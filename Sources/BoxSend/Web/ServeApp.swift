@@ -76,6 +76,8 @@ final class ServeApp {
             return apiStatus()
         case ("POST", "/api/gist-sync"):
             return apiGistSync()
+        case ("POST", "/api/test-downloader"):
+            return apiTestDownloader()
         case ("POST", "/api/run"):
             return apiRun(req)
         default:
@@ -149,6 +151,18 @@ final class ServeApp {
             state.note("web: gist 同步 \(r.cookieCount) 条 cookie")
             return .json(["ok": true,
                           "message": "同步完成: \(r.cookieCount) 条 cookie, hosts=\(r.hosts.joined(separator: ", ")) (备份时间 \(r.backupTime))"])
+        } catch {
+            return .json(["ok": false, "error": error.localizedDescription], status: 500)
+        }
+    }
+
+    private func apiTestDownloader() -> HTTPServer.Response {
+        let cfg = currentConfig
+        let d = DownloaderFactory.make(cfg, client: client)
+        do {
+            let msg = try d.testConnection()
+            state.note("web: 下载器连接测试通过 (\(msg))")
+            return .json(["ok": true, "message": msg])
         } catch {
             return .json(["ok": false, "error": error.localizedDescription], status: 500)
         }

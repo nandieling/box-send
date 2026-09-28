@@ -5,6 +5,9 @@ protocol Downloader: AnyObject {
                     savePath: String?, category: String?,
                     skipChecking: Bool,
                     upLimit: Int64) throws -> String   // 返回下载器侧标识
+
+    /// 连接/登录检测：成功返回描述（如版本信息），失败抛错
+    func testConnection() throws -> String
 }
 
 /// 下载器工厂（CLI 与 Web 共用）

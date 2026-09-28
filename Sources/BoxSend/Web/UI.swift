@@ -83,6 +83,11 @@ pre{background:#10141a;color:#d7dee7;padding:10px;border-radius:6px;font:12px/1.
     <label>推送策略<select id="d_policy"><option value="always">always：转种失败也推</option><option value="onSuccess">onSuccess：全部成功才推</option></select></label>
     <label class="chk"><input type="checkbox" id="d_skip" style="width:auto"> 跳过种子校验 skipChecking</label>
   </div>
+  <div class="row" style="margin-top:10px">
+    <button onclick="testDownloader()">测试下载器连接</button>
+    <span class="mut">会先保存当前表单，再实际登录一次下载器</span>
+    <span class="msg" id="d-msg"></span>
+  </div>
 </section>
 
 <section class="card">
@@ -231,6 +236,18 @@ async function refreshStatus(){
       '<span class="chip">下载器 <b>'+s.downloader+'</b></span>';
     $('notes').textContent=(s.notes&&s.notes.length)?s.notes.join('\\n'):'（暂无）';
   }catch(e){}
+}
+async function testDownloader(){
+  setMsg('d-msg','','测试中…');
+  try{
+    collectFromForm();
+    if(!$('json').value.trim()){ setMsg('d-msg','err','配置为空：先点「重新载入」'); return; }
+    try{ JSON.parse($('json').value); }catch(e){ setMsg('d-msg','err','JSON 格式错误: '+e.message); return; }
+    const sv=await api('/api/config', {raw:$('json').value});
+    if(!sv.ok){ setMsg('d-msg','err','保存失败: '+(sv.error||'')); return; }
+    const r=await api('/api/test-downloader', {});
+    setMsg('d-msg', r.ok?'ok':'err', r.message||r.error||'');
+  }catch(e){ setMsg('d-msg','err','请求失败: '+e.message); }
 }
 async function syncGist(){
   setMsg('st-msg','','同步中…（走 api.github.com，网络不佳可能要等 1 分钟）');

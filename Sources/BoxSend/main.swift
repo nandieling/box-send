@@ -71,6 +71,7 @@ do {
               gist-sync [--loop]     从 PT-depiler Gist 备份同步 cookie（--loop 常驻轮询）
               serve [--port 8088] [--host 127.0.0.1] [--token xxx]
                                     Web 控制台：网页编辑 boxsend.json / 手动转种 / 同步
+              test-downloader       测试下载器连接（登录检测）
               cookies               查看本地 cookie 状态
               template              生成模板配置 Config/boxsend.json
               notes                 查看最近运行日志
@@ -151,6 +152,15 @@ do {
                 Thread.sleep(forTimeInterval: Double(mins) * 60)
             }
         } while loop
+
+    case "test-downloader":
+        let d = DownloaderFactory.make(config, client: client)
+        do {
+            print("连接测试: \(try d.testConnection())")
+        } catch {
+            print("连接测试失败: \(error.localizedDescription)")
+            exit(1)
+        }
 
     case "cookies":
         if cookies.isEmpty {

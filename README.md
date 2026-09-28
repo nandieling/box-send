@@ -218,6 +218,7 @@ box-send info --detail <url>   # 只解析源站详情页（名称/IMDB/大小/�
 box-send run --detail <url> [--site <id>] [--targets a,b] [--skip-reseed] [--skip-push]
 box-send push --detail <url>   # 只推下载器（不转种，带源站限速）
 box-send list --site <id>      # 拉取源站种子列表
+box-send test-downloader       # 测试下载器连接（实际登录一次）
 box-send cookies               # 查看本地 cookie 状态
 box-send notes                 # 最近运行日志
 box-send template              # 重新生成模板配置
@@ -245,6 +246,8 @@ box-send template              # 重新生成模板配置
 - `gistSync`: `gistID` / `token` / `encryptionKey` / `pollMinutes`
 - `webToken`: Web 控制台访问令牌（空 = 不校验）
 - `dataDir`: 状态目录（默认 `~/.boxsend`）
+
+> qBittorrent 5.2+ 推送时若种子已存在于下载器，`torrents/add` 返回 409 Conflict，box-send 视为"已推送"（幂等，重复执行不报错）。
 
 限速生效方式：qBittorrent 在 `torrents/add` 请求里直接带 `upLimit`；Transmission 在 `torrent-add` 成功后用 `torrent-set` 设 `upload-limit` + `upload-limit-enabled`。
 
@@ -281,7 +284,7 @@ rm -rf /opt/box-send ~/.boxsend          # 状态与本地 cookie 缓存
 
 ## Web 配置控制台
 
-- 页面功能：运行状态（cookie 站点数/上次同步/日志）、Gist 同步、下载器、按源站点限速表、目标站勾选、手动「转种 + 推 / 仅推」、完整 JSON 编辑保存。
+- 页面功能：运行状态（cookie 站点数/上次同步/日志）、Gist 同步、下载器（含**测试连接**按钮：保存表单后实际登录一次下载器，返回版本信息）、按源站点限速表、目标站勾选、手动「转种 + 推 / 仅推」、完整 JSON 编辑保存。
 - 令牌：`webToken` 或 `--token` 非空时 `/api/*` 需要令牌（请求头 `X-BoxSend-Token` 或 `?token=`），页面首次输入后存浏览器 localStorage。
 - Mac 远程访问（推荐，端口不暴露公网）：`ssh -L 8088:127.0.0.1:8088 user@vps` → 浏览器开 `http://127.0.0.1:8088`。
 - cookie 一致性：`serve` 与 `gist-sync --loop` 两个进程共享 `~/.boxsend/cookies.json`——loop 进程写盘，serve 按 mtime 热加载，无需重启。

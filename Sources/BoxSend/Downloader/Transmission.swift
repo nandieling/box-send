@@ -20,6 +20,13 @@ final class Transmission: Downloader {
         self.password = password
     }
 
+    func testConnection() throws -> String {
+        let r = try rpc("session-get", [:])
+        let version = (r["version"] as? String) ?? "未知版本"
+        let name = (r["name"] as? String) ?? "Transmission"
+        return "\(name) \(version)，登录成功"
+    }
+
     private func rpc(_ method: String, _ arguments: [String: Any]) throws -> [String: Any] {
         var attempt = 0
         while true {
