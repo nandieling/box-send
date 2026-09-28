@@ -9,24 +9,24 @@ import FoundationNetworking
 ///   _manifest.json  -> { time, encryption, files: { cookies: { name: "cookies.txt" } } }
 ///   cookies.txt     -> AES-256-CBC 加密（口令 = MD5(备份密码|gistID) 前 16 位 hex）
 ///   解密后          -> { "host": [chrome.cookies.Cookie] }
-final class GistSync {
+public final class GistSync {
     let config: GistSyncConfig
     let client: HTTPClient   // 不带 cookie 的裸客户端（访问 api.github.com）
 
-    init(config: GistSyncConfig, client: HTTPClient) {
+    public init(config: GistSyncConfig, client: HTTPClient) {
         self.config = config
         self.client = client
     }
 
-    struct PullResult {
-        var hosts: [String]
-        var cookieCount: Int
-        var backupTime: String
-        var changed: Bool
+    public struct PullResult {
+        public var hosts: [String]
+        public var cookieCount: Int
+        public var backupTime: String
+        public var changed: Bool
     }
 
     @discardableResult
-    func pull(into store: CookieStore, state: StateStore) throws -> PullResult {
+    public func pull(into store: CookieStore, state: StateStore) throws -> PullResult {
         var req = URLRequest(url: URL(string: "https://api.github.com/gists/\(config.gistID)")!)
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")

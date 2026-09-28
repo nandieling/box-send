@@ -1,5 +1,5 @@
 import XCTest
-@testable import BoxSend
+@testable import BoxSendKit
 
 final class ModelsTests: XCTestCase {
 

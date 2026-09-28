@@ -1,6 +1,6 @@
 import Foundation
 
-protocol Downloader: AnyObject {
+public protocol Downloader: AnyObject {
     func addTorrent(data: Data, filename: String,
                     savePath: String?, category: String?,
                     skipChecking: Bool,
@@ -11,8 +11,8 @@ protocol Downloader: AnyObject {
 }
 
 /// 下载器工厂（CLI 与 Web 共用）
-enum DownloaderFactory {
-    static func make(_ config: AppConfig, client: HTTPClient) -> Downloader {
+public enum DownloaderFactory {
+    public static func make(_ config: AppConfig, client: HTTPClient) -> Downloader {
         switch config.downloader.type {
         case .qbittorrent:
             return QBittorrent(client: client, baseURL: config.downloader.url,

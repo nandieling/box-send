@@ -1,4 +1,5 @@
 import Foundation
+import BoxSendKit
 
 // box-send: PT 批量转种 + 推送下载器（限速）
 // 用法见 `box-send help`
@@ -69,6 +70,8 @@ do {
               push --detail <url>   只推下载器（不转种）
               list --site <id>      拉取源站种子列表
               gist-sync [--loop]     从 PT-depiler Gist 备份同步 cookie（--loop 常驻轮询）
+              import-zip --file <PTD_backup_*.zip> [--password <备份密码>]
+                                    导入 PT-depiler「本地备份」zip
               serve [--port 8088] [--host 127.0.0.1] [--token xxx]
                                     Web 控制台：网页编辑 boxsend.json / 手动转种 / 同步
               test-downloader       测试下载器连接（登录检测）
@@ -161,6 +164,19 @@ do {
             print("连接测试失败: \(error.localizedDescription)")
             exit(1)
         }
+
+    case "import-zip":
+        // 导入 PT-depiler「本地备份」zip（PTD_backup_*.zip）
+        let file = required("--file")
+        let pw = opt("--password") ?? ""
+        let n = try PTDZipImport.importZip(
+            url: URL(fileURLWithPath: (file as NSString).expandingTildeInPath),
+            password: pw, into: cookies)
+        if let data = cookies.exportBackupJSON() {
+            try FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
+            try data.write(to: localCookieFile)
+        }
+        print("导入完成: \(n) 条 cookie, hosts=\(cookies.hosts().count)")
 
     case "cookies":
         if cookies.isEmpty {

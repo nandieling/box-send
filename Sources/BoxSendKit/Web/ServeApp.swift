@@ -10,7 +10,7 @@ import Foundation
 ///   POST /api/run          {detail, site?, skipReseed, skipPush?, targets?} 同步执行
 ///
 /// 认证：设置 webToken（配置或 --token）后，/api/* 需要请求头 X-BoxSend-Token 或 ?token=。
-final class ServeApp {
+public final class ServeApp {
     private let configPath: String
     private var config: AppConfig
     private let cookies: CookieStore
@@ -25,7 +25,7 @@ final class ServeApp {
     private var cookieFileMTime: Double = 0
     private let server = HTTPServer()
 
-    init(config: AppConfig, configPath: String, cookies: CookieStore,
+    public init(config: AppConfig, configPath: String, cookies: CookieStore,
          state: StateStore, client: HTTPClient, dataDir: String, token: String?) {
         self.config = config
         self.configPath = (configPath as NSString).expandingTildeInPath
@@ -43,7 +43,7 @@ final class ServeApp {
 
     // MARK: 启动
 
-    func start(host: String, port: Int) throws {
+    public func start(host: String, port: Int) throws {
         try server.start(host: host, port: port) { [weak self] req in
             self?.handle(req) ?? .notFound
         }
@@ -56,7 +56,7 @@ final class ServeApp {
     }
 
     /// 阻塞 accept 循环
-    func run() { server.run() }
+    public func run() { server.run() }
 
     // MARK: 路由
 

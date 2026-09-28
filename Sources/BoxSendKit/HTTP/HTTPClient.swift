@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 /// 轻量 HTTP 客户端：手动管理 Cookie（不发 Set-Cookie 自动存储），支持 multipart 表单。
-final class HTTPClient {
+public final class HTTPClient {
     let cookies: CookieStore
     var userAgent: String
     var timeout: TimeInterval = 90
@@ -25,14 +25,14 @@ final class HTTPClient {
     /// 供外部手动构造请求时复用（如 Transmission RPC）
     var session0: URLSession { session }
 
-    struct Response {
-        var status: Int
-        var data: Data
-        var headers: [String: String]
-        var finalURL: String
+    public struct Response {
+        public var status: Int
+        public var data: Data
+        public var headers: [String: String]
+        public var finalURL: String
     }
 
-    init(cookies: CookieStore, userAgent: String) {
+    public init(cookies: CookieStore, userAgent: String) {
         self.cookies = cookies
         self.userAgent = userAgent
     }
@@ -40,7 +40,7 @@ final class HTTPClient {
     // MARK: - 请求
 
     @discardableResult
-    func get(_ url: String, referer: String? = nil) throws -> Response {
+    public func get(_ url: String, referer: String? = nil) throws -> Response {
         var req = try makeRequest(url: url, method: "GET", referer: referer)
         req.httpMethod = "GET"
         return try perform(req)
@@ -63,7 +63,7 @@ final class HTTPClient {
 
     /// multipart/form-data POST，可混入文本字段与文件
     @discardableResult
-    func postMultipart(_ url: String, fields: [String: String],
+    public func postMultipart(_ url: String, fields: [String: String],
                        files: [(name: String, filename: String, data: Data, mime: String)],
                        referer: String? = nil) throws -> Response {
         let boundary = "----BoxSend" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
@@ -145,7 +145,7 @@ final class HTTPClient {
     }
 
     /// 便捷方法：GET 并返回 HTML 文本；登录失效（302 到登录页 / 403）时抛 cookieExpired。
-    func fetchHTML(_ url: String, referer: String? = nil) throws -> String {
+    public func fetchHTML(_ url: String, referer: String? = nil) throws -> String {
         let resp = try get(url, referer: referer)
         if resp.status == 403 || resp.status == 401 {
             let host = (URL(string: url)?.host ?? url)

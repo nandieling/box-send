@@ -4,7 +4,7 @@ import Foundation
 /// - uploaded: 目标站 -> dedupKey -> 时间戳（转种成功记录）
 /// - pushed: dedupKey -> 下载器标识（推种记录）
 /// - lastGistSync: 上次 gist 同步时间
-final class StateStore {
+public final class StateStore {
     struct Snapshot: Codable {
         var uploaded: [String: [String: Double]] = [:]
         var pushed: [String: String] = [:]
@@ -15,8 +15,10 @@ final class StateStore {
     private let path: String
     private var snapshot: Snapshot
     private let lock = NSLock()
+    /// 新日志回调（GUI 实时显示；在调用线程同步执行）
+    public var onNote: ((String) -> Void)?
 
-    init(dataDir: String) {
+    public init(dataDir: String) {
         let dir = URL(fileURLWithPath: dataDir, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         path = dir.appendingPathComponent("state.json").path
@@ -28,40 +30,42 @@ final class StateStore {
         }
     }
 
-    func isUploaded(site: String, key: String) -> Bool {
+    public func isUploaded(site: String, key: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return snapshot.uploaded[site]?[key] != nil
     }
-    func markUploaded(site: String, key: String) {
+    public func markUploaded(site: String, key: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.uploaded[site, default: [:]][key] = Date().timeIntervalSince1970
         saveLocked()
     }
-    func isPushed(key: String) -> Bool {
+    public func isPushed(key: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
         return snapshot.pushed[key] != nil
     }
-    func markPushed(key: String, id: String) {
+    public func markPushed(key: String, id: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.pushed[key] = id
         saveLocked()
     }
-    var lastGistSync: Double? {
+    public var lastGistSync: Double? {
         lock.lock(); defer { lock.unlock() }
         return snapshot.lastGistSync
     }
-    func setLastGistSync(_ t: Double) {
+    public func setLastGistSync(_ t: Double) {
         lock.lock(); defer { lock.unlock() }
         snapshot.lastGistSync = t
         saveLocked()
     }
-    func note(_ s: String) {
+    public func note(_ s: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.notes.append("\(ISO8601Time.stamp()): \(s)")
         if snapshot.notes.count > 500 { snapshot.notes.removeFirst(snapshot.notes.count - 500) }
         saveLocked()
+        let cb = onNote
+        cb?(snapshot.notes.last ?? "")
     }
-    var recentNotes: [String] {
+    public var recentNotes: [String] {
         lock.lock(); defer { lock.unlock() }
         return Array(snapshot.notes.suffix(50))
     }
@@ -72,8 +76,8 @@ final class StateStore {
     }
 }
 
-enum ISO8601Time {
-    static func stamp() -> String {
+public enum ISO8601Time {
+    public static func stamp() -> String {
         let f = ISO8601DateFormatter()
         return f.string(from: Date())
     }

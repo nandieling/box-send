@@ -2,14 +2,14 @@ import Foundation
 
 /// 转种 + 推下载器 流水线
 /// 源站详情 -> 解析 -> (禁转检查) -> 逐目标站查重/上传 -> 推下载器(按源站限速)
-final class ReseedPipeline {
+public final class ReseedPipeline {
     let config: AppConfig
     let cookies: CookieStore
     let client: HTTPClient
     let state: StateStore
     let downloader: Downloader
 
-    init(config: AppConfig, cookies: CookieStore, state: StateStore, downloader: Downloader) {
+    public init(config: AppConfig, cookies: CookieStore, state: StateStore, downloader: Downloader) {
         self.config = config
         self.cookies = cookies
         self.client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
@@ -17,21 +17,27 @@ final class ReseedPipeline {
         self.downloader = downloader
     }
 
-    struct Options {
-        var skipReseed = false
-        var skipPush = false
-        var targets: [String]?    // nil = 用 config.targetSites
+    public struct Options {
+        public var skipReseed = false
+        public var skipPush = false
+        public var targets: [String]?    // nil = 用 config.targetSites
+
+        public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil) {
+            self.skipReseed = skipReseed
+            self.skipPush = skipPush
+            self.targets = targets
+        }
     }
 
-    struct Report: CustomStringConvertible {
-        var release: ReleaseInfo
-        var torrentBytes: Int
-        var outcomes: [(site: String, ok: Bool, message: String)]
-        var pushed: Bool
-        var pushID: String?
-        var upLimit: Int64
+    public struct Report: CustomStringConvertible {
+        public var release: ReleaseInfo
+        public var torrentBytes: Int
+        public var outcomes: [(site: String, ok: Bool, message: String)]
+        public var pushed: Bool
+        public var pushID: String?
+        public var upLimit: Int64
 
-        var description: String {
+        public var description: String {
             var lines: [String] = ["[\(release.summary)] torrent \(torrentBytes) bytes"]
             for o in outcomes {
                 lines.append("  reseed \(o.site): \(o.ok ? "OK" : "FAIL") \(o.message)")
@@ -41,7 +47,7 @@ final class ReseedPipeline {
         }
     }
 
-    func run(detailURL: String, sourceSiteID: String?, opts: Options) throws -> Report {
+    public func run(detailURL: String, sourceSiteID: String?, opts: Options) throws -> Report {
         // 1. 定位源站
         let site: SiteConfig
         if let id = sourceSiteID, let s = config.site(id) {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 站点适配器：一个框架家族一个实现，站点差异通过 SiteOverride 收敛。
-protocol SiteAdapter: AnyObject {
+public protocol SiteAdapter: AnyObject {
     var site: SiteConfig { get }
     var client: HTTPClient { get }
     var override: SiteOverride? { get }
@@ -18,8 +18,13 @@ protocol SiteAdapter: AnyObject {
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
 }
 
-struct UploadOutcome {
-    var success: Bool
-    var message: String
-    var detailURL: String?
+public struct UploadOutcome {
+    public var success: Bool
+    public var message: String
+    public var detailURL: String?
+    public init(success: Bool, message: String, detailURL: String?) {
+        self.success = success
+        self.message = message
+        self.detailURL = detailURL
+    }
 }

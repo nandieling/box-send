@@ -12,3 +12,4 @@ Config/boxsend.json
 
 # 系统
 .DS_Store
+dist/

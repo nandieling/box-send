@@ -1,29 +1,31 @@
 import Foundation
 
 /// 与 chrome.cookies.Cookie / PT-depiler 备份格式对齐的 cookie 结构。
-struct Cookie: Codable, Hashable {
-    var name: String
-    var value: String
-    var domain: String?
-    var path: String?
-    var secure: Bool?
-    var httpOnly: Bool?
-    var expirationDate: Double?
+public struct Cookie: Codable, Hashable {
+    public var name: String
+    public var value: String
+    public var domain: String?
+    public var path: String?
+    public var secure: Bool?
+    public var httpOnly: Bool?
+    public var expirationDate: Double?
 }
 
 /// 按站点 host 维护的 cookie 集合。
 /// 请求 host 为 H 时，jar 中 key == H 或 key 是 H 的父域名的条目都会带上。
-final class CookieStore {
+public final class CookieStore {
     private var byHost: [String: [Cookie]] = [:]
+
+    public init() {}
     private let lock = NSLock()
 
-    func importCookies(host: String, cookies: [Cookie]) {
+    public func importCookies(host: String, cookies: [Cookie]) {
         lock.lock(); defer { lock.unlock() }
         byHost[host] = cookies
     }
 
     /// 解析一条 Set-Cookie 头并合并入 jar
-    func importSetCookie(_ header: String, host: String) {
+    public func importSetCookie(_ header: String, host: String) {
         var cookie = Cookie(name: "", value: "", domain: host, path: "/")
         let parts = header.split(separator: ";")
         for (idx, part) in parts.enumerated() {
@@ -73,7 +75,7 @@ final class CookieStore {
     }
 
     /// 生成请求 host 应携带的 `Cookie` 头；无 cookie 时返回 nil。
-    func cookieHeader(forHost host: String) -> String? {
+    public func cookieHeader(forHost host: String) -> String? {
         lock.lock(); defer { lock.unlock() }
         let host = normalized(host)
         var pairs: [String] = []
@@ -87,17 +89,17 @@ final class CookieStore {
         return pairs.isEmpty ? nil : pairs.joined(separator: "; ")
     }
 
-    func hosts() -> [String] {
+    public func hosts() -> [String] {
         lock.lock(); defer { lock.unlock() }
         return byHost.keys.sorted()
     }
 
-    func snapshot() -> [String: [Cookie]] {
+    public func snapshot() -> [String: [Cookie]] {
         lock.lock(); defer { lock.unlock() }
         return byHost
     }
 
-    var isEmpty: Bool {
+    public var isEmpty: Bool {
         lock.lock(); defer { lock.unlock() }
         return byHost.values.allSatisfy { $0.isEmpty }
     }
@@ -105,7 +107,7 @@ final class CookieStore {
     /// 从 PT-depiler 备份的 cookies 结构导入：`{ "host": [Cookie] }`。
     /// 也兼容 `{ "cookies": { "host": [Cookie] } }` 外层包裹。
     @discardableResult
-    func importBackupJSON(_ data: Data) throws -> Int {
+    public func importBackupJSON(_ data: Data) throws -> Int {
         let obj = try JSONSerialization.jsonObject(with: data)
         guard let dict = obj as? [String: Any] else {
             throw BoxSendError.badInput("cookie JSON 顶层应为对象")
@@ -129,7 +131,7 @@ final class CookieStore {
     }
 
     /// 从 "k1=v1; k2=v2" 形式的裸 cookie 字符串导入。
-    func importRawString(host: String, _ raw: String) {
+    public func importRawString(host: String, _ raw: String) {
         var cookies: [Cookie] = []
         for part in raw.split(separator: ";") {
             let kv = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
@@ -147,20 +149,20 @@ final class CookieStore {
     }
 
     /// 清空全部 cookie
-    func clear() {
+    public func clear() {
         lock.lock(); defer { lock.unlock() }
         byHost.removeAll()
     }
 
     /// 用备份 JSON 整体替换现有内容（web 控制台热加载本地 cookies.json 用）
     @discardableResult
-    func replace(from data: Data) throws -> Int {
+    public func replace(from data: Data) throws -> Int {
         clear()
         return try importBackupJSON(data)
     }
 
     /// 导出为与 importBackupJSON 兼容的备份结构：{"cookies": {host: [...]}}
-    func exportBackupJSON() -> Data? {
+    public func exportBackupJSON() -> Data? {
         var dict: [String: Any] = [:]
         for (host, arr) in snapshot() {
             guard let d = try? JSONEncoder().encode(arr),
@@ -171,13 +173,13 @@ final class CookieStore {
     }
 }
 
-enum BoxSendError: LocalizedError {
+public enum BoxSendError: LocalizedError {
     case badInput(String)
     case http(status: Int, url: String, body: String)
     case cookieExpired(String)
     case notImplemented(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .badInput(let m): return "输入错误: \(m)"
         case .http(let s, let u, let b): return "HTTP \(s) \(u): \(String(b.prefix(300)))"
