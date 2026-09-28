@@ -86,18 +86,18 @@ final class AppModel: ObservableObject {
 
     // MARK: 配置
 
-    var siteUpLimitMB: [String: String] {
-        var out: [String: String] = [:]
+    /// 各站限速（整数 MB/s，0 = 不限速）
+    var siteUpLimitMBInt: [String: Int] {
+        var out: [String: Int] = [:]
         for s in config.sourceSites {
             let v = config.downloader.siteUpLimits[s.id] ?? 0
-            out[s.id] = v == 0 ? "0" : String(Double(v) / 1048576.0)
+            out[s.id] = Int((Double(v) / 1048576.0).rounded())
         }
         return out
     }
 
-    func setSiteUpLimitMB(_ mb: String, siteID: String) {
-        let d = Double(mb.replacingOccurrences(of: ",", with: ".")) ?? 0
-        config.downloader.siteUpLimits[siteID] = Int64(d * 1048576.0)
+    func setSiteUpLimitMBInt(_ mb: Int?, siteID: String) {
+        config.downloader.siteUpLimits[siteID] = Int64(mb ?? 0) * 1_048_576
     }
 
     // MARK: 分组
@@ -117,10 +117,10 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
-    func addGroup(name: String, upLimitMB: Int, dailyGB: Int) {
+    func addGroup(name: String, upLimitMB: Int) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        config.groups.append(GroupConfig(name: trimmed, upLimitMB: max(0, upLimitMB), dailyGB: max(0, dailyGB)))
+        config.groups.append(GroupConfig(name: trimmed, upLimitMB: max(0, upLimitMB)))
         saveConfig()
     }
 
@@ -128,10 +128,6 @@ final class AppModel: ObservableObject {
         guard config.groups.indices.contains(index) else { return }
         config.groups.remove(at: index)
         saveConfig()
-    }
-
-    func groupUsedTodayGB(groupName: String) -> Double {
-        state.groupUploadBytes(group: groupName) / 1_073_741_824
     }
 
     func saveConfig() {

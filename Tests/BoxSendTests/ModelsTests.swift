@@ -136,8 +136,8 @@ final class ModelsTests: XCTestCase {
                                   defaultUpLimit: 0,
                                   siteUpLimits: ["a": 5 * 1_048_576, "c": 5 * 1_048_576],
                                   pushPolicy: .always)
-        let g1 = GroupConfig(name: "g1", sites: ["b", "c"], upLimitMB: 2, dailyGB: 100)
-        let g2 = GroupConfig(name: "g2", sites: ["d"], upLimitMB: 0, dailyGB: 0)
+        let g1 = GroupConfig(name: "g1", sites: ["b", "c"], upLimitMB: 2)
+        let g2 = GroupConfig(name: "g2", sites: ["d"], upLimitMB: 0)
         let cfg = AppConfig(dataDir: "d", sourceSites: [], targetSites: [], downloader: dl,
                             gistSync: nil, userAgent: "ua", webToken: nil, groups: [g1, g2])
         // 仅站点限速
@@ -148,21 +148,6 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(cfg.effectiveUpLimit(siteID: "c"), 2 * 1_048_576)
         // 站点与分组都未设 = 不限
         XCTAssertEqual(cfg.effectiveUpLimit(siteID: "d"), 0)
-        XCTAssertEqual(cfg.groupDailyCapBytes(g1), 100 * 1_073_741_824)
-        XCTAssertEqual(cfg.groupDailyCapBytes(g2), 0)
     }
 
-    func testGroupUploads() throws {
-        let dir = NSTemporaryDirectory() + "boxsend-test-" + UUID().uuidString
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        let st = StateStore(dataDir: dir)
-        XCTAssertEqual(st.groupUploadBytes(group: "g"), 0)
-        st.addGroupUpload(group: "g", bytes: 1024)
-        XCTAssertEqual(st.groupUploadBytes(group: "g"), 1024)
-        st.addGroupUpload(group: "g", bytes: 2048)
-        XCTAssertEqual(st.groupUploadBytes(group: "g"), 3072)
-        // 重新加载后保持
-        let st2 = StateStore(dataDir: dir)
-        XCTAssertEqual(st2.groupUploadBytes(group: "g"), 3072)
-    }
 }

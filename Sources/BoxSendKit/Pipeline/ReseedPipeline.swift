@@ -36,20 +36,13 @@ public final class ReseedPipeline {
         public var pushed: Bool
         public var pushID: String?
         public var upLimit: Int64
-        public var pushNote: String?    // 未推送原因（如分组单日量上限）
 
         public var description: String {
             var lines: [String] = ["[\(release.summary)] torrent \(torrentBytes) bytes"]
             for o in outcomes {
                 lines.append("  reseed \(o.site): \(o.ok ? "OK" : "FAIL") \(o.message)")
             }
-            if pushed {
-                lines.append("  push: OK (\(pushID ?? "")) upLimit=\(upLimit == 0 ? "unlimited" : "\(upLimit) B/s")")
-            } else if let note = pushNote {
-                lines.append("  push: skipped (\(note))")
-            } else {
-                lines.append("  push: skipped")
-            }
+            lines.append("  push: \(pushed ? "OK (\(pushID ?? "")) upLimit=\(upLimit == 0 ? "unlimited" : "\(upLimit) B/s")" : "skipped")")
             return lines.joined(separator: "\n")
         }
     }
@@ -119,20 +112,15 @@ public final class ReseedPipeline {
             }
         }
 
-        // 5. 推下载器（站点限速 + 分组带宽/单日量上限）
-        let group = config.groupOf(siteID: release.siteID)
+        // 5. 推下载器（站点限速 + 分组带宽上限）
         let upLimit = config.effectiveUpLimit(siteID: release.siteID)
         report.upLimit = upLimit
-        let contentSize = Bencode.totalLength(torrentData) ?? release.size ?? Int64(torrentData.count)
         let reseedOk = report.outcomes.allSatisfy { $0.ok } || report.outcomes.isEmpty
         let shouldPush = !opts.skipPush && (config.downloader.pushPolicy == .always || reseedOk)
         if shouldPush {
             if state.isPushed(key: release.dedupKey) {
                 report.pushed = true
                 report.pushID = "already pushed"
-            } else if let reason = dailyCapBlockReason(group: group, contentSize: contentSize) {
-                report.pushNote = reason
-                state.note("push SKIP \(release.summary): \(reason)")
             } else {
                 do {
                     let id = try downloader.addTorrent(
@@ -145,10 +133,7 @@ public final class ReseedPipeline {
                     report.pushed = true
                     report.pushID = id
                     state.markPushed(key: release.dedupKey, id: id)
-                    if let group {
-                        state.addGroupUpload(group: group.name, bytes: Double(contentSize))
-                    }
-                    state.note("push OK \(release.summary) upLimit=\(upLimit) size=\(contentSize) B")
+                    state.note("push OK \(release.summary) upLimit=\(upLimit)")
                 } catch {
                     state.note("push FAIL \(release.summary): \(error.localizedDescription)")
                     throw error
@@ -156,16 +141,6 @@ public final class ReseedPipeline {
             }
         }
         return report
-    }
-
-    /// 分组单日上传量上限检查：已用量 + 本种子超过上限时返回原因（nil = 放行）
-    private func dailyCapBlockReason(group: GroupConfig?, contentSize: Int64) -> String? {
-        guard let group else { return nil }
-        let cap = config.groupDailyCapBytes(group)
-        guard cap > 0 else { return nil }
-        let used = Int64(state.groupUploadBytes(group: group.name))
-        guard used + contentSize > cap else { return nil }
-        return "分组\"\(group.name)\"单日上传量已达上限（已用 \(String(format: "%.2f", Double(used) / 1_073_741_824)) GB / 上限 \(group.dailyGB) GB，本种子 \(String(format: "%.2f", Double(contentSize) / 1_073_741_824)) GB）"
     }
 }
 

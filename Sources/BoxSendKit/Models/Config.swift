@@ -93,18 +93,16 @@ public struct GistSyncConfig: Codable {
     public static let empty = GistSyncConfig(gistID: "", token: "", encryptionKey: "", pollMinutes: 30)
 }
 
-/// 目标站分组：共用带宽上限 + 单日上传量上限（避免 VPS 带宽/日上传量超限）
+/// 目标站分组：共用带宽上限（避免 VPS 上传带宽超限）
 public struct GroupConfig: Codable, Equatable {
     public var name: String
     public var sites: [String]     // 成员站点 id
     public var upLimitMB: Int      // 分组带宽上限 MB/s，0 = 不限
-    public var dailyGB: Int        // 分组单日上传量上限 GB，0 = 不限
 
-    public init(name: String, sites: [String] = [], upLimitMB: Int = 0, dailyGB: Int = 0) {
+    public init(name: String, sites: [String] = [], upLimitMB: Int = 0) {
         self.name = name
         self.sites = sites
         self.upLimitMB = upLimitMB
-        self.dailyGB = dailyGB
     }
 }
 
@@ -169,11 +167,6 @@ public struct AppConfig: Codable {
         case (_, 0): return siteLimit
         default: return min(siteLimit, groupLimit)
         }
-    }
-
-    /// 分组单日量上限（bytes），0 = 不限
-    public func groupDailyCapBytes(_ group: GroupConfig) -> Int64 {
-        Int64(group.dailyGB) * 1_073_741_824
     }
 
     public static func load(path: String) -> AppConfig? {

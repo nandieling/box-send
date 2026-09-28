@@ -641,8 +641,7 @@
     {
       "name": "示例分组",
       "sites": ["chdbits", "hdhome"],
-      "upLimitMB": 50,
-      "dailyGB": 100
+      "upLimitMB": 50
     }
   ],
   "downloader": {

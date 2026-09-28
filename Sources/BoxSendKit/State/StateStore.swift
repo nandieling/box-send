@@ -10,8 +10,6 @@ public final class StateStore {
         var pushed: [String: String] = [:]
         var lastGistSync: Double?
         var notes: [String] = []
-        /// 分组 -> "yyyy-MM-dd" -> 当日已推送种子内容量（bytes）
-        var groupUploads: [String: [String: Double]] = [:]
     }
 
     private let path: String
@@ -59,36 +57,6 @@ public final class StateStore {
         snapshot.lastGistSync = t
         saveLocked()
     }
-    // MARK: 分组单日上传量
-
-    public static func dayKey(_ date: Date = Date()) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.timeZone = .current
-        return f.string(from: date)
-    }
-
-    public func groupUploadBytes(group: String, date: Date = Date()) -> Double {
-        lock.lock(); defer { lock.unlock() }
-        return snapshot.groupUploads[group]?[Self.dayKey(date)] ?? 0
-    }
-
-    public func addGroupUpload(group: String, bytes: Double, date: Date = Date()) {
-        lock.lock(); defer { lock.unlock() }
-        let key = Self.dayKey(date)
-        snapshot.groupUploads[group, default: [:]][key, default: 0] += bytes
-        // 只保留最近 7 天
-        let cal = Calendar.current
-        let cutoff = cal.date(byAdding: .day, value: -7, to: date) ?? date
-        let cutoffKey = Self.dayKey(cutoff)
-        for g in snapshot.groupUploads.keys {
-            if let days = snapshot.groupUploads[g] {
-                snapshot.groupUploads[g] = days.filter { $0.key >= cutoffKey }
-            }
-        }
-        saveLocked()
-    }
-
     public func note(_ s: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.notes.append("\(ISO8601Time.stamp()): \(s)")
