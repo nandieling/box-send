@@ -1,0 +1,14 @@
+# 构建产物
+.build/
+.swiftpm/
+
+# 本地运行状态（默认在 ~/.boxsend；防止有人把 dataDir 指进仓库）
+.boxsend/
+*.log
+
+# 本地配置：含 Gist token / 下载器密码等敏感信息，不入库
+# 模板见 Config/boxsend.example.json（新环境: box-send template 或复制 example）
+Config/boxsend.json
+
+# 系统
+.DS_Store

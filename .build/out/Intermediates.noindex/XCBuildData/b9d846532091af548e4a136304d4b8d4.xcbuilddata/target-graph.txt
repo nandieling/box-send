@@ -1,4 +1,0 @@
-Target dependency graph (2 targets)
-Target 'AllExcludingTests' in project 'Aggregate'
-➜ Explicit dependency on target 'BoxSend-product' in project 'BoxSend'
-Target 'BoxSend-product' in project 'BoxSend' (no dependencies)
