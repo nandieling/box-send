@@ -96,9 +96,9 @@ rm -rf /opt/swift-6.4.0-RELEASE-*
 
 ## 使用（GUI）
 
-- **运行**：粘贴详情页 URL → 勾选「转种到目标站」「推送到下载器」→ 勾选参与本次转种的目标站 → 「开始运行」。结果含每站转种状态 + 推送状态 + 生效的上传限速。
-- **站点与限速**：启用/停用源站；**每个源站的上传限速（MB/s，0 = 不限速）**——限速在「该站作为源站」推送到下载器时生效（需求 3，避免上传速度过高被站管/带宽策略盯上）；全局默认限速；推送策略（总是推 / 全部转种成功才推）。
-- **Cookie**：导入 PT-depiler 本地备份 zip、Gist 同步（手动/自动）、当前 cookie 统计、清空。
+- **运行**：粘贴详情页链接（一行说明 + 一行输入框）→ 勾选「转种到目标站」「推送到下载器」→ 勾选参与本次转种的目标站 → 「开始运行」。结果含每站转种状态 + 推送状态 + 生效的上传限速。
+- **站点与限速**：每个站一行，可开关「源站 / 转种目标」、设置**该站种子的上传限速（MB/s，0 = 不限速）**（推送到下载器时生效，避免上传速度过高被站管/带宽策略盯上）、并把它**加入分组**；**目标站分组**为组内站点提供共用带宽上限（MB/s）与单日上传量上限（GB，按推送种子的实际内容量累计，超限的种子当天不再推送、日志记录原因），用于避免 VPS 上传带宽 / 单日上传量不够；站点限速与分组带宽取更严格者；另有全局默认限速、推送策略（总是推 / 全部转种成功才推）。
+- **Cookie**：Gist 同步（手动/自动，最上）→ PT-depiler 本地备份 zip 导入（中）→ 已同步的 Cookie 详情（站点数/总数/站点列表，最下）。
 - **下载器**：qBittorrent/Transmission 参数 + 连接检测。
 - **日志**：最近 500 条运行日志（转种/推送/cookie 变更）。
 
@@ -138,6 +138,7 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
   - `forbidReseedMarkers`：命中即视为禁转（默认 `禁转/Excl.`），只推不转种
   - `extraUploadFields`：额外固定字段（如各站 `uplver`）
 - `targetSites`: 转种目标站 id 列表（HHanClub 不在其中，M2）
+- `groups`: 目标站分组（可选，旧配置无此字段自动按空处理），每项 `name` / `sites`（成员站点 id）/ `upLimitMB`（组带宽上限 MB/s，0 = 不限）/ `dailyGB`（组单日上传量上限 GB，0 = 不限）。种子推送时生效限速 = 站点限速与组带宽上限取小；组单日已推量（state.json 的 `groupUploads`，按种子内容量累计、保留 7 天）+ 本种子超过 `dailyGB` 时跳过推送
 - `downloader`:
   - `type`: `qbittorrent` | `transmission`
   - `url/username/password/savePath/category/skipChecking`
@@ -157,11 +158,11 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
 
 ## 测试
 
-`swift test`（16 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码）。
+`swift test`（23 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码）。
 
 ## 里程碑
 
-- M1（当前）：Mac GUI 主体（运行/站点限速/Cookie/下载器/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按源站限速 + 状态幂等 + CLI
+- M1（当前）：Mac GUI 主体（运行/站点限速/Cookie/下载器/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽/单日量上限）+ 状态幂等 + CLI
 - M2：HHanClub offers 候选区上传、Unit3D（REST API）/Gazelle 适配器、源站 RSS 轮询全自动（新种子自动转种）、监控 PT-depiler 备份目录自动导入、OWSS/WebDAV 同步、简介模板精调
 - M3：长尾站点（MTeam/YemaPT/Rousi 等定制站）、截图搬运图床、动态限速、统计面板
 

@@ -637,6 +637,14 @@
     "ttg",
     "pter"
   ],
+  "groups": [
+    {
+      "name": "示例分组",
+      "sites": ["chdbits", "hdhome"],
+      "upLimitMB": 50,
+      "dailyGB": 100
+    }
+  ],
   "downloader": {
     "type": "qbittorrent",
     "url": "http://127.0.0.1:8080",

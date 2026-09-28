@@ -93,6 +93,21 @@ public struct GistSyncConfig: Codable {
     public static let empty = GistSyncConfig(gistID: "", token: "", encryptionKey: "", pollMinutes: 30)
 }
 
+/// 目标站分组：共用带宽上限 + 单日上传量上限（避免 VPS 带宽/日上传量超限）
+public struct GroupConfig: Codable, Equatable {
+    public var name: String
+    public var sites: [String]     // 成员站点 id
+    public var upLimitMB: Int      // 分组带宽上限 MB/s，0 = 不限
+    public var dailyGB: Int        // 分组单日上传量上限 GB，0 = 不限
+
+    public init(name: String, sites: [String] = [], upLimitMB: Int = 0, dailyGB: Int = 0) {
+        self.name = name
+        self.sites = sites
+        self.upLimitMB = upLimitMB
+        self.dailyGB = dailyGB
+    }
+}
+
 public struct AppConfig: Codable {
     public var dataDir: String
     public var sourceSites: [SiteConfig]    // 可作为源站的站点（任一支持站均可）
@@ -101,11 +116,64 @@ public struct AppConfig: Codable {
     public var gistSync: GistSyncConfig?
     public var userAgent: String
     public var webToken: String?        // web 控制台访问令牌，nil/空 = 不启用
+    public var groups: [GroupConfig]    // 目标站分组（限速/单日量上限）
+
+    private enum CodingKeys: String, CodingKey {
+        case dataDir, sourceSites, targetSites, downloader, gistSync, userAgent, webToken, groups
+    }
+
+    /// 向后兼容：旧配置无 groups 字段时解码为空
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dataDir = try c.decode(String.self, forKey: .dataDir)
+        sourceSites = try c.decode([SiteConfig].self, forKey: .sourceSites)
+        targetSites = try c.decode([String].self, forKey: .targetSites)
+        downloader = try c.decode(DownloaderConfig.self, forKey: .downloader)
+        gistSync = try c.decodeIfPresent(GistSyncConfig.self, forKey: .gistSync)
+        userAgent = try c.decode(String.self, forKey: .userAgent)
+        webToken = try c.decodeIfPresent(String.self, forKey: .webToken)
+        groups = try c.decodeIfPresent([GroupConfig].self, forKey: .groups) ?? []
+    }
+
+    public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
+                downloader: DownloaderConfig, gistSync: GistSyncConfig?, userAgent: String,
+                webToken: String?, groups: [GroupConfig] = []) {
+        self.dataDir = dataDir
+        self.sourceSites = sourceSites
+        self.targetSites = targetSites
+        self.downloader = downloader
+        self.gistSync = gistSync
+        self.userAgent = userAgent
+        self.webToken = webToken
+        self.groups = groups
+    }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
 
     public func site(_ id: String) -> SiteConfig? {
         sourceSites.first { $0.id == id }
+    }
+
+    /// 站点所属分组（第一个包含该站的分组）
+    public func groupOf(siteID: String) -> GroupConfig? {
+        groups.first { $0.sites.contains(siteID) }
+    }
+
+    /// 实际生效的上传限速（bytes/s）：站点限速与所属分组带宽上限取小，0 = 不限
+    public func effectiveUpLimit(siteID: String) -> Int64 {
+        let siteLimit = downloader.upLimitFor(originSiteID: siteID)
+        let groupLimit = Int64(groupOf(siteID: siteID)?.upLimitMB ?? 0) * 1_048_576
+        switch (siteLimit, groupLimit) {
+        case (0, 0): return 0
+        case (0, _): return groupLimit
+        case (_, 0): return siteLimit
+        default: return min(siteLimit, groupLimit)
+        }
+    }
+
+    /// 分组单日量上限（bytes），0 = 不限
+    public func groupDailyCapBytes(_ group: GroupConfig) -> Int64 {
+        Int64(group.dailyGB) * 1_073_741_824
     }
 
     public static func load(path: String) -> AppConfig? {
@@ -131,7 +199,8 @@ public struct AppConfig: Codable {
             ),
             gistSync: nil,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-            webToken: nil
+            webToken: nil,
+            groups: []
         )
     }
 }

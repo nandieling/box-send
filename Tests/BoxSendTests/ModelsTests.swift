@@ -85,4 +85,84 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(ov.categoryMap?["movie/uhd-bd"], 499)
         XCTAssertEqual(ov.qualityValueMaps?["medium"]?["uhdbd"], 19)
     }
+
+    func testBencodeSingleFile() {
+        // {"info": {"length": 123456}}
+        var b = "d4:info"
+        b += "d6:length"
+        b += "i123456e"
+        b += "ee"
+        XCTAssertEqual(Bencode.totalLength(Data(b.utf8)), 123456)
+    }
+
+    func testBencodeMultiFile() {
+        // {"info": {"lengths": [1000, 2000, 3000]}, "name": "file"}
+        var b = "d4:info"
+        b += "d7:lengths"
+        b += "l"
+        b += "i1000ei2000ei3000e"
+        b += "ee4:name4:filee"
+        let data = Data(b.utf8)
+        XCTAssertEqual(Bencode.totalLength(data), 6000)
+    }
+
+    func testBencodeFilesArray() {
+        // {"info": {"files": [{"length": 70000, "path": ["a"]}, {"length": 80000, "path": ["b"]}]}}
+        var b = "d4:info"
+        b += "d5:files"
+        b += "l"
+        b += "d6:lengthi70000e4:pathl1:aee"
+        b += "d6:lengthi80000e4:pathl1:bee"
+        b += "eee"
+        XCTAssertEqual(Bencode.totalLength(Data(b.utf8)), 150000)
+    }
+
+    func testBencodeGarbage() {
+        XCTAssertNil(Bencode.totalLength(Data("not bencode".utf8)))
+        XCTAssertNil(Bencode.totalLength(Data()))
+    }
+
+    func testAppConfigDecodesWithoutGroups() throws {
+        let jsonStr = #"{"dataDir":"d","sourceSites":[],"targetSites":[],"downloader":{"type":"qbittorrent","url":"u","username":"","password":"","savePath":null,"category":null,"skipChecking":true,"defaultUpLimit":0,"siteUpLimits":{},"pushPolicy":"always"},"userAgent":"ua"}"#
+        let cfg = try JSONDecoder().decode(AppConfig.self, from: Data(jsonStr.utf8))
+        XCTAssertEqual(cfg.groups, [])
+        XCTAssertNil(cfg.gistSync)
+        XCTAssertNil(cfg.webToken)
+    }
+
+    func testGroupEffectiveUpLimit() {
+        let dl = DownloaderConfig(type: .qbittorrent, url: "u", username: "", password: "",
+                                  savePath: nil, category: nil, skipChecking: true,
+                                  defaultUpLimit: 0,
+                                  siteUpLimits: ["a": 5 * 1_048_576, "c": 5 * 1_048_576],
+                                  pushPolicy: .always)
+        let g1 = GroupConfig(name: "g1", sites: ["b", "c"], upLimitMB: 2, dailyGB: 100)
+        let g2 = GroupConfig(name: "g2", sites: ["d"], upLimitMB: 0, dailyGB: 0)
+        let cfg = AppConfig(dataDir: "d", sourceSites: [], targetSites: [], downloader: dl,
+                            gistSync: nil, userAgent: "ua", webToken: nil, groups: [g1, g2])
+        // 仅站点限速
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "a"), 5 * 1_048_576)
+        // 仅分组上限
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "b"), 2 * 1_048_576)
+        // 两者取小
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "c"), 2 * 1_048_576)
+        // 站点与分组都未设 = 不限
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "d"), 0)
+        XCTAssertEqual(cfg.groupDailyCapBytes(g1), 100 * 1_073_741_824)
+        XCTAssertEqual(cfg.groupDailyCapBytes(g2), 0)
+    }
+
+    func testGroupUploads() throws {
+        let dir = NSTemporaryDirectory() + "boxsend-test-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let st = StateStore(dataDir: dir)
+        XCTAssertEqual(st.groupUploadBytes(group: "g"), 0)
+        st.addGroupUpload(group: "g", bytes: 1024)
+        XCTAssertEqual(st.groupUploadBytes(group: "g"), 1024)
+        st.addGroupUpload(group: "g", bytes: 2048)
+        XCTAssertEqual(st.groupUploadBytes(group: "g"), 3072)
+        // 重新加载后保持
+        let st2 = StateStore(dataDir: dir)
+        XCTAssertEqual(st2.groupUploadBytes(group: "g"), 3072)
+    }
 }

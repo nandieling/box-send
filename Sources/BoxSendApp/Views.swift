@@ -55,7 +55,12 @@ struct RunView: View {
     var body: some View {
         Form {
             Section("种子链接") {
-                TextField("粘贴源站详情页 URL，如 https://pt.luckpt.de/details.php?id=…", text: $model.detailURL)
+                Text("粘贴源站种子详情页链接，一次运行处理一条，如 https://pt.luckpt.de/details.php?id=…")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                TextField("https://…", text: $model.detailURL)
+                    .multilineTextAlignment(.leading)
                 HStack(spacing: 20) {
                     Toggle("转种到目标站", isOn: $model.doReseed)
                     Toggle("推送到下载器", isOn: $model.doPush)
@@ -64,7 +69,7 @@ struct RunView: View {
                         .disabled(model.running)
                 }
             }
-            Section("转种目标站") {
+            Section("转种目标站（本次运行勾选参与）") {
                 ForEach(model.config.targetSites, id: \.self) { id in
                     Toggle(model.siteName(id), isOn: targetBinding(id))
                 }
@@ -93,6 +98,7 @@ struct RunView: View {
         Binding(get: { model.selectedTargets.contains(id) },
                 set: { on in
                     if on { model.selectedTargets.insert(id) } else { model.selectedTargets.remove(id) }
+                    model.saveConfig()
                 })
     }
 }
@@ -105,35 +111,106 @@ extension AppModel {
 
 struct SitesView: View {
     @EnvironmentObject var model: AppModel
+    @State private var newGroupName = ""
+    @State private var newGroupMB = ""
+    @State private var newGroupGB = ""
 
     var body: some View {
         Form {
             Section {
                 ForEach(Array(model.config.sourceSites.enumerated()), id: \.offset) { idx, s in
-                    HStack(spacing: 12) {
-                        Toggle(isOn: enabledBinding(idx)) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(s.name).fontWeight(.medium)
-                                Text(s.url).font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Text(s.name).fontWeight(.medium)
+                            Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer()
+                            Picker("分组", selection: groupBinding(s.id)) {
+                                Text("无分组").tag(-1)
+                                ForEach(model.config.groups.indices, id: \.self) { i in
+                                    Text(model.config.groups[i].name).tag(i)
+                                }
                             }
+                            .frame(maxWidth: 150)
                         }
-                        TextField("0", text: limitBinding(s.id))
-                            .frame(width: 90)
-                            .multilineTextAlignment(.trailing)
-                        Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            Toggle("源站", isOn: enabledBinding(idx))
+                            Toggle("转种目标", isOn: targetBinding(s.id))
+                            Spacer()
+                            TextField("0", text: limitBinding(s.id))
+                                .frame(width: 70)
+                                .multilineTextAlignment(.trailing)
+                            Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
-                Text("左侧启用/停用源站；限速是「该站作为源站」推送到下载器的上传速度上限，0 = 不限速（避免限速过低被判做种无效，或过高被站管盯上）。")
+                Text("「源站」= 可作为转种/推送来源；「转种目标」= 可被转发种子。限速 = 该站种子推送到下载器后的上传速度上限（推送时生效），0 = 不限速；与所属分组的带宽上限取更严格者。")
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
-                Text("源站（限速按源站生效）")
+                Text("站点（源站 / 转种目标 / 限速 / 分组）")
+            }
+            Section {
+                if model.config.groups.isEmpty {
+                    Text("还没有分组。把多个目标站放入同一分组，可共用带宽上限与单日上传量上限，避免 VPS 上传带宽或单日上传量超限。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(Array(model.config.groups.enumerated()), id: \.offset) { idx, g in
+                    HStack(spacing: 6) {
+                        TextField("分组名", text: groupNameBinding(idx))
+                            .frame(maxWidth: 120)
+                        TextField("0", text: groupMBBinding(idx))
+                            .frame(width: 56)
+                            .multilineTextAlignment(.trailing)
+                        Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                        TextField("0", text: groupGBBinding(idx))
+                            .frame(width: 56)
+                            .multilineTextAlignment(.trailing)
+                        Text("GB/天").font(.caption).foregroundStyle(.secondary)
+                        Text("\(g.sites.count) 站")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if g.dailyGB > 0 {
+                            Text("今日 \(String(format: "%.1f", model.groupUsedTodayGB(groupName: g.name)))/\(g.dailyGB) GB")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button(role: .destructive) { model.removeGroup(at: idx) } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                HStack(spacing: 6) {
+                    TextField("新分组名", text: $newGroupName)
+                        .frame(maxWidth: 120)
+                    TextField("0", text: $newGroupMB)
+                        .frame(width: 56)
+                        .multilineTextAlignment(.trailing)
+                    Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                    TextField("0", text: $newGroupGB)
+                        .frame(width: 56)
+                        .multilineTextAlignment(.trailing)
+                    Text("GB/天").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("添加分组") {
+                        model.addGroup(name: newGroupName,
+                                       upLimitMB: Int(newGroupMB) ?? 0,
+                                       dailyGB: Int(newGroupGB) ?? 0)
+                        newGroupName = ""
+                        newGroupMB = ""
+                        newGroupGB = ""
+                    }
+                    .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                Text("带宽上限 0 = 不限；单日量按推送成功的种子实际内容量累计，超限的种子不再推送（日志记录原因）。单日量 0 = 不限。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("目标站分组（带宽 / 单日上传量）")
             }
             Section {
                 HStack {
                     TextField("0", text: defaultLimitBinding)
                         .frame(width: 90)
                         .multilineTextAlignment(.trailing)
-                    Text("MB/s — 默认上传限速（未单独设置的源站）").foregroundStyle(.secondary)
+                    Text("MB/s — 默认上传限速（未单独设置的站点）").foregroundStyle(.secondary)
                 }
                 Picker("推送策略", selection: $model.config.downloader.pushPolicy) {
                     Text("总是推送（转种失败也推）").tag(PushPolicy.always)
@@ -142,22 +219,33 @@ struct SitesView: View {
             } header: {
                 Text("全局")
             }
-            Section("转种目标站（在「运行」页勾选参与本次转种）") {
-                ForEach(model.config.sourceSites, id: \.id) { s in
-                    Toggle("\(s.name)（\(s.id)）", isOn: targetBinding(s.id))
-                }
-            }
         }
         .formStyle(.grouped)
     }
 
     private func enabledBinding(_ idx: Int) -> Binding<Bool> {
         Binding(get: { model.config.sourceSites[idx].enabled },
-                set: { model.config.sourceSites[idx].enabled = $0 })
+                set: { model.config.sourceSites[idx].enabled = $0; model.saveConfig() })
     }
     private func limitBinding(_ id: String) -> Binding<String> {
         Binding(get: { model.siteUpLimitMB[id] ?? "0" },
-                set: { model.setSiteUpLimitMB($0, siteID: id) })
+                set: { model.setSiteUpLimitMB($0, siteID: id); model.saveConfig() })
+    }
+    private func groupBinding(_ id: String) -> Binding<Int> {
+        Binding(get: { model.groupIndex(of: id) },
+                set: { model.setGroup(index: $0, for: id) })
+    }
+    private func groupNameBinding(_ idx: Int) -> Binding<String> {
+        Binding(get: { model.config.groups[idx].name },
+                set: { model.config.groups[idx].name = $0; model.saveConfig() })
+    }
+    private func groupMBBinding(_ idx: Int) -> Binding<String> {
+        Binding(get: { String(model.config.groups[idx].upLimitMB) },
+                set: { model.config.groups[idx].upLimitMB = max(0, Int($0) ?? 0); model.saveConfig() })
+    }
+    private func groupGBBinding(_ idx: Int) -> Binding<String> {
+        Binding(get: { String(model.config.groups[idx].dailyGB) },
+                set: { model.config.groups[idx].dailyGB = max(0, Int($0) ?? 0); model.saveConfig() })
     }
     private var defaultLimitBinding: Binding<String> {
         Binding(get: {
@@ -166,12 +254,14 @@ struct SitesView: View {
         }, set: {
             let d = Double($0.replacingOccurrences(of: ",", with: ".")) ?? 0
             model.config.downloader.defaultUpLimit = Int64(d * 1048576.0)
+            model.saveConfig()
         })
     }
     private func targetBinding(_ id: String) -> Binding<Bool> {
         Binding(get: { model.selectedTargets.contains(id) },
                 set: { on in
                     if on { model.selectedTargets.insert(id) } else { model.selectedTargets.remove(id) }
+                    model.saveConfig()
                 })
     }
 }
@@ -184,16 +274,25 @@ struct CookiesView: View {
 
     var body: some View {
         Form {
-            Section("当前状态") {
-                LabeledContent("站点数", value: "\(model.cookieHosts.count)")
-                LabeledContent("Cookie 总数", value: "\(model.cookieTotal)")
-                if !model.cookieHosts.isEmpty {
-                    Text(model.cookieHosts.joined(separator: "  "))
-                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            Section {
+                TextField("gistID", text: gistStringBinding(\.gistID))
+                SecureField("GitHub token", text: gistStringBinding(\.token))
+                SecureField("PT-depiler 备份密码", text: gistStringBinding(\.encryptionKey))
+                HStack {
+                    TextField("轮询分钟", text: pollBinding)
+                        .frame(width: 70)
+                    Text("（自动同步间隔，最小 5 分钟）").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Toggle("自动定时同步", isOn: autoBinding)
+                    Button("立即同步") { model.gistSyncNow() }
                 }
                 if !model.lastGistSyncText.isEmpty {
                     LabeledContent("上次 Gist 同步", value: model.lastGistSyncText)
                 }
+                Text("与 PT-depiler 的 Gist 备份联动，无需手动导入。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("Gist 同步")
             }
             Section {
                 HStack {
@@ -207,22 +306,15 @@ struct CookiesView: View {
             } header: {
                 Text("PT-depiler 本地备份")
             }
-            Section {
-                TextField("gistID", text: gistStringBinding(\.gistID))
-                SecureField("GitHub token", text: gistStringBinding(\.token))
-                SecureField("PT-depiler 备份密码", text: gistStringBinding(\.encryptionKey))
-                HStack {
-                    TextField("轮询分钟", text: pollBinding)
-                        .frame(width: 70)
-                    Text("（自动同步间隔，最小 5 分钟）").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Toggle("自动定时同步", isOn: autoBinding)
-                    Button("立即同步") { model.gistSyncNow() }
+            Section("已同步的 Cookie 详情") {
+                LabeledContent("站点数", value: "\(model.cookieHosts.count)")
+                LabeledContent("Cookie 总数", value: "\(model.cookieTotal)")
+                if !model.cookieHosts.isEmpty {
+                    Text(model.cookieHosts.joined(separator: "  "))
+                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    Text("（还没有 cookie）").font(.caption).foregroundStyle(.secondary)
                 }
-                Text("可选方式：与 PT-depiler 的 Gist 备份联动，无需手动导入。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("Gist 同步（可选）")
             }
         }
         .formStyle(.grouped)

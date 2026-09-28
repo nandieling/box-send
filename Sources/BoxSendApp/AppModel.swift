@@ -100,6 +100,40 @@ final class AppModel: ObservableObject {
         config.downloader.siteUpLimits[siteID] = Int64(d * 1048576.0)
     }
 
+    // MARK: 分组
+
+    func groupIndex(of siteID: String) -> Int {
+        config.groups.firstIndex { $0.sites.contains(siteID) } ?? -1
+    }
+
+    func setGroup(index: Int, for siteID: String) {
+        for i in config.groups.indices where i != index {
+            config.groups[i].sites.removeAll { $0 == siteID }
+        }
+        if index >= 0, index < config.groups.count,
+           !config.groups[index].sites.contains(siteID) {
+            config.groups[index].sites.append(siteID)
+        }
+        saveConfig()
+    }
+
+    func addGroup(name: String, upLimitMB: Int, dailyGB: Int) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        config.groups.append(GroupConfig(name: trimmed, upLimitMB: max(0, upLimitMB), dailyGB: max(0, dailyGB)))
+        saveConfig()
+    }
+
+    func removeGroup(at index: Int) {
+        guard config.groups.indices.contains(index) else { return }
+        config.groups.remove(at: index)
+        saveConfig()
+    }
+
+    func groupUsedTodayGB(groupName: String) -> Double {
+        state.groupUploadBytes(group: groupName) / 1_073_741_824
+    }
+
     func saveConfig() {
         do {
             var c = config
@@ -157,7 +191,7 @@ final class AppModel: ObservableObject {
 
     func gistSyncNow() {
         guard let g = config.gistSync, !g.gistID.isEmpty else {
-            cookieMessage = "先在下方填写 Gist 配置（gistID + token + 备份密码）"
+            cookieMessage = "先在上方填写 Gist 配置（gistID + token + 备份密码）"
             return
         }
         Task {
