@@ -25,16 +25,33 @@ struct SiteConfig: Codable {
 /// 每站覆盖配置：把框架通用行为收敛到站点差异。
 struct SiteOverride: Codable {
     var detailLinkPattern: String?      // 正则，匹配详情链接
-    var uploadPath: String?             // 如 "upload.php"
-    var titleField: String?             // 默认 "title"
+    var uploadPath: String?             // 上传页地址，如 "upload.php"
+    /// 真正的 POST 动作地址（中文 NexusPHP 家族是 "takeupload.php"）；缺省 = uploadPath
+    var uploadActionPath: String?
+    var titleField: String?             // 默认 "title"；中文站家族为 "name"
+    /// 标题来源：reseed（默认，解析出的发布名）| torrentName（.torrent 文件名）| torrentNameDotted（文件名且空格换 .）
+    var titleMode: String?
     var descrField: String?             // 默认 "descr"
-    var imdbField: String?              // 默认 "imdbid"
+    var imdbField: String?              // 默认 "imdbid"；中文站家族为 "url"，TTG 为 "imdb_c"
+    /// imdb 字段值模板，{imdb} = tt 号；默认 "{imdb}"。url 型站点用 "http://www.imdb.com/title/{imdb}/"
+    var imdbValueTemplate: String?
+    var doubanField: String?            // 如 "url_douban" / "douban_id" / "douban"
+    /// 豆瓣字段值模板，{douban} = 豆瓣号；默认 "{douban}"
+    var doubanValueTemplate: String?
+    var categoryField: String?          // 默认 "category"；中文站家族为 "type"
+    var fileField: String?              // 默认 "file"；CHDBits 为 "torrentfile"
     var searchURL: String?              // 查重用，{imdb}/{name} 占位；nil = 关闭自动查重
-    var categoryMap: [String: Int]?     // movie/series/anime/documentary/music/other -> 站点分类 ID
+    /// 分类映射：movie/series/anime/documentary/music/other，或 质量型站点用 "<kind>/<profile>"
+    /// profile 取值：8k-bd/8k/uhd-bd/2160p/remux/bluray/1440p/1080p/1080i/720p/dvd/sd
+    var categoryMap: [String: Int]?
     var extraUploadFields: [String: String]?  // 上传时额外提交的固定字段
     /// 命中即视为禁转（只推下载器、不转种），大小写不敏感
     var forbidReseedMarkers: [String]?
     var userAgent: String?
+    /// 质量下拉自动填充：字段名 -> medium|codec|audiocodec|standard
+    var qualitySelects: [String: String]?
+    /// 质量值表：medium|codec|audiocodec|standard -> token -> 站点 ID
+    var qualityValueMaps: [String: [String: Int]]?
 }
 
 struct DownloaderConfig: Codable {

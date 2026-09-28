@@ -230,13 +230,17 @@ box-send template              # 重新生成模板配置
 
 > `Config/boxsend.json` 含 token/密码，**不入 git**（见 `.gitignore`）；仓库里带的是模板 `Config/boxsend.example.json`。新环境用 `box-send template` 生成，或 `cp Config/boxsend.example.json Config/boxsend.json`。VPS 上 `git pull` 不会覆盖本地已填的配置。
 
-- `sourceSites`: 可作源站的站点。每项 `id/name/url/framework/enabled` + 可选 `overrides`：
-  - `uploadPath` / `titleField` / `descrField` / `imdbField`：上传表单字段名
-  - `categoryMap`：`movie/series/anime/documentary/music/other` → 站点分类 ID
-  - `searchURL`：查重模板，`{imdb}` / `{name}` 占位；nil = 关闭自动查重
-  - `forbidReseedMarkers`：命中即视为禁转（只推下载器、不转种）
-  - `extraUploadFields`：上传时额外提交的固定字段
-- `targetSites`: 转种目标站 id 列表（按顺序执行）
+- `sourceSites`: 可作源站的站点。每项 `id/name/url/framework/enabled` + 可选 `overrides`。9 个优先站的 overrides **已内置在 `Config/boxsend.example.json`**（实测各站上传表单后填入），部署脚本会自动同步进本地配置：
+  - `uploadPath` / `uploadActionPath`：上传页地址 / 真正 POST 的动作地址（中文 NexusPHP 家族为 `takeupload.php`）
+  - `titleField` / `descrField` / `imdbField` / `doubanField` / `categoryField` / `fileField`：表单字段名（中文站家族标题=`name`、IMDb=`url`、分类=`type`、CHDBits 文件=`torrentfile`、TTG IMDb=`imdb_c`）
+  - `imdbValueTemplate` / `doubanValueTemplate`：字段值模板，`{imdb}` / `{douban}` 占位。`url` 型字段需填完整链接，如 `http://www.imdb.com/title/{imdb}/`
+  - `titleMode`: `reseed`（默认，用解析出的发布名）| `torrentName`（.torrent 文件名）| `torrentNameDotted`（文件名且空格换 `.`，CMCT 规则：全英文无空格）
+  - `categoryMap`：`movie/series/anime/documentary/music/other` → 站点分类 ID；质量型站点（HDHome/TTG 按分辨率分区）用 `<kind>/<profile>` 键，profile 取值 `8k-bd/8k/uhd-bd/2160p/remux/bluray/1440p/1080p/1080i/720p/dvd/sd`（按发布名自动推断，如 `2160p BluRay` → `uhd-bd`、`2160p Web-DL` → `2160p`）
+  - `qualitySelects` / `qualityValueMaps`：媒介/编码/音轨/分辨率下拉自动填充（字段名 → `medium|codec|audiocodec|standard`，token → 站点 ID），从发布名自动识别（REMUX/BluRay/UHD/Web-DL/x265/DTS-HD MA 等）
+  - `searchURL`：查重模板，`{imdb}` / `{name}` 占位；nil = 关闭自动查重（默认关闭，靠状态幂等去重）
+  - `forbidReseedMarkers`：命中即视为禁转（只推下载器、不转种），默认 `禁转/Excl.`
+  - `extraUploadFields`：上传时额外提交的固定字段（如各站的 `uplver` 声明项）
+- `targetSites`: 转种目标站 id 列表（按顺序执行）。**HHanClub 暂不在其中**（其 `upload.php` 重定向到 `offers.php` 候选区，属 M2）；仍可作为源站
 - `downloader`:
   - `type`: `qbittorrent` | `transmission`
   - `url/username/password/savePath/category/skipChecking`
@@ -260,12 +264,12 @@ cd ~/Downloads/swift/box-send
 git push origin main
 ```
 
-VPS 上拉取更新（本地 boxsend.json 不入 git，不会被覆盖）：
+VPS 上拉取更新（本地 boxsend.json 不入 git，不会被覆盖；deploy 脚本会把新版内置的站点 overrides/targetSites 自动合并进本地配置，保留你的 token 与下载器设置）：
 
 ```bash
 cd /opt/box-send
 git pull
-bash scripts/deploy-debian.sh   # Swift 已装则跳过下载，只重新构建 + 装二进制
+bash scripts/deploy-debian.sh   # Swift 已装则跳过下载；重新构建 + 装二进制 + 同步站点 overrides
 # systemd 方式：
 systemctl restart boxsend-gistsync boxsend-web
 # 手动 serve 方式：
@@ -292,17 +296,20 @@ rm -rf /opt/box-send ~/.boxsend          # 状态与本地 cookie 缓存
 
 ## 测试
 
-`swift test`（12 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 生成的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置）。
+`swift test`（16 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 生成的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码）。
 
 ## 里程碑
 
-- M1（当前）：骨架 + Gist cookie 同步/解密 + NexusPHP 适配器（9 优先站通用解析+上传）+ qBittorrent/Transmission 推送（含每站限速）+ 状态幂等 + CLI + Web 配置控制台
-- M2：Unit3D（REST API）/Gazelle 适配器、源站 RSS 轮询全自动、OWSS/WebDAV 同步、按站分类映射精调与简介模板
+- M1（当前）：骨架 + Gist cookie 同步/解密 + NexusPHP 适配器（8 站内置 overrides 实测转种可用：luckpt/hdsky/chdbits/hdhome/cmct/audiences/ttg/pter；HHanClub 候选区上传归 M2）+ 质量标记自动填充分类/媒介/编码/音轨/分辨率 + qBittorrent/Transmission 推送（含每站限速）+ 状态幂等 + CLI + Web 配置控制台
+- M2：HHanClub offers 候选区、Unit3D（REST API）/Gazelle 适配器、源站 RSS 轮询全自动、OWSS/WebDAV 同步、简介模板精调
 - M3：长尾站点（MTeam/YemaPT/Rousi 等定制站）、截图搬运图床、动态限速、统计面板
 
 ## 已知限制
 
-- 9 个优先站均为 NexusPHP，M1 用通用实现 + overrides 微调；首跑先 `info` 验证解析，再单站 `run --targets` 小流量验证。
+- 9 个优先站均为 NexusPHP，M1 用通用实现 + overrides 微调（8 站已内置）；HHanClub 为候选区上传（M2），当前仅作源站。
+- 转种失败时上传页 HTML 自动存到 `<dataDir>/debug/upload-<站id>-<时间戳>.html`，错误信息里带路径，便于对照排查。
+- 质量分类/下拉按发布名启发式推断，个别非标准命名可能落到兜底分类；可在 overrides 的 `categoryMap`/`qualityValueMaps` 精调。
+- 首跑先 `info` 验证解析，再单站 `run --targets` 小流量验证。
 - 个别有 Cloudflare/JS 校验的站点纯 HTTP 可能失败，需浏览器兜底（PT-depiler 手动转种）。
 - `serve` 与 `gist-sync --loop` 同时运行时，`state.json` 由两进程各自加锁写盘，极小概率互相覆盖（M2 换 SQLite 后消除）；cookie 已通过 cookies.json mtime 热加载解决。
 - Web 控制台单任务锁：同一时间只跑一个「同步/转种」任务，并发请求返回 409。

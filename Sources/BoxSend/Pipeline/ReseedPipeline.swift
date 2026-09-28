@@ -53,7 +53,8 @@ final class ReseedPipeline {
             }
             site = s
         }
-        let adapter = SiteRegistry.adapter(for: site, client: client)
+        let debugDir = (config.dataDir as NSString).expandingTildeInPath
+        let adapter = SiteRegistry.adapter(for: site, client: client, debugDir: debugDir)
 
         // 2. 解析详情
         let release = try adapter.fetchDetail(detailURL: detailURL)
@@ -84,7 +85,7 @@ final class ReseedPipeline {
                         continue
                     }
                     do {
-                        let tAdapter = SiteRegistry.adapter(for: ts, client: client)
+                        let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
                         if let exists = try tAdapter.searchExists(release), !(ts.overrides?.searchURL ?? "").isEmpty {
                             report.outcomes.append((tid, true, "已存在: \(exists)"))
                             state.markUploaded(site: tid, key: release.dedupKey)

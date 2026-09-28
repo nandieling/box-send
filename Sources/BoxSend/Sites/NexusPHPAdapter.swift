@@ -6,18 +6,26 @@ final class NexusPHPAdapter: SiteAdapter {
     let site: SiteConfig
     let client: HTTPClient
     let override: SiteOverride?
+    /// 上传失败时把页面 HTML 存到这里排查（<dataDir>/debug/）
+    let debugDir: String?
 
-    init(site: SiteConfig, client: HTTPClient) {
+    init(site: SiteConfig, client: HTTPClient, debugDir: String? = nil) {
         self.site = site
         self.client = client
         self.override = site.overrides
+        self.debugDir = debugDir
     }
 
     private var uploadPath: String { override?.uploadPath ?? "upload.php" }
+    private var uploadAction: String {
+        let a = override?.uploadActionPath ?? uploadPath
+        return a.hasPrefix("/") ? String(a.dropFirst()) : a
+    }
     private var titleField: String { override?.titleField ?? "title" }
     private var descrField: String { override?.descrField ?? "descr" }
     private var imdbField: String { override?.imdbField ?? "imdbid" }
-    private var fileField: String { "file" }
+    private var categoryField: String { override?.categoryField ?? "category" }
+    private var fileField: String { override?.fileField ?? "file" }
     private var listPath: String { "torrents.php" }
 
     // MARK: - 详情解析
@@ -190,14 +198,77 @@ final class NexusPHPAdapter: SiteAdapter {
 
     // MARK: - 上传（转种）
 
+    private func resolvedTitle(_ info: ReleaseInfo) -> String {
+        let mode = override?.titleMode ?? "reseed"
+        var t = info.name
+        if mode == "torrentName" || mode == "torrentNameDotted" {
+            t = info.torrentName
+            if t.hasSuffix(".torrent") { t = String(t.dropLast(8)) }
+        }
+        if mode == "torrentNameDotted" {
+            t = t.replacingOccurrences(of: "\\s+", with: ".", options: .regularExpression)
+        }
+        return t
+    }
+
+    private func resolveCategory(_ info: ReleaseInfo) -> Int? {
+        guard let map = override?.categoryMap else { return nil }
+        let kind = info.kind?.rawValue ?? "other"
+        if let profile = QualityTokens.catProfile(from: info.name, kind: info.kind),
+           let v = map["\(kind)/\(profile)"] {
+            return v
+        }
+        return map[kind] ?? map["other"]
+    }
+
+    private func applyQualitySelects(_ info: ReleaseInfo, into fields: inout [String: String]) {
+        guard let selects = override?.qualitySelects, let maps = override?.qualityValueMaps else { return }
+        let tokens: [String: String?] = [
+            "medium": QualityTokens.medium(from: info.name, kind: info.kind),
+            "codec": QualityTokens.codec(from: info.name),
+            "audiocodec": QualityTokens.audio(from: info.name),
+            "standard": QualityTokens.standard(from: info.name),
+        ]
+        for (field, attr) in selects {
+            guard let token = tokens[attr].flatMap({ $0 }), let v = maps[attr]?[token] else { continue }
+            fields[field] = String(v)
+        }
+    }
+
+    /// 上传未成功时提取错误：errorbox -> 常见错误特征 -> 静默重渲染提示
+    private func extractUploadError(body: String, status: Int) -> String {
+        if let e = HTMLUtil.group(body, "<div[^>]*id=[\"']errorbox[\"'][^>]*>(.*?)</div>", group: 1, options: [.dotMatchesLineSeparators]) {
+            let t = HTMLUtil.stripTags(e).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { return t }
+        }
+        if let m = HTMLUtil.firstMatch(body, "(?:This torrent already exists|already exists|已存在)[^<]{0,60}") {
+            return m
+        }
+        if body.contains("<form") && (body.contains("takeupload.php") || body.contains("upload.php")) {
+            return "服务器未跳转到详情页（必填字段缺失或校验失败），请核对该站 overrides 配置"
+        }
+        return "HTTP \(status) 未识别的返回"
+    }
+
+    private func dumpDebugHTML(_ body: String) -> String? {
+        guard let root = debugDir else { return nil }
+        let dir = (root as NSString).appendingPathComponent("debug")
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let path = (dir as NSString).appendingPathComponent("upload-\(site.id)-\(Int(Date().timeIntervalSince1970)).html")
+        if let data = body.data(using: .utf8), (try? data.write(to: URL(fileURLWithPath: path))) != nil {
+            return path
+        }
+        return nil
+    }
+
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
-        let uploadURL = site.url + uploadPath
+        let uploadURL = site.url + uploadAction
         let page = try client.fetchHTML(uploadURL, referer: site.url)
 
         // 抓取所有隐藏字段（含 passkey/n_id 等站点 token）
         var fields: [String: String] = [:]
         let hiddenRe = try! NSRegularExpression(
-            pattern: "<input[^>]*type=[\"']hidden[\"'][^>]*>|<input[^>]*type=[\"']file[\"'][^>]*>",
+            pattern: "<input[^>]*type=[\"']hidden[\"'][^>]*>",
             options: [.caseInsensitive])
         let range = NSRange(page.startIndex..., in: page)
         for m in hiddenRe.matches(in: page, options: [], range: range) {
@@ -209,14 +280,20 @@ final class NexusPHPAdapter: SiteAdapter {
         }
 
         // 业务字段
-        fields[titleField] = info.name
+        fields[titleField] = resolvedTitle(info)
         fields[descrField] = cleanDescription(info.descr, sourceHost: site.url)
-        if let imdb = info.imdb { fields[imdbField] = imdb }
-        // 分类
-        let catMap = override?.categoryMap
-        let kindKey = info.kind?.rawValue ?? "other"
-        let category = catMap?[kindKey] ?? catMap?["other"]
-        if let category { fields["category"] = String(category) }
+        if let imdb = info.imdb {
+            let tmpl = override?.imdbValueTemplate ?? "{imdb}"
+            fields[imdbField] = tmpl.replacingOccurrences(of: "{imdb}", with: imdb)
+        }
+        if let doubanField = override?.doubanField, let douban = info.douban {
+            let tmpl = override?.doubanValueTemplate ?? "{douban}"
+            fields[doubanField] = tmpl.replacingOccurrences(of: "{douban}", with: douban)
+        }
+        // 分类（支持质量型键 "<kind>/<profile>"）
+        if let category = resolveCategory(info) { fields[categoryField] = String(category) }
+        // 质量下拉（medium/codec/audiocodec/standard）
+        applyQualitySelects(info, into: &fields)
         // 额外固定字段
         for (k, v) in (override?.extraUploadFields ?? [:]) {
             fields[k] = v
@@ -224,7 +301,6 @@ final class NexusPHPAdapter: SiteAdapter {
         // 常见可选字段的默认值（不影响大多数站）
         fields["nfo"] = ""
         fields["anonymous"] = "1"
-        fields["strikethrough"] = ""
 
         let resp = try client.postMultipart(
             uploadURL,
@@ -244,10 +320,11 @@ final class NexusPHPAdapter: SiteAdapter {
         if resp.status == 200, body.contains("new torrent") || body.contains("发布成功") || body.contains("Torrent added") {
             return UploadOutcome(success: true, message: "发布成功", detailURL: nil)
         }
-        // 失败: 提取错误信息
-        let errMsg = HTMLUtil.group(body, "<div[^>]*id=[\"']errorbox[\"'][^>]*>(.*?)</div>", group: 1, options: [.dotMatchesLineSeparators])
-            ?? HTMLUtil.firstMatch(body, "(?:This torrent already exists|already exists|已存在|标题.*错误|不能为空|分类.*错误)[^<]{0,80}")
-            ?? "HTTP \(resp.status) 未识别的返回"
+        // 失败: 提取错误信息 + 保存页面
+        var errMsg = extractUploadError(body: body, status: resp.status)
+        if let p = dumpDebugHTML(body) {
+            errMsg += "（页面已存 \(p)）"
+        }
         return UploadOutcome(success: false, message: HTMLUtil.stripTags(errMsg), detailURL: nil)
     }
 }

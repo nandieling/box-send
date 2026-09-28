@@ -75,6 +75,37 @@ if [ ! -f Config/boxsend.json ]; then
     log "已从 Config/boxsend.example.json 生成 Config/boxsend.json（填入 gistSync/downloader 后再启用服务）"
   fi
 fi
+# 把示例里最新的站点 overrides/targetSites 同步进本地配置（保留本地 token、下载器等）
+if [ -f Config/boxsend.json ] && [ -f Config/boxsend.example.json ]; then
+  log "同步站点 overrides 到 Config/boxsend.json ..."
+  python3 - <<'PYEOF_CFG'
+import json
+try:
+    local = json.load(open("Config/boxsend.json"))
+    ex = json.load(open("Config/boxsend.example.json"))
+except Exception as e:
+    print(f"  (跳过配置同步: {e})")
+    raise SystemExit(0)
+exmap = {s["id"]: s for s in ex.get("sourceSites", [])}
+changed = False
+for s in local.get("sourceSites", []):
+    e = exmap.get(s["id"])
+    if e and "overrides" in e and s.get("overrides") != e["overrides"]:
+        s["overrides"] = e["overrides"]
+        changed = True
+ids = {s["id"] for s in local.get("sourceSites", [])}
+new_targets = [t for t in ex.get("targetSites", []) if t in ids]
+if local.get("targetSites") != new_targets:
+    local["targetSites"] = new_targets
+    changed = True
+if changed:
+    json.dump(local, open("Config/boxsend.json", "w"), ensure_ascii=False, indent=2)
+    open("Config/boxsend.json", "a").write("\n")
+    print("  已更新 Config/boxsend.json（站点 overrides / targetSites）")
+else:
+    print("  Config/boxsend.json 已是最新")
+PYEOF_CFG
+fi
 swift build -c release
 install -m 755 .build/release/BoxSend /usr/local/bin/box-send
 box-send sites | head -3

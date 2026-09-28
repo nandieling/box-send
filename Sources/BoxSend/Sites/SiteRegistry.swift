@@ -3,10 +3,10 @@ import Foundation
 /// 站点注册表：按 framework 选择适配器；NexusPHP 家族内置优先站点表。
 enum SiteRegistry {
 
-    static func adapter(for site: SiteConfig, client: HTTPClient) -> SiteAdapter {
+    static func adapter(for site: SiteConfig, client: HTTPClient, debugDir: String? = nil) -> SiteAdapter {
         switch site.framework {
         case .nexusPHP:
-            return NexusPHPAdapter(site: site, client: client)
+            return NexusPHPAdapter(site: site, client: client, debugDir: debugDir)
         default:
             // M1 只实现 NexusPHP；其余框架 M2 补齐
             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器 (M2)")
