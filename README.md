@@ -12,7 +12,7 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 │  BoxSend.app（GUI）  /  box-send（CLI）                        │
 │   ├─ PT-depiler（Safari 扩展）→ 本地备份 zip 或 Gist 提供 cookie │
 │   ├─ 直接访问 PT 站（解析/下载 .torrent/上传转种）                │
-│   └─ 通过 de5 隧道推送到下载器（按源站限速 upLimit）              │
+│   └─ 通过 de5 隧道推送到下载器（按站点 + 分组限速 upLimit）        │
 └──────────────────────────────┬─────────────────────────────────┘
                                │ https://qbnet.….de5.net（已有隧道）
 ┌──────────────────────────────▼─────────────────────────────────┐
@@ -40,7 +40,8 @@ open dist/BoxSend.app
 
 1. **Cookie 页** → 「导入 PTD_backup_*.zip …」：在 PT-depiler 里「备份 → 本地备份」导出 zip（勾选 Cookie 字段；如设置了备份密码，导入时输入）。
 2. **下载器页** → 填 VPS 隧道地址（如 `https://qbnet.nandielinghai.de5.net`）+ 账号密码 → 「测试连接」应显示版本信息。
-3. **运行页** → 粘贴种子详情页链接 → 勾选目标站 → 「开始运行」。
+3. **站点与限速页**（可选）→ 给站点设上传限速（MB/s）、把多个目标站加入同一分组（组带宽上限 + 单日上传量上限，避免 VPS 带宽/日上传量超限）。
+4. **运行页** → 粘贴种子详情页链接 → 勾选目标站 → 「开始运行」。
 
 配置与状态都在 `~/Library/Application Support/BoxSend/`（boxsend.json / cookies.json / state.json / debug/）。
 
@@ -57,7 +58,7 @@ open dist/BoxSend.app
 1. 打开 PT-depiler 界面 → 「备份」→ 勾选 **Cookie**（其它字段随意）→ 「本地备份」，保存 `PTD_backup_*.zip`。
 2. 在 BoxSend 的 **Cookie** 页选择该 zip 导入。若 PT-depiler 设置了备份密码，导入时输入（zip 内是 AES 加密的，口令 = MD5(密码) 前 16 位）。
 
-> 备选：Gist 自动同步（可选）。在 PT-depiler 里配置 Gist 备份后，把 gistID / GitHub token / 备份密码填到 BoxSend **Cookie** 页下方，可开「自动定时同步」（默认 30 分钟），无需手动导 zip。
+> 备选：Gist 自动同步（可选）。在 PT-depiler 里配置 Gist 备份后，把 gistID / GitHub token / 备份密码填到 BoxSend **Cookie** 页上方的「Gist 同步」区块，可开「自动定时同步」（默认 30 分钟），无需手动导 zip。
 
 ### 第 2 步：打包并启动
 
@@ -92,6 +93,15 @@ rm -f /usr/local/bin/box-send
 rm -rf /opt/box-send ~/.boxsend
 # Swift 工具链（约 1GB+）
 rm -rf /opt/swift-6.4.0-RELEASE-*
+```
+
+### 更新版本
+
+```bash
+cd box-send
+git pull
+bash scripts/make-app.sh   # 重新打包（配置/cookie/状态都在 Application Support，不受影响）
+open dist/BoxSend.app
 ```
 
 ## 使用（GUI）
