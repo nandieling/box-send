@@ -145,11 +145,16 @@ async function api(path, body){
 }
 
 async function loadConfig(){
-  const r=await api('/api/config');
-  if(!r.ok){ setMsg('save-msg','err', r.error||'加载失败'); return; }
-  cfg=JSON.parse(r.raw);
-  $('json').value=r.raw;
-  fillFromCfg();
+  try{
+    const r=await api('/api/config');
+    if(!r.ok){ setMsg('save-msg','err', r.error||'加载失败'); return; }
+    if(!r.raw || !r.raw.trim()){ setMsg('save-msg','err','服务器返回的配置为空'); return; }
+    cfg=JSON.parse(r.raw);
+    $('json').value=r.raw;
+    fillFromCfg();
+  }catch(e){
+    setMsg('save-msg','err','加载失败: '+e.message+'（点「重新载入」重试）');
+  }
 }
 function fillFromCfg(){
   if(!cfg) return;
@@ -195,11 +200,18 @@ function collectFromForm(){
   $('json').value=JSON.stringify(cfg, null, 2);
 }
 async function saveAll(){
-  collectFromForm();
-  try{ JSON.parse($('json').value); }catch(e){ setMsg('save-msg','err','JSON 格式错误: '+e.message); return; }
-  const r=await api('/api/config', {raw:$('json').value});
-  setMsg('save-msg', r.ok?'ok':'err', r.ok?'已保存到 Config/boxsend.json':'保存失败: '+(r.error||''));
-  if(r.ok) loadConfig();
+  try{ collectFromForm(); }catch(e){ setMsg('save-msg','err','表单收集出错: '+e.message); return; }
+  const t=$('json').value;
+  if(!t || !t.trim()){ setMsg('save-msg','err','配置为空：先点「重新载入」再保存'); return; }
+  try{ JSON.parse(t); }catch(e){
+    setMsg('save-msg','err','JSON 格式错误: '+e.message+'（未手改过的话点「重新载入」再试）');
+    return;
+  }
+  try{
+    const r=await api('/api/config', {raw:t});
+    setMsg('save-msg', r.ok?'ok':'err', r.ok?'已保存到 Config/boxsend.json':'保存失败: '+(r.error||''));
+    if(r.ok) loadConfig();
+  }catch(e){ setMsg('save-msg','err','请求失败: '+e.message); }
 }
 function formatJson(){
   try{ const t=$('json'); t.value=JSON.stringify(JSON.parse(t.value), null, 2); setMsg('save-msg','ok','已格式化'); }

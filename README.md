@@ -2,6 +2,7 @@
 
 在 VPS（"盒子"服务器）上运行的 Swift 工具：从源 PT 站批量转种到其它 PT 站，并把种子推送到本机下载器（qBittorrent / Transmission），**按源站点设置上传限速**（避免上传过快被站点风控/封禁）。
 
+- 仓库：<https://github.com/nandieling/box-send>（私有）
 - 转种流程与 [auto_feed 油猴脚本](https://greasyfork.org/zh-CN/scripts/424132-auto-feed) 一致，限速机制参考其 `siteUpLimits`
 - cookie 由 [PT-depiler-safari](../PT-depiler-safari) 的 Gist 备份功能自动提供，无需手工导出
 - 支持 Mac（开发）/ Debian 12 / 13 VPS（生产）
@@ -29,7 +30,9 @@ VPS: box-send（Swift 常驻进程）
 前置：一台 Debian 12/13 的 VPS（有 root 或 sudo）、VPS 上已装好下载器并开启 WebUI/RPC、一台登录了 PT 站的 Mac（Safari + PT-depiler）、一个 GitHub 账号。
 
 ```bash
-# 1) VPS 上放仓库（git clone 或 scp 整个目录均可，位置随意，示例 /opt/box-send）
+# 1) VPS 上放仓库（git clone 或 scp 均可，位置随意，示例 /opt/box-send）
+git clone https://github.com/nandieling/box-send.git /opt/box-send
+# 私有仓库：clone 时输账号 nandieling + 一个对 box-send 有 Contents 读写权限的 PAT
 cd /opt/box-send
 
 # 2) 一键部署：装 Swift 6.4 工具链 + 依赖 → release 构建 → 装 /usr/local/bin/box-send → 注册 systemd 服务
@@ -89,12 +92,13 @@ systemctl enable --now boxsend-web        # Web 控制台 http://127.0.0.1:8088
 ### 第 2 步：在 VPS 安装 box-send
 
 ```bash
-# 方式 A：git（需要 VPS 能访问 GitHub）
-git clone <你的仓库地址> /opt/box-send
+# 方式 A：git（需要 VPS 能访问 GitHub；私有仓库输账号 + PAT）
+git clone https://github.com/nandieling/box-send.git /opt/box-send
+git config credential.helper store   # 首次输入后免再输
 
-# 方式 B：本地打包 scp
-#   tar czf box-send.tgz box-send/
-#   scp box-send.tgz user@vps:/opt/ && ssh user@vps 'cd /opt && tar xzf box-send.tgz'
+# 方式 B：本地打包 scp（Mac 上）
+#   cd ~/Downloads/swift && tar czf /tmp/box-send.tgz --exclude 'box-send/.build' box-send
+#   scp /tmp/box-send.tgz root@<vps-ip>:/opt/ && ssh root@<vps-ip> 'cd /opt && tar xzf box-send.tgz'
 ```
 
 ```bash
