@@ -1,0 +1,15 @@
+[Unit]
+Description=box-send web console (config UI + manual runs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/box-send
+# 默认只监听回环地址；对局域网/公网暴露前请改 --host 并加 --token
+ExecStart=/usr/local/bin/box-send serve --host 127.0.0.1 --port 8088
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

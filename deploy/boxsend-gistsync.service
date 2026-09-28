@@ -1,0 +1,14 @@
+[Unit]
+Description=box-send PT-depiler Gist cookie sync (loop)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/box-send
+ExecStart=/usr/local/bin/box-send gist-sync --loop
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
