@@ -59,6 +59,8 @@ public struct SiteOverride: Codable {
     /// 标签复选框字段名（如 "option_sel[]"）；值 = 规范标签 -> 站点 ID（各站值类型不同：数字或字母 token）
     var tagField: String?
     var tagMap: [String: String]?
+    /// 独立复选框标签（个别站的标签是若干独立 checkbox，命中时提交 字段名=yes）：规范标签 -> 字段名
+    var tagCheckboxes: [String: String]?
     /// 规范标签: chinese_sub / hdr10 / hdr10plus / dovi / dtsx / atmos / forbid / limited
     /// 制作组下拉字段（如 "team_sel"）；未知组 -> teamOtherValue
     var teamField: String?
@@ -105,6 +107,7 @@ extension SiteOverride {
             out.qualityValueMaps = m
         }
         if let v = tagMap { out.tagMap = base.tagMap?.merging(v) { _, new in new } }
+        if let v = tagCheckboxes { out.tagCheckboxes = base.tagCheckboxes?.merging(v) { _, new in new } }
         if let v = teamPatterns { out.teamPatterns = base.teamPatterns?.merging(v) { _, new in new } }
         if let v = regionField { out.regionField = v }
         if let v = regionOtherValue { out.regionOtherValue = v }

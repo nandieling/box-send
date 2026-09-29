@@ -129,6 +129,7 @@ public final class ReseedPipeline {
             if state.isPushed(key: release.dedupKey) {
                 report.pushed = true
                 report.pushID = "already pushed"
+                state.note("push: 已推送过，跳过: \(release.summary)")
             } else {
                 do {
                     let result = try downloader.addTorrent(

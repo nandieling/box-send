@@ -59,6 +59,7 @@ extension SiteOverride {
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
         qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 19, "uhdbd8k": 19, "uhd8k": 19, "uhd": 4, "webdl": 18, "bluray": 1, "encode": 4, "hdtv": 6], "codec": ["hevc": 5, "avc": 1, "vc1": 2, "mpeg2": 4, "av1": 3, "xvid": 6], "audiocodec": ["dtsma": 10, "truehd": 11, "ac3": 7, "dts": 3, "flac": 1, "ape": 2, "lpcm": 13, "pcm": 13, "wav": 12, "aac": 6, "alac": 14, "m4a": 14], "standard": ["1080p": 1, "1080i": 2, "720p": 3, "2160p": 6, "8k": 7]],
         subtitleField: "small_descr",
+        tagCheckboxes: ["chinese_sub": "cnsub", "limited": "limited"],
         teamField: "team_sel",
         teamOtherValue: 0,
         teamPatterns: ["CHDBits": 14, "CHDHKTV": 11, "CHDWEB": 12, "CHDTV": 2, "CHDPAD": 15, "CHDBPM": 28, "GrammyFan": 29, "OneHD": 8, "blucook": 16, "SGNB": 13, "REMUX": 1, "KAN": 19, "JKCT": 22, "BMDru": 23, "Destiny": 25, "GrassTV": 27, "SP": 26]

@@ -77,7 +77,9 @@ final class NexusPHPAdapter: SiteAdapter {
 
         // 副标题（译名）与类别：从简介纯文本的 "❁ 译　　名:　X" / "❁ 类　　别:　X" 行提取
         let plain = HTMLUtil.stripTags(descr)
-        let subtitle = Self.lineValue(plain, prefix: "译", suffix: "名") ?? ""
+        // 副标题：优先详情页"副标题"行（完整内容），回退简介"译名"行
+        var subtitle = Self.detailRowValue(html, label: "副标题") ?? ""
+        if subtitle.isEmpty { subtitle = Self.lineValue(plain, prefix: "译", suffix: "名") ?? "" }
         let genre = Self.lineValue(plain, prefix: "类", suffix: "别") ?? ""
         let region = Self.lineValue(plain, prefix: "产", suffix: "地") ?? ""
 
@@ -110,20 +112,35 @@ final class NexusPHPAdapter: SiteAdapter {
             size = Int64(num * factor)
         }
 
-        // .torrent 下载直链: download.php 链接
+        // .torrent 下载直链：1) 文本含关键词的 download.php 锚点；2) 下载表单（HDSky：form action + submit value=文件名）；兜底：任意含 download.php 的 href
         var torrentURL: String? = nil
         var torrentName = ""
+        func cleanURL(_ r: String) -> String {
+            HTMLUtil.resolveURL(HTMLUtil.decodeEntities(r), against: base)
+        }
         for a in HTMLUtil.anchorText(html, hrefPattern: "download.php") {
             let t = a.text.lowercased()
             if t.contains("torrent") || t.contains("种子") || t.contains("下载") {
                 torrentName = a.text
-                torrentURL = HTMLUtil.resolveURL(a.href, against: base)
+                torrentURL = cleanURL(a.href)
                 break
             }
         }
         if torrentURL == nil {
-            torrentURL = HTMLUtil.firstMatch(html, "href=[\"']([^\"']*download\\.php[^\"']*)[\"']").map {
-                HTMLUtil.resolveURL($0, against: base)
+            let formRe = try? NSRegularExpression(pattern: "<form[^>]*action=[\"']([^\"']*download\\.php[^\"']*)[\"'][^>]*>(.*?)</form>", options: [.caseInsensitive, .dotMatchesLineSeparators])
+            if let m = formRe?.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)) {
+                torrentURL = cleanURL(String(html[Range(m.range(at: 1), in: html)!]))
+                let body = String(html[Range(m.range(at: 2), in: html)!])
+                if let v = HTMLUtil.group(body, "<input[^>]*value=[\"']([^\"']*)[\"']") {
+                    torrentName = HTMLUtil.decodeEntities(v)
+                }
+            }
+        }
+        if torrentURL == nil {
+            // 逐属性取 href 值再匹配（避免跨属性误匹配拼出坏 URL）
+            for v in HTMLUtil.allMatches(html, "href=[\"']([^\']+)[\"']", options: .caseInsensitive) where v.contains("download.php") {
+                torrentURL = cleanURL(v)
+                break
             }
             if torrentURL != nil { torrentName = "\(site.id).torrent" }
         }
@@ -171,6 +188,18 @@ final class NexusPHPAdapter: SiteAdapter {
         let v = text[Range(m.range(at: 1), in: text)!]
             .trimmingCharacters(in: CharacterSet(charactersIn: " \u{3000}：:"))
         return v.isEmpty ? nil : String(v)
+    }
+
+    /// 详情页表格行取值：<tr><td>标签</td><td>值</td></tr>（如 副标题 行，值可能含 | 分隔的完整副标题）
+    static func detailRowValue(_ html: String, label: String) -> String? {
+        let pattern = "<tr[^>]*>\\s*<td[^>]*>\\s*\(NSRegularExpression.escapedPattern(for: label))\\s*</td>\\s*<td[^>]*>(.*?)</td>"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+              let m = re.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)) else { return nil }
+        let raw = String(html[Range(m.range(at: 1), in: html)!])
+        let t = HTMLUtil.stripTags(HTMLUtil.decodeEntities(raw))
+            .replacingOccurrences(of: "[ \\t　 ]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
     }
 
     /// 简介清洗（HTML 格式目标站用）：
@@ -235,9 +264,10 @@ final class NexusPHPAdapter: SiteAdapter {
             throw BoxSendError.http(status: resp.status, url: info.torrentURL,
                                     body: String(data: resp.data.prefix(200), encoding: .utf8) ?? "")
         }
-        // .torrent 是 bencode，长度合理
-        guard resp.data.count > 64 else {
-            throw BoxSendError.badInput(".torrent 内容异常(\(resp.data.count) bytes)，可能 cookie 失效: \(info.torrentURL)")
+        // 校验是有效 bencode 且含 info（防止误抓 HTML 页面，如下载链接过期/失效时）
+        guard Bencode.infoHash(resp.data) != nil else {
+            let head = String(data: resp.data.prefix(80), encoding: .utf8) ?? ""
+            throw BoxSendError.badInput(".torrent 不是有效 bencode（\(resp.data.count) bytes，开头: \(head)），可能 cookie 失效或下载链接错误: \(info.torrentURL)")
         }
         return (resp.data, info.torrentName)
     }
@@ -313,13 +343,13 @@ final class NexusPHPAdapter: SiteAdapter {
     private func canonicalTags(_ info: ReleaseInfo) -> [String] {
         var tags: [String] = []
         let n = info.name.uppercased()
-        let evidence = HTMLUtil.stripTags(info.descr) + "\n" + info.mediainfo
+        let evidence = HTMLUtil.stripTags(info.descr) + "\n" + info.mediainfo + "\n" + info.subtitle
         if n.contains("DTS:X") || n.contains("DTS X") { tags.append("dtsx") }
         if n.contains("ATMOS") { tags.append("atmos") }
         if n.contains("HDR10+") { tags.append("hdr10plus") }
         else if n.contains("HDR10") { tags.append("hdr10") }
         if n.contains("DOVI") || n.contains("DOLBY VISION") { tags.append("dovi") }
-        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || info.name.contains("中字") {
+        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || info.name.contains("中字") {
             tags.append("chinese_sub")
         }
         if info.isForbidReseed { tags.append("forbid") }
@@ -392,6 +422,12 @@ final class NexusPHPAdapter: SiteAdapter {
         if let tagField = override?.tagField, let map = override?.tagMap {
             for tag in canonicalTags(info) {
                 if let v = map[tag] { fields.append(.init(tagField, v)) }
+            }
+        }
+        // 独立复选框标签（chdbits 等：cnsub=yes）
+        if let box = override?.tagCheckboxes {
+            for tag in canonicalTags(info) {
+                if let f = box[tag] { setField(f, "yes") }
             }
         }
         // 制作组

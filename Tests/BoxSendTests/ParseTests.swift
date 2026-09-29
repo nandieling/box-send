@@ -4,6 +4,9 @@ import XCTest
 /// 真实页面/种子解析回归测试（fixture 抓自 LuckPT #42211 + HDSky upload.php）
 final class ParseTests: XCTestCase {
 
+    /// LuckPT #42211 详情页"副标题"行的完整内容（回归基准）
+    let FULL_SUBTITLE = "毒食难肥/美味代价(台) | 导演：罗伯特·肯纳 | 第8届华盛顿影评人协会奖获奖纪录片 | 内封LuckPT原创简繁中字及Now官方翻译中字 *美国食品安全纪录片*"
+
     private func fixturePath(_ name: String) -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -68,8 +71,8 @@ final class ParseTests: XCTestCase {
         let info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=42211&hit=1")
         // 标题 = 纯发布名（不带 "LuckPT :: 种子详情 ... Powered by NexusPHP"）
         XCTAssertEqual(info.name, "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu")
-        // 副标题（译名）
-        XCTAssertEqual(info.subtitle, "毒食难肥")
+        // 副标题 = 详情页"副标题"行完整内容（不只是"译名"行的前段）
+        XCTAssertEqual(info.subtitle, FULL_SUBTITLE)
         // 类别
         XCTAssertEqual(info.genre, "纪录片")
         XCTAssertEqual(info.kind, .documentary)
@@ -146,8 +149,8 @@ final class ParseTests: XCTestCase {
 
         // 名称（torrentName 型站点除外，HDSky 用发布名）
         XCTAssertEqual(dict["name"], "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu")
-        // 副标题
-        XCTAssertEqual(dict["small_descr"], "毒食难肥")
+        // 副标题（完整内容）
+        XCTAssertEqual(dict["small_descr"], FULL_SUBTITLE)
         // 分类 = 纪录片 404
         XCTAssertEqual(dict["type"], "404")
         // IMDb / 豆瓣
@@ -220,7 +223,7 @@ final class ParseTests: XCTestCase {
         // hdhome：副标题 + tags[]（中字=zz，简介有简繁字幕）+ 制作组 Other(11)
         let hdhome = try fieldsFor("hdhome")
         let d1 = dictOf(hdhome)
-        XCTAssertEqual(d1["small_descr"], "毒食难肥")
+        XCTAssertEqual(d1["small_descr"], FULL_SUBTITLE)
         let tags1 = hdhome.filter { $0.0 == "tags[]" }.map { $0.1 }
         XCTAssertTrue(tags1.contains("zz"), "hdhome 应勾 中字(zz), got \(tags1)")
         XCTAssertFalse(tags1.contains("db"))
@@ -229,7 +232,7 @@ final class ParseTests: XCTestCase {
         // audiences：副标题 + tags[] 中字=zz；无制作组字段
         let audiences = try fieldsFor("audiences")
         let d2 = dictOf(audiences)
-        XCTAssertEqual(d2["small_descr"], "毒食难肥")
+        XCTAssertEqual(d2["small_descr"], FULL_SUBTITLE)
         let tags2 = audiences.filter { $0.0 == "tags[]" }.map { $0.1 }
         XCTAssertTrue(tags2.contains("zz"))
         XCTAssertFalse(audiences.contains { $0.0 == "team_sel" })
@@ -237,29 +240,68 @@ final class ParseTests: XCTestCase {
         // chdbits：副标题；无标签；制作组兜底 0（无 Other 选项）
         let chdbits = try fieldsFor("chdbits")
         let d3 = dictOf(chdbits)
-        XCTAssertEqual(d3["small_descr"], "毒食难肥")
+        XCTAssertEqual(d3["small_descr"], FULL_SUBTITLE)
         XCTAssertFalse(chdbits.contains { $0.0.hasPrefix("tags") })
+        // 独立复选框标签：中字 -> cnsub=yes
+        XCTAssertTrue(chdbits.contains { $0.0 == "cnsub" && $0.1 == "yes" })
+        XCTAssertFalse(chdbits.contains { $0.0 == "perent" && $0.1 == "yes" })
         XCTAssertEqual(d3["team_sel"], "0")
 
         // ttg：副标题字段名为 subtitle
         let ttg = try fieldsFor("ttg")
         let d4 = dictOf(ttg)
-        XCTAssertEqual(d4["subtitle"], "毒食难肥")
+        XCTAssertEqual(d4["subtitle"], FULL_SUBTITLE)
         XCTAssertFalse(ttg.contains { $0.0 == "team" })  // 该站 team 是 hidden 字段
 
         // pter：副标题 + 地区（产地 美国 -> 欧美 4）
         let pter = try fieldsFor("pter")
         let d5 = dictOf(pter)
-        XCTAssertEqual(d5["small_descr"], "毒食难肥")
+        XCTAssertEqual(d5["small_descr"], FULL_SUBTITLE)
         XCTAssertEqual(d5["team_sel"], "4")
 
         // luckpt：tags[4][] 中字=23 + 制作组 LuckDocu(13)
         let luckpt = try fieldsFor("luckpt")
         let d6 = dictOf(luckpt)
-        XCTAssertEqual(d6["small_descr"], "毒食难肥")
+        XCTAssertEqual(d6["small_descr"], FULL_SUBTITLE)
         let tags6 = luckpt.filter { $0.0 == "tags[4][]" }.map { $0.1 }
         XCTAssertTrue(tags6.contains("23"), "luckpt 应勾 中字(23), got \(tags6)")
         XCTAssertEqual(d6["team_sel[4]"], "13")
+    }
+
+    // MARK: - HDSky 详情页解析（表单下载 + 副标题行）
+
+    func testHDSkyDetailPage() throws {
+        let html = fixtureStr("hdsky-detail.html")
+        XCTAssertFalse(html.isEmpty)
+        let adapter = NexusPHPAdapter(site: site("hdsky"), client: HTTPClient(cookies: CookieStore(), userAgent: "box-send-test"))
+        let info = try adapter.parseDetail(html: html, detailURL: "https://hdsky.me/details.php?id=550491&hit=1")
+        // 标题 = h1#top 纯发布名
+        XCTAssertEqual(info.name, "The Immortal Ascension S01 2025 2160p WEB-DL AAC H265-Pure@HDSWEB")
+        // 副标题 = 副标题行完整内容
+        XCTAssertTrue(info.subtitle.hasPrefix("凡人修仙传 全30集"), "got: \(info.subtitle)")
+        XCTAssertTrue(info.subtitle.contains("主演: 杨洋 金晨 汪铎"))
+        // 下载直链 = 下载表单 action（含 t= 与 sign=），不是跨属性拼出的坏 URL
+        XCTAssertTrue(info.torrentURL.contains("download.php?id=550491"), "got: \(info.torrentURL)")
+        XCTAssertTrue(info.torrentURL.contains("t=") && info.torrentURL.contains("sign="))
+        XCTAssertFalse(info.torrentURL.contains("hit=1href"))
+        // 文件名 = submit 按钮 value
+        XCTAssertTrue(info.torrentName.hasPrefix("[HDSky]."), "got: \(info.torrentName)")
+        XCTAssertTrue(info.torrentName.hasSuffix(".torrent"))
+        // 该直链下载下来的 torrent 是有效 bencode（回归：之前误抓 HTML 导致 415）
+        if let d = fixtureData("hdsky-550491.torrent") {
+            XCTAssertNotNil(Bencode.infoHash(d), "fixture 应可解析出 info hash")
+            XCTAssertEqual(d.prefix(9).map { Character(UnicodeScalar($0)) }, Array("d8:announce".prefix(9)).map { $0 })
+        } else {
+            XCTFail("fixture hdsky-550491.torrent 缺失")
+        }
+        // 无效 bencode 校验：HTML 页面应判为无效
+        XCTAssertNil(Bencode.infoHash(Data("<html>not a torrent</html>".utf8)))
+    }
+
+    func testDetailRowValue() {
+        let html = "<tr><td class=\"rowhead\">副标题</td><td class=\"rowfollow\">A | B&nbsp;C</td></tr>"
+        XCTAssertEqual(NexusPHPAdapter.detailRowValue(html, label: "副标题"), "A | B C")
+        XCTAssertNil(NexusPHPAdapter.detailRowValue(html, label: "不存在"))
     }
 
     func testRegionLineValue() {
