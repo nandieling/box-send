@@ -154,5 +154,131 @@ extension SiteOverride {
     )
 
     /// hhanclub：候选区上传（offers.php），M2；目前无 overrides
+    // MARK: - 通用中文 NexusPHP（2026-09-29 批量接入）
+
+    /// 通用中文 NexusPHP 默认值：POST takeupload.php、标题 name、IMDB 走 url 字段。
+    /// 分类走 NexusPHPAdapter 动态解析（上传页 <select> 关键词匹配），质量下拉保持服务器默认值；
+    /// 个别站字段不同（如 PTFans 的 pt_gen/小描述位置、CHDBits 的 torrentfile）请用配置层 overrides 覆盖。
+    static let nexusCN = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// byr（BYR）：分类走 auto_feed 实测 type 表（电影408 剧集401 综艺405 音乐402 动漫404 纪录410）
+    static let byr = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 408, "series": 401, "tvshow": 405, "music": 402, "anime": 404, "documentary": 410, "other": 408],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// 影（StarSpace）：自定义 NexusPHP 变体，分类值是字母 token，源介质需 medium+resolution 组合选值
+    static let shadow = SiteOverride(
+        uploadPath: "p_torrent/video_upload.php",
+        uploadActionPath: "video_upload_act.php",
+        titleField: "name",
+        descrField: "descr",
+        imdbField: "imdb_url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        doubanField: "douban_url",
+        doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
+        categoryField: "tr_category",
+        categoryStringMap: ["movie": "mo", "series": "tv", "tvshow": "tv", "anime": "an", "documentary": "do", "music": "mv", "sports": "sp", "other": "ot"],
+        sourceSelectField: "tr_source",
+        sourceMap: [
+            "remux/2160p": "s52", "remux/8k": "s52", "remux/1080p": "s42", "remux/1080i": "s42",
+            "bluray/1080p": "s41", "bluray/720p": "s41", "bluray/1080i": "s41",
+            "webdl/2160p": "s13", "webdl/1080p": "s13", "webdl/720p": "s13",
+            "hdtv/1080p": "s22", "hdtv/720p": "s22",
+            "dvd/sd": "s32",
+            "encode/2160p": "s51", "encode/1080p": "s41",
+            "remux": "s42", "bluray": "s41", "webdl": "s13", "hdtv": "s22", "dvd": "s32", "encode": "s41", "track": "s11"
+        ],
+        qualitySelects: ["tr_video_codec": "codec", "tr_audio_codec": "audiocodec", "tr_resolution": "standard"],
+        qualityValueMaps: [
+            "codec": ["hevc": 2, "avc": 1, "vc1": 5, "mpeg2": 3, "av1": 4, "xvid": 4],
+            "audiocodec": ["dtsma": 6, "dtsc": 7, "truehd": 13, "eac3": 3, "ac3": 3, "dts": 4, "flac": 8, "ape": 2, "aac": 1, "mp3": 11, "ogg": 12, "m4a": 10, "pcm": 13]
+        ],
+        qualityStringMaps: [
+            "standard": ["8k": "r5", "2160p": "r4", "1080p": "r3", "1080i": "r3", "720p": "r2", "sd": "r1"]
+        ],
+        subtitleField: "small_desc",
+        tagCheckboxes: ["chinese_sub": "tag_chs_sub", "forbid": "tag_jz"]
+    )
+
+    // MARK: - Blu 家族
+
+    /// blutopia（Blu）：分类 1=Movie 2=TV Show 8=Other；媒介 1=Full Disc 3=Remux 4=WEB-DL 5=WEBRip 6=HDTV 12=Encode 15=Other；分辨率 11=4320p 1=2160p 2=1080p 3=1080i 5=720p 10=Other（2026-09-29 实测创建页选项表）
+    static let blutopia = SiteOverride(
+        uploadPath: "torrents/create",
+        uploadActionPath: "torrents",
+        categoryMap: ["movie": 1, "series": 2, "tvshow": 2, "anime": 2, "documentary": 2, "music": 8, "other": 8],
+        qualityValueMaps: [
+            "medium": ["remux": 3, "uhdbd": 1, "uhdbd8k": 1, "uhd8k": 1, "uhd": 1, "bluray": 1, "webdl": 4, "webrip": 5, "hdtv": 6, "dvd": 15, "encode": 12, "track": 15, "default": 15],
+            "standard": ["8k": 11, "2160p": 1, "1080p": 2, "1080i": 3, "720p": 5, "sd": 10, "music": 10, "default": 10]
+        ]
+    )
+
+    /// monika（MonikaDesign）：分类 1=Movie 2=TV 6=Anime Movie 8=Anime TV 9=Music of TV；媒介 1=Full Disc 2=Remux 3=Encode 4=WEB-DL 5=WEBRip 6=HDTV 7=ALBUM；分辨率 1=4320p 2=2160p 3=1080p 4=1080i 5=720p 10=Other 11=Lossless（2026-09-29 实测）
+    static let monika = SiteOverride(
+        uploadPath: "upload/1",
+        uploadActionPath: "upload",
+        categoryMap: ["movie": 1, "series": 2, "tvshow": 2, "anime": 8, "documentary": 2, "music": 9, "other": 1],
+        qualityValueMaps: [
+            "medium": ["remux": 2, "uhdbd": 1, "uhdbd8k": 1, "uhd8k": 1, "uhd": 1, "bluray": 1, "webdl": 4, "webrip": 5, "hdtv": 6, "dvd": 1, "encode": 3, "track": 7, "default": 3],
+            "standard": ["8k": 1, "2160p": 2, "1080p": 3, "1080i": 4, "720p": 5, "sd": 10, "music": 11, "default": 10]
+        ]
+    )
+
+    // MARK: - 经典 Gazelle / xbtit
+
+    /// hdspace（HD-Space，xbtit 皮肤）：分类 15=Blu-Ray 18/19=Movie 720/1080 40=Remux 41=4K UHD 24/25/47=Doc 720/1080/2160 27/28/48=Anime 720/1080/2160 30=HQ Audio 36=Trailers 38=Other（2026-09-29 实测上传页）
+    static let hdspace = SiteOverride(
+        uploadPath: "index.php?page=upload",
+        categoryMap: [
+            "movie/remux": 40, "movie/uhd-bd": 41, "movie/8k-bd": 41, "movie/8k": 41, "movie/2160p": 41,
+            "movie/bluray": 15, "movie/1440p": 19, "movie/1080p": 19, "movie/1080i": 19, "movie/720p": 18,
+            "movie/dvd": 38, "movie/sd": 38,
+            "documentary/2160p": 47, "documentary/8k": 47, "documentary/8k-bd": 47, "documentary/uhd-bd": 47,
+            "documentary/remux": 25, "documentary/1080p": 25, "documentary/1080i": 25, "documentary/1440p": 25,
+            "documentary/720p": 24, "documentary/sd": 24, "documentary/dvd": 24,
+            "anime/2160p": 48, "anime/8k": 48, "anime/8k-bd": 48, "anime/uhd-bd": 48,
+            "anime/remux": 28, "anime/1080p": 28, "anime/1080i": 28, "anime/1440p": 28,
+            "anime/720p": 27, "anime/sd": 27, "anime/dvd": 27,
+            "series": 38, "music": 30, "other": 38,
+            "movie": 19, "documentary": 25, "anime": 28
+        ]
+    )
+
+    /// opencd（OpenCD，经典 Gazelle）：分类表沿用 OpenCD 老版结构，站点改版后需按实际选项修正
+    static let opencd = SiteOverride(
+        categoryMap: [
+            "movie/1080p": 3, "movie/720p": 2, "movie/sd": 1, "movie/dvd": 1,
+            "movie/2160p": 3, "movie/8k": 3, "movie/uhd-bd": 3, "movie/8k-bd": 3, "movie/remux": 3,
+            "series": 9, "documentary": 6, "anime": 7, "music": 8, "other": 9, "movie": 3
+        ]
+    )
+
+    /// iptorrents（IPTorrents，经典 Gazelle）：分类表为 2023 改版后的结构，需按实际选项修正
+    static let iptorrents = SiteOverride(
+        categoryMap: [
+            "movie/1080p": 3, "movie/720p": 2, "movie/sd": 1, "movie/dvd": 1,
+            "movie/2160p": 4, "movie/8k": 4, "movie/uhd-bd": 4, "movie/8k-bd": 4, "movie/remux": 4,
+            "series/1080p": 7, "series/720p": 6, "series/sd": 5, "series/2160p": 8, "series": 7,
+            "documentary": 9, "anime": 10, "music": 11, "other": 12, "movie": 3
+        ]
+    )
+
     static let hhanclub: SiteOverride? = nil
 }

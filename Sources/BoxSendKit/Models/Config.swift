@@ -8,6 +8,7 @@ public enum SiteFramework: String, Codable {
     case gazelleJSONAPI = "GazelleJSONAPI"
     case luminance = "Luminance"
     case avistaz = "AvistazNetwork"
+    case blu = "Blu"
     case xbtit = "XBTIT"
     case custom = "custom"
 }
@@ -44,6 +45,12 @@ public struct SiteOverride: Codable {
     /// 分类映射：movie/series/anime/documentary/music/other，或 质量型站点用 "<kind>/<profile>"
     /// profile 取值：8k-bd/8k/uhd-bd/2160p/remux/bluray/1440p/1080p/1080i/720p/dvd/sd
     var categoryMap: [String: Int]?
+    /// 字符串值分类映射（个别站分类值是字母 token，如 影 站 tr_category: "mo"/"tv"）；支持 "<kind>/<profile>" 键
+    var categoryStringMap: [String: String]?
+    /// 源介质下拉（质量+分辨率组合选值）：字段名，如 "tr_source"
+    var sourceSelectField: String?
+    /// 组合键选值表："medium" 或 "medium/standard" -> 站点值（字符串），如 "remux/2160p" -> "s52"
+    var sourceMap: [String: String]?
     var extraUploadFields: [String: String]?  // 上传时额外提交的固定字段
     /// 命中即视为禁转（只推下载器、不转种），大小写不敏感
     var forbidReseedMarkers: [String]?
@@ -52,6 +59,8 @@ public struct SiteOverride: Codable {
     var qualitySelects: [String: String]?
     /// 质量值表：medium|codec|audiocodec|standard -> token -> 站点 ID
     var qualityValueMaps: [String: [String: Int]]?
+    /// 字符串值质量表（个别站选项值是字母 token，如 影 站 tr_resolution: "r3"）
+    var qualityStringMaps: [String: [String: String]]?
     /// 副标题字段（中文 NexusPHP 家族 "small_descr"）；值取源简介"译名"
     var subtitleField: String?
     /// 简介格式：bbcode（中文站默认）| html
@@ -102,7 +111,15 @@ extension SiteOverride {
         if let v = teamField { out.teamField = v }
         if let v = teamOtherValue { out.teamOtherValue = v }
         if let v = categoryMap { out.categoryMap = base.categoryMap?.merging(v) { _, new in new } }
+        if let v = categoryStringMap { out.categoryStringMap = base.categoryStringMap?.merging(v) { _, new in new } }
+        if let v = sourceSelectField { out.sourceSelectField = v }
+        if let v = sourceMap { out.sourceMap = base.sourceMap?.merging(v) { _, new in new } }
         if let v = qualitySelects { out.qualitySelects = base.qualitySelects?.merging(v) { _, new in new } }
+        if let v = qualityStringMaps {
+            var m = base.qualityStringMaps ?? [:]
+            for (k, nv) in v { m[k] = (m[k] ?? [:]).merging(nv) { _, n2 in n2 } }
+            out.qualityStringMaps = m
+        }
         if let v = qualityValueMaps {
             var m = base.qualityValueMaps ?? [:]
             for (k, nv) in v { m[k] = (m[k] ?? [:]).merging(nv) { _, n2 in n2 } }
@@ -349,9 +366,21 @@ public struct AppConfig: Codable {
         for p in candidates {
             guard FileManager.default.fileExists(atPath: p) else { continue }
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: p)) else { continue }
-            return try? JSONDecoder().decode(AppConfig.self, from: data)
+            guard var cfg = try? JSONDecoder().decode(AppConfig.self, from: data) else { continue }
+            return cfg.mergedWithRoster()
         }
         return nil
+    }
+
+    /// 内置站点表新增的站点自动并入 sourceSites（已存在的条目原样保留）
+    /// 用户在 GUI 勾选启用/作为目标，默认 enabled=false 不干扰现有工作流
+    public func mergedWithRoster() -> AppConfig {
+        let existing = Set(sourceSites.map(\.id))
+        let added = SiteRegistry.prioritySites.filter { !existing.contains($0.id) }
+        guard !added.isEmpty else { return self }
+        var cfg = self
+        cfg.sourceSites = sourceSites + added
+        return cfg
     }
 
     public static func template() -> AppConfig {

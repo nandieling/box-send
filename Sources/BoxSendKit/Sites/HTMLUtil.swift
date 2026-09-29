@@ -117,7 +117,52 @@ enum HTMLUtil {
         return base.absoluteString + ref
     }
 
+    /// 从 openPattern 命中的 <div> 起，按 <div>/</div> 深度配对提取该 div 的完整内容（含嵌套）
+    static func divByOpenTag(_ html: String, _ openPattern: String) -> String? {
+        guard let re = try? NSRegularExpression(pattern: openPattern, options: [.caseInsensitive]),
+              let m = re.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)) else { return nil }
+        let start = Range(m.range, in: html)!.upperBound
+        let startOffset = m.range.location + m.range.length
+        let divRe = try! NSRegularExpression(pattern: "<div\\b|</div>", options: [.caseInsensitive])
+        // 全量匹配后过滤（NSRegularExpression 局部 range 搜索有跨行漏匹配 quirk）
+        let matches = divRe.matches(in: html, options: [], range: NSRange(html.startIndex..., in: html))
+        var depth = 1
+        for dm in matches where dm.range.location >= startOffset {
+            if html[Range(dm.range, in: html)!].hasPrefix("</div") {
+                depth -= 1
+                if depth == 0 { return String(html[start..<Range(dm.range, in: html)!.lowerBound]) }
+            } else {
+                depth += 1
+            }
+        }
+        return nil
+    }
+
     /// 从 <a ...>text</a> 中提取 href 与文本
+    /// 解析 <select name="X"> 的选项 [(value, label)]（动态分类解析用）
+    static func selectOptions(_ html: String, name: String) -> [(value: String, label: String)] {
+        let pat = "<select[^>]*name=['\"]" + NSRegularExpression.escapedPattern(for: name) + "[\"'][^>]*>([\\s\\S]*?)</select>"
+        guard let m = firstMatch(html, pat) else { return [] }
+        let optPat = "<option[^>]*value=['\"]([^\"']*)[\"'][^>]*>([\\s\\S]*?)</option>"
+        var out: [(String, String)] = []
+        for o in firstMatches(m, optPat) {
+            let label = stripTags(o.1).trimmingCharacters(in: .whitespacesAndNewlines)
+            out.append((o.0, label))
+        }
+        return out
+    }
+
+    static func firstMatches(_ text: String, _ pattern: String, options: NSRegularExpression.Options = []) -> [(String, String)] {
+        guard let re = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+        let ns = NSRange(text.startIndex..., in: text)
+        return re.matches(in: text, options: [], range: ns).compactMap { m in
+            guard m.numberOfRanges >= 3,
+                  let r1 = Range(m.range(at: 1), in: text),
+                  let r2 = Range(m.range(at: 2), in: text) else { return nil }
+            return (String(text[r1]), String(text[r2]))
+        }
+    }
+
     static func anchorText(_ html: String, hrefPattern: String) -> [(href: String, text: String)] {
         var out: [(String, String)] = []
         // 逐段处理更稳：找出所有 <a ...>...</a>

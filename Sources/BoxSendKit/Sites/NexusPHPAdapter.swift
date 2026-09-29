@@ -330,18 +330,53 @@ final class NexusPHPAdapter: SiteAdapter {
         return t
     }
 
-    private func resolveCategory(_ info: ReleaseInfo) -> Int? {
-        guard let map = override?.categoryMap else { return nil }
+    /// 分类值解析：1) 静态 Int 表 2) 静态字符串表（影 站）3) 动态解析上传页 <select>（新站免配置）
+    private func resolveCategory(_ info: ReleaseInfo, page: String) -> String? {
         let kind = info.kind?.rawValue ?? "other"
-        if let profile = QualityTokens.catProfile(from: info.name, kind: info.kind),
-           let v = map["\(kind)/\(profile)"] {
-            return v
+        let profile = QualityTokens.catProfile(from: info.name, kind: info.kind)
+        if let map = override?.categoryMap {
+            if let profile, let v = map["\(kind)/\(profile)"] { return String(v) }
+            if let v = map[kind] ?? map["other"] { return String(v) }
         }
-        return map[kind] ?? map["other"]
+        if let map = override?.categoryStringMap {
+            if let profile, let v = map["\(kind)/\(profile)"] { return v }
+            if let v = map[kind] ?? map["other"] { return v }
+        }
+        let opts = HTMLUtil.selectOptions(page, name: categoryField)
+        guard !opts.isEmpty else { return nil }
+        for (k, keywords) in Self.kindKeywords {
+            guard k == kind || k == "other" else { continue }
+            if k == "other" && kind != "other" { continue }
+            for kw in keywords {
+                if let hit = opts.first(where: { $0.label.lowercased().contains(kw) }) {
+                    return hit.value
+                }
+            }
+        }
+        return nil
     }
 
+    /// 源介质下拉（tr_source 型：值依赖 medium+standard 组合，如 BD Remux 1080 vs UHD Remux 2160）
+    private func applySourceSelect(_ info: ReleaseInfo, _ set: (String, String) -> Void) {
+        guard let field = override?.sourceSelectField, let map = override?.sourceMap else { return }
+        let medium = QualityTokens.medium(from: info.name, kind: info.kind)
+        let standard = QualityTokens.standard(from: info.name)
+        if let medium, let standard, let v = map["\(medium)/\(standard)"] { set(field, v); return }
+        if let medium, let v = map[medium] { set(field, v) }
+    }
+
+    /// 类型 -> 分类选项关键词（顺序 = 优先级；命中任一即返回）
+    static let kindKeywords: [(String, [String])] = [
+        ("anime", ["动漫", "动画", "anime", "animation"]),
+        ("documentary", ["纪录片", "documentary", "doc "]),
+        ("music", ["音乐", "music", "hq audio"]),
+        ("series", ["剧集", "series", "tv"]),
+        ("movie", ["电影", "movie", "film"]),
+        ("other", ["其他", "other"]),
+    ]
+
     private func applyQualitySelects(_ info: ReleaseInfo, _ set: (String, String) -> Void) {
-        guard let selects = override?.qualitySelects, let maps = override?.qualityValueMaps else { return }
+        guard let selects = override?.qualitySelects else { return }
         let tokens: [String: String?] = [
             "medium": QualityTokens.medium(from: info.name, kind: info.kind),
             "codec": QualityTokens.codec(from: info.name),
@@ -349,8 +384,9 @@ final class NexusPHPAdapter: SiteAdapter {
             "standard": QualityTokens.standard(from: info.name),
         ]
         for (field, attr) in selects {
-            guard let token = tokens[attr].flatMap({ $0 }), let v = maps[attr]?[token] else { continue }
-            set(field, String(v))
+            guard let token = tokens[attr].flatMap({ $0 }) else { continue }
+            if let v = override?.qualityValueMaps?[attr]?[token] { set(field, String(v)); continue }
+            if let v = override?.qualityStringMaps?[attr]?[token] { set(field, v); continue }
         }
     }
 
@@ -434,10 +470,11 @@ final class NexusPHPAdapter: SiteAdapter {
             let tmpl = override?.doubanValueTemplate ?? "{douban}"
             setField(doubanField, tmpl.replacingOccurrences(of: "{douban}", with: douban))
         }
-        // 分类（支持质量型键 "<kind>/<profile>"）
-        if let category = resolveCategory(info) { setField(categoryField, String(category)) }
-        // 质量下拉（medium/codec/audiocodec/standard）
+        // 分类（支持质量型键 "<kind>/<profile>"，字符串表与动态解析）
+        if let category = resolveCategory(info, page: page) { setField(categoryField, category) }
+        // 质量下拉（medium/codec/audiocodec/standard）+ 源介质组合下拉
         applyQualitySelects(info, setField)
+        applySourceSelect(info, setField)
         // 额外固定字段
         for (k, v) in (override?.extraUploadFields ?? [:]) {
             setField(k, v)

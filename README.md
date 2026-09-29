@@ -22,8 +22,16 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 
 > 推送时**源站与每个目标站各自推送该站自己的 .torrent**：各站 .torrent 内嵌的 tracker 不同、info hash 通常也不同，在下载器中是相互独立的种子；每个 torrent 按**对应站点**的上传限速（站点/分组取更严格者）添加，避免某一站上传过快被盯上。
 
-支持站（9 个优先站，内置实测过的上传参数，全部可作源站）：
-pt.luckpt.de、hdsky.me、ptchdbits.co、hdhome.org、springsunday.net（CMCT）、audiences.me、totheglory.im（TTG）、pterclub.net、hhanclub.net（仅作源站；一般用户无发种权限，其 offers 候选区不使用）。
+### 支持站（内置 ~85 站，参照 auto_feed 站点清单，全部可作源站）
+
+- **9 个优先站**（默认启用，内置逐站实测的完整上传参数：分类/质量下拉/标签/制作组/搜索查重）：pt.luckpt.de、hdsky.me、ptchdbits.co、hdhome.org、springsunday.net（CMCT）、audiences.me、totheglory.im（TTG）、pterclub.net、hhanclub.net（仅作源站；一般用户无发种权限）。
+- **Blu 家族**（Layuout UI 适配器）：blutopia.cc、monikadesign.uk —— 详情页解析（标题/简介/MediaInfo/IMDb/种子直链）、上传自动填 category_id / type_id（媒介）/ resolution_id（分辨率）/ 季集数 / IMDb，值表为 2026-09-29 实测创建页选项。
+- **经典 Gazelle / xbtit 适配器**：hd-space.org（HDSpace，实测上传表单与分类表）、open.cd、iptorrents.com（分类表为老版结构，站点改版后需按实际选项在配置层修正）。
+- **特殊 NexusPHP**：byr.pt（auto_feed 实测 type 表：电影408/剧集401/综艺405/音乐402/动漫404/纪录410）、star-space.net（影，自定义表单：字母 token 分类、medium+分辨率组合的源介质下拉、字符串分辨率/编解码下拉，值表实测）。
+- **通用中文 NexusPHP（~70 站）**：13City、1PTBA、52MOVIE、52PT、AGSV、RailgunPT、藏宝阁、CarPt、CrabPt、财神、CyanBug、DiscFan、DragonHD、天枢、MARCH、TCCF、GGPT、HDArea、HDBAO、HDDolby、HDfans、麒麟、HDTime、HDVideo、HITPT、海棠、HUDBT、好学、自然、KuFei、LaJiDui、柠檬不甜、LongPT、iloli、NJTUPT、OKPT、Oshen、BaoZi、PandaPT、PigGo、FreeFarm、ALing、BTSchool、TLFbits、GTK、HDClone、ITZMX、慕雪阁、NovaHD、SoulVoice、HDU、星陨阁、樱花、PTCafe、PTFans、PThome、PTLGS、PTsbao、PTSkit、PTT、PTzone、QingWa、SBPT、下水道、躺平、TJUPT、UBits、UltraHD、WT-Sakura、杏林、ZMPT、U2（dmhy）等。
+  - 这类站走通用参数（POST `takeupload.php`、标题 `name`、IMDb `url` 字段、副标题 `small_descr`），**分类自动解析**：上传页分类下拉按类型关键词（电影/剧集/动漫/纪录片/音乐…）动态匹配选项值，免逐站配置；质量下拉保持服务器默认值，需要精确质量选值时在「站点 overrides」里补 `qualitySelects`/`qualityValueMaps`。
+  - 新增站默认**停用**（GUI「站点与限速」页启用并勾选为目标即可）；内置表新增站点会在启动时自动并入配置，已有条目保持不变。
+- **暂未适配（M3）**：YemaPT（SPA）、ZHUQUE（TNode SPA）、HaiDan（SPA）、OurBits / GPW（新版自研系统）、MTeam / PTP / HDB / BTN / CinemaZ 等（无账号 cookie 或表单为新版结构）。这些站可先在「运行」页作**源站**使用（源站解析走 NexusPHP 通用逻辑），作为转种目标待后续实测。
 
 ## 快速开始（Mac，约 5 分钟）
 
@@ -151,7 +159,9 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
   - `imdbValueTemplate` / `doubanValueTemplate`：值模板（`{imdb}` / `{douban}` 占位；`url` 型字段要完整链接）
   - `titleMode`: `reseed`（默认）| `torrentName` | `torrentNameDotted`（CMCT 规则：文件名且空格换 `.`）
   - `categoryMap`：`movie/series/anime/documentary/music/other` → 分类 ID；质量型站点（HDHome/TTG）用 `<kind>/<profile>` 键（`8k-bd/8k/uhd-bd/2160p/remux/bluray/1440p/1080p/1080i/720p/dvd/sd`，按发布名自动推断）
+  - 分类解析优先级：`categoryMap` 静态表 > `categoryStringMap` 字符串表（影 等字母 token 站）> 上传页分类下拉动态解析（通用站免逐站配置）
   - `qualitySelects` / `qualityValueMaps`：媒介/编码/音轨/分辨率下拉自动填充（从发布名识别 REMUX/UHD/Web-DL/x265/DTS-HD MA 等）
+  - `qualityStringMaps`：选项值为字符串的下拉值表（影 的 `tr_resolution` r1-r5）；`sourceSelectField`/`sourceMap`：源介质组合下拉（值依赖 媒介+分辨率，如 影 的 `tr_source`：`"remux/2160p": "s52"`，`"remux": "s42"` 兜底）
   - `forbidReseedMarkers`：命中即视为禁转（默认 `禁转/Excl.`），只推不转种
   - `extraUploadFields`：额外固定字段（如各站 `uplver`）
 - `targetSites`: 转种目标站 id 列表（HHanClub 一般用户无发种权限，不作为目标站）
@@ -180,13 +190,13 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
 
 ## 测试
 
-`swift test`（45 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试）。
+`swift test`（59 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入）。
 
 ## 里程碑
 
-- M1（当前）：Mac GUI 主体（运行/站点限速/Cookie/下载器/RSS/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽上限）+ 状态幂等 + CLI
-- M2（已完成部分加粗）：**RSS 自动转种（新种自动查重/大小检测/转种/推送）**、**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**；剩余：Unit3D（REST API）/Gazelle 适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）
-- M3：长尾站点（MTeam/YemaPT/Rousi 等定制站）、截图搬运图床、动态限速、统计面板
+- M1：Mac GUI 主体（运行/站点限速/Cookie/下载器/RSS/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽上限）+ 状态幂等 + CLI
+- M2（已完成部分加粗）：**RSS 自动转种（新种自动查重/大小检测/转种/推送）**、**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**、**站点覆盖扩展（Blu 家族 blutopia/monika + 经典 Gazelle/xbtit HDSpace/OpenCD/IPTorrents + BYR/影 特殊 NexusPHP + ~70 通用中文 NexusPHP 站，动态分类解析免逐站配置）**；剩余：Unit3D（REST API）适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）、通用站逐站质量下拉实测
+- M3：长尾站点（YemaPT/ZHUQUE/HaiDan SPA、OurBits/GPW/MTeam/PTP/HDB/BTN/CinemaZ 新版表单）、截图搬运图床、动态限速、统计面板
 
 ## 已知限制
 
