@@ -420,6 +420,26 @@ struct DownloaderView: View {
             } header: {
                 Text("连接检测")
             }
+            Section {
+                HStack {
+                    IntLimitField(initial: model.config.downloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }
+                        .frame(width: 60)
+                    Text("VPS 剩余空间（GB，空 = 不做大小检测）").font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Picker("超过剩余空间时", selection: $model.config.downloader.sizeGuardMode) {
+                        Text("提醒（继续转种）").tag(SizeGuardMode.warn)
+                        Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
+                    }
+                    IntLimitField(initial: model.config.downloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
+                        .frame(width: 50)
+                    Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
+                }
+                Text("可用空间 = 剩余 - 边际；剩余空间需手动维护（qB WebAPI 无磁盘接口），空间变化大时记得更新。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("种子大小检测")
+            }
         }
         .formStyle(.grouped)
     }

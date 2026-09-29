@@ -391,6 +391,15 @@ final class AppModel: ObservableObject {
 
     // MARK: 下载器
 
+    func setVpsFreeGB(_ gb: Int?) {
+        config.downloader.vpsFreeGB = (gb == nil || (gb ?? 0) <= 0) ? nil : gb
+        saveConfig()
+    }
+    func setVpsFreeMargin(_ gb: Int?) {
+        config.downloader.sizeGuardMarginGB = max(0, gb ?? 0)
+        saveConfig()
+    }
+
     func testDownloader() {
         saveConfig()
         testingDownloader = true
