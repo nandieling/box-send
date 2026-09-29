@@ -40,8 +40,8 @@ public final class HTTPClient {
     // MARK: - 请求
 
     @discardableResult
-    public func get(_ url: String, referer: String? = nil) throws -> Response {
-        var req = try makeRequest(url: url, method: "GET", referer: referer)
+    public func get(_ url: String, referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> Response {
+        var req = try makeRequest(url: url, method: "GET", referer: referer, extraHeaders: extraHeaders)
         req.httpMethod = "GET"
         return try perform(req)
     }
@@ -75,7 +75,7 @@ public final class HTTPClient {
     @discardableResult
     public func postMultipart(_ url: String, fields: [MultipartField],
                        files: [(name: String, filename: String, data: Data, mime: String)],
-                       referer: String? = nil) throws -> Response {
+                       referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> Response {
         let boundary = "----BoxSend" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         var body = Data()
         func addHeader(name: String, filename: String? = nil, mime: String? = nil) {
@@ -100,7 +100,7 @@ public final class HTTPClient {
         }
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-        var req = try makeRequest(url: url, method: "POST", referer: referer)
+        var req = try makeRequest(url: url, method: "POST", referer: referer, extraHeaders: extraHeaders)
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
@@ -109,7 +109,7 @@ public final class HTTPClient {
 
     // MARK: - 内部
 
-    private func makeRequest(url: String, method: String, referer: String?) throws -> URLRequest {
+    private func makeRequest(url: String, method: String, referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> URLRequest {
         guard let u = URL(string: url) else {
             throw BoxSendError.badInput("非法 URL: \(url)")
         }
@@ -121,7 +121,21 @@ public final class HTTPClient {
         req.setValue(referer ?? url, forHTTPHeaderField: "Referer")
         req.setValue("zh-CN,zh;q=0.9,en;q=0.8", forHTTPHeaderField: "Accept-Language")
         req.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        for (k, v) in extraHeaders { req.setValue(v, forHTTPHeaderField: k) }
         return req
+    }
+
+    /// application/json POST（TNode 搜索等）
+    @discardableResult
+    func postJSON(_ url: String, object: Any, referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> Response {
+        guard let body = try? JSONSerialization.data(withJSONObject: object) else {
+            throw BoxSendError.badInput("JSON 序列化失败")
+        }
+        var req = try makeRequest(url: url, method: "POST", referer: referer, extraHeaders: extraHeaders)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try perform(req)
     }
 
     private func perform(_ req: URLRequest) throws -> Response {

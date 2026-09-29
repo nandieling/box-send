@@ -11,6 +11,8 @@ public enum SiteRegistry {
             return BluAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .gazelle:
             return GazelleAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
+        case .tnode:
+            return TNodeAdapter(site: site, client: client, debugDir: debugDir)
         default:
             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器")
         }
@@ -122,5 +124,7 @@ public enum SiteRegistry {
         SiteConfig(id: "xingtan", name: "杏林", url: "https://xingtan.one/", framework: .nexusPHP, enabled: false, overrides: .xingtan),
         SiteConfig(id: "zmpt", name: "ZMPT", url: "https://zmpt.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "u2", name: "U2", url: "http://u2.dmhy.org/", framework: .nexusPHP, enabled: false, overrides: .u2),
+        // --- TNode（REST API + SPA） ---
+        SiteConfig(id: "zhuque", name: "ZHUQUE", url: "https://zhuque.in/", framework: .tnode, enabled: false, overrides: nil),
     ]
 }

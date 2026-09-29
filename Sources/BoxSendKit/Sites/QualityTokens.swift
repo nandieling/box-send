@@ -82,6 +82,30 @@ enum QualityTokens {
     }
 
     /// 发布名中的年份（第一个 19xx/20xx 四位数字）
+    /// 规范标签判定（源名 + 简介 + mediainfo 文本证据）——各适配器共享
+    static func canonicalTags(_ info: ReleaseInfo) -> [String] {
+        var tags: [String] = []
+        let n = info.name.uppercased()
+        let evidence = HTMLUtil.stripTags(info.descr) + "\n" + info.mediainfo + "\n" + info.subtitle
+        if n.contains("DTS:X") || n.contains("DTS X") { tags.append("dtsx") }
+        if n.contains("ATMOS") { tags.append("atmos") }
+        if n.contains("HDR10+") { tags.append("hdr10plus") }
+        else if n.contains("HDR10") { tags.append("hdr10") }
+        if n.contains("DOVI") || n.contains("DOLBY VISION") { tags.append("dovi") }
+        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || info.name.contains("中字") {
+            tags.append("chinese_sub")
+        }
+        if n.contains("DIY") && (n.hasPrefix("DIY") || n.contains(" DIY") || n.contains("DIY ") || n.contains("DIY-")) {
+            tags.append("diy")
+        }
+        if ["bluray", "uhdbd", "uhdbd8k"].contains(medium(from: info.name, kind: info.kind)) {
+            tags.append("disc")
+        }
+        if info.isForbidReseed { tags.append("forbid") }
+        if evidence.contains("限转") { tags.append("limited") }
+        return tags
+    }
+
     static func year(from name: String) -> Int? {
         guard let re = try? NSRegularExpression(pattern: "(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])") else { return nil }
         let ns = NSRange(name.startIndex..., in: name)

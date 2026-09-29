@@ -484,29 +484,7 @@ final class NexusPHPAdapter: SiteAdapter {
         return out
     }
 
-    /// 规范标签判定（源名 + 简介 + mediainfo 文本证据）
-    private func canonicalTags(_ info: ReleaseInfo) -> [String] {
-        var tags: [String] = []
-        let n = info.name.uppercased()
-        let evidence = HTMLUtil.stripTags(info.descr) + "\n" + info.mediainfo + "\n" + info.subtitle
-        if n.contains("DTS:X") || n.contains("DTS X") { tags.append("dtsx") }
-        if n.contains("ATMOS") { tags.append("atmos") }
-        if n.contains("HDR10+") { tags.append("hdr10plus") }
-        else if n.contains("HDR10") { tags.append("hdr10") }
-        if n.contains("DOVI") || n.contains("DOLBY VISION") { tags.append("dovi") }
-        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || info.name.contains("中字") {
-            tags.append("chinese_sub")
-        }
-        if n.contains("DIY") && (n.hasPrefix("DIY") || n.contains(" DIY") || n.contains("DIY ") || n.contains("DIY-")) {
-            tags.append("diy")
-        }
-        if ["bluray", "uhdbd", "uhdbd8k"].contains(QualityTokens.medium(from: info.name, kind: info.kind)) {
-            tags.append("disc")
-        }
-        if info.isForbidReseed { tags.append("forbid") }
-        if evidence.contains("限转") { tags.append("limited") }
-        return tags
-    }
+    private func canonicalTags(_ info: ReleaseInfo) -> [String] { QualityTokens.canonicalTags(info) }
 
     /// 动态标签：解析页面 tags 类复选框，按文案匹配规范标签后提交（新站免逐站配置）
     private func dynamicTagValues(_ info: ReleaseInfo, page: String) -> [(name: String, value: String)] {

@@ -1,0 +1,142 @@
+{
+ "status": 200,
+ "data": {
+  "content": {
+   "adult": false,
+   "backdrop_path": "/20mzzWj3NWynbbIEHIiK9mvPG4a.jpg",
+   "belongs_to_collection": null,
+   "budget": 0,
+   "genres": [
+    {
+     "id": 28,
+     "name": "动作"
+    },
+    {
+     "id": 53,
+     "name": "惊悚"
+    }
+   ],
+   "homepage": "",
+   "id": 239801,
+   "imdb_id": "tt2058740",
+   "origin_country": [
+    "HK"
+   ],
+   "original_language": "cn",
+   "original_title": "無法無天飛車黨",
+   "overview": "高级文员郭静中（凌云），偕妻子陈美娟（刘慧茹）、妹妹嘉莉（江珊），乘搭渡轮往离岛渡假。同船而往者，有二十二名飞仔及九名飞女。彼等喜欢以飞车寻求刺激，无法无天，因而被人们称为「飞车党」；此次前往离岛，所有飞仔都各自带备一部电单车。「飞车党」之首叫尊尼，是个冷酷青年。其弟米高，有自大狂及虐待狂，且最爱闯祸捣乱，亦是「飞车党」之一员。米高在船上见到健美性感的嘉莉，竟出手调戏。尊尼以郭静中在场，只得将米高喝止，事情始未闹大。既抵离岛，郭静中他们三人便迳赴一间独处一方之别墅。该别墅是嘉莉之男友黄思伟（李修贤）独自居住。他们到达别墅时，思伟已往海边射鱼去了。郭静中遂驾著黄思伟那部汽车，载著美娟和嘉莉到野外兜风，但屡遭「飞车党」的作梗整蛊，使美娟与嘉莉饱受虚惊...",
+   "popularity": 1.5425,
+   "poster_path": "/1r6td5Ga9d9Buk5nhqkEcfZdKCY.jpg",
+   "production_companies": [
+    {
+     "id": 5798,
+     "logo_path": "/tmuI9BGXgpWLmokhlxpnG3IGNQB.png",
+     "name": "Shaw Brothers",
+     "origin_country": "HK"
+    }
+   ],
+   "production_countries": [
+    {
+     "iso_3166_1": "HK",
+     "name": "Hong Kong"
+    }
+   ],
+   "release_date": "1976-08-26",
+   "revenue": 0,
+   "runtime": 95,
+   "softcore": false,
+   "spoken_languages": [
+    {
+     "english_name": "Cantonese",
+     "iso_639_1": "cn",
+     "name": "广州话 / 廣州話"
+    }
+   ],
+   "status": "Released",
+   "tagline": "",
+   "title": "无法无天飞车党",
+   "video": false,
+   "vote_average": 6.571,
+   "vote_count": 7,
+   "external_ids": {
+    "imdb_id": "tt2058740",
+    "wikidata_id": "Q122790296",
+    "facebook_id": null,
+    "instagram_id": null,
+    "twitter_id": null
+   }
+  },
+  "torrent": {
+   "id": 54988,
+   "name": "KILLERS_ON_WHEELS_1976_USA_BD-HXTF.torrent",
+   "hash": "2889cf79f43a3c3b7ab934eea3a52833885b57ef",
+   "size": 41159194464,
+   "uploaderId": 520,
+   "review": 0,
+   "uploadTime": 1790697232,
+   "complete": 0,
+   "seeding": 0,
+   "leeching": 0,
+   "download": 0,
+   "note": "制作组: HXTF\nhttps://www.imdb.com/title/tt2058740\nhttps://movie.douban.com/subject/4325916/",
+   "subtitle": "无法无天飞车党 | Killers on Wheels | 1976 | Killers on Wheels | 无法无天飞车党",
+   "title": "Wu fa wu tian fei che dang 1976 1080p Blu-ray AVC DTS-HD MA 2.0-HXTF",
+   "anonymous": 0,
+   "screenshot": "https://img3.pixhost.cc/images/6066/776203642_00000_screenshot_001.png\nhttps://img3.pixhost.cc/images/6066/776203643_00000_screenshot_002.png\nhttps://img3.pixhost.cc/images/6066/776203644_00000_screenshot_003.png",
+   "tmdbid": 239801,
+   "tmdbtype": 0,
+   "mediainfo": "Disc Label: KILLERS_ON_WHEELS_1976_USA_BD-HXTF\nDisc Size: 41,159,194,464 bytes\nProtection: AACS\nPlaylist: 00000.MPLS\nSize: 32,333,814,912 bytes\nLength: 1:43:12.936\nTotal Bitrate: 41.77 Mbps\nVideo: MPEG-4 AVC Video / 34941 kbps / 1080p / 23.976 fps / 16:9 / High Profile 4.1\nAudio: Chinese / DTS-HD Master Audio / 2.0 / 48 kHz /  2128 kbps / 24-bit (DTS Core: 2.0 / 48 kHz /  1509 kbps / 24-bit)\nAudio: English / DTS-HD Master Audio / 2.0 / 48 kHz /  2132 kbps / 24-bit (DTS Core: 2.0 / 48 kHz /  1509 kbps / 24-bit)\nAudio: English / Dolby Digital Audio / 2.0 / 48 kHz /   192 kbps / DN -27dB\nSubtitle: English / 14.950 kbps\nSubtitle: English / 28.814 kbps\nSubtitle: English / 0.652 kbps",
+   "pinned": 0,
+   "pinTime": -1,
+   "videoCoding": 101,
+   "medium": 303,
+   "category": 501,
+   "resolution": 403,
+   "is_official": 1,
+   "tags": [],
+   "locked": 0,
+   "user": {
+    "id": 520,
+    "username": "hangsijing",
+    "class": {
+     "id": 10500,
+     "level": 20,
+     "name": "执事",
+     "color": "A4414F",
+     "need_upload": 0,
+     "need_download": 0,
+     "need_time": 0,
+     "need_ratio": 0,
+     "lock": 1,
+     "duty": null
+    },
+    "upload": 443420962184755,
+    "download": 597968488748,
+    "nameColor": "000000",
+    "avatar": null,
+    "banned": 0,
+    "low_ratio": null,
+    "vip_status": 0,
+    "badges": [
+     {
+      "id": 3,
+      "name": "工作组",
+      "user_id": 2,
+      "title": "工作组",
+      "create_time": 1733208300,
+      "update_time": 1733208300,
+      "url": "https://snarp.zhuque.in/i/2025/04/16/1c89db0400374bd886ccc71783d03717.png"
+     }
+    ],
+    "isVip": false,
+    "anonymous": 0
+   },
+   "torrentKey": "23be15979e34467b956a91b6cc461bfe",
+   "uploadRate": 1,
+   "downloadRate": 0,
+   "uExpireTime": 1790783632,
+   "dExpireTime": 1790783632,
+   "claims": []
+  }
+ }
+}

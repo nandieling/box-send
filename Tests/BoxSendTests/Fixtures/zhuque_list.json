@@ -1,0 +1,1745 @@
+{
+ "status": 200,
+ "data": {
+  "tmdbs": [
+   {
+    "id": 22501,
+    "type": 0,
+    "tmdb_id": 239801,
+    "imdb_id": "tt2058740",
+    "create_time": 1790697232,
+    "update_time": 1790697232,
+    "title": "无法无天飞车党",
+    "content": {
+     "adult": false,
+     "backdrop_path": "/20mzzWj3NWynbbIEHIiK9mvPG4a.jpg",
+     "belongs_to_collection": null,
+     "budget": 0,
+     "genres": [
+      {
+       "id": 28,
+       "name": "动作"
+      },
+      {
+       "id": 53,
+       "name": "惊悚"
+      }
+     ],
+     "homepage": "",
+     "id": 239801,
+     "imdb_id": "tt2058740",
+     "origin_country": [
+      "HK"
+     ],
+     "original_language": "cn",
+     "original_title": "無法無天飛車黨",
+     "overview": "高级文员郭静中（凌云），偕妻子陈美娟（刘慧茹）、妹妹嘉莉（江珊），乘搭渡轮往离岛渡假。同船而往者，有二十二名飞仔及九名飞女。彼等喜欢以飞车寻求刺激，无法无天，因而被人们称为「飞车党」；此次前往离岛，所有飞仔都各自带备一部电单车。「飞车党」之首叫尊尼，是个冷酷青年。其弟米高，有自大狂及虐待狂，且最爱闯祸捣乱，亦是「飞车党」之一员。米高在船上见到健美性感的嘉莉，竟出手调戏。尊尼以郭静中在场，只得将米高喝止，事情始未闹大。既抵离岛，郭静中他们三人便迳赴一间独处一方之别墅。该别墅是嘉莉之男友黄思伟（李修贤）独自居住。他们到达别墅时，思伟已往海边射鱼去了。郭静中遂驾著黄思伟那部汽车，载著美娟和嘉莉到野外兜风，但屡遭「飞车党」的作梗整蛊，使美娟与嘉莉饱受虚惊...",
+     "popularity": 1.5425,
+     "poster_path": "/1r6td5Ga9d9Buk5nhqkEcfZdKCY.jpg",
+     "production_companies": [
+      {
+       "id": 5798,
+       "logo_path": "/tmuI9BGXgpWLmokhlxpnG3IGNQB.png",
+       "name": "Shaw Brothers",
+       "origin_country": "HK"
+      }
+     ],
+     "production_countries": [
+      {
+       "iso_3166_1": "HK",
+       "name": "Hong Kong"
+      }
+     ],
+     "release_date": "1976-08-26",
+     "revenue": 0,
+     "runtime": 95,
+     "softcore": false,
+     "spoken_languages": [
+      {
+       "english_name": "Cantonese",
+       "iso_639_1": "cn",
+       "name": "广州话 / 廣州話"
+      }
+     ],
+     "status": "Released",
+     "tagline": "",
+     "title": "无法无天飞车党",
+     "video": false,
+     "vote_average": 6.571,
+     "vote_count": 7,
+     "external_ids": {
+      "imdb_id": "tt2058740",
+      "wikidata_id": "Q122790296",
+      "facebook_id": null,
+      "instagram_id": null,
+      "twitter_id": null
+     }
+    },
+    "torrents": [
+     {
+      "id": 54988,
+      "title": "Wu fa wu tian fei che dang 1976 1080p Blu-ray AVC DTS-HD MA 2.0-HXTF",
+      "subtitle": "无法无天飞车党 | Killers on Wheels | 1976 | Killers on Wheels | 无法无天飞车党",
+      "size": 41159194464,
+      "complete": 0,
+      "uploaderId": 520,
+      "medium": 303,
+      "review": 0,
+      "uploadTime": 1790697232,
+      "anonymous": 0,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 0,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [],
+      "tmdb_id": 22501,
+      "imdb_id": "tt2058740",
+      "tmdb_type": 0,
+      "user": {
+       "id": 520,
+       "username": "hangsijing",
+       "class": {
+        "id": 10500,
+        "level": 20,
+        "name": "执事",
+        "color": "A4414F",
+        "need_upload": 0,
+        "need_download": 0,
+        "need_time": 0,
+        "need_ratio": 0,
+        "lock": 1,
+        "duty": null
+       },
+       "upload": 443420962184755,
+       "download": 597968488748,
+       "nameColor": "000000",
+       "avatar": null,
+       "banned": 0,
+       "low_ratio": null,
+       "vip_status": 0,
+       "badges": [
+        {
+         "id": 3,
+         "name": "工作组",
+         "user_id": 2,
+         "title": "工作组",
+         "create_time": 1733208300,
+         "update_time": 1733208300,
+         "url": "https://snarp.zhuque.in/i/2025/04/16/1c89db0400374bd886ccc71783d03717.png"
+        }
+       ],
+       "isVip": false,
+       "anonymous": 0
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     }
+    ]
+   },
+   {
+    "id": 3391,
+    "type": 0,
+    "tmdb_id": 739405,
+    "imdb_id": "tt7985704",
+    "create_time": 1687257809,
+    "update_time": 1687257809,
+    "title": "金爆行动",
+    "content": {
+     "adult": false,
+     "backdrop_path": "/7TdVWAO7vV9j1OLDq1hQJS3pb4U.jpg",
+     "belongs_to_collection": null,
+     "budget": 50000000,
+     "genres": [
+      {
+       "id": 28,
+       "name": "动作"
+      },
+      {
+       "id": 35,
+       "name": "喜剧"
+      },
+      {
+       "id": 12,
+       "name": "冒险"
+      },
+      {
+       "id": 53,
+       "name": "惊悚"
+      }
+     ],
+     "homepage": "",
+     "id": 739405,
+     "imdb_id": "tt7985704",
+     "original_language": "en",
+     "original_title": "Operation Fortune: Ruse de Guerre",
+     "overview": "在财富行动中，超级间谍奥森·福琼（杰森·斯坦森 饰）必须追踪并阻止亿万富翁武器经纪人格雷格·西蒙斯（休·格兰特 饰）所使用的致命新武器技术的销售。《财富》 杂志和他的团队不情愿地与一些世界上最优秀的特工（奥布瑞·普拉扎、加利·艾尔维斯、巴奇·马龙 饰）合作， 招募了好莱坞最大牌的电影明星丹尼·弗朗西斯科（乔什·哈奈特 饰）来帮助他们完成环球旅行的秘密任务，拯救世界。",
+     "popularity": 89.578,
+     "poster_path": "/qqqm2OIjxSqcHthGh9mDDcoo24i.jpg",
+     "production_companies": [
+      {
+       "id": 14,
+       "logo_path": "/m6AHu84oZQxvq7n1rsvMNJIAsMu.png",
+       "name": "Miramax",
+       "origin_country": "US"
+      },
+      {
+       "id": 47729,
+       "logo_path": "/5NRpQ7xxmODXAjt2pRWUFMLVzvP.png",
+       "name": "STX Films",
+       "origin_country": "US"
+      },
+      {
+       "id": 2900,
+       "logo_path": null,
+       "name": "Toff Guy Films",
+       "origin_country": "GB"
+      },
+      {
+       "id": 73204,
+       "logo_path": "/j2wL7Qzpo1mIg9tIG9GmYNTpdq0.png",
+       "name": "AZ Celtic Films",
+       "origin_country": "TR"
+      }
+     ],
+     "production_countries": [
+      {
+       "iso_3166_1": "CZ",
+       "name": "Czech Republic"
+      },
+      {
+       "iso_3166_1": "TR",
+       "name": "Turkey"
+      },
+      {
+       "iso_3166_1": "GB",
+       "name": "United Kingdom"
+      },
+      {
+       "iso_3166_1": "US",
+       "name": "United States of America"
+      }
+     ],
+     "release_date": "2023-01-04",
+     "revenue": 37846713,
+     "runtime": 114,
+     "spoken_languages": [
+      {
+       "english_name": "English",
+       "iso_639_1": "en",
+       "name": "English"
+      }
+     ],
+     "status": "Released",
+     "tagline": "在这次行动中，每个人都有自己的角色。",
+     "title": "金爆行动",
+     "video": false,
+     "vote_average": 6.614,
+     "vote_count": 848,
+     "external_ids": {
+      "imdb_id": "tt7985704",
+      "wikidata_id": "Q104822312",
+      "facebook_id": "OperationFortune",
+      "instagram_id": "operationfortune",
+      "twitter_id": "fortunemovie"
+     }
+    },
+    "torrents": [
+     {
+      "id": 54987,
+      "title": "Operation Fortune：Ruse de Guerre 2023 2160p GER UHD Blu-ray HDR10 HEVC DTS-HD MA 7.1-Panda",
+      "subtitle": "片名：金爆行动/玩命特攻：武演行动(台)/伙星行动：扭计特攻(港)/财富行动：战争之街/财富行动：战争诡计/Operation Fortune | 导演：盖·里奇 | 编剧： | 主演：杰森·斯坦森/奥布瑞·普拉扎/乔什·哈奈特/休·格兰特等领衔 | 类别：喜剧/动作 | 音频:※英语/德语/普通话※ | 字幕:※德语/英语/简英/繁英/简体/繁体※【德版原盘】",
+      "size": 66656153576,
+      "complete": 0,
+      "medium": 301,
+      "review": 0,
+      "uploadTime": 1790696492,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 2,
+      "seeding": 0,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       603,
+       604,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     },
+     {
+      "id": 34323,
+      "title": "Operation Fortune Ruse de Guerre 2023 UHD REPACK Blu-ray 2160p DoVi HDR10 HEVC Atmos TrueHD 7.1-DIY@UBits",
+      "subtitle": "【原盘DIY 00162】【修复字幕问题】金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港)  美版 4K UHD原盘 DIY简体/繁体/简英双语/繁英双语 保留杜比视界 BDJ菜单修改 新增按钮",
+      "size": 87454536342,
+      "complete": 7,
+      "medium": 302,
+      "review": 0,
+      "uploadTime": 1718529595,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 2,
+      "videoCoding": 104,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       604,
+       611,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 30444,
+      "title": "Operation Fortune: Ruse de Guerre 2023 2160p USA UHD Blu-ray DoVi HDR10 HEVC TrueHD 7.1-BeyondHD",
+      "subtitle": "金爆行动/玩命特攻：武演行动(台)/伙星行动：扭计特攻(港)/财富行动：战争之街 [美版原盘]",
+      "size": 86559359008,
+      "complete": 7,
+      "medium": 301,
+      "review": 0,
+      "uploadTime": 1709606342,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 2,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       611,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 23587,
+      "title": "Operation Fortune Ruse de Guerre 2023 UHD Blu-ray 2160p HEVC Atmos TrueHD 7.1-DIY@UBits",
+      "subtitle": "【原盘DIY 00162】金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune 美版 4K UHD原盘  DIY简体/繁体/简英双语/繁英双语中文字幕 保留杜比视界 BDJ菜单修改 新增按钮",
+      "size": 87450642020,
+      "complete": 22,
+      "medium": 302,
+      "review": 0,
+      "uploadTime": 1698767960,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 11,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       611,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 15606,
+      "title": "Operation Fortune: Ruse de Guerre 2023 1080p USA Blu-ray AVC TrueHD 7.1 Atmos-BeyondHD",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune | 类别：喜剧  动作    【美版原盘】",
+      "size": 45318318149,
+      "complete": 62,
+      "medium": 303,
+      "review": 0,
+      "uploadTime": 1690943613,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 1,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 13235,
+      "title": "Operation Fortune Ruse de guerre 2023 Blu-ray 1080p x265 DTS-HD MA 5.1-CarPT",
+      "subtitle": "金爆行动",
+      "size": 8811748253,
+      "complete": 52,
+      "medium": 306,
+      "review": 0,
+      "uploadTime": 1686691948,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 4,
+      "videoCoding": 104,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [
+       604,
+       614
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 12606,
+      "title": "Operation Fortune Ruse de Guerre 2023 2160p USA UHD BluRay HEVC DV TrueHD 7.1 Atmos-DIY@Audies",
+      "subtitle": "金爆行动/玩命特攻：武演行动(台)/伙星行动：扭计特攻(港)/财富行动：战争之街/财富行动：战争诡计/Operation Fortune 【美版原盘DIY/双语简繁字幕】",
+      "size": 86744429000,
+      "complete": 38,
+      "medium": 302,
+      "review": 0,
+      "uploadTime": 1686206794,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 2,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       611,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 10434,
+      "title": "Operation Fortune: Ruse de Guerre 2023 1080p GER Blu-ray AVC DTS-HD MA 7.1-GAMBLERS",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune / Operation Fortune: Ruse de guerre | 类别：喜剧 动作 【德版原盘】",
+      "size": 39029876616,
+      "complete": 31,
+      "medium": 303,
+      "review": 1,
+      "uploadTime": 1684135454,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 0,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 9662,
+      "title": "金爆行动 Operation Fortune Ruse de guerre 2023 UHD Blu-ray 2160p HEVC DTS-HD MA 7.1-Pete@HDSky",
+      "subtitle": "金爆行动/玩命特攻：武演行动(台)/伙星行动：扭计特攻(港)/财富行动：战争之街【德版高码 DIY国配+简繁/双语特效字幕】",
+      "size": 62052696064,
+      "complete": 20,
+      "medium": 302,
+      "review": 0,
+      "uploadTime": 1683163772,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 1,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       603,
+       604,
+       613,
+       614
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 9519,
+      "title": "Operation Fortune Ruse de Guerre 2023 UHD Blu-ray Remux 2160p HEVC DTS-HD MA 5.1-Hares",
+      "subtitle": "金爆行动/玩命特攻：武演行动(台)/伙星行动：扭计特攻(港) | 导演：盖·里奇 | 主演：杰森·斯坦森 | [英语原声] [简英|繁英|简中|繁中|英文]",
+      "size": 50499047229,
+      "complete": 30,
+      "medium": 305,
+      "review": 0,
+      "uploadTime": 1683081083,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 0,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 9233,
+      "title": "Operation Fortune Ruse de Guerre 2023 2160p NOR UHD Blu-ray HEVC HDR DTS-HD MA 5.1-ESiR",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune / Operation Fortune: Ruse de guerre | 类别：喜剧  动作    【北欧版原盘】",
+      "size": 52485908246,
+      "complete": 42,
+      "medium": 301,
+      "review": 0,
+      "uploadTime": 1682673979,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 1,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 7917,
+      "title": "Operation Fortune: Ruse de Guerre 2023 NOR UHD BluRay 2160p 10bit HDR DTS-HD MA 5.1 x265-beAst",
+      "subtitle": "金爆行动/伙星行动：扭计特攻(港)/玩命特攻：武演行动(台)/英语DTS-HD MA5.1/英简繁&简英繁英双语双特效SUP字幕/章节/HDR10",
+      "size": 12174068948,
+      "complete": 60,
+      "medium": 306,
+      "review": 0,
+      "uploadTime": 1680971967,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 2,
+      "videoCoding": 104,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       613,
+       614
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 7815,
+      "title": "Operation Fortune 2023 2160p UHD BluRay HEVC HDR DTS-HD MA 5.1-DIY@Audies",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune 【DIY/双语简繁字幕】",
+      "size": 52662966230,
+      "complete": 41,
+      "medium": 302,
+      "review": 0,
+      "uploadTime": 1680839842,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 1,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 7748,
+      "title": "Operation Fortune: Ruse de Guerre 2023 2160p BluRay x265 10bit DTS-WiKi ",
+      "subtitle": "金爆行动/伙星行动：扭计特攻(港)/玩命特攻：武演行动(台) [内封简繁中字] 盖·里奇作品 杰森·斯坦森 乔什·哈奈特 休·格兰特",
+      "size": 25183405536,
+      "complete": 55,
+      "medium": 306,
+      "review": 1,
+      "uploadTime": 1680670897,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 7,
+      "videoCoding": 104,
+      "category": 501,
+      "resolution": 404,
+      "is_official": 0,
+      "tags": [
+       604,
+       613
+      ],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 7610,
+      "title": "Operation Fortune Ruse de guerre 2023 1080p BluRay REMUX AVC DTS-HD MA 5.1-TRiToN",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 / 财富行动：战争诡计 / Operation Fortune / Operation Fortune: Ruse de guerre",
+      "size": 19025689629,
+      "complete": 50,
+      "medium": 305,
+      "review": 1,
+      "uploadTime": 1680425972,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 0,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 7571,
+      "title": "Operation Fortune 2023 1080p ITA Blu-ray AVC DTS-HD MA 5.1-FHC",
+      "subtitle": "金爆行动 / 玩命特攻：武演行动(台) / 伙星行动：扭计特攻(港) / 财富行动：战争之街 | 类别：喜剧 动作 [意大利版原盘]",
+      "size": 24473627053,
+      "complete": 48,
+      "medium": 303,
+      "review": 1,
+      "uploadTime": 1680306013,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 0,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 6102,
+      "title": "Operation Fortune Ruse de Guerre 2023 1080p WEB-DL DDP5.1 H.264-RiGHTNOW",
+      "subtitle": "金爆行动/ 伙星行动：扭计特攻(港) / 玩命特攻：武演行动(台) / | 主演：杰森·斯坦森 奥布瑞·普拉扎",
+      "size": 8795148911,
+      "complete": 60,
+      "medium": 309,
+      "review": 1,
+      "uploadTime": 1678356217,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 3,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 0,
+      "tags": [],
+      "tmdb_id": 3391,
+      "imdb_id": "tt7985704",
+      "tmdb_type": 0,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     }
+    ]
+   },
+   {
+    "id": 22500,
+    "type": 0,
+    "tmdb_id": 32636,
+    "imdb_id": "tt0111590",
+    "create_time": 1790693233,
+    "update_time": 1790693233,
+    "title": "万尼亚在42街口",
+    "content": {
+     "adult": false,
+     "backdrop_path": "/llXsPTScDIdQjgsescQyKaIZA6l.jpg",
+     "belongs_to_collection": null,
+     "budget": 0,
+     "genres": [
+      {
+       "id": 18,
+       "name": "剧情"
+      }
+     ],
+     "homepage": "",
+     "id": 32636,
+     "imdb_id": "tt0111590",
+     "origin_country": [
+      "US"
+     ],
+     "original_language": "en",
+     "original_title": "Vanya on 42nd Street",
+     "overview": "法国大导演路易·马勒的最后遗作，采用颇为复杂的戏中戏方式来探讨人生如戏，戏如人生的微妙交错关系。片中多名演员时而是自己，时而变成戏中的角色，在真假虚实的人生互动中诠释他们之间纠缠不清的感情关系。全片的影像感较单调，但演技相当精彩，被美联社选为90年代十大最佳影片之一。",
+     "popularity": 3.1499,
+     "poster_path": "/sYkkHsqXyUcFoLbXt4WNwnRRpT1.jpg",
+     "production_companies": [
+      {
+       "id": 34237,
+       "logo_path": null,
+       "name": "Mayfair Entertainment International",
+       "origin_country": "GB"
+      },
+      {
+       "id": 251088,
+       "logo_path": null,
+       "name": "The Vanya Company",
+       "origin_country": "US"
+      },
+      {
+       "id": 181,
+       "logo_path": "/A8SjepJ332C0YMamdFEMco0nstt.png",
+       "name": "Channel Four Films",
+       "origin_country": "GB"
+      }
+     ],
+     "production_countries": [
+      {
+       "iso_3166_1": "US",
+       "name": "United States of America"
+      },
+      {
+       "iso_3166_1": "GB",
+       "name": "United Kingdom"
+      }
+     ],
+     "release_date": "1994-10-19",
+     "revenue": 1746050,
+     "runtime": 120,
+     "softcore": false,
+     "spoken_languages": [
+      {
+       "english_name": "English",
+       "iso_639_1": "en",
+       "name": "English"
+      }
+     ],
+     "status": "Released",
+     "tagline": "",
+     "title": "万尼亚在42街口",
+     "video": false,
+     "vote_average": 6.7,
+     "vote_count": 98,
+     "external_ids": {
+      "imdb_id": "tt0111590",
+      "wikidata_id": "Q736349",
+      "facebook_id": null,
+      "instagram_id": null,
+      "twitter_id": null
+     }
+    },
+    "torrents": [
+     {
+      "id": 54986,
+      "title": "Vanya on 42nd Street 1994 Criterion Collection BluRay 1080p x265 10bit LPCM 2.0-LK@UBits",
+      "subtitle": "万尼亚在42街口 | Vanya on 42nd Street | 1994 | 泛雅在42街口 | 万雅在42号街口",
+      "size": 11518319109,
+      "complete": 3,
+      "uploaderId": 520,
+      "medium": 306,
+      "review": 0,
+      "uploadTime": 1790693233,
+      "anonymous": 0,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 1,
+      "seeding": 4,
+      "videoCoding": 102,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       604
+      ],
+      "tmdb_id": 22500,
+      "imdb_id": "tt0111590",
+      "tmdb_type": 0,
+      "user": {
+       "id": 520,
+       "username": "hangsijing",
+       "class": {
+        "id": 10500,
+        "level": 20,
+        "name": "执事",
+        "color": "A4414F",
+        "need_upload": 0,
+        "need_download": 0,
+        "need_time": 0,
+        "need_ratio": 0,
+        "lock": 1,
+        "duty": null
+       },
+       "upload": 443420962184755,
+       "download": 597968488748,
+       "nameColor": "000000",
+       "avatar": null,
+       "banned": 0,
+       "low_ratio": null,
+       "vip_status": 0,
+       "badges": [
+        {
+         "id": 3,
+         "name": "工作组",
+         "user_id": 2,
+         "title": "工作组",
+         "create_time": 1733208300,
+         "update_time": 1733208300,
+         "url": "https://snarp.zhuque.in/i/2025/04/16/1c89db0400374bd886ccc71783d03717.png"
+        }
+       ],
+       "isVip": false,
+       "anonymous": 0
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     }
+    ]
+   },
+   {
+    "id": 21925,
+    "type": 0,
+    "tmdb_id": 1258509,
+    "imdb_id": "tt33381401",
+    "create_time": 1783531306,
+    "update_time": 1783531306,
+    "title": "留存的爱",
+    "content": {
+     "adult": false,
+     "backdrop_path": "/7xWTnediis2NYgZTq7ZndvI9JgW.jpg",
+     "belongs_to_collection": null,
+     "budget": 0,
+     "genres": [
+      {
+       "id": 18,
+       "name": "剧情"
+      },
+      {
+       "id": 35,
+       "name": "喜剧"
+      }
+     ],
+     "homepage": "",
+     "id": 1258509,
+     "imdb_id": "tt33381401",
+     "origin_country": [
+      "IS"
+     ],
+     "original_language": "is",
+     "original_title": "Ástin sem eftir er",
+     "overview": "一个年轻家庭在冰岛乡村的一年生活。我们跟随他们经历分离过程中的挣扎与胜利。这是一个关于记忆与遗留爱意的故事。",
+     "popularity": 0.9789,
+     "poster_path": "/gveoShAALiQfdINESmjmsPGb0IC.jpg",
+     "production_companies": [
+      {
+       "id": 88231,
+       "logo_path": "/hVx90I5BEktosw4N9AneIFwmjeg.png",
+       "name": "Snowglobe",
+       "origin_country": "DK"
+      },
+      {
+       "id": 250039,
+       "logo_path": "/iH6K7PulRDZW53gdRoRY7OygmO5.png",
+       "name": "Still Vivid",
+       "origin_country": "IS"
+      },
+      {
+       "id": 122594,
+       "logo_path": "/w7CeTbwg9SmhZVilZXh4Yy1yp6Y.png",
+       "name": "HOBAB",
+       "origin_country": "SE"
+      },
+      {
+       "id": 2801,
+       "logo_path": "/bswb1PLLsKDUXMLgy42bZtCtIde.png",
+       "name": "Film i Väst",
+       "origin_country": "SE"
+      },
+      {
+       "id": 94,
+       "logo_path": "/huC7HqorvUThGIrENrbcHmQVUA0.png",
+       "name": "ARTE France Cinéma",
+       "origin_country": "FR"
+      },
+      {
+       "id": 95747,
+       "logo_path": "/9fP0ZNfxTzm8S7KNfHrMHGYimb3.png",
+       "name": "Maneki Films",
+       "origin_country": "FR"
+      }
+     ],
+     "production_countries": [
+      {
+       "iso_3166_1": "DK",
+       "name": "Denmark"
+      },
+      {
+       "iso_3166_1": "FR",
+       "name": "France"
+      },
+      {
+       "iso_3166_1": "IS",
+       "name": "Iceland"
+      },
+      {
+       "iso_3166_1": "SE",
+       "name": "Sweden"
+      }
+     ],
+     "release_date": "2025-08-08",
+     "revenue": 133449,
+     "runtime": 109,
+     "softcore": false,
+     "spoken_languages": [
+      {
+       "english_name": "Icelandic",
+       "iso_639_1": "is",
+       "name": "Íslenska"
+      },
+      {
+       "english_name": "Swedish",
+       "iso_639_1": "sv",
+       "name": "svenska"
+      },
+      {
+       "english_name": "English",
+       "iso_639_1": "en",
+       "name": "English"
+      }
+     ],
+     "status": "Released",
+     "tagline": "",
+     "title": "留存的爱",
+     "video": false,
+     "vote_average": 6.224,
+     "vote_count": 29,
+     "external_ids": {
+      "imdb_id": "tt33381401",
+      "wikidata_id": "Q131750758",
+      "facebook_id": null,
+      "instagram_id": null,
+      "twitter_id": null
+     }
+    },
+    "torrents": [
+     {
+      "id": 54985,
+      "title": "Ástin sem eftir er 2025 1080p GER Blu-ray AVC DTS-HD MA 5.1-MAMA",
+      "subtitle": "留存的爱 | The Love That Remains | 2025 | The Love That Remains | 总有爱在(港) ｜ 德国原盘",
+      "size": 32613404110,
+      "complete": 3,
+      "uploaderId": 520,
+      "medium": 303,
+      "review": 0,
+      "uploadTime": 1790692286,
+      "anonymous": 0,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 1,
+      "seeding": 3,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [],
+      "tmdb_id": 21925,
+      "imdb_id": "tt33381401",
+      "tmdb_type": 0,
+      "user": {
+       "id": 520,
+       "username": "hangsijing",
+       "class": {
+        "id": 10500,
+        "level": 20,
+        "name": "执事",
+        "color": "A4414F",
+        "need_upload": 0,
+        "need_download": 0,
+        "need_time": 0,
+        "need_ratio": 0,
+        "lock": 1,
+        "duty": null
+       },
+       "upload": 443420962184755,
+       "download": 597968488748,
+       "nameColor": "000000",
+       "avatar": null,
+       "banned": 0,
+       "low_ratio": null,
+       "vip_status": 0,
+       "badges": [
+        {
+         "id": 3,
+         "name": "工作组",
+         "user_id": 2,
+         "title": "工作组",
+         "create_time": 1733208300,
+         "update_time": 1733208300,
+         "url": "https://snarp.zhuque.in/i/2025/04/16/1c89db0400374bd886ccc71783d03717.png"
+        }
+       ],
+       "isVip": false,
+       "anonymous": 0
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     },
+     {
+      "id": 53585,
+      "title": "Ástin sem eftir er 2025 1080p Blu-ray AVC DTS-HD MA 5.1-BDA",
+      "subtitle": "留存的爱 | The Love That Remains | 2025 | The Love That Remains | 总有爱在(港)",
+      "size": 49005789306,
+      "complete": 10,
+      "uploaderId": 520,
+      "medium": 303,
+      "review": 0,
+      "uploadTime": 1783531306,
+      "anonymous": 0,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 1,
+      "videoCoding": 101,
+      "category": 501,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [],
+      "tmdb_id": 21925,
+      "imdb_id": "tt33381401",
+      "tmdb_type": 0,
+      "user": {
+       "id": 520,
+       "username": "hangsijing",
+       "class": {
+        "id": 10500,
+        "level": 20,
+        "name": "执事",
+        "color": "A4414F",
+        "need_upload": 0,
+        "need_download": 0,
+        "need_time": 0,
+        "need_ratio": 0,
+        "lock": 1,
+        "duty": null
+       },
+       "upload": 443420962184755,
+       "download": 597968488748,
+       "nameColor": "000000",
+       "avatar": null,
+       "banned": 0,
+       "low_ratio": null,
+       "vip_status": 0,
+       "badges": [
+        {
+         "id": 3,
+         "name": "工作组",
+         "user_id": 2,
+         "title": "工作组",
+         "create_time": 1733208300,
+         "update_time": 1733208300,
+         "url": "https://snarp.zhuque.in/i/2025/04/16/1c89db0400374bd886ccc71783d03717.png"
+        }
+       ],
+       "isVip": false,
+       "anonymous": 0
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     }
+    ]
+   },
+   {
+    "id": 8635,
+    "type": 1,
+    "tmdb_id": 107371,
+    "imdb_id": "tt13695606",
+    "create_time": 1692267894,
+    "update_time": 1784970735,
+    "title": "一念永恒",
+    "content": {
+     "adult": false,
+     "backdrop_path": "/8kjea5G7lMYRit7U9rSOLLZZOUh.jpg",
+     "created_by": [],
+     "episode_run_time": [],
+     "first_air_date": "2020-08-12",
+     "genres": [
+      {
+       "id": 16,
+       "name": "动画"
+      },
+      {
+       "id": 10765,
+       "name": "Sci-Fi & Fantasy"
+      },
+      {
+       "id": 18,
+       "name": "剧情"
+      }
+     ],
+     "homepage": "https://wetv.vip/zh-cn/album/ciw7o8319w2cx15",
+     "id": 107371,
+     "in_production": true,
+     "languages": [
+      "zh"
+     ],
+     "last_air_date": "2025-07-23",
+     "last_episode_to_air": {
+      "id": 5822108,
+      "name": "逆河之危",
+      "overview": "白小纯三人误入鬼母骨州之内，凭借守陵人信物躲过此难。面对三院联手进犯，逆河宗岌岌可危。",
+      "vote_average": 0,
+      "vote_count": 0,
+      "air_date": "2026-07-22",
+      "episode_number": 168,
+      "episode_type": "standard",
+      "production_code": "",
+      "runtime": null,
+      "season_number": 1,
+      "show_id": 107371,
+      "still_path": "/qqO2j3xhk6JtN272HPxpjqWih2y.jpg"
+     },
+     "name": "一念永恒",
+     "next_episode_to_air": {
+      "id": 5822109,
+      "name": "第 169 集",
+      "overview": "",
+      "vote_average": 0,
+      "vote_count": 0,
+      "air_date": "2026-07-28",
+      "episode_number": 169,
+      "episode_type": "standard",
+      "production_code": "",
+      "runtime": null,
+      "season_number": 1,
+      "show_id": 107371,
+      "still_path": null
+     },
+     "networks": [
+      {
+       "id": 2007,
+       "logo_path": "/6Lfll43wYG2eyereOBjpYFRSGs4.png",
+       "name": "Tencent Video",
+       "origin_country": "CN"
+      }
+     ],
+     "number_of_episodes": 200,
+     "number_of_seasons": 1,
+     "origin_country": [
+      "CN"
+     ],
+     "original_language": "zh",
+     "original_name": "一念永恒",
+     "overview": "腾讯视频打造的第二部国漫年番，也是第一部2D国漫年番，由视美影业制作，讲述平凡少年白小纯在一次次磨炼挑战中的成长变化，描绘了一个极具东方奇幻色彩的瑰丽世界。人们常说“陪伴是最长情的告白”，而每一位资深的动漫迷，都值得一个《一念永恒》这样的国漫年番“长情”的守护。",
+     "popularity": 33.7566,
+     "poster_path": "/jgeAAUyACa4KIdOPafFlWas3em5.jpg",
+     "production_companies": [
+      {
+       "id": 259834,
+       "logo_path": null,
+       "name": "Weidao",
+       "origin_country": "CN"
+      }
+     ],
+     "production_countries": [
+      {
+       "iso_3166_1": "CN",
+       "name": "China"
+      }
+     ],
+     "seasons": [
+      {
+       "air_date": "2020-08-12",
+       "episode_count": 200,
+       "id": 158842,
+       "name": "第 1 季",
+       "overview": "《一念永恒》是由企鹅影视与视美影业联合出品的中国奇幻动画电影系列，改编自网络作家耳根的同名小说。该系列首部作品于2020年8月12日在腾讯视频独播，是第一部2D国漫年番，由苏晓光执导，主要配音演员包括苏尚卿、郭浩然、李诗萌等 。",
+       "poster_path": "/uUOz0nrLwGBQdDAvGKgEuQNkSIw.jpg",
+       "season_number": 1,
+       "vote_average": 9.7
+      }
+     ],
+     "softcore": false,
+     "spoken_languages": [
+      {
+       "english_name": "Mandarin",
+       "iso_639_1": "zh",
+       "name": "普通话"
+      }
+     ],
+     "status": "Returning Series",
+     "tagline": "长生之愿一念永恒！",
+     "type": "Scripted",
+     "vote_average": 8.9,
+     "vote_count": 16,
+     "external_ids": {
+      "imdb_id": "tt13695606",
+      "freebase_mid": null,
+      "freebase_id": null,
+      "tvdb_id": 388680,
+      "tvrage_id": null,
+      "wikidata_id": null,
+      "facebook_id": null,
+      "instagram_id": null,
+      "twitter_id": null
+     }
+    },
+    "torrents": [
+     {
+      "id": 54984,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 178 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 242441094,
+      "complete": 15,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1790683800,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 10,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     },
+     {
+      "id": 54983,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 178 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 498189151,
+      "complete": 33,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1790683740,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 33,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 0,
+      "progress": 0
+     },
+     {
+      "id": 54825,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 177 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 297490297,
+      "complete": 17,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1790079000,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 13,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 54824,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 177 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 635524718,
+      "complete": 31,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1790078940,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 22,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 54733,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 176 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 260920832,
+      "complete": 17,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1789474140,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 11,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 54732,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 176 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 552285549,
+      "complete": 47,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1789474140,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 25,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 54683,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 166-175 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 2501295032,
+      "complete": 14,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1789094520,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 6,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 54682,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 166-175 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 5976061339,
+      "complete": 23,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1789094100,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 9,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 44305,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 107-165 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 35564625034,
+      "complete": 35,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1753197120,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 11,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 44304,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 110-165 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 16692567073,
+      "complete": 14,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1753196880,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 4,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 34779,
+      "title": "A Will Eternal 2020 S01 1080p WEB-DL H264 AAC-ZWEX",
+      "subtitle": "一念永恒 第 1 季 第 1-109 集 | 导演: 苏晓光 主演: 苏尚卿 / 郭浩然 / 李诗萌 / 乔诗语 / 刘琮 *极光 TV*",
+      "size": 28844551719,
+      "complete": 44,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1719922680,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 5,
+      "videoCoding": 101,
+      "category": 503,
+      "resolution": 403,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     },
+     {
+      "id": 17122,
+      "title": "A Will Eternal 2020 S01 2160p WEB-DL H265 AAC-ZWEX",
+      "subtitle": "一念永恒 第一季 第 1-106 集",
+      "size": 31383107078,
+      "complete": 141,
+      "medium": 309,
+      "review": 0,
+      "uploadTime": 1692267894,
+      "anonymous": true,
+      "pinned": 0,
+      "pinTime": -1,
+      "leeching": 0,
+      "seeding": 9,
+      "videoCoding": 102,
+      "category": 503,
+      "resolution": 404,
+      "is_official": 1,
+      "tags": [
+       601,
+       603,
+       604,
+       622
+      ],
+      "tmdb_id": 8635,
+      "imdb_id": "tt13695606",
+      "tmdb_type": 1,
+      "user": {
+       "anonymous": true
+      },
+      "uploadRate": 1,
+      "downloadRate": 1,
+      "progress": 0
+     }
+    ]
+   }
+  ],
+  "total": 22197
+ }
+}
