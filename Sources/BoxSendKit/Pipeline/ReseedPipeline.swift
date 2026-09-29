@@ -37,6 +37,7 @@ public final class ReseedPipeline {
         public var pushed: Bool
         public var pushID: String?
         public var upLimit: Int64
+        public var pushes: [(site: String, ok: Bool, message: String)]
 
         public var description: String {
             var lines: [String] = ["[\(release.summary)] torrent \(torrentBytes) bytes"]
@@ -44,6 +45,9 @@ public final class ReseedPipeline {
                 lines.append("  reseed \(o.site): \(o.ok ? "OK" : "FAIL") \(o.message)")
             }
             lines.append("  push: \(pushed ? "OK (\(pushID ?? "")) upLimit=\(upLimit == 0 ? "unlimited" : "\(upLimit) B/s")" : "skipped")")
+            for p in pushes {
+                lines.append("  push[\(p.site)]: \(p.ok ? "OK" : "FAIL") \(p.message)")
+            }
             return lines.joined(separator: "\n")
         }
     }
@@ -65,7 +69,7 @@ public final class ReseedPipeline {
 
         // 2. 解析详情
         var release = try adapter.fetchDetail(detailURL: detailURL)
-        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0)
+        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [])
 
         // 3. 下载 .torrent，并用 bencode info.name 校正发布名（权威来源）
         let (torrentData, filename) = try adapter.downloadTorrentFile(release)
@@ -81,6 +85,8 @@ public final class ReseedPipeline {
 
         // 4. 逐目标站转种
         let targets = opts.targets ?? config.targetSites
+        // 转种成功的目标站 -> 其新种子详情页，稍后逐站推送该站自己的 .torrent
+        var targetPushes: [(siteID: String, detailURL: String)] = []
         if !opts.skipReseed {
             if release.isForbidReseed {
                 state.note("forbid-reseed marker hit, skip reseed: \(release.summary)")
@@ -96,6 +102,9 @@ public final class ReseedPipeline {
                     }
                     if state.isUploaded(site: tid, key: release.dedupKey) {
                         report.outcomes.append((tid, true, "已转种过，跳过"))
+                        if let tu = state.targetURL(site: tid, key: release.dedupKey) {
+                            targetPushes.append((tid, tu))
+                        }
                         continue
                     }
                     do {
@@ -109,6 +118,12 @@ public final class ReseedPipeline {
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
                             state.note("reseed OK \(tid) <- \(release.summary)")
+                            if let u = outcome.detailURL {
+                                state.markTargetURL(site: tid, key: release.dedupKey, url: u)
+                                targetPushes.append((tid, u))
+                            } else {
+                                state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
+                            }
                         } else {
                             state.note("reseed FAIL \(tid) <- \(release.summary): \(outcome.message)")
                         }
@@ -116,6 +131,13 @@ public final class ReseedPipeline {
                     } catch {
                         report.outcomes.append((tid, false, "\(error.localizedDescription)"))
                     }
+                }
+            }
+        } else {
+            // skipReseed：从已有记录补齐目标站新种子链接，保证目标站 torrent 也能推送
+            for tid in targets {
+                if let tu = state.targetURL(site: tid, key: release.dedupKey) {
+                    targetPushes.append((tid, tu))
                 }
             }
         }
@@ -148,6 +170,44 @@ public final class ReseedPipeline {
                 } catch {
                     state.note("push FAIL \(release.summary): \(error.localizedDescription)")
                     throw error
+                }
+            }
+        }
+
+        // 6. 逐目标站推送该站自己的 .torrent
+        //    各站 .torrent 的 tracker 不同、info hash 通常也不同，在 qB 中是独立种子；
+        //    按目标站限速（分组/站点 upLimit），避免某一站上传过快被封。
+        if !opts.skipPush {
+            for item in targetPushes {
+                let pushKey = "\(item.siteID)#\(item.detailURL)"
+                if state.isPushed(key: pushKey) {
+                    report.pushes.append((item.siteID, true, "已推送过，跳过"))
+                    continue
+                }
+                do {
+                    guard let ts = config.site(item.siteID) else {
+                        report.pushes.append((item.siteID, false, "未配置的站点 id"))
+                        continue
+                    }
+                    let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
+                    let tInfo = try tAdapter.fetchDetail(detailURL: item.detailURL)
+                    let (tData, tName) = try tAdapter.downloadTorrentFile(tInfo)
+                    let limit = config.effectiveUpLimit(siteID: item.siteID)
+                    let result = try downloader.addTorrent(
+                        data: tData, filename: tName,
+                        savePath: config.downloader.savePath,
+                        category: config.downloader.category,
+                        skipChecking: config.downloader.skipChecking,
+                        upLimit: limit
+                    )
+                    state.markPushed(key: pushKey, id: result.id)
+                    var msg = "upLimit=\(limit == 0 ? "unlimited" : "\(limit) B/s")"
+                    if !result.note.isEmpty { msg += " [\(result.note)]" }
+                    report.pushes.append((item.siteID, true, msg))
+                    state.note("push[\(item.siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
+                } catch {
+                    report.pushes.append((item.siteID, false, error.localizedDescription))
+                    state.note("push[\(item.siteID)] FAIL \(item.detailURL): \(error.localizedDescription)")
                 }
             }
         }

@@ -20,6 +20,8 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 └────────────────────────────────────────────────────────────────┘
 ```
 
+> 推送时**源站与每个目标站各自推送该站自己的 .torrent**：各站 .torrent 内嵌的 tracker 不同、info hash 通常也不同，在下载器中是相互独立的种子；每个 torrent 按**对应站点**的上传限速（站点/分组取更严格者）添加，避免某一站上传过快被盯上。
+
 支持站（9 个优先站，内置实测过的上传参数，全部可作源站）：
 pt.luckpt.de、hdsky.me、ptchdbits.co、hdhome.org、springsunday.net（CMCT）、audiences.me、totheglory.im（TTG）、pterclub.net、hhanclub.net（仅作源站，其 offers 候选区上传属 M2）。
 
@@ -106,13 +108,13 @@ open dist/BoxSend.app
 
 ## 使用（GUI）
 
-- **运行**：粘贴详情页链接（一行说明 + 一行输入框）→ 勾选「转种到目标站」「推送到下载器」→ 勾选参与本次转种的目标站 → 「开始运行」。结果含每站转种状态 + 推送状态 + 生效的上传限速。
+- **运行**：粘贴详情页链接（一行说明 + 一行输入框）→ 勾选「转种到目标站」「推送到下载器」→ 勾选参与本次转种的目标站 → 「开始运行」。结果含每站转种状态 + 推送状态 + 生效的上传限速。转种成功的目标站会**自动拉取该站新种子的 .torrent 并单独推送到下载器**（按目标站限速），无需手动添加。
 - **站点与限速**：每个站一行，设置**该站种子的上传限速（整数 MB/s，空 = 不限速）**（推送到下载器时生效，避免上传速度过高被站管/带宽策略盯上）、并把它**加入分组**；**目标站分组**为组内站点提供共用带宽上限（整数 MB/s，空 = 不限），用于避免 VPS 上传带宽超限；生效限速 = 站点限速与分组带宽取更严格者；另有全局默认限速、推送策略（总是推 / 全部转种成功才推）。转种目标站在「运行」页勾选。
 - **Cookie**：Gist 同步（手动/自动，最上）→ PT-depiler 本地备份 zip 导入（中）→ 已同步的 Cookie 详情（站点数/总数/站点列表，最下）。
 - **下载器**：qBittorrent/Transmission 参数 + 连接检测。
 - **日志**：最近 500 条运行日志（转种/推送/cookie 变更）。
 
-幂等：同一种子重复运行，已转种的目标站自动跳过（state.json 记录）；已推过的下载器重复推送按"已存在"处理（qBittorrent 5.2+ 的 409 视为成功）。
+幂等：同一种子重复运行，已转种的目标站自动跳过（state.json 记录）；已推过的下载器重复推送按"已存在"处理（qBittorrent 5.2+ 的 409 视为成功）。目标站 torrent 按「目标站#新种子详情页」去重；转种成功后新种子链接存入 state.json，重复运行或 `--skip-reseed` 时也能据此补齐目标站推送。
 
 ## 使用（CLI，可选）
 
@@ -168,7 +170,7 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
 
 ## 测试
 
-`swift test`（31 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码；新增：真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换、HDSky 上传表单全字段校验）。
+`swift test`（35 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码；新增：真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换、HDSky 上传表单全字段校验）。
 
 ## 里程碑
 

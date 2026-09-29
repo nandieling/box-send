@@ -3,13 +3,27 @@ import Foundation
 /// JSON 文件状态（M1 够用；M2 换 SQLite 便于历史查询）
 /// - uploaded: 目标站 -> dedupKey -> 时间戳（转种成功记录）
 /// - pushed: dedupKey -> 下载器标识（推种记录）
+/// - targetURLs: 目标站 -> dedupKey -> 转种后的新种子详情页（用于推送/重试目标站 torrent）
 /// - lastGistSync: 上次 gist 同步时间
 public final class StateStore {
     struct Snapshot: Codable {
         var uploaded: [String: [String: Double]] = [:]
         var pushed: [String: String] = [:]
+        var targetURLs: [String: [String: String]] = [:]   // 目标站 -> dedupKey -> 新种子详情页
         var lastGistSync: Double?
         var notes: [String] = []
+
+        init() {}
+
+        // 兼容旧版 state.json（无 targetURLs 字段）
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            uploaded = try c.decodeIfPresent([String: [String: Double]].self, forKey: .uploaded) ?? [:]
+            pushed = try c.decodeIfPresent([String: String].self, forKey: .pushed) ?? [:]
+            targetURLs = try c.decodeIfPresent([String: [String: String]].self, forKey: .targetURLs) ?? [:]
+            lastGistSync = try c.decodeIfPresent(Double.self, forKey: .lastGistSync)
+            notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
+        }
     }
 
     private let path: String
@@ -46,6 +60,15 @@ public final class StateStore {
     public func markPushed(key: String, id: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.pushed[key] = id
+        saveLocked()
+    }
+    public func targetURL(site: String, key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.targetURLs[site]?[key]
+    }
+    public func markTargetURL(site: String, key: String, url: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.targetURLs[site, default: [:]][key] = url
         saveLocked()
     }
     public var lastGistSync: Double? {
