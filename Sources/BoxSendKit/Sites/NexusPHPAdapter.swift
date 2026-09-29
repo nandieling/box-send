@@ -2,7 +2,7 @@ import Foundation
 
 /// NexusPHP 家族适配器（覆盖 9 个优先站 + 大多数中文站）。
 /// 通用逻辑 + SiteOverride 站点差异。
-final class NexusPHPAdapter: SiteAdapter {
+class NexusPHPAdapter: SiteAdapter {
     let site: SiteConfig
     let client: HTTPClient
     let override: SiteOverride?

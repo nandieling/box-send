@@ -13,6 +13,8 @@ public enum SiteRegistry {
             return GazelleAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .tnode:
             return TNodeAdapter(site: site, client: client, debugDir: debugDir)
+        case .haidan:
+            return HaidanAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         default:
             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器")
         }
@@ -126,5 +128,7 @@ public enum SiteRegistry {
         SiteConfig(id: "u2", name: "U2", url: "http://u2.dmhy.org/", framework: .nexusPHP, enabled: false, overrides: .u2),
         // --- TNode（REST API + SPA） ---
         SiteConfig(id: "zhuque", name: "ZHUQUE", url: "https://zhuque.in/", framework: .tnode, enabled: false, overrides: nil),
+        // --- Haidan（NexusPHP 后端 + 自定义详情布局） ---
+        SiteConfig(id: "haidan", name: "HAIDAN", url: "https://www.haidan.cc/", framework: .haidan, enabled: false, overrides: .haidan),
     ]
 }

@@ -10,6 +10,7 @@ public enum SiteFramework: String, Codable {
     case avistaz = "AvistazNetwork"
     case blu = "Blu"
     case tnode = "TNode"
+    case haidan = "Haidan"
     case xbtit = "XBTIT"
     case custom = "custom"
 }

@@ -185,7 +185,18 @@ enum HTMLUtil {
             guard let name = group(tag, "name=['\"]([^\"']*)['\"]"),
                   let value = group(tag, "value=['\"]([^\"']*)['\"]") else { continue }
             let tail = String(html[r.upperBound...]).prefix(while: { $0 != "<" })
-            out.append((name, value, String(tail).trimmingCharacters(in: .whitespacesAndNewlines)))
+            var label = String(tail).trimmingCharacters(in: .whitespacesAndNewlines)
+            if label.isEmpty {
+                // 标签在紧随的 <label>…</label> 里（如 HAIDAN 的 tag_list[]）
+                let after = String(html[r.upperBound...].prefix(200))
+                if let lm = after.range(of: "<label", options: .caseInsensitive),
+                   after.distance(from: after.startIndex, to: lm.lowerBound) <= 3,
+                   let em = after.range(of: "</label>", options: .caseInsensitive) {
+                    label = stripTags(String(after[lm.upperBound..<em.lowerBound]))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            out.append((name, value, label))
         }
         return out
     }

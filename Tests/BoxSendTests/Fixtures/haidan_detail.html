@@ -1,0 +1,573 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<link rel="stylesheet" href="public/css/font-awesome-4.7.0/css/font-awesome.min.css">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name="keywords"
+        content="haidan" />
+        <meta name="description"
+        content="haidan" />
+        <meta name="generator" content="NexusPHP" />
+    
+    <title>HAIDAN :: 详情  海胆之家 - Powered by NexusPHP    </title>
+    <link rel="shortcut icon" href="public/pic/favicon.ico" type="image/x-icon" />
+    <link rel="search" type="application/opensearchdescription+xml"
+        title="HAIDAN Torrents"
+        href="opensearch.php" />
+    <link rel="stylesheet"
+        href="public/css/mediumfont.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/sprites.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/theme/Default/theme.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Default/details.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/forum_pic/chs/forumsprites.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/theme/Classic/theme.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Classic/details.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Classic/DomTT.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/curtain_imageresizer.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/pic/category/chd/scenetorrents/catsprites.css?202107312100"
+        type="text/css" />
+        <link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php" />
+
+
+
+    <script src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    <!-- clipboard -->
+    <script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script>
+    <!-- Tippy -->
+    <script type="text/javascript" src="public/js/popper.min.js"></script>
+    <script type="text/javascript" src="public/js/tippy-bundle.umd.min.js"></script>
+        <script type="text/javascript"
+        src="public/js/page/details.js?202107312100"></script>
+        <script type="text/javascript"
+        src="public/js/curtain_imageresizer.js?202107312100"></script>
+    <script type="text/javascript"
+        src="public/js/ajaxbasic.js?202107312100"></script>
+    <script type="text/javascript" src="public/js/common.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/domLib.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/domTT.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/sortable.min.js?202107312100">
+    </script>
+    <script type="text/javascript"
+        src="public/js/domTT_drag.js?202107312100"></script>
+    <script type="text/javascript"
+        src="public/js/fadomatic.js?202107312100"></script>
+
+<body>
+    <div class="head" id="head">
+                    <div class="option">
+
+        </div>
+    <div class="top-panel special-border">
+                            <a class="logo_img" href="index.php"><img
+                        src="public/pic/logo.png"
+                        alt="HAIDAN"
+                        title="HAIDAN - 海胆PT,PT" />
+                </a>
+                <div class="userinfo medium border-box">
+    <div class="userinfo-half">
+        <div class="user_sub_item"
+            href="userdetails.php?id=22440">
+            <span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></div>
+        <a class="user_sub_item" href="logout.php"
+            title="退出">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>&nbsp;退出        </a>
+        <a class="user_sub_item" href="usercp.php"
+            title="控制面板">
+            <i class="fa fa-cog" aria-hidden="true"></i>&nbsp;控制面板        </a>
+        <a class="user_sub_item"
+            href="invite.php?id=22440"
+            title="邀请 ">
+            <i class="fa fa-user-plus " aria-hidden="true"></i>&nbsp;邀请         </a>
+        <a class="user_sub_item" href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0"
+            title="收藏">
+            <i class="fa fa-star" aria-hidden="true"></i>&nbsp;收藏        </a>
+        <a class="user_sub_item" href="friends.php"
+            title="好友">
+            <i class="fa fa-users" aria-hidden="true"></i>&nbsp;好友        </a>
+        <a class="user_sub_item" href="getrss.php"
+            title="RSS订阅">
+            <i class="fa fa-rss" aria-hidden="true"></i>&nbsp;RSS订阅        </a>
+        <div class="user_sub_item">
+             <input type="submit" id="modalBtn" class="dt_button" value="每日打卡" />            <div id="simpleModal" class="modal">
+                <div class="modal-content">
+                    <div>
+                        <div class="modal-header">
+                            <span class="closeBtn">&times;</span>
+                            <h2 style="text-align:center">
+                                每日打卡                            </h2>
+                        </div>
+                        <div class="modal-body">
+                            <p>恭喜您,获得了15魔力值奖励!                            <p>明天再来可获取20魔力值奖励!                            <p><a style="font-weight:bold;color:darkred" href="mybonus.php#magic_rules">打卡规则详情</a>
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+                                    <div id="signinFailModal" class="modal">
+                <div class="modal-content">
+                    <div>
+                        <div class="modal-header">
+                            <span class="closeBtn">&times;</span>
+                            <h2 style="text-align:center">
+                                每日打卡                            </h2>
+                        </div>
+                        <div class="modal-body">
+                            <p>小海胆开小差了，刷新后再来试试吧!                        </div>
+                        <div class="modal-footer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div class="userinfo-half">
+        <div class="user_item">
+        <a href="classpoint.php">
+        <i class="fa fa-trophy" aria-hidden="true"></i>
+        <font class='color_bonus'>等级积分: </font>
+        </a>
+        <span> 8,073 </span>
+        </div>
+        <div class="user_item">
+            <font class='color_bonus'>魔力值:             </font>
+            <span id="magic_num">1,415,623.4(165.487/h)</span>
+            <span id='magic_num_new' style='display:none'>1,415,638.4(165.487/h)</span>
+        </div>
+
+        <div class="user_item">
+            <font class="color_ratio">分享率:             </font> 41.798        </div>
+        <div class="user_item">
+            <font class='color_uploaded'>上传量:             </font> 30.067 TB        </div>
+        <div class="user_item">
+            <font class='color_downloaded'> 下载量:             </font> 736.60 GB        </div>
+        <div class="user_item">
+            <font class='color_active'>当前活动:             </font> <img class="arrowup" alt="Torrents seeding"
+                title="当前做种"
+                src="public/pic/trans.gif" />68 <img class="arrowdown"
+                alt="Torrents leeching"
+                title="当前下载"
+                src="public/pic/trans.gif" />
+            0
+        </div>
+        <div class="user_item">
+            <a href="messages.php">&nbsp;<i class="fa fa-envelope" style="color:" aria-hidden="true" alt="inbox" title="收件箱&nbsp;(无新短讯)" ></i></a> 3 (0 新)  <a href="messages.php?action=viewmailbox&amp;box=-1"><i class="fa fa-envelope-o" aria-hidden="true" alt="sentbox" title="发件箱"></i></a> 0
+        </div>
+        
+    </div>
+<script>
+                daily_attendance(
+                    '已经打卡'
+                );
+            </script>
+
+</div>    </div>
+
+</div>
+    <div class="mainroute">
+        <div class="navbar special-border"><ul class="menu navmenu"><li class="nav"><a data-hover="&nbsp;首&nbsp;&nbsp;页&nbsp;" href="index.php">&nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;论&nbsp;&nbsp;坛&nbsp;" href="forums.php">&nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;主题推荐区&nbsp;" href="collections.php">&nbsp;主题推荐区&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;影视区&nbsp;" href="videos.php">&nbsp;影视区&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;种&nbsp;&nbsp;子&nbsp;" href="torrents.php">&nbsp;种&nbsp;&nbsp;子&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;魔力商店&nbsp;" href="mybonus.php">&nbsp;魔力商店&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;种子悬赏&nbsp;" href="torrentrequest.php">&nbsp;种子悬赏&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;H&R&nbsp;" href="uploadrequest.php">&nbsp;H&R&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;字&nbsp;&nbsp;幕&nbsp;" href="subtitles.php">&nbsp;字&nbsp;&nbsp;幕&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;排&nbsp;&nbsp;行&nbsp;" href="topten.php">&nbsp;排&nbsp;&nbsp;行&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;规&nbsp;&nbsp;则&nbsp;" href="rules.php">&nbsp;规&nbsp;&nbsp;则&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;常见问题&nbsp;" href="faq.php">&nbsp;常见问题&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;管理组&nbsp;" href="staff.php">&nbsp;管理组&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;日&nbsp;志&nbsp;" href="log.php">&nbsp;日&nbsp;志&nbsp;</a></li></ul></div>        <div class="mainpanel special-border">
+        <a href="#footer" class="float-item right-float-item-1"><img src="public/pic/down-arrow.png "/></a>
+        <a href="#head" class="float-item right-float-item-2"><img src="public/pic/top-arrow.png "/></a>
+        <a href="upload.php" class="float-item left-float-item-2"><img width="100%" src="public/pic/upload.png "/></a>
+        <a href="imgdonate.php" class="float-item left-float-item-1"><img width="100%" src="public/pic/donate.png "/></a>
+                    <div align="center" style="margin-bottom: 10px" id="ad_belownav"><a href="adredir.php?id=2&amp;url=https%3A%2F%2Fitem.taobao.com%2Fitem.htm%3Fid%3D942731898846%26amp%3Bspm%3Da213gs.v2success.0.0.4a5848319xMx9r%26amp%3BskuId%3D6011200635934" target="_blank"><img border="0" src="https://s2.loli.net/2025/06/24/bnlTsquDWk6NECY.jpg" width="728" alt="ad" /></a></div><script type="text/javascript">
+					$(document).ready(function (){
+					var target= $('#torrent-79788').offset().top;
+					$('html,body').animate({scrollTop: target-50}, 500);
+					viewDetail(79788);
+				});</script>
+
+
+
+<div class="movie-content medium">
+		<div class="movie-info">
+
+
+		<div class="movie-body content-color">
+			<div class="poster">
+				<img class="poster-img"
+					src="./res/douban/images/37452964.jpg" />
+			</div>
+			<div class="detail-info">
+				<div class="detail-info-title">
+					<span id="master-title">除暴之路</span>
+					<span id="sub-title">除暴之路</span>
+				</div>
+				<div class="detail-info-items">
+						<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>评分:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+				<div class="rating-item">
+		<a class="rating-item-inner" ><img src="public/pic/imdb.jpg" width="25" style="padding-bottom: 0px;"
+	/>
+		&nbsp;&nbsp;
+				<span class="votes">暂无评分</span>
+		</a>
+				<a class="rating-item-inner"        href="https://movie.douban.com/subject/37452964" target="_blank"><img src="public/pic/douban.jpg" width="25"/>
+		&nbsp;&nbsp;
+        		<span class="votes">暂无评分</span>
+		</a>
+			</div>
+		</div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='mult-item'><div class='mult-item-desc mult-first-item-desc'> <span class='detail-info-item-name'>上映日期:</span></div> <div class='mult-item-content'> 2026-09-24 </div> </div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='mult-item'><div class='mult-item-desc mult-first-item-desc'> <span class='detail-info-item-name'>地区:</span></div> <div class='mult-item-content'>     <a href="videos.php?regionType=59">中国大陆</a> </div> <div class='mult-item-desc '> <span class='detail-info-item-name'>年份:</span></div> <div class='mult-item-content'>     <a href="videos.php?yearType=1644">2026</a> </div> </div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>类型:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+			    <a href="videos.php?styleType=56">犯罪</a>
+		</div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>介绍:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+			怀揣明星梦的妹妹身陷娱乐公司犯罪漩涡，哥哥为救出亲人，与当地警察并肩行动，最终成功将社会中的黑恶势力铲除。
+		</div>
+	</div>				</div>
+			</div>
+		</div>
+	</div>
+		<div class="torrents content-color">
+				<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:25px;'> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;'>种子</div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>操作</div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-arrow-up fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-arrow-down fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-check fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'><i class="fa fa-align-justify fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>发布信息</div> 
+			</div>
+		</div>    <div class="torrent-wrap content-color">
+    	<a style='margin-left:10px; margin-top: 4px;' class='switch-button switch-btn-color' id='t-79788-switch-button' href='javascript: viewDetail(79788);'> <i id="img_minus_79788" class='fa fa-plus-square fa-lg'></i> </a>
+			<div class="torrent" id="torrent-79788">
+					<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=t-simple-info>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:20px;'> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;justify-content:flex-start'><div style='display:flex;flex-direction:row;align-items:center;'><div class="poster"></div>    <div class="torrent_name_wrap">
+    <div class="torrent_name_col torrent_cell">
+        <a href="javascript: viewDetail(79788)"> WEB-DL&nbsp;/&nbsp;H.265&nbsp;/&nbsp;2160p&nbsp;/&nbsp;AC3&nbsp;/&nbsp;LongWeb&nbsp;</a>
+        <div></div>
+        <div class="sp">   <img class="pro_30pctdown" src="public/pic/trans.gif" alt="30%" title="30%" />&nbsp;   <b>(<font class='new'>新</font>)</b>&nbsp;  </div>
+        <div><label style='white-space: nowrap;background-color: #0000ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>中字</b></label><label style='white-space: nowrap;background-color: #8000ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>国语</b></label>&nbsp;</div>
+    </div>
+    </div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'><div style='display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%; padding: 0 4px;'><a class='action_item copy-download-link clipboard' title="复制种子下载链接" href="javascript:;" data-clipboard-text="https://www.haidan.cc/download.php?id=79788&passkey=92ac74edb2a8c2410386cdb5f3e4e8df"><i class="fa fa-copy fa-lg" aria-hidden="true" alt="copy"></i></a><a class='action_item' title="下载种子" href="download.php?id=79788&passkey=92ac74edb2a8c2410386cdb5f3e4e8df"><i class="fa fa-download fa-lg" aria-hidden="true" alt="download"></i></a><a class='action_item' title="举报该种子违反了规则" href="report.php?torrent=79788"><i class="fa fa-exclamation-triangle fa-lg" aria-hidden="true" alt="report" ></i></a>  <div class='action_item' style='display:flex;align-items:center;justify-content:center;'><a id="bookmark79788" href="javascript: bookmark(79788);"><i class="fa fa-star-o fa-lg" alt="Unbookmarked" title="收藏"></i></a></div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>14</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>0</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>18</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'>7.73 GB</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=62090" class='InsaneUser_Name'><b>happysky0816</b></a></span>发布于<span title="2026-09-27 20:50:40">2天3时前</span></div> 
+			</div>
+		</div>
+			<div class="torrent-detail" id="t-79788-hidden-area">
+				<table style="width: 100%;border:none;">
+					<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>标题</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<b><span>Chu Bao Zhi Lu 2026 2160p WEB-DL HDR H.265 10bit DDP 5.1-LongWeb</span></br><span>除暴之路 /  | 类型：剧情 / 犯罪 | 演员：刘峰超 / 黄涛 / 姚祯 / 孙彩纶 / 梁栋禹</span></b>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>其他信息</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id='kdescr'><fieldset><legend> 引用 </legend><br /><br />
+<span style="color: indigo;"><b><font size="5">LongPT官组出品</font></b></span></fieldset><br /><br />
+<img alt="image" src="https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmZqtJ0tmIuhilc48W0J8mlW-1XuHQACWw9rGwpgqFVfvNPKRUtLhwEAAwIAA3cAAz0E.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+◎译　　名　除暴之路<br />
+◎别　　名　◎片　　名　除暴之路<br />
+◎年　　代　2026<br />
+◎产　　地　中国大陆<br />
+◎类　　别　剧情 / 犯罪<br />
+◎语　　言　汉语普通话<br />
+◎上映日期　2026-09-24(中国大陆网络)<br />
+◎IMDb链接 &nbsp;<a class="faqlink" href="https://www.imdb.com/title/tt46550708/">https://www.imdb.com/title/tt46550708/</a><br />
+◎豆瓣评分　0/10 from 0 users<br />
+◎豆瓣链接　<a class="faqlink" href="https://movie.douban.com/subject/37452964/">https://movie.douban.com/subject/37452964/</a><br />
+◎导　　演　秦鹏飞 Pengfei Qin / 齐建勇<br />
+◎主　　演　刘峰超 Fengchao Liu<br />
+　　　　　 &nbsp;黄涛 Tao Huang<br />
+　　　　　 &nbsp;姚祯 Zhen Yao<br />
+　　　　　 &nbsp;孙彩纶 Cailun Sun<br />
+　　　　　 &nbsp;梁栋禹 Gener<br />
+　　　　　 &nbsp;房岩 Yan Fang<br />
+<br />
+◎简　　介<br />
+<br />
+　　怀揣明星梦的妹妹身陷娱乐公司犯罪漩涡，哥哥为救出亲人，与当地警察并肩行动，最终成功将社会中的黑恶势力铲除。<br />
+<br />
+ &nbsp;<br />
+<fieldset><legend> 引用 </legend><br />General<br />
+Unique ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 117407207228765495351357377244233965598 (0x5853CE3C621E8053A137929A43DBA01E)<br />
+Complete name &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 除暴之路.Chu.Bao.Zhi.Lu.2026.2160p.WEB-DL.HDR.H.265.10bit.DDP.5.1-LongWeb.mkv<br />
+Format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Matroska<br />
+Format version &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Version 4<br />
+File size &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 7.73 GiB<br />
+Duration &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 h 30 min<br />
+Overall bit rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 12.2 Mb/s<br />
+Frame rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 24.000 FPS<br />
+Group &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : LongWeb<br />
+Writing application &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Lavf62.12.101<br />
+Writing library &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Lavf62.12.101<br />
+<br />
+Video<br />
+ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1<br />
+Format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: HEVC<br />
+Format/Info &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : High Efficiency Video Coding<br />
+Format profile &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Main 10@L5@Main<br />
+HDR format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: HDR Vivid, Version 1<br />
+Codec ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: V_MPEGH/ISO/HEVC<br />
+Duration &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 h 30 min<br />
+Bit rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 11.7 Mb/s<br />
+Width &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 3 840 pixels<br />
+Height &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 640 pixels<br />
+Display aspect ratio &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 2.35:1<br />
+Frame rate mode &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Constant<br />
+Frame rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 24.000 FPS<br />
+Color space &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : YUV<br />
+Chroma subsampling &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 4:2:0<br />
+Bit depth &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 10 bits<br />
+Bits/(Pixel*Frame) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 0.078<br />
+Stream size &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 7.41 GiB (96%)<br />
+Default &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Yes<br />
+Forced &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: No<br />
+Color range &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Limited<br />
+Color primaries &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : BT.2020<br />
+Transfer characteristics &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: PQ<br />
+Matrix coefficients &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : BT.2020 non-constant<br />
+Mastering display color primaries &nbsp; : R: x=0.708000 y=0.292000, G: x=0.170000 y=0.797000, B: x=0.130000 y=0.046000, White point: x=0.312700 y=0.329000<br />
+Mastering display luminance &nbsp; &nbsp; &nbsp; &nbsp; : min: 0.0001 cd/m2, max: 1000 cd/m2<br />
+Maximum Content Light Level &nbsp; &nbsp; &nbsp; &nbsp; : 613 cd/m2<br />
+Maximum Frame-Average Light Level &nbsp; : 93 cd/m2<br />
+<br />
+Audio #1<br />
+ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 2<br />
+Format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: E-AC-3<br />
+Format/Info &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Enhanced AC-3<br />
+Commercial name &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Dolby Digital Plus<br />
+Codec ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: A_EAC3<br />
+Duration &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 h 30 min<br />
+Bit rate mode &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Constant<br />
+Bit rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 256 kb/s<br />
+Channel(s) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 6 channels<br />
+Channel layout &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: L R C LFE Ls Rs<br />
+Sampling rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 48.0 kHz<br />
+Frame rate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 31.250 FPS (1536 SPF)<br />
+Bit depth &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 32 bits<br />
+Compression mode &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Lossy<br />
+Stream size &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 166 MiB (2%)<br />
+Title &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 普通话 · Dolby · 256 kbps<br />
+Language &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Mandarin<br />
+Service kind &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Complete Main<br />
+Default &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Yes<br />
+Forced &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: No<br />
+<br />
+Text #1<br />
+ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 3<br />
+Format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: UTF-8<br />
+Codec ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: S_TEXT/UTF8<br />
+Codec ID/Info &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : UTF-8 Plain Text<br />
+Duration &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 h 28 min<br />
+Title &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 简体中文<br />
+Language &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: Chinese<br />
+Default &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Yes<br />
+Forced &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: No<br />
+<br />
+Text #2<br />
+ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 4<br />
+Format &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: UTF-8<br />
+Codec ID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: S_TEXT/UTF8<br />
+Codec ID/Info &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : UTF-8 Plain Text<br />
+Duration &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: 1 h 28 min<br />
+Title &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : 字幕<br />
+Default &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; : Yes<br />
+Forced &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;: No<br />
+<br />
+Created by longpt-auto-publisher</fieldset><br /><br />
+ &nbsp;<br />
+<img alt="image" src="https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmdqtJ2fM-6XUlPNDG_jxN7jW7-4TwACXg9rGwpgqFUIMOG7nbcIjAEAAwIAA3cAAz0E.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><img alt="image" src="https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmhqtJ2hHS1fY3YUs3WiBpeLC8tcvAACXw9rGwpgqFX-Tx7Xij6t-gEAAwIAA3cAAz0E.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><img alt="image" src="https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmlqtJ2kKYlXbPvEdNNxxEVMNzxSnQACYQ9rGwpgqFV4d3sGPSBw-gEAAwIAA3cAAz0E.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><img alt="image" src="https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmpqtJ2ncxCrcYPaSiriolDpj5u2eQACYg9rGwpgqFXLhDisR2JAFgEAAwIAA3cAAz0E.png" onload="Scale(this,700,0);" onclick="Preview(this);" /></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>字幕</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			该种子暂无字幕<div style="display: flex;flex-direction: row"><form method="post" action="subtitles.php"><input type="hidden" name="torrent_name" value="Chu Bao Zhi Lu 2026 2160p WEB-DL HDR H.265 10bit DDP 5.1-LongWeb" /><input type="hidden" name="detail_torrent_id" value="79788" /><input type="hidden" name="in_detail" value="in_detail" /><input type="submit" value="上传字幕" /></form><form method="get" action="https://assrt.net/sub/" target="_blank"><input type="text" name="searchword" id="keyword" style="" value="除暴之路" /><input type="submit" value="搜索射手网" /></form><form method="get" action="https://www.opensubtitles.org/en/search2/" target="_blank"><input type="hidden" id="moviename" name="MovieName" /><input type="hidden" name="action" value="search" /><input type="hidden" name="SubLanguageID" value="all" /><input onclick="document.getElementById('moviename').value=document.getElementById('keyword').value;" type="submit" value="搜索Opensubtitles" /></form></div></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>截图区</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='white-space:nowrap;overflow-x:auto;overflow-y:hidden;'><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmdqtJ2fM-6XUlPNDG_jxN7jW7-4TwACXg9rGwpgqFUIMOG7nbcIjAEAAwIAA3cAAz0E.jpg'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmhqtJ2hHS1fY3YUs3WiBpeLC8tcvAACXw9rGwpgqFX-Tx7Xij6t-gEAAwIAA3cAAz0E.jpg'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmlqtJ2kKYlXbPvEdNNxxEVMNzxSnQACYQ9rGwpgqFV4d3sGPSBw-gEAAwIAA3cAAz0E.jpg'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://imgs.longpt.org/file/AgACAgUAAyEGAASjAAEHRQACQmpqtJ2ncxCrcYPaSiriolDpj5u2eQACYg9rGwpgqFXLhDisR2JAFgEAAwIAA3cAAz0E.png'/></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>NFO</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<a href='viewnfo.php?id=79788&view=latin-1'>[所有模式]</a><div class='knfo' id='knfo'><pre style="font-size:10pt; font-family: 'Courier New', monospace; white-space: pre-wrap; word-wrap: break-word;">General
+Unique ID                           : 117407207228765495351357377244233965598 (0x5853CE3C621E8053A137929A43DBA01E)
+Complete name                       : &#x0398;&#x00d6;&#x00f1;&#x03bc;&#x00dc;&#x2524;&#x03a3;&#x2563;&#x00ef;&#x03a6;&#x2556;&#x00bb;.Chu.Bao.Zhi.Lu.2026.2160p.WEB-DL.HDR.H.265.10bit.DDP.5.1-LongWeb.mkv
+Format                              : Matroska
+Format version                      : Version 4
+File size                           : 7.73 GiB
+Duration                            : 1 h 30 min
+Overall bit rate                    : 12.2 Mb/s
+Frame rate                          : 24.000 FPS
+Group                               : LongWeb
+Writing application                 : Lavf62.12.101
+Writing library                     : Lavf62.12.101
+
+Video
+ID                                  : 1
+Format                              : HEVC
+Format/Info                         : High Efficiency Video Coding
+Format profile                      : Main 10@L5@Main
+HDR format                          : HDR Vivid, Version 1
+Codec ID                            : V_MPEGH/ISO/HEVC
+Duration                            : 1 h 30 min
+Bit rate                            : 11.7 Mb/s
+Width                               : 3 840 pixels
+Height                              : 1 640 pixels
+Display aspect ratio                : 2.35:1
+Frame rate mode                     : Constant
+Frame rate                          : 24.000 FPS
+Color space                         : YUV
+Chroma subsampling                  : 4:2:0
+Bit depth                           : 10 bits
+Bits/(Pixel*Frame)                  : 0.078
+Stream size                         : 7.41 GiB (96%)
+Default                             : Yes
+Forced                              : No
+Color range                         : Limited
+Color primaries                     : BT.2020
+Transfer characteristics            : PQ
+Matrix coefficients                 : BT.2020 non-constant
+Mastering display color primaries   : R: x=0.708000 y=0.292000, G: x=0.170000 y=0.797000, B: x=0.130000 y=0.046000, White point: x=0.312700 y=0.329000
+Mastering display luminance         : min: 0.0001 cd/m2, max: 1000 cd/m2
+Maximum Content Light Level         : 613 cd/m2
+Maximum Frame-Average Light Level   : 93 cd/m2
+
+Audio #1
+ID                                  : 2
+Format                              : E-AC-3
+Format/Info                         : Enhanced AC-3
+Commercial name                     : Dolby Digital Plus
+Codec ID                            : A_EAC3
+Duration                            : 1 h 30 min
+Bit rate mode                       : Constant
+Bit rate                            : 256 kb/s
+Channel(s)                          : 6 channels
+Channel layout                      : L R C LFE Ls Rs
+Sampling rate                       : 48.0 kHz
+Frame rate                          : 31.250 FPS (1536 SPF)
+Bit depth                           : 32 bits
+Compression mode                    : Lossy
+Stream size                         : 166 MiB (2%)
+Title                               : &#x03bc;&#x00d6;&#x00ab;&#x0398;&#x00c7;&#x00dc;&#x03a6;&#x00bb;&#x00a5; &#x252c;&#x2556; Dolby &#x252c;&#x2556; 256 kbps
+Language                            : Mandarin
+Service kind                        : Complete Main
+Default                             : Yes
+Forced                              : No
+
+Text #1
+ID                                  : 3
+Format                              : UTF-8
+Codec ID                            : S_TEXT/UTF8
+Codec ID/Info                       : UTF-8 Plain Text
+Duration                            : 1 h 28 min
+Title                               : &#x03c4;&#x00ab;&#x00c7;&#x03a3;&#x255c;&#x00f4;&#x03a3;&#x2555;&#x00a1;&#x03bc;&#x00fb;&#x00e7;
+Language                            : Chinese
+Default                             : Yes
+Forced                              : No
+
+Text #2
+ID                                  : 4
+Format                              : UTF-8
+Codec ID                            : S_TEXT/UTF8
+Codec ID/Info                       : UTF-8 Plain Text
+Duration                            : 1 h 28 min
+Title                               : &#x03c3;&#x00a1;&#x00f9;&#x03c3;&#x2563;&#x00f2;
+Default                             : Yes
+Forced                              : No
+
+Created by longpt-auto-publisher</pre></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>同伴</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id="peercount_79788"><b>14个做种者</b> | <b>0个下载者</b></div><span class="medium"><div style="display: block" id="showpeer_79788"><a href='javascript: viewpeerlist(79788);'>[查看列表]</a></div><div id="hidepeer_79788" style="display: none;"><a href="javascript: hidepeerlist(79788);">[隐藏列表]</a></div></span><div id='peerlist_79788'></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>感谢者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div class="thanks-list"><span id='no-thank-text-79788'>暂无感谢者</span><span id='thank-self-79788' style='display:none'><span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></span></div><a id="saythanks-79788"  href="javascript: saythanks(79788);" >[说谢谢]</a>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>打赏者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div>暂无打赏者</div><div style="display:flex;flex-direction:row;"><div style='display:flex;flex-direction:row;'><form style='display:inline' method='POST' action='takereward.php'><input type='hidden' name='id' value='79788'> <input type='hidden' name='page' value='details.php' /> <input style="width:30px" type='text' name='reward' value='10'><input type='submit' class='btn' value='打赏'/></form></div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>种子文件</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='display: flex;flex-direction: column;'><div style='display: flex;flex-direction: column;align-items: flex-start;'><div><b>文件数量：</b>1</div><div><b>Hash：</b>0c3aa69f98fbfdbee218c72fd8c6c22d90666885</div><div><span id="showfl_79788"><a href="javascript: viewfilelist(79788)" >[查看列表]</a></span><span id="hidefl_79788" style="display: none;"><a href="javascript: hidefilelist(79788)">[隐藏列表]</a></span><a href="torrent_info.php?id=79788">[查看结构]</a></div><div><span id='filelist_79788'></span></div></div></div>
+		</div>
+	</div>
+				</table>
+			</div>
+		</div>
+	</div>	</div>
+</div>
+
+
+
+
+
+
+
+<br /><br /><table style='border-radius: 7px;'><tr><td class="text" align="center"><b>快速评论</b><br /><br /><form id="compose" name="comment" method="post" action="comment.php?action=add&amp;type=torrent&amp;group_id=54868" onsubmit="return postvalid(this);"><input type="hidden" name="pid" value="79788" /><br /><textarea name='body' cols="100" rows="8" style="width: 450px" onkeydown="ctrlenter(event,'compose','qr')"></textarea><div align="center"><a href="javascript: SmileIT('[em4]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/4.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/4.gif" alt="" /></a><a href="javascript: SmileIT('[em5]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/5.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/5.gif" alt="" /></a><a href="javascript: SmileIT('[em39]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/39.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/39.gif" alt="" /></a><a href="javascript: SmileIT('[em25]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/25.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/25.gif" alt="" /></a><a href="javascript: SmileIT('[em11]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/11.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/11.gif" alt="" /></a><a href="javascript: SmileIT('[em8]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/8.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/8.gif" alt="" /></a><a href="javascript: SmileIT('[em10]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/10.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/10.gif" alt="" /></a><a href="javascript: SmileIT('[em15]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/15.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/15.gif" alt="" /></a><a href="javascript: SmileIT('[em27]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/27.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/27.gif" alt="" /></a><a href="javascript: SmileIT('[em57]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/57.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/57.gif" alt="" /></a><a href="javascript: SmileIT('[em42]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/42.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/42.gif" alt="" /></a><a href="javascript: SmileIT('[em122]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/122.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/122.gif" alt="" /></a><a href="javascript: SmileIT('[em52]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/52.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/52.gif" alt="" /></a><a href="javascript: SmileIT('[em28]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/28.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/28.gif" alt="" /></a><a href="javascript: SmileIT('[em29]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/29.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/29.gif" alt="" /></a><a href="javascript: SmileIT('[em30]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/30.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/30.gif" alt="" /></a><a href="javascript: SmileIT('[em176]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/176.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/176.gif" alt="" /></a></div><br /><input type="submit" id="qr" class="btn" value="&nbsp;&nbsp;添加&nbsp;&nbsp;" /></form></td></tr></table><p align="center"><a class="index" href="comment.php?action=add&amp;pid=79788&amp;type=torrent&amp;group_id=54868">添加评论</a></p>
+</td></tr></table></div><div id="footer"><div style="margin-top: 10px; margin-bottom: 30px;" align="center"> (c)  <a href="https://www.haidan.cc" target="_self">HAIDAN</a> 2020-2026 Powered by <a href="aboutnexus.php">NexusPHP</a><br /><br />[page created in <b> 0.014619 </b> sec with <b>25</b> db queries, <b>18</b> reads and <b>1</b> writes of memcached and <b>2.38 MB</b> ram]</div>
+<div style="display: none;" id="lightbox" class="lightbox" onclick="Return()"></div><div style="display: none;" id="curtain" class="curtain" onclick="Return()"></div></div></body></html>
