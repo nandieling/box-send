@@ -61,9 +61,19 @@ public final class HTTPClient {
         return try perform(req)
     }
 
+    /// multipart 文本字段（有序，允许同名多次，如 option_sel[]）
+    public struct MultipartField {
+        public let name: String
+        public let value: String
+        public init(_ name: String, _ value: String) {
+            self.name = name
+            self.value = value
+        }
+    }
+
     /// multipart/form-data POST，可混入文本字段与文件
     @discardableResult
-    public func postMultipart(_ url: String, fields: [String: String],
+    public func postMultipart(_ url: String, fields: [MultipartField],
                        files: [(name: String, filename: String, data: Data, mime: String)],
                        referer: String? = nil) throws -> Response {
         let boundary = "----BoxSend" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
@@ -78,9 +88,9 @@ public final class HTTPClient {
                              "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n").data(using: .utf8)!)
             }
         }
-        for (k, v) in fields.sorted(by: { $0.key < $1.key }) {
-            addHeader(name: k)
-            body.append(v.data(using: .utf8)!)
+        for f in fields {
+            addHeader(name: f.name)
+            body.append(f.value.data(using: .utf8)!)
             body.append("\r\n".data(using: .utf8)!)
         }
         for f in files {

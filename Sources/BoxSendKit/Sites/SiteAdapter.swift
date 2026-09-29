@@ -16,6 +16,14 @@ public protocol SiteAdapter: AnyObject {
     func searchExists(_ info: ReleaseInfo) throws -> String?
     /// 上传（转种）
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
+    /// 上传字段预览（调试用，CLI info --preview）
+    func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)]
+}
+
+extension SiteAdapter {
+    func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)] {
+        throw BoxSendError.badInput("\(site.id) 适配器不支持上传字段预览")
+    }
 }
 
 public struct UploadOutcome {

@@ -78,7 +78,7 @@ final class Transmission: Downloader {
 
     func addTorrent(data: Data, filename: String,
                     savePath: String?, category: String?,
-                    skipChecking: Bool, upLimit: Int64) throws -> String {
+                    skipChecking: Bool, upLimit: Int64) throws -> AddTorrentResult {
         var args: [String: Any] = [
             "metainfo": data.base64EncodedString(),
             "labels": [filename],
@@ -94,6 +94,6 @@ final class Transmission: Downloader {
         if upLimit > 0 {
             _ = try rpc("torrent-set", ["ids": [id], "upload-limit": upLimit, "upload-limit-enabled": 1])
         }
-        return "torrent-#\(id)"
+        return AddTorrentResult(id: "torrent-#\(id)")
     }
 }

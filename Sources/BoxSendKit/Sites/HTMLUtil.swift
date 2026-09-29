@@ -40,6 +40,30 @@ enum HTMLUtil {
         return inner.map { decodeEntities(stripTags($0)) }
     }
 
+    /// 按 id 提取 div 内容（配对 <div>/</div>，支持嵌套）
+    static func divContent(_ html: String, id: String) -> String? {
+        guard let re = try? NSRegularExpression(pattern: "<div[^>]*id=[\"']\(NSRegularExpression.escapedPattern(for: id))[\"'][^>]*>", options: .caseInsensitive),
+              let m = re.firstMatch(in: html, options: [], range: NSRange(html.startIndex..., in: html)) else { return nil }
+        let contentStart = Range(m.range, in: html)!.upperBound
+        let divRe = try! NSRegularExpression(pattern: "<div\\b|</div>", options: .caseInsensitive)
+        var depth = 1
+        var idx = contentStart
+        while idx < html.endIndex {
+            let r = NSRange(idx..., in: html)
+            guard let dm = divRe.firstMatch(in: html, options: [], range: r),
+                  dm.range.location >= r.location else { return nil }
+            let tag = html[Range(dm.range, in: html)!]
+            if tag.hasPrefix("</div") {
+                depth -= 1
+                if depth == 0 { return String(html[contentStart..<Range(dm.range, in: html)!.lowerBound]) }
+            } else {
+                depth += 1
+            }
+            idx = html.index(html.startIndex, offsetBy: dm.range.location + dm.range.length)
+        }
+        return nil
+    }
+
     static func stripTags(_ html: String) -> String {
         var s = html
         s = s.replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)

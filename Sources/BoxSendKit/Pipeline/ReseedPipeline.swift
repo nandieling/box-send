@@ -32,6 +32,7 @@ public final class ReseedPipeline {
     public struct Report: CustomStringConvertible {
         public var release: ReleaseInfo
         public var torrentBytes: Int
+        public var torrentData: Data
         public var outcomes: [(site: String, ok: Bool, message: String)]
         public var pushed: Bool
         public var pushID: String?
@@ -63,12 +64,19 @@ public final class ReseedPipeline {
         let adapter = SiteRegistry.adapter(for: site, client: client, debugDir: debugDir)
 
         // 2. 解析详情
-        let release = try adapter.fetchDetail(detailURL: detailURL)
-        var report = Report(release: release, torrentBytes: 0, outcomes: [], pushed: false, pushID: nil, upLimit: 0)
+        var release = try adapter.fetchDetail(detailURL: detailURL)
+        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0)
 
-        // 3. 下载 .torrent
+        // 3. 下载 .torrent，并用 bencode info.name 校正发布名（权威来源）
         let (torrentData, filename) = try adapter.downloadTorrentFile(release)
         report.torrentBytes = torrentData.count
+        report.torrentData = torrentData
+        if let tn = Bencode.infoName(torrentData), !tn.isEmpty, tn != release.name {
+            state.note("name corrected by .torrent info.name: \(release.name) -> \(tn)")
+            release.name = tn
+        }
+        release.size = Bencode.totalLength(torrentData) ?? release.size
+        report.release = release
         state.note("release: \(release.summary) torrent \(filename)")
 
         // 4. 逐目标站转种
@@ -123,7 +131,7 @@ public final class ReseedPipeline {
                 report.pushID = "already pushed"
             } else {
                 do {
-                    let id = try downloader.addTorrent(
+                    let result = try downloader.addTorrent(
                         data: torrentData, filename: filename,
                         savePath: config.downloader.savePath,
                         category: config.downloader.category,
@@ -131,9 +139,11 @@ public final class ReseedPipeline {
                         upLimit: upLimit
                     )
                     report.pushed = true
-                    report.pushID = id
-                    state.markPushed(key: release.dedupKey, id: id)
-                    state.note("push OK \(release.summary) upLimit=\(upLimit)")
+                    report.pushID = result.id
+                    state.markPushed(key: release.dedupKey, id: result.id)
+                    var note = "push OK \(release.summary) upLimit=\(upLimit)"
+                    if !result.note.isEmpty { note += " [\(result.note)]" }
+                    state.note(note)
                 } catch {
                     state.note("push FAIL \(release.summary): \(error.localizedDescription)")
                     throw error

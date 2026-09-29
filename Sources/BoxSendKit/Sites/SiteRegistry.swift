@@ -6,11 +6,22 @@ public enum SiteRegistry {
     public static func adapter(for site: SiteConfig, client: HTTPClient, debugDir: String? = nil) -> SiteAdapter {
         switch site.framework {
         case .nexusPHP:
-            return NexusPHPAdapter(site: site, client: client, debugDir: debugDir)
+            return NexusPHPAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         default:
             // M1 只实现 NexusPHP；其余框架 M2 补齐
             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器 (M2)")
         }
+    }
+
+    /// 配置层 overrides 与内置表合并（内置为底，配置优先；旧配置缺的新字段自动用内置值）
+    public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {
+        guard let cfgOv = site.overrides,
+              let builtin = prioritySites.first(where: { $0.id == site.id })?.overrides else {
+            return site
+        }
+        var s = site
+        s.overrides = cfgOv.merged(over: builtin)
+        return s
     }
 
     /// auto_feed 优先站点（全部 NexusPHP）

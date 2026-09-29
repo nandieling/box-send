@@ -52,6 +52,57 @@ public struct SiteOverride: Codable {
     var qualitySelects: [String: String]?
     /// 质量值表：medium|codec|audiocodec|standard -> token -> 站点 ID
     var qualityValueMaps: [String: [String: Int]]?
+    /// 副标题字段（中文 NexusPHP 家族 "small_descr"）；值取源简介"译名"
+    var subtitleField: String?
+    /// 简介格式：bbcode（中文站默认）| html
+    var descrFormat: String?
+    /// 标签复选框字段名（如 "option_sel[]"）；值 = 规范标签 -> 站点 ID
+    var tagField: String?
+    var tagMap: [String: Int]?
+    /// 规范标签: chinese_sub / hdr10 / hdr10plus / dovi / dtsx / atmos / forbid / limited
+    /// 制作组下拉字段（如 "team_sel"）；未知组 -> teamOtherValue
+    var teamField: String?
+    var teamOtherValue: Int?
+    /// 制作组名（出现在种子名 - 后）-> 站点 team ID
+    var teamPatterns: [String: Int]?
+}
+
+extension SiteOverride {
+    /// 配置层覆盖内置层：标量字段配置非 nil 时生效；字典字段按 key 合并（内置的新 key 保留）
+    func merged(over base: SiteOverride) -> SiteOverride {
+        var out = base
+        if let v = detailLinkPattern { out.detailLinkPattern = v }
+        if let v = uploadPath { out.uploadPath = v }
+        if let v = uploadActionPath { out.uploadActionPath = v }
+        if let v = titleField { out.titleField = v }
+        if let v = titleMode { out.titleMode = v }
+        if let v = descrField { out.descrField = v }
+        if let v = imdbField { out.imdbField = v }
+        if let v = imdbValueTemplate { out.imdbValueTemplate = v }
+        if let v = doubanField { out.doubanField = v }
+        if let v = doubanValueTemplate { out.doubanValueTemplate = v }
+        if let v = categoryField { out.categoryField = v }
+        if let v = fileField { out.fileField = v }
+        if let v = searchURL { out.searchURL = v }
+        if let v = extraUploadFields { out.extraUploadFields = v }
+        if let v = forbidReseedMarkers { out.forbidReseedMarkers = v }
+        if let v = userAgent { out.userAgent = v }
+        if let v = subtitleField { out.subtitleField = v }
+        if let v = descrFormat { out.descrFormat = v }
+        if let v = tagField { out.tagField = v }
+        if let v = teamField { out.teamField = v }
+        if let v = teamOtherValue { out.teamOtherValue = v }
+        if let v = categoryMap { out.categoryMap = base.categoryMap?.merging(v) { _, new in new } }
+        if let v = qualitySelects { out.qualitySelects = base.qualitySelects?.merging(v) { _, new in new } }
+        if let v = qualityValueMaps {
+            var m = base.qualityValueMaps ?? [:]
+            for (k, nv) in v { m[k] = (m[k] ?? [:]).merging(nv) { _, n2 in n2 } }
+            out.qualityValueMaps = m
+        }
+        if let v = tagMap { out.tagMap = base.tagMap?.merging(v) { _, new in new } }
+        if let v = teamPatterns { out.teamPatterns = base.teamPatterns?.merging(v) { _, new in new } }
+        return out
+    }
 }
 
 public struct DownloaderConfig: Codable {

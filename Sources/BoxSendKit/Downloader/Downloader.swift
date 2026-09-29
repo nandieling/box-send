@@ -1,10 +1,21 @@
 import Foundation
 
+public struct AddTorrentResult {
+    /// 下载器侧标识（qBittorrent 为 info hash；Transmission 为下载 id）
+    public var id: String
+    /// 附加说明：如"已存在于下载器" / "限速未生效"；无则为空
+    public var note: String
+    public init(id: String, note: String = "") {
+        self.id = id
+        self.note = note
+    }
+}
+
 public protocol Downloader: AnyObject {
     func addTorrent(data: Data, filename: String,
                     savePath: String?, category: String?,
                     skipChecking: Bool,
-                    upLimit: Int64) throws -> String   // 返回下载器侧标识
+                    upLimit: Int64) throws -> AddTorrentResult
 
     /// 连接/登录检测：成功返回描述（如版本信息），失败抛错
     func testConnection() throws -> String

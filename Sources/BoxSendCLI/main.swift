@@ -109,11 +109,22 @@ do {
         let p = ReseedPipeline(config: config, cookies: cookies, state: state, downloader: makeDownloader())
         let report = try p.run(detailURL: detail, sourceSiteID: pid, opts: .init(skipReseed: true, skipPush: true))
         print(report.release.summary)
-        print("  imdb: \(report.release.imdb ?? "-")  douban: \(report.release.douban ?? "-")  size: \(report.release.size.map { "\($0 / 1024 / 1024 / 1024) GiB" } ?? "-")")
-        print("  kind: \(report.release.kind?.rawValue ?? "-")  forbid: \(report.release.isForbidReseed)")
+        print("  imdb: \(report.release.imdb ?? "-")  douban: \(report.release.douban ?? "-")  size: \(report.release.size.map { String(format: "%.2f GiB", Double($0) / 1073741824) } ?? "-")")
+        print("  kind: \(report.release.kind?.rawValue ?? "-")  genre: \(report.release.genre.isEmpty ? "-" : report.release.genre)  subtitle: \(report.release.subtitle.isEmpty ? "-" : report.release.subtitle)  forbid: \(report.release.isForbidReseed)")
+        let mi = report.release.mediainfo
+        let miPreview = mi.isEmpty ? "无" : String(mi.prefix(60)).replacingOccurrences(of: "\n", with: " ")  // 文件内为真实换行
+        print("  mediainfo: \(miPreview) …（\(mi.count) 字符）")
         print("  torrent: \(report.release.torrentURL)")
-        print("  torrentName: \(report.release.torrentName)")
-        print("  descr: \(String(report.release.descr.prefix(200)))...")
+        print("  torrentName: \(report.release.torrentName)  hash: \(Bencode.infoHash(report.torrentData) ?? "-")")
+        if let previewSite = opt("--preview") {
+            guard let s2 = config.site(previewSite) else { die("未知站点 \(previewSite)") }
+            let a2 = SiteRegistry.adapter(for: s2, client: client, debugDir: dataDir)
+            print("--- 预览 \(previewSite) 上传字段 ---")
+            for (k, v) in try a2.previewUploadFields(report.release) {
+                let shown = v.count > 120 ? String(v.prefix(120)) + "…(\(v.count))" : v
+                print("  \(k) = \(shown.replacingOccurrences(of: "\\n", with: "\\n    "))")
+            }
+        }
 
     case "run", "push":
         let detail = required("--detail")
