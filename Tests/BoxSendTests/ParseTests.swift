@@ -120,6 +120,23 @@ final class ParseTests: XCTestCase {
         XCTAssertFalse(out.contains("<fieldset"), "残留 fieldset:\n\(String(out.prefix(300)))")
         XCTAssertFalse(out.contains("<img"), "残留 img 标签")
         XCTAssertFalse(out.contains("DarkRed"), "残留 style 颜色")
+        // 空行上限：源页 CRLF 不得产生 3 个及以上连续换行（最多 1 个空行）
+        if let r3 = out.range(of: "\n\n\n") {
+            let i = out.distance(from: out.startIndex, to: r3.lowerBound)
+            let lo = out.index(out.startIndex, offsetBy: max(0, i - 100))
+            let hi = out.index(out.startIndex, offsetBy: min(out.count, i + 100))
+            XCTFail("多连续空行 @\(i): \(out[lo..<hi].replacingOccurrences(of: "\n", with: "⏎"))")
+        }
+        XCTAssertNil(out.range(of: "\r"), "残留 CR 字符")
+    }
+
+    func testBBCodeCRLFSource() {
+        // 源页常见 <br><br> + CRLF 混排：转换后最多 1 个空行
+        let html = "<fieldset><legend>x</legend>text</fieldset><br /><br />\r<br />\r\n<img src=\"http://a/b.jpg\" /><br /><br />\r\nhello"
+        let out = BBCode.fromHTML(html)
+        XCTAssertNil(out.range(of: "\n\n\n"), "CRLF 未被规范化:\n\(out)")
+        XCTAssertNil(out.range(of: "\r"))
+        XCTAssertTrue(out.hasSuffix("hello"))
     }
 
     func testBBCodeSmallCases() {

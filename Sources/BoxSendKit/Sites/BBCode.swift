@@ -7,6 +7,9 @@ enum BBCode {
     /// 转换入口。base = 源站 URL（相对链接绝对化）。
     static func fromHTML(_ html: String, base: URL? = nil) -> String {
         var s = html
+        // 源页 HTML 常含 CRLF/CR 换行；\r 会打断 \n 连续段使上限正则失效，先统一为 \n
+        s = s.replacingOccurrences(of: "\r\n", with: "\n", options: [])
+        s = s.replacingOccurrences(of: "\r", with: "\n", options: [])
         // 去脚本/样式块与注释
         s = HTMLUtil.replaceMatches(s, "<(script|style)[^>]*>.*?</\\1>",
                                     options: [.caseInsensitive, .dotMatchesLineSeparators]) { _ in "" }
@@ -198,7 +201,9 @@ enum BBCode {
         }
         if let at = insertAt, at < lines.count {
             var newLines = lines
-            newLines.insert(contentsOf: ["", block, ""], at: at)
+            // 插入点若本来就是空行，不再额外追加，避免产生连续 2 个空行
+            let pad: [String] = lines[at].trimmingCharacters(in: Self.trimSet).isEmpty ? [] : [""]
+            newLines.insert(contentsOf: ["", block] + pad, at: at)
             return newLines.joined(separator: "\n")
         }
         return bbcode + "\n\n" + block

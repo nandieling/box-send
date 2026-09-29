@@ -86,8 +86,12 @@ final class NexusPHPAdapter: SiteAdapter {
         // MediaInfo / BDInfo：源页 <pre> 块（含 Unique ID / DISC TITLE 特征）
         var mediainfo = ""
         for pre in HTMLUtil.allMatches(html, "<pre[^>]*>(.*?)</pre>", options: [.dotMatchesLineSeparators, .caseInsensitive]) {
-            let t = HTMLUtil.stripTags(pre).trimmingCharacters(in: .whitespacesAndNewlines)
+            var t = HTMLUtil.stripTags(pre).trimmingCharacters(in: .whitespacesAndNewlines)
             if t.contains("Unique ID") || t.contains("DISC TITLE") || (t.contains("Format") && t.contains("Duration")) {
+                // 源页 CRLF：统一换行并压缩多空行（与简介 BBCode 一致，最多 1 个空行）
+                t = t.replacingOccurrences(of: "\r\n", with: "\n", options: [])
+                t = t.replacingOccurrences(of: "\r", with: "\n", options: [])
+                t = t.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
                 mediainfo = t
                 break
             }
