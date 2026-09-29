@@ -123,13 +123,22 @@ enum HTMLUtil {
         // 逐段处理更稳：找出所有 <a ...>...</a>
         guard let re = try? NSRegularExpression(pattern: "<a\\s[^>]*?href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
                                                 options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
+        // hrefPattern 按正则匹配（detailLinkPattern/search 端点均为正则）；无法编译时退回子串
+        let hrefRe = try? NSRegularExpression(pattern: hrefPattern, options: [.caseInsensitive])
         let range = NSRange(html.startIndex..., in: html)
         for m in re.matches(in: html, options: [], range: range) {
             guard m.numberOfRanges >= 3 else { continue }
             let href = String(html[Range(m.range(at: 1), in: html)!])
             let rawText = String(html[Range(m.range(at: 2), in: html)!])
             let text = stripTags(rawText).trimmingCharacters(in: .whitespacesAndNewlines)
-            if href.contains(hrefPattern) {
+            let hit: Bool
+            if let hrefRe {
+                let r = NSRange(href.startIndex..., in: href)
+                hit = hrefRe.firstMatch(in: href, options: [], range: r) != nil
+            } else {
+                hit = href.contains(hrefPattern)
+            }
+            if hit {
                 out.append((href, text))
             }
         }

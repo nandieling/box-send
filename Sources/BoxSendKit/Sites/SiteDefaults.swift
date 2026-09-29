@@ -2,7 +2,7 @@ import Foundation
 
 /// 9 优先站的内置 overrides。
 /// 由 2026-09-28 用真实账号 cookie 实测各站上传表单生成（POST takeupload.php、字段名、分类表、质量下拉表）；
-/// 2026-09-29 补充各站副标题/标签/制作组(地区)字段实测值。
+/// 2026-09-29 补充各站副标题/标签/制作组(地区)字段实测值 + 各站搜索端点实测（查重 searchURL）。
 /// 配置 JSON 里的 site.overrides 与这里按 key 合并（配置优先）；新增/修改站点差异请两处同步。
 extension SiteOverride {
     /// luckpt（LuckPT）
@@ -12,6 +12,7 @@ extension SiteOverride {
         imdbField: "url",
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         categoryField: "type",
+        searchURL: "search.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 402, "anime": 405, "documentary": 411, "music": 408, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel[4]": "medium", "codec_sel[4]": "codec", "audiocodec_sel[4]": "audiocodec", "standard_sel[4]": "standard"],
@@ -33,6 +34,7 @@ extension SiteOverride {
         doubanField: "url_douban",
         doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
         categoryField: "type",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 402, "tvshow": 403, "anime": 405, "documentary": 404, "music": 408, "sports": 407, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
@@ -54,6 +56,7 @@ extension SiteOverride {
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         categoryField: "type",
         fileField: "torrentfile",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 402, "anime": 405, "documentary": 404, "music": 408, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
@@ -73,6 +76,7 @@ extension SiteOverride {
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         doubanField: "douban_id",
         categoryField: "type",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie/8k-bd": 506, "movie/8k": 505, "movie/uhd-bd": 499, "movie/remux": 415, "movie/2160p": 416, "movie/bluray": 450, "movie/1440p": 414, "movie/1080p": 414, "movie/720p": 413, "movie/sd": 411, "series/8k-bd": 523, "series/8k": 526, "series/uhd-bd": 502, "series/remux": 437, "series/2160p": 438, "series/bluray": 453, "series/1440p": 436, "series/1080p": 436, "series/1080i": 435, "series/720p": 434, "series/sd": 432, "documentary/8k-bd": 508, "documentary/8k": 507, "documentary/uhd-bd": 500, "documentary/remux": 421, "documentary/2160p": 422, "documentary/bluray": 451, "documentary/1440p": 420, "documentary/1080p": 420, "documentary/720p": 419, "documentary/sd": 417, "anime/8k-bd": 510, "anime/8k": 509, "anime/uhd-bd": 501, "anime/remux": 448, "anime/2160p": 449, "anime/bluray": 454, "anime/1440p": 447, "anime/1080p": 447, "anime/720p": 446, "anime/sd": 444, "sports/8k": 511, "sports/2160p": 504, "sports/1080p": 443, "sports/1080i": 443, "sports/720p": 442, "music": 440, "movie": 414, "series": 436, "documentary": 420, "anime": 447, "sports": 442, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
@@ -93,6 +97,7 @@ extension SiteOverride {
         imdbField: "url",
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         categoryField: "type",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 501, "series": 502, "documentary": 503, "music": 508, "anime": 509, "other": 509],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
@@ -108,6 +113,7 @@ extension SiteOverride {
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         doubanField: "douban_id",
         categoryField: "type",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 402, "documentary": 406, "music": 408, "anime": 409, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
@@ -125,6 +131,7 @@ extension SiteOverride {
         doubanField: "douban_id",
         categoryField: "type",
         fileField: "file",
+        searchURL: "search.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie/uhd-bd": 109, "movie/8k-bd": 109, "movie/2160p": 108, "movie/8k": 108, "movie/remux": 54, "movie/bluray": 54, "movie/1440p": 53, "movie/1080p": 53, "movie/1080i": 53, "movie/720p": 52, "movie/sd": 51, "movie/dvd": 51, "documentary/uhd-bd": 67, "documentary/8k-bd": 67, "documentary/2160p": 67, "documentary/8k": 67, "documentary/remux": 67, "documentary/bluray": 67, "documentary/1440p": 63, "documentary/1080p": 63, "documentary/1080i": 63, "documentary/720p": 62, "documentary/sd": 62, "documentary/dvd": 62, "series/uhd-bd": 70, "series/8k-bd": 70, "series/2160p": 70, "series/8k": 70, "series/remux": 70, "series/bluray": 70, "series/1440p": 70, "series/1080p": 70, "series/1080i": 70, "series/720p": 69, "series/sd": 69, "series/dvd": 69, "anime/uhd-bd": 111, "anime/8k-bd": 111, "anime/2160p": 58, "anime/8k": 58, "anime/remux": 58, "anime/bluray": 58, "anime/1440p": 58, "anime/1080p": 58, "anime/1080i": 58, "anime/720p": 58, "anime/sd": 58, "anime/dvd": 58, "music": 83, "movie": 53, "documentary": 63, "series": 70, "anime": 58, "other": 32],
         extraUploadFields: ["anonymity": "-1"],
         subtitleField: "subtitle"
@@ -138,6 +145,7 @@ extension SiteOverride {
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         doubanField: "douban",
         categoryField: "type",
+        searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 404, "anime": 403, "documentary": 402, "music": 406, "other": 412],
         subtitleField: "small_descr",
         regionField: "team_sel",

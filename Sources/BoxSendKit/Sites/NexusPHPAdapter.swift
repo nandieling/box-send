@@ -283,13 +283,36 @@ final class NexusPHPAdapter: SiteAdapter {
         q = q.replacingOccurrences(of: "{name}", with: (info.name).urlEncoded)
         let url = (q.hasPrefix("http") ? q : site.url + q)
         let html = try client.fetchHTML(url, referer: site.url)
-        // 无结果特征
-        let noResultMarkers = ["No torrents found", "没有种子", "没有相关", "no results"]
+        // 无结果特征（早退；最终判定以名称匹配为准）
+        let noResultMarkers = ["No torrents found", "没有种子", "没有相关", "no results", "No torrents"]
         if noResultMarkers.contains(where: { html.contains($0) }) { return nil }
-        // 有结果: 取第一个详情链接
+        // 结果行 = 详情链接的锚文本（各站搜索结果名称在 <a href="details.php?id=..">名称</a> 内）
+        guard let hit = Self.searchNameInResults(html: html, releaseName: info.name, base: URL(string: url)!) else {
+            return nil
+        }
+        return hit.href
+    }
+
+    /// 搜索结果页里按名称匹配已存在种子：任一结果行的归一化名称与发布名互含即命中
+    static func searchNameInResults(html: String, releaseName: String, base: URL) -> (href: String, text: String)? {
         let anchors = HTMLUtil.anchorText(html, hrefPattern: "details\\.php\\?id=|/torrents\\.php\\?id=")
-        guard let first = anchors.first else { return nil }
-        return HTMLUtil.resolveURL(first.href, against: URL(string: url)!)
+        guard !anchors.isEmpty else { return nil }
+        let target = normalizeSearchName(releaseName)
+        guard target.count >= 8 else { return nil }
+        for a in anchors {
+            let cand = normalizeSearchName(a.text)
+            guard cand.count >= 8 else { continue }
+            if cand.contains(target) || (target.count >= 15 && target.contains(cand)) {
+                return (HTMLUtil.decodeEntities(a.href), a.text)
+            }
+        }
+        return nil
+    }
+
+    /// 搜索名称归一化：去标签/实体、小写、只留字母数字（CJK 按字母保留）
+    static func normalizeSearchName(_ s: String) -> String {
+        let t = HTMLUtil.decodeEntities(HTMLUtil.stripTags(s)).lowercased()
+        return String(t.filter { $0.isLetter || $0.isNumber })
     }
 
     // MARK: - 上传（转种）
@@ -511,6 +534,11 @@ final class NexusPHPAdapter: SiteAdapter {
         if let p = dumpDebugHTML(body) {
             errMsg += "（页面已存 \(p)）"
         }
-        return UploadOutcome(success: false, message: HTMLUtil.stripTags(errMsg), detailURL: nil)
+        let msg = HTMLUtil.stripTags(errMsg)
+        // 站点提示同名/同 hash 种子已存在（如手动转过）：视为成功，不再重复发种
+        if msg.contains("已存在") || msg.lowercased().contains("already exists") {
+            return UploadOutcome(success: true, message: "站点已存在该种子（查重兜底命中）", detailURL: nil)
+        }
+        return UploadOutcome(success: false, message: msg, detailURL: nil)
     }
 }

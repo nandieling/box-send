@@ -150,4 +150,52 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(cfg.effectiveUpLimit(siteID: "d"), 0)
     }
 
+    // MARK: 大小检测
+
+    func testSizeGuard() {
+        let g: Int64 = 1_073_741_824
+        // 未启用 / 未知大小 -> 放行
+        if case .ok = SizeGuard.evaluate(sizeBytes: 400 * g, freeGB: nil, marginGB: 5) {} else { XCTFail() }
+        if case .ok = SizeGuard.evaluate(sizeBytes: 0, freeGB: 100, marginGB: 5) {} else { XCTFail() }
+        // 正常放行
+        if case .ok = SizeGuard.evaluate(sizeBytes: 40 * g, freeGB: 500, marginGB: 5) {} else { XCTFail() }
+        // 超过剩余（含边际：500-5=495 可用）
+        if case .over(let m) = SizeGuard.evaluate(sizeBytes: 600 * g, freeGB: 500, marginGB: 5) {
+            XCTAssertTrue(m.contains("500"))
+        } else { XCTFail() }
+        // 边际吃掉全部剩余
+        if case .over = SizeGuard.evaluate(sizeBytes: 8 * g, freeGB: 10, marginGB: 5) {} else { XCTFail() }
+        if case .ok = SizeGuard.evaluate(sizeBytes: 4 * g, freeGB: 10, marginGB: 5) {} else { XCTFail() }
+    }
+
+    /// 旧配置（无 vpsFreeGB 等新字段）仍可解码，默认 warn / 5GB 边际
+    func testDownloaderConfigOldJSONDecodes() throws {
+        let jsonStr = #"{ "type": "qbittorrent", "url": "u", "username": "", "password": "", "savePath": null, "category": null, "skipChecking": true, "defaultUpLimit": 0, "siteUpLimits": {}, "pushPolicy": "always" }"#
+        let dl = try JSONDecoder().decode(DownloaderConfig.self, from: Data(jsonStr.utf8))
+        XCTAssertNil(dl.vpsFreeGB)
+        XCTAssertEqual(dl.sizeGuardMode, .warn)
+        XCTAssertEqual(dl.sizeGuardMarginGB, 5)
+    }
+
+    // MARK: 搜索查重
+
+    func testNormalizeSearchName() {
+        // 大小写/HTML 实体/全角空格 不敏感
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("  Food&nbsp;Inc　2009 "), "foodinc2009")
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("<b>Food Inc</b>"), "foodinc")
+        // 中英文混合保留
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("凡人修仙传 全30集"), "凡人修仙传全30集")
+    }
+
+    /// 查重结果行匹配：命中 = 任一结果名称与发布名互含
+    func testSearchNameInResults() {
+        let html = "<table><tr><td><a href=\"details.php?id=1001&amp;hit=1\">Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu</a></td></tr>"
+            + "<tr><td><a href=\"details.php?id=1002&amp;hit=1\">Food, Inc 2 2023 REPACK 1080p USA Blu-ray AVC DTS-HD MA 5.1-SQUY</a></td></tr></table>"
+        let base = URL(string: "https://pt.luckpt.de/")!
+        let hit = NexusPHPAdapter.searchNameInResults(html: html, releaseName: "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu", base: base)
+        XCTAssertEqual(HTMLUtil.resolveURL(hit?.href ?? "", against: base), "https://pt.luckpt.de/details.php?id=1001&hit=1")
+        // 只有别的发行版 -> 不命中
+        let none = NexusPHPAdapter.searchNameInResults(html: html, releaseName: "The Whole Truth 2016 BluRay REMUX 1080p AVC DTS-HD MA 5.1-HDS", base: base)
+        XCTAssertNil(none)
+    }
 }

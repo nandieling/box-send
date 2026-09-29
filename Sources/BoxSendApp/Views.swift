@@ -26,6 +26,9 @@ struct ContentView: View {
             LogsView()
                 .tabItem { Label("日志", systemImage: "list.bullet") }
                 .tag(4)
+            RSSView()
+                .tabItem { Label("RSS", systemImage: "antenna.radiowaves.left.and.right") }
+                .tag(5)
         }
         .safeAreaInset(edge: .bottom) { statusBar }
     }
@@ -294,6 +297,38 @@ struct CookiesView: View {
             } header: {
                 Text("PT-depiler 本地备份")
             }
+            Section {
+                HStack {
+                    Text("监控目录").font(.callout).foregroundStyle(.secondary)
+                    TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) }))
+                        .textFieldStyle(.roundedBorder)
+                }
+                HStack {
+                    Text("备份密码").font(.callout).foregroundStyle(.secondary)
+                    SecureField("", text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) }))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                    IntLimitField(initial: model.config.zipWatch?.pollMinutes ?? 5) { model.setZipPollMinutes($0 ?? 5) }
+                        .frame(width: 60)
+                    Text("（分钟）").font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Toggle("启用备份目录监控", isOn: Binding(get: { model.zipAuto }, set: { model.setZipAuto($0) }))
+                    Spacer()
+                    Button("立即扫描") { model.zipScanNow() }
+                        .disabled(model.zipRunning)
+                }
+                if model.zipRunning {
+                    Text("扫描中…").font(.caption).foregroundStyle(.secondary)
+                }
+                if let m = model.zipMessage {
+                    Text(m).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                Text("目录出现新的 PTD_backup*.zip 时自动导入（整体替换本地 cookie），失败的下次重试。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("备份目录监控")
+            }
             Section("已同步的 Cookie 详情") {
                 LabeledContent("站点数", value: "\(model.cookieHosts.count)")
                 LabeledContent("Cookie 总数", value: "\(model.cookieTotal)")
@@ -302,6 +337,14 @@ struct CookiesView: View {
                         .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 } else {
                     Text("（还没有 cookie）").font(.caption).foregroundStyle(.secondary)
+                }
+                Button("检测登录状态") { model.checkCookies() }
+                    .disabled(model.cookieChecking)
+                if model.cookieChecking {
+                    Text("检测中（逐站访问首页，需十几秒）…").font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(model.cookieCheckLines, id: \.self) { line in
+                    Text(line).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 }
             }
         }
@@ -410,5 +453,53 @@ struct LogsView: View {
             .background(Color(nsColor: .textBackgroundColor))
         }
         .padding()
+    }
+}
+
+// MARK: - RSS 自动转种
+
+struct RSSView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("启用 RSS 自动转种（定时拉取新种并自动转种 + 推送）", isOn: Binding(
+                    get: { model.rssAuto },
+                    set: { model.setRssAuto($0) }
+                ))
+                HStack {
+                    IntLimitField(initial: model.config.rss?.pollMinutes ?? 10) { model.setRssPollMinutes($0 ?? 10) }
+                        .frame(width: 60)
+                    Text("（轮询间隔，分钟）").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("立即轮询一次") { model.rssPollNow() }
+                        .disabled(model.rssRunning)
+                }
+                if model.rssRunning {
+                    Text("轮询进行中…").font(.caption).foregroundStyle(.secondary)
+                }
+                if let m = model.rssMessage {
+                    Text(m).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                Text("RSS 新种自动走完整转种流水线（查重、大小检测、按站限速推送）。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("RSS 自动转种")
+            }
+            Section("源站 passkey（留空的站点不参与轮询）") {
+                ForEach(model.config.sourceSites, id: \.id) { s in
+                    HStack {
+                        Text(s.id).frame(width: 100, alignment: .leading)
+                        TextField("passkey", text: Binding(
+                            get: { model.rssPasskey(s.id) },
+                            set: { model.setRssPasskey(s.id, $0) }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
     }
 }

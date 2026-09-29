@@ -72,6 +72,8 @@ public struct SiteOverride: Codable {
     /// 产地文本（如 "美国"/"日本"）-> 站点地区 ID；无匹配 -> regionOtherValue
     var regionPatterns: [String: Int]?
     var regionOtherValue: Int?
+    /// RSS 地址模板（NexusPHP 默认 "passkey.php?rss={passkey}"）
+    var rssPath: String?
 }
 
 extension SiteOverride {
@@ -112,6 +114,7 @@ extension SiteOverride {
         if let v = regionField { out.regionField = v }
         if let v = regionOtherValue { out.regionOtherValue = v }
         if let v = regionPatterns { out.regionPatterns = base.regionPatterns?.merging(v) { _, new in new } }
+        if let v = rssPath { out.rssPath = v }
         return out
     }
 }
@@ -130,9 +133,112 @@ public struct DownloaderConfig: Codable {
     /// reseed 失败时是否仍推下载器：always | on_success
     public var pushPolicy: PushPolicy
 
+    /// VPS 剩余空间（GB，人工维护；VPS 只装下载器，WebAPI 无磁盘统计端点）。nil/0 = 不做大小检测
+    public var vpsFreeGB: Int?
+    /// 超过剩余空间（含安全边际）时的行为：warn = 弹窗提醒并继续 | skip = 跳过该种子
+    public var sizeGuardMode: SizeGuardMode
+    /// 安全边际（GB），剩余空间需大于 种子大小 + 边际 才放行
+    public var sizeGuardMarginGB: Int
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        type = try c.decode(DownloaderType.self, forKey: .type)
+        url = try c.decode(String.self, forKey: .url)
+        username = try c.decode(String.self, forKey: .username)
+        password = try c.decode(String.self, forKey: .password)
+        savePath = try c.decodeIfPresent(String.self, forKey: .savePath)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        skipChecking = try c.decodeIfPresent(Bool.self, forKey: .skipChecking) ?? true
+        defaultUpLimit = try c.decodeIfPresent(Int64.self, forKey: .defaultUpLimit) ?? 0
+        siteUpLimits = try c.decodeIfPresent([String: Int64].self, forKey: .siteUpLimits) ?? [:]
+        pushPolicy = try c.decodeIfPresent(PushPolicy.self, forKey: .pushPolicy) ?? .always
+        vpsFreeGB = try c.decodeIfPresent(Int.self, forKey: .vpsFreeGB)
+        sizeGuardMode = try c.decodeIfPresent(SizeGuardMode.self, forKey: .sizeGuardMode) ?? .warn
+        sizeGuardMarginGB = try c.decodeIfPresent(Int.self, forKey: .sizeGuardMarginGB) ?? 5
+    }
+
+    public init(type: DownloaderType, url: String, username: String, password: String,
+                savePath: String?, category: String?, skipChecking: Bool,
+                defaultUpLimit: Int64, siteUpLimits: [String: Int64], pushPolicy: PushPolicy,
+                vpsFreeGB: Int? = nil, sizeGuardMode: SizeGuardMode = .warn, sizeGuardMarginGB: Int = 5) {
+        self.type = type
+        self.url = url
+        self.username = username
+        self.password = password
+        self.savePath = savePath
+        self.category = category
+        self.skipChecking = skipChecking
+        self.defaultUpLimit = defaultUpLimit
+        self.siteUpLimits = siteUpLimits
+        self.pushPolicy = pushPolicy
+        self.vpsFreeGB = vpsFreeGB
+        self.sizeGuardMode = sizeGuardMode
+        self.sizeGuardMarginGB = sizeGuardMarginGB
+    }
+
     public func upLimitFor(originSiteID: String) -> Int64 {
         siteUpLimits[originSiteID] ?? defaultUpLimit
     }
+}
+
+/// 大小检测：种子大小对比 VPS 剩余空间（WebAPI 无磁盘统计端点，剩余空间由用户按 VPS 实际维护）
+public enum SizeGuardMode: String, Codable { case warn, skip }
+
+public enum SizeGuard {
+    public enum Verdict {
+        case ok
+        case over(String)
+    }
+
+    /// sizeBytes = 0 视为未知大小（放行）。freeGB = nil/<=0 视为未启用。
+    public static func evaluate(sizeBytes: Int64, freeGB: Int?, marginGB: Int) -> Verdict {
+        guard let free = freeGB, free > 0, sizeBytes > 0 else { return .ok }
+        let margin = max(0, marginGB)
+        let available = free - margin
+        let sizeGB = (Double(sizeBytes) / 1_073_741_824.0).rounded(toPlaces: 2)
+        guard available > 0 else {
+            return .over("VPS 剩余空间（含 \(margin)GB 安全边际）不足，无法容纳新种子")
+        }
+        if sizeBytes > Int64(Double(available) * 1_073_741_824.0) {
+            return .over("种子 \(String(format: "%.2f", sizeGB)) GiB 超过 VPS 剩余 \(free)GB（含 \(margin)GB 安全边际）")
+        }
+        return .ok
+    }
+}
+
+extension Double {
+    func rounded(toPlaces n: Int) -> Double {
+        let f = pow(10.0, Double(n))
+        return (self * f).rounded() / f
+    }
+}
+
+/// RSS 自动转种（源站 passkey RSS -> 新种子自动走转种流水线）
+public struct RssConfig: Codable {
+    public var enabled: Bool
+    public var pollMinutes: Int          // 轮询间隔（分钟）
+    public var passkeys: [String: String] // 源站 id -> RSS passkey（空 = 该站不参与）
+    public init(enabled: Bool = false, pollMinutes: Int = 10, passkeys: [String: String] = [:]) {
+        self.enabled = enabled
+        self.pollMinutes = pollMinutes
+        self.passkeys = passkeys
+    }
+    public static let empty = RssConfig()
+}
+
+/// PT-depiler 本地备份目录监控（发现新 zip 自动导入 cookie）
+public struct ZipWatchConfig: Codable {
+    public var enabled: Bool
+    public var dir: String               // 监控目录（如 ~/Downloads）
+    public var pollMinutes: Int
+    public var password: String          // PT-depiler 备份密码（未加密备份可空）
+    public init(enabled: Bool = false, dir: String = "~/Downloads", pollMinutes: Int = 5, password: String = "") {
+        self.enabled = enabled
+        self.dir = dir
+        self.pollMinutes = pollMinutes
+        self.password = password
+    }
+    public static let empty = ZipWatchConfig()
 }
 
 public enum DownloaderType: String, Codable { case qbittorrent, transmission }
@@ -177,9 +283,11 @@ public struct AppConfig: Codable {
     public var userAgent: String
     public var webToken: String?        // web 控制台访问令牌，nil/空 = 不启用
     public var groups: [GroupConfig]    // 目标站分组（限速/单日量上限）
+    public var rss: RssConfig?          // RSS 自动转种
+    public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, userAgent, webToken, groups
+        case dataDir, sourceSites, targetSites, downloader, gistSync, userAgent, webToken, groups, rss, zipWatch
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -193,11 +301,14 @@ public struct AppConfig: Codable {
         userAgent = try c.decode(String.self, forKey: .userAgent)
         webToken = try c.decodeIfPresent(String.self, forKey: .webToken)
         groups = try c.decodeIfPresent([GroupConfig].self, forKey: .groups) ?? []
+        rss = try c.decodeIfPresent(RssConfig.self, forKey: .rss)
+        zipWatch = try c.decodeIfPresent(ZipWatchConfig.self, forKey: .zipWatch)
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
                 downloader: DownloaderConfig, gistSync: GistSyncConfig?, userAgent: String,
-                webToken: String?, groups: [GroupConfig] = []) {
+                webToken: String?, groups: [GroupConfig] = [], rss: RssConfig? = nil,
+                zipWatch: ZipWatchConfig? = nil) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -206,6 +317,8 @@ public struct AppConfig: Codable {
         self.userAgent = userAgent
         self.webToken = webToken
         self.groups = groups
+        self.rss = rss
+        self.zipWatch = zipWatch
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
@@ -255,7 +368,9 @@ public struct AppConfig: Codable {
             gistSync: nil,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             webToken: nil,
-            groups: []
+            groups: [],
+            rss: RssConfig(enabled: false, pollMinutes: 10, passkeys: [:]),
+            zipWatch: ZipWatchConfig(enabled: false, dir: "~/Downloads", pollMinutes: 5, password: "")
         )
     }
 }

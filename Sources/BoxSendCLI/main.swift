@@ -69,13 +69,16 @@ do {
                                     转种 + 推下载器
               push --detail <url>   只推下载器（不转种）
               list --site <id>      拉取源站种子列表
+              rss-sync              轮询一次 RSS：自动转种 + 推下载器（需在配置里启用 rss）
               gist-sync [--loop]     从 PT-depiler Gist 备份同步 cookie（--loop 常驻轮询）
               import-zip --file <PTD_backup_*.zip> [--password <备份密码>]
                                     导入 PT-depiler「本地备份」zip
+              import-watch          扫描配置的备份目录，自动导入新出现的 PTD_backup*.zip（需在配置里启用 zipWatch）
               serve [--port 8088] [--host 127.0.0.1] [--token xxx]
                                     Web 控制台：网页编辑 boxsend.json / 手动转种 / 同步
               test-downloader       测试下载器连接（登录检测）
               cookies               查看本地 cookie 状态
+              check-cookies [--site <id>]   检测各站 cookie 是否仍然登录
               template              生成模板配置 Config/boxsend.json
               notes                 查看最近运行日志
 
@@ -145,6 +148,18 @@ do {
             print("\(r.name)  ->  \(r.detailURL)")
         }
 
+    case "rss-sync":
+        guard let rss = config.rss, rss.enabled else { die("配置中未启用 rss（填写 rss.enabled=true 与各源站 passkey）") }
+        let poller = RssPoller(config: config, cookies: cookies, state: state, downloader: makeDownloader())
+        let results = poller.pollOnce()
+        if results.isEmpty {
+            print("无新种子")
+        }
+        for r in results {
+            print("\(r.ok ? "OK  " : "FAIL") [\(r.siteID)] \(r.title.prefix(80))")
+            print("       \(r.message)")
+        }
+
     case "gist-sync":
         guard let g = config.gistSync else { die("配置中无 gistSync") }
         if g.gistID.isEmpty || g.token.isEmpty { die("gistSync.gistID / token 为空，请先填 Config/boxsend.json") }
@@ -189,6 +204,18 @@ do {
         }
         print("导入完成: \(n) 条 cookie, hosts=\(cookies.hosts().count)")
 
+    case "import-watch":
+        guard let zw = config.zipWatch else { die("配置中无 zipWatch（填写 zipWatch.enabled=true 与 dir）") }
+        let n = ZipWatcher.scanOnce(dir: zw.dir, password: zw.password, store: cookies, state: state)
+        if n.isEmpty {
+            print("无新备份")
+        } else {
+            for f in n { print("已导入: \(f)") }
+            if let data = cookies.exportBackupJSON() {
+                try? data.write(to: localCookieFile)
+            }
+        }
+
     case "cookies":
         if cookies.isEmpty {
             print("本地无 cookie。执行 `box-send gist-sync` 或先配置 gistSync")
@@ -197,6 +224,22 @@ do {
                 print("\(h): \(cookies.snapshot()[h]?.count ?? 0) 条")
             }
         }
+
+    case "check-cookies":
+        let only = opt("--site")
+        let checkClient = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+        let sites = config.sourceSites.filter { only == nil || $0.id == only }
+        var any = false
+        for site in sites {
+            guard cookies.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil else {
+                print("SKIP [\(site.id)] 本地无该站 cookie")
+                continue
+            }
+            any = true
+            let r = CookieCheck.check(site: site, client: checkClient)
+            print("\(r.ok ? "OK  " : "FAIL") [\(site.id)] \(r.message)")
+        }
+        if !any { die("没有可检测的站点 cookie（--site 或同步 cookie 后重试）") }
 
     case "notes":
         for n in state.recentNotes { print(n) }

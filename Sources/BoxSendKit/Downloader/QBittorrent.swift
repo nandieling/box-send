@@ -100,6 +100,9 @@ final class QBittorrent: Downloader {
             let cur = (ul == -1) ? "跟随全局" : "\(ul) B/s"
             notes.append("限速未生效（当前 \(cur)，请求 \(upLimit) B/s）")
         }
+        if let st = t["state"] as? String, st == "missingFiles" {
+            notes.append("文件不存在于下载器路径（missingFiles）：在 VPS 上放置对应文件或 qB 里重新定位后才开始上传")
+        }
         return AddTorrentResult(id: hash, note: notes.joined(separator: "；"))
     }
 }

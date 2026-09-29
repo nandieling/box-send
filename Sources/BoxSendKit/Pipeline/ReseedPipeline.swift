@@ -38,15 +38,27 @@ public final class ReseedPipeline {
         public var pushID: String?
         public var upLimit: Int64
         public var pushes: [(site: String, ok: Bool, message: String)]
+        public var sizeSkipped: Bool
+        public var sizeGuardWarning: String?
 
         public var description: String {
             var lines: [String] = ["[\(release.summary)] torrent \(torrentBytes) bytes"]
+            if sizeSkipped {
+                lines.append("  size: SKIP \(sizeGuardWarning ?? "")")
+                return lines.joined(separator: "\n")
+            }
+            if let w = sizeGuardWarning {
+                lines.append("  size: WARN \(w)")
+            }
             for o in outcomes {
                 lines.append("  reseed \(o.site): \(o.ok ? "OK" : "FAIL") \(o.message)")
             }
             lines.append("  push: \(pushed ? "OK (\(pushID ?? "")) upLimit=\(upLimit == 0 ? "unlimited" : "\(upLimit) B/s")" : "skipped")")
             for p in pushes {
                 lines.append("  push[\(p.site)]: \(p.ok ? "OK" : "FAIL") \(p.message)")
+            }
+            if outcomes.contains(where: { !$0.ok }) {
+                lines.append("  提示: 重跑同一条链接可重试失败站点（已成功的站点自动跳过）")
             }
             return lines.joined(separator: "\n")
         }
@@ -69,7 +81,7 @@ public final class ReseedPipeline {
 
         // 2. 解析详情
         var release = try adapter.fetchDetail(detailURL: detailURL)
-        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [])
+        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [], sizeSkipped: false, sizeGuardWarning: nil)
 
         // 3. 下载 .torrent，并用 bencode info.name 校正发布名（权威来源）
         let (torrentData, filename) = try adapter.downloadTorrentFile(release)
@@ -82,6 +94,20 @@ public final class ReseedPipeline {
         release.size = Bencode.totalLength(torrentData) ?? release.size
         report.release = release
         state.note("release: \(release.summary) torrent \(filename)")
+
+        // 3.5 大小检测：种子大小 vs VPS 剩余空间（含安全边际）
+        if case .over(let msg) = SizeGuard.evaluate(sizeBytes: release.size ?? 0,
+                                                    freeGB: config.downloader.vpsFreeGB,
+                                                    marginGB: config.downloader.sizeGuardMarginGB) {
+            if config.downloader.sizeGuardMode == .skip {
+                report.sizeSkipped = true
+                report.sizeGuardWarning = msg
+                state.note("sizeGuard SKIP \(release.summary): \(msg)")
+                return report
+            }
+            report.sizeGuardWarning = msg
+            state.note("sizeGuard WARN \(release.summary): \(msg)")
+        }
 
         // 4. 逐目标站转种
         let targets = opts.targets ?? config.targetSites

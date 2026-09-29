@@ -27,6 +27,16 @@ final class AppModel: ObservableObject {
     @Published var runningStep = ""
     @Published var lastReport: String = ""
 
+    // MARK: RSS 自动转种
+    @Published var rssAuto = false
+    @Published var rssRunning = false
+    @Published var rssMessage: String? = nil
+
+    // MARK: 备份目录监控
+    @Published var zipAuto = false
+    @Published var zipRunning = false
+    @Published var zipMessage: String? = nil
+
     // MARK: 下载器
     @Published var testingDownloader = false
     @Published var downloaderTestResult: String? = nil
@@ -39,6 +49,8 @@ final class AppModel: ObservableObject {
     private var cookies = CookieStore()
     private let state: StateStore
     private var gistTimer: Timer?
+    private var rssTimer: Timer?
+    private var zipTimer: Timer?
 
     init() {
         dataDir = AppPaths.dir
@@ -75,6 +87,14 @@ final class AppModel: ObservableObject {
         refreshCookieStats()
         if config.gistSync != nil {
             lastGistSyncText = state.lastGistSync.map { Self.dateText($0) } ?? "从未同步"
+        }
+        if config.rss?.enabled == true {
+            rssAuto = true
+            startRssTimer()
+        }
+        if config.zipWatch?.enabled == true {
+            zipAuto = true
+            startZipTimer()
         }
     }
 
@@ -212,6 +232,159 @@ final class AppModel: ObservableObject {
             let mins = max(5, config.gistSync?.pollMinutes ?? 30)
             gistTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.gistSyncNow() }
+            }
+        }
+    }
+
+    // MARK: RSS
+
+    func rssPasskey(_ siteID: String) -> String {
+        config.rss?.passkeys[siteID] ?? ""
+    }
+    func setRssPasskey(_ siteID: String, _ v: String) {
+        if config.rss == nil { config.rss = RssConfig() }
+        config.rss?.passkeys[siteID] = v
+        saveConfig()
+    }
+    func setRssPollMinutes(_ mins: Int) {
+        if config.rss == nil { config.rss = RssConfig() }
+        config.rss?.pollMinutes = max(1, mins)
+        saveConfig()
+        if rssAuto { startRssTimer() }   // 间隔变了，重启定时器
+    }
+    func setRssAuto(_ on: Bool) {
+        rssAuto = on
+        if config.rss == nil { config.rss = RssConfig() }
+        config.rss?.enabled = on
+        saveConfig()
+        rssTimer?.invalidate()
+        rssTimer = nil
+        if on { startRssTimer() }
+    }
+    private func startRssTimer() {
+        let mins = max(1, config.rss?.pollMinutes ?? 10)
+        rssTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.rssPollNow() }
+        }
+    }
+    func rssPollNow() {
+        guard !rssRunning else { return }
+        guard config.rss?.enabled == true else {
+            rssMessage = "先在 RSS 页启用并填写源站 passkey"
+            return
+        }
+        rssRunning = true
+        rssMessage = "RSS 轮询中…"
+        saveConfig()
+        let cfg = config
+        let cookieJar = cookies
+        let st = state
+        Task.detached {
+            let d = DownloaderFactory.make(cfg, client: HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent))
+            let poller = RssPoller(config: cfg, cookies: cookieJar, state: st, downloader: d)
+            let results = poller.pollOnce()
+            await MainActor.run {
+                self.cookies.mergeFrom(cookieJar)
+                self.refreshCookieStats()
+                self.persistCookies()
+                self.rssRunning = false
+                if results.isEmpty {
+                    self.rssMessage = "RSS 轮询完成：无新种子"
+                } else {
+                    let ok = results.filter { $0.ok }.count
+                    self.rssMessage = "RSS 轮询完成：\(results.count) 个新种，成功 \(ok) 个"
+                }
+                self.notes = st.recentNotes
+            }
+        }
+    }
+
+    // MARK: cookie 检测
+    @Published var cookieChecking = false
+    @Published var cookieCheckLines: [String] = []
+
+    func checkCookies() {
+        guard !cookieChecking else { return }
+        if cookies.isEmpty {
+            cookieMessage = "本地还没有 cookie，先同步"
+            return
+        }
+        cookieChecking = true
+        cookieCheckLines = []
+        let cookieJar = cookies
+        let cfg = config
+        Task.detached {
+            let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
+            var lines: [String] = []
+            for site in cfg.sourceSites {
+                guard cookieJar.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil else { continue }
+                let r = CookieCheck.check(site: site, client: client)
+                lines.append("\(r.ok ? "OK  " : "FAIL") [\(site.id)] \(r.message)")
+            }
+            await MainActor.run {
+                self.cookieCheckLines = lines
+                self.cookieChecking = false
+            }
+        }
+    }
+
+    // MARK: 备份目录监控
+
+    func zipDir() -> String { config.zipWatch?.dir ?? "~/Downloads" }
+    func setZipDir(_ v: String) {
+        if config.zipWatch == nil { config.zipWatch = ZipWatchConfig() }
+        config.zipWatch?.dir = v
+        saveConfig()
+    }
+    func zipPassword() -> String { config.zipWatch?.password ?? "" }
+    func setZipPassword(_ v: String) {
+        if config.zipWatch == nil { config.zipWatch = ZipWatchConfig() }
+        config.zipWatch?.password = v
+        saveConfig()
+    }
+    func setZipPollMinutes(_ mins: Int) {
+        if config.zipWatch == nil { config.zipWatch = ZipWatchConfig() }
+        config.zipWatch?.pollMinutes = max(1, mins)
+        saveConfig()
+        if zipAuto { startZipTimer() }
+    }
+    func setZipAuto(_ on: Bool) {
+        zipAuto = on
+        if config.zipWatch == nil { config.zipWatch = ZipWatchConfig() }
+        config.zipWatch?.enabled = on
+        saveConfig()
+        zipTimer?.invalidate()
+        zipTimer = nil
+        if on { startZipTimer() }
+    }
+    private func startZipTimer() {
+        let mins = max(1, config.zipWatch?.pollMinutes ?? 5)
+        zipTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.zipScanNow() }
+        }
+    }
+    func zipScanNow() {
+        guard !zipRunning else { return }
+        guard config.zipWatch?.enabled == true else {
+            zipMessage = "先在 Cookie 页启用备份目录监控并填写目录"
+            return
+        }
+        zipRunning = true
+        zipMessage = "扫描备份目录…"
+        saveConfig()
+        let dir = config.zipWatch?.dir ?? "~/Downloads"
+        let pw = config.zipWatch?.password ?? ""
+        let cookieJar = cookies
+        let st = state
+        Task.detached {
+            let imported = ZipWatcher.scanOnce(dir: dir, password: pw, store: cookieJar, state: st)
+            await MainActor.run {
+                self.cookies.mergeFrom(cookieJar)
+                self.refreshCookieStats()
+                self.persistCookies()
+                self.zipRunning = false
+                self.zipMessage = imported.isEmpty ? "扫描完成：无新备份" : "扫描完成：已导入 \(imported.joined(separator: ", "))"
+                self.notes = st.recentNotes
             }
         }
     }
