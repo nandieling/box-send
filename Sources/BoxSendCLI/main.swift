@@ -110,7 +110,7 @@ do {
         let report = try p.run(detailURL: detail, sourceSiteID: pid, opts: .init(skipReseed: true, skipPush: true))
         print(report.release.summary)
         print("  imdb: \(report.release.imdb ?? "-")  douban: \(report.release.douban ?? "-")  size: \(report.release.size.map { String(format: "%.2f GiB", Double($0) / 1073741824) } ?? "-")")
-        print("  kind: \(report.release.kind?.rawValue ?? "-")  genre: \(report.release.genre.isEmpty ? "-" : report.release.genre)  subtitle: \(report.release.subtitle.isEmpty ? "-" : report.release.subtitle)  forbid: \(report.release.isForbidReseed)")
+        print("  kind: \(report.release.kind?.rawValue ?? "-")  genre: \(report.release.genre.isEmpty ? "-" : report.release.genre)  region: \(report.release.region.isEmpty ? "-" : report.release.region)  subtitle: \(report.release.subtitle.isEmpty ? "-" : report.release.subtitle)  forbid: \(report.release.isForbidReseed)")
         let mi = report.release.mediainfo
         let miPreview = mi.isEmpty ? "无" : String(mi.prefix(60)).replacingOccurrences(of: "\n", with: " ")  // 文件内为真实换行
         print("  mediainfo: \(miPreview) …（\(mi.count) 字符）")

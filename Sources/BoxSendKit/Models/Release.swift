@@ -16,12 +16,13 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var subtitle: String        // 副标题（源简介"译名"，如 毒食难肥）
     public var genre: String           // 源站类别（如 纪录片）
     public var mediainfo: String       // 源页 MediaInfo/BDInfo 原文
+    public var region: String          // 源简介"产地"（个别目标站"制作组"下拉实为地区）
 
     init(siteID: String, detailURL: String, name: String, descr: String = "",
          imdb: String? = nil, douban: String? = nil, size: Int64? = nil,
          kind: ReleaseKind? = nil, torrentName: String = "", torrentURL: String = "",
          isForbidReseed: Bool = false, subtitle: String = "", genre: String = "",
-         mediainfo: String = "") {
+         mediainfo: String = "", region: String = "") {
         self.siteID = siteID
         self.detailURL = detailURL
         self.name = name
@@ -36,11 +37,12 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         self.subtitle = subtitle
         self.genre = genre
         self.mediainfo = mediainfo
+        self.region = region
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteID, detailURL, name, descr, imdb, douban, size, kind
-        case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo
+        case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo, region
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -58,6 +60,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
         genre = try c.decodeIfPresent(String.self, forKey: .genre) ?? ""
         mediainfo = try c.decodeIfPresent(String.self, forKey: .mediainfo) ?? ""
+        region = try c.decodeIfPresent(String.self, forKey: .region) ?? ""
     }
 
     /// 稳定去重键：同一源站同一详情页视为同一种子

@@ -79,6 +79,7 @@ final class NexusPHPAdapter: SiteAdapter {
         let plain = HTMLUtil.stripTags(descr)
         let subtitle = Self.lineValue(plain, prefix: "译", suffix: "名") ?? ""
         let genre = Self.lineValue(plain, prefix: "类", suffix: "别") ?? ""
+        let region = Self.lineValue(plain, prefix: "产", suffix: "地") ?? ""
 
         // MediaInfo / BDInfo：源页 <pre> 块（含 Unique ID / DISC TITLE 特征）
         var mediainfo = ""
@@ -154,7 +155,8 @@ final class NexusPHPAdapter: SiteAdapter {
             isForbidReseed: isForbid,
             subtitle: subtitle,
             genre: genre,
-            mediainfo: mediainfo
+            mediainfo: mediainfo,
+            region: region
         )
     }
 
@@ -389,12 +391,22 @@ final class NexusPHPAdapter: SiteAdapter {
         // 标签（同名多次）
         if let tagField = override?.tagField, let map = override?.tagMap {
             for tag in canonicalTags(info) {
-                if let v = map[tag] { fields.append(.init(tagField, String(v))) }
+                if let v = map[tag] { fields.append(.init(tagField, v)) }
             }
         }
         // 制作组
         if let teamField = override?.teamField, let v = resolveTeam(info) {
             setField(teamField, String(v))
+        }
+        // 地区（个别站该下拉实为产地）
+        if let rf = override?.regionField, !info.region.isEmpty,
+           let patterns = override?.regionPatterns {
+            var val = override?.regionOtherValue
+            for (k, v) in patterns.sorted(by: { $0.key.count > $1.key.count }) where info.region.contains(k) {
+                val = v
+                break
+            }
+            if let val { setField(rf, String(val)) }
         }
         return fields
     }

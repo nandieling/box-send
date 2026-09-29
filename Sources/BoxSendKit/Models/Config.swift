@@ -56,15 +56,20 @@ public struct SiteOverride: Codable {
     var subtitleField: String?
     /// 简介格式：bbcode（中文站默认）| html
     var descrFormat: String?
-    /// 标签复选框字段名（如 "option_sel[]"）；值 = 规范标签 -> 站点 ID
+    /// 标签复选框字段名（如 "option_sel[]"）；值 = 规范标签 -> 站点 ID（各站值类型不同：数字或字母 token）
     var tagField: String?
-    var tagMap: [String: Int]?
+    var tagMap: [String: String]?
     /// 规范标签: chinese_sub / hdr10 / hdr10plus / dovi / dtsx / atmos / forbid / limited
     /// 制作组下拉字段（如 "team_sel"）；未知组 -> teamOtherValue
     var teamField: String?
     var teamOtherValue: Int?
     /// 制作组名（出现在种子名 - 后）-> 站点 team ID
     var teamPatterns: [String: Int]?
+    /// 地区字段（个别站的"制作组"下拉实为产地地区，如 Pterclub）；按源简介"产地"匹配
+    var regionField: String?
+    /// 产地文本（如 "美国"/"日本"）-> 站点地区 ID；无匹配 -> regionOtherValue
+    var regionPatterns: [String: Int]?
+    var regionOtherValue: Int?
 }
 
 extension SiteOverride {
@@ -101,6 +106,9 @@ extension SiteOverride {
         }
         if let v = tagMap { out.tagMap = base.tagMap?.merging(v) { _, new in new } }
         if let v = teamPatterns { out.teamPatterns = base.teamPatterns?.merging(v) { _, new in new } }
+        if let v = regionField { out.regionField = v }
+        if let v = regionOtherValue { out.regionOtherValue = v }
+        if let v = regionPatterns { out.regionPatterns = base.regionPatterns?.merging(v) { _, new in new } }
         return out
     }
 }

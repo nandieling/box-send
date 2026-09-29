@@ -186,16 +186,85 @@ final class ParseTests: XCTestCase {
 
     func testSiteOverrideNewFieldsDecode() throws {
         let json = Data("""
-        {"titleField":"name","subtitleField":"small_descr","tagField":"option_sel[]","tagMap":{"chinese_sub":6},"teamField":"team_sel","teamOtherValue":27,"teamPatterns":{"HDS":1}}
+        {"titleField":"name","subtitleField":"small_descr","tagField":"option_sel[]","tagMap":{"chinese_sub":"6"},"teamField":"team_sel","teamOtherValue":27,"teamPatterns":{"HDS":1},"regionField":"team_sel","regionPatterns":{"美国":4},"regionOtherValue":8}
         """.utf8)
         let ov = try JSONDecoder().decode(SiteOverride.self, from: json)
         XCTAssertEqual(ov.subtitleField, "small_descr")
-        XCTAssertEqual(ov.tagMap?["chinese_sub"], 6)
+        XCTAssertEqual(ov.tagMap?["chinese_sub"], "6")
         XCTAssertEqual(ov.teamOtherValue, 27)
+        XCTAssertEqual(ov.regionPatterns?["美国"], 4)
+        XCTAssertEqual(ov.regionOtherValue, 8)
         // 旧配置（无新字段）仍可解码
         let old = try JSONDecoder().decode(SiteOverride.self, from: Data("{}".utf8))
         XCTAssertNil(old.subtitleField)
         XCTAssertNil(old.teamField)
+    }
+
+    // MARK: - 多站上传字段（副标题/标签/制作组/地区）
+
+    func testMultiSiteUploadFields() throws {
+        let html = fixtureStr("luckpt-42211.html")
+        var info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=42211")
+        if let d = fixtureData("food.torrent"), let tn = Bencode.infoName(d), !tn.isEmpty {
+            info.name = tn
+        }
+        func fieldsFor(_ id: String) throws -> [(String, String)] {
+            let adapter = NexusPHPAdapter(site: site(id), client: HTTPClient(cookies: CookieStore(), userAgent: "box-send-test"))
+            return adapter.buildUploadFields(info, page: "").map { ($0.name, $0.value) }
+        }
+        func dictOf(_ fields: [(String, String)]) -> [String: String] {
+            var seen = Set<String>()
+            return Dictionary(uniqueKeysWithValues: fields.filter { seen.insert($0.0).inserted }.map { ($0.0, $0.1) })
+        }
+
+        // hdhome：副标题 + tags[]（中字=zz，简介有简繁字幕）+ 制作组 Other(11)
+        let hdhome = try fieldsFor("hdhome")
+        let d1 = dictOf(hdhome)
+        XCTAssertEqual(d1["small_descr"], "毒食难肥")
+        let tags1 = hdhome.filter { $0.0 == "tags[]" }.map { $0.1 }
+        XCTAssertTrue(tags1.contains("zz"), "hdhome 应勾 中字(zz), got \(tags1)")
+        XCTAssertFalse(tags1.contains("db"))
+        XCTAssertEqual(d1["team_sel"], "11")
+
+        // audiences：副标题 + tags[] 中字=zz；无制作组字段
+        let audiences = try fieldsFor("audiences")
+        let d2 = dictOf(audiences)
+        XCTAssertEqual(d2["small_descr"], "毒食难肥")
+        let tags2 = audiences.filter { $0.0 == "tags[]" }.map { $0.1 }
+        XCTAssertTrue(tags2.contains("zz"))
+        XCTAssertFalse(audiences.contains { $0.0 == "team_sel" })
+
+        // chdbits：副标题；无标签；制作组兜底 0（无 Other 选项）
+        let chdbits = try fieldsFor("chdbits")
+        let d3 = dictOf(chdbits)
+        XCTAssertEqual(d3["small_descr"], "毒食难肥")
+        XCTAssertFalse(chdbits.contains { $0.0.hasPrefix("tags") })
+        XCTAssertEqual(d3["team_sel"], "0")
+
+        // ttg：副标题字段名为 subtitle
+        let ttg = try fieldsFor("ttg")
+        let d4 = dictOf(ttg)
+        XCTAssertEqual(d4["subtitle"], "毒食难肥")
+        XCTAssertFalse(ttg.contains { $0.0 == "team" })  // 该站 team 是 hidden 字段
+
+        // pter：副标题 + 地区（产地 美国 -> 欧美 4）
+        let pter = try fieldsFor("pter")
+        let d5 = dictOf(pter)
+        XCTAssertEqual(d5["small_descr"], "毒食难肥")
+        XCTAssertEqual(d5["team_sel"], "4")
+
+        // luckpt：tags[4][] 中字=23 + 制作组 LuckDocu(13)
+        let luckpt = try fieldsFor("luckpt")
+        let d6 = dictOf(luckpt)
+        XCTAssertEqual(d6["small_descr"], "毒食难肥")
+        let tags6 = luckpt.filter { $0.0 == "tags[4][]" }.map { $0.1 }
+        XCTAssertTrue(tags6.contains("23"), "luckpt 应勾 中字(23), got \(tags6)")
+        XCTAssertEqual(d6["team_sel[4]"], "13")
+    }
+
+    func testRegionLineValue() {
+        let text = "❁ 产　　地:　美国\n❁ 类　　别:　纪录片\n"
+        XCTAssertEqual(NexusPHPAdapter.lineValue(text, prefix: "产", suffix: "地"), "美国")
     }
 }
 
