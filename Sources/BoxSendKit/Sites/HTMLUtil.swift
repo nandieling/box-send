@@ -141,15 +141,63 @@ enum HTMLUtil {
     /// 从 <a ...>text</a> 中提取 href 与文本
     /// 解析 <select name="X"> 的选项 [(value, label)]（动态分类解析用）
     static func selectOptions(_ html: String, name: String) -> [(value: String, label: String)] {
-        let pat = "<select[^>]*name=['\"]" + NSRegularExpression.escapedPattern(for: name) + "[\"'][^>]*>([\\s\\S]*?)</select>"
+        let pat = "<select[^>]*name=['\"']" + NSRegularExpression.escapedPattern(for: name) + "[\"''][^>]*>([\\s\\S]*?)</select>"
         guard let m = firstMatch(html, pat) else { return [] }
-        let optPat = "<option[^>]*value=['\"]([^\"']*)[\"'][^>]*>([\\s\\S]*?)</option>"
+        let optPat = "<option[^>]*value=['\"']([^\"']*)[\"''][^>]*>([\\s\\S]*?)</option>"
         var out: [(String, String)] = []
         for o in firstMatches(m, optPat) {
             let label = stripTags(o.1).trimmingCharacters(in: .whitespacesAndNewlines)
             out.append((o.0, label))
         }
         return out
+    }
+
+    /// 同名下拉的全部实例（新 NexusPHP 页面可含多个 type 下拉，各带 data-mode）。
+    /// 返回每个下拉的 data-mode（可为 nil）与其选项列表
+    static func selectGroups(_ html: String, name: String) -> [(mode: String?, options: [(value: String, label: String)])] {
+        let pat = "<select[^>]*name=['\"']" + NSRegularExpression.escapedPattern(for: name) + "[\"''][^>]*>([\\s\\S]*?)</select>"
+        guard let re = try? NSRegularExpression(pattern: pat, options: []) else { return [] }
+        let ns = NSRange(html.startIndex..., in: html)
+        var out: [(String?, [(String, String)])] = []
+        for m in re.matches(in: html, options: [], range: ns) {
+            guard m.numberOfRanges >= 2,
+                  let whole = Range(m.range, in: html),
+                  let bodyR = Range(m.range(at: 1), in: html) else { continue }
+            let openTag = String(html[whole].prefix { $0 != ">" })
+            let mode = group(openTag, "data-mode=['\"]([^\"']*)['\"]")
+            var opts: [(String, String)] = []
+            for o in firstMatches(String(html[bodyR]), "<option[^>]*value=['\"']([^\"']*)[\"'][^>]*>([\\s\\S]*?)</option>") {
+                opts.append((o.0, stripTags(o.1).trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
+            out.append((mode, opts))
+        }
+        return out
+    }
+
+    /// 复选框 (name, value, label)；label = 标签后紧随的文本（到下一个标签为止）
+    static func checkboxes(_ html: String) -> [(name: String, value: String, label: String)] {
+        guard let re = try? NSRegularExpression(pattern: "<input[^>]*type=['\"]checkbox['\"][^>]*>", options: [.caseInsensitive]) else { return [] }
+        let ns = NSRange(html.startIndex..., in: html)
+        var out: [(String, String, String)] = []
+        for m in re.matches(in: html, options: [], range: ns) {
+            guard let r = Range(m.range, in: html) else { continue }
+            let tag = String(html[r])
+            guard let name = group(tag, "name=['\"]([^\"']*)['\"]"),
+                  let value = group(tag, "value=['\"]([^\"']*)['\"]") else { continue }
+            let tail = String(html[r.upperBound...]).prefix(while: { $0 != "<" })
+            out.append((name, value, String(tail).trimmingCharacters(in: .whitespacesAndNewlines)))
+        }
+        return out
+    }
+
+    /// 页面 textarea 字段名列表（判断是否有 technical_info/media_info 等专用字段）
+    static func textareaNames(_ html: String) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: "<textarea[^>]*name=['\"]([^\"']*)['\"][^>]*>") else { return [] }
+        let ns = NSRange(html.startIndex..., in: html)
+        return re.matches(in: html, options: [], range: ns).compactMap { m in
+            guard let r = Range(m.range(at: 1), in: html) else { return nil }
+            return String(html[r])
+        }
     }
 
     static func firstMatches(_ text: String, _ pattern: String, options: NSRegularExpression.Options = []) -> [(String, String)] {

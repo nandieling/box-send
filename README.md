@@ -29,7 +29,13 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 - **经典 Gazelle / xbtit 适配器**：hd-space.org（HDSpace，实测上传表单与分类表）、open.cd、iptorrents.com（分类表为老版结构，站点改版后需按实际选项在配置层修正）。
 - **特殊 NexusPHP**：byr.pt（auto_feed 实测 type 表：电影408/剧集401/综艺405/音乐402/动漫404/纪录410）、star-space.net（影，自定义表单：字母 token 分类、medium+分辨率组合的源介质下拉、字符串分辨率/编解码下拉，值表实测）。
 - **通用中文 NexusPHP（~70 站）**：13City、1PTBA、52MOVIE、52PT、AGSV、RailgunPT、藏宝阁、CarPt、CrabPt、财神、CyanBug、DiscFan、DragonHD、天枢、MARCH、TCCF、GGPT、HDArea、HDBAO、HDDolby、HDfans、麒麟、HDTime、HDVideo、HITPT、海棠、HUDBT、好学、自然、KuFei、LaJiDui、柠檬不甜、LongPT、iloli、NJTUPT、OKPT、Oshen、BaoZi、PandaPT、PigGo、FreeFarm、ALing、BTSchool、TLFbits、GTK、HDClone、ITZMX、慕雪阁、NovaHD、SoulVoice、HDU、星陨阁、樱花、PTCafe、PTFans、PThome、PTLGS、PTsbao、PTSkit、PTT、PTzone、QingWa、SBPT、下水道、躺平、TJUPT、UBits、UltraHD、WT-Sakura、杏林、ZMPT、U2（dmhy）等。
-  - 这类站走通用参数（POST `takeupload.php`、标题 `name`、IMDb `url` 字段、副标题 `small_descr`），**分类自动解析**：上传页分类下拉按类型关键词（电影/剧集/动漫/纪录片/音乐…）动态匹配选项值，免逐站配置；质量下拉保持服务器默认值，需要精确质量选值时在「站点 overrides」里补 `qualitySelects`/`qualityValueMaps`。
+  - 这类站走通用参数（POST `takeupload.php`、标题 `name`、IMDb `url` 字段、副标题 `small_descr`），**全字段动态适配（2026-09-29 对 72 站上传页批量实测后实现，免逐站配置）**：
+    - **分类**：上传页分类下拉按类型关键词（电影/剧集/动漫/纪录片/音乐…）动态匹配选项值；新版 NexusPHP（多下拉 + `data-mode`）自动定位到正确下拉并按模式索引质量字段；学术站（星陨阁）走 `ajax.php` 动态取子分类。
+    - **质量**：`medium_sel/codec_sel/standard_sel/audiocodec_sel/source_sel` 等按发布名 token（REMUX/BluRay/1080p/VC-1/DTS-HD MA…）匹配选项，无匹配时按年份选编码（如 GGPT）。
+    - **标签**：`tags[][]`/`chinese`/`exclusive`/`span[]` 等复选框按种子特征自动勾选（中字/禁转/限转/DIY/首发/杜比视界/HDR…）。
+    - **简介**：含 `technical_info`/`media_info` 字段的站自动把 MediaInfo 填入该字段，简介正文 HTML 清洗（源站链接转文本、图片 src 绝对化、压缩空行）。
+    - 需要精调时在「站点 overrides」里补 `qualitySelects`/`qualityValueMaps`/`tagMap` 等，显式配置优先于动态匹配。
+  - 实测状态备注：movie52/longpt/ultrahd 的 cookie 当时已过期（请重新用 PT-depiler 备份导入）；hdbao 服务端 500、baozi 被 Cloudflare 403、yinghua 域名解析失败、ziran 有 JS 校验（纯 HTTP 暂无法通过）；u2 为自研多标签表单，按最简参数适配（实验性）；ptt/tjupt 为老式表单，动态分类可用。
   - 新增站默认**停用**（GUI「站点与限速」页启用并勾选为目标即可）；内置表新增站点会在启动时自动并入配置，已有条目保持不变。
 - **暂未适配（M3）**：YemaPT（SPA）、ZHUQUE（TNode SPA）、HaiDan（SPA）、OurBits / GPW（新版自研系统）、MTeam / PTP / HDB / BTN / CinemaZ 等（无账号 cookie 或表单为新版结构）。这些站可先在「运行」页作**源站**使用（源站解析走 NexusPHP 通用逻辑），作为转种目标待后续实测。
 
@@ -190,12 +196,12 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
 
 ## 测试
 
-`swift test`（59 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入）。
+`swift test`（69 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入、新版 NexusPHP 动态质量/标签/technical_info 填充（多 data-mode 下拉、ajax 子分类、年份兜底选编码））。
 
 ## 里程碑
 
 - M1：Mac GUI 主体（运行/站点限速/Cookie/下载器/RSS/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽上限）+ 状态幂等 + CLI
-- M2（已完成部分加粗）：**RSS 自动转种（新种自动查重/大小检测/转种/推送）**、**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**、**站点覆盖扩展（Blu 家族 blutopia/monika + 经典 Gazelle/xbtit HDSpace/OpenCD/IPTorrents + BYR/影 特殊 NexusPHP + ~70 通用中文 NexusPHP 站，动态分类解析免逐站配置）**；剩余：Unit3D（REST API）适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）、通用站逐站质量下拉实测
+- M2（已完成部分加粗）：**RSS 自动转种（新种自动查重/大小检测/转种/推送）**、**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**、**站点覆盖扩展（Blu 家族 blutopia/monika + 经典 Gazelle/xbtit HDSpace/OpenCD/IPTorrents + BYR/影 特殊 NexusPHP + ~70 通用中文 NexusPHP 站，动态分类解析免逐站配置）**；剩余：Unit3D（REST API）适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）
 - M3：长尾站点（YemaPT/ZHUQUE/HaiDan SPA、OurBits/GPW/MTeam/PTP/HDB/BTN/CinemaZ 新版表单）、截图搬运图床、动态限速、统计面板
 
 ## 已知限制

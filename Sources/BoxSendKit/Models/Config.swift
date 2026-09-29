@@ -47,6 +47,14 @@ public struct SiteOverride: Codable {
     var categoryMap: [String: Int]?
     /// 字符串值分类映射（个别站分类值是字母 token，如 影 站 tr_category: "mo"/"tv"）；支持 "<kind>/<profile>" 键
     var categoryStringMap: [String: String]?
+    /// 动态分类 ajax 端点（个别站分类下拉由 JS 异步生成，如 xingtan "ajax.php"）
+    var ajaxCategoryPath: String?
+    /// 动态分类：kind -> 顶层 mode（ajax 拉取子分类用）
+    var ajaxCategoryModes: [String: Int]?
+    /// 动态分类：kind -> 直接使用的子分类 ID（免 ajax）
+    var ajaxCategorySubMap: [String: Int]?
+    /// 动态分类：kind -> 在 ajax 返回的子分类名中检索的关键词
+    var ajaxCategoryKeywords: [String: String]?
     /// 源介质下拉（质量+分辨率组合选值）：字段名，如 "tr_source"
     var sourceSelectField: String?
     /// 组合键选值表："medium" 或 "medium/standard" -> 站点值（字符串），如 "remux/2160p" -> "s52"
@@ -112,6 +120,10 @@ extension SiteOverride {
         if let v = teamOtherValue { out.teamOtherValue = v }
         if let v = categoryMap { out.categoryMap = base.categoryMap?.merging(v) { _, new in new } }
         if let v = categoryStringMap { out.categoryStringMap = base.categoryStringMap?.merging(v) { _, new in new } }
+        if let v = ajaxCategoryPath { out.ajaxCategoryPath = v }
+        if let v = ajaxCategoryModes { out.ajaxCategoryModes = base.ajaxCategoryModes?.merging(v) { _, new in new } }
+        if let v = ajaxCategorySubMap { out.ajaxCategorySubMap = base.ajaxCategorySubMap?.merging(v) { _, new in new } }
+        if let v = ajaxCategoryKeywords { out.ajaxCategoryKeywords = base.ajaxCategoryKeywords?.merging(v) { _, new in new } }
         if let v = sourceSelectField { out.sourceSelectField = v }
         if let v = sourceMap { out.sourceMap = base.sourceMap?.merging(v) { _, new in new } }
         if let v = qualitySelects { out.qualitySelects = base.qualitySelects?.merging(v) { _, new in new } }

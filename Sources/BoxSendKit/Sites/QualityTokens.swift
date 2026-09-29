@@ -81,6 +81,17 @@ enum QualityTokens {
         return nil
     }
 
+    /// 发布名中的年份（第一个 19xx/20xx 四位数字）
+    static func year(from name: String) -> Int? {
+        guard let re = try? NSRegularExpression(pattern: "(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])") else { return nil }
+        let ns = NSRange(name.startIndex..., in: name)
+        for m in re.matches(in: name, options: [], range: ns) {
+            guard let r = Range(m.range, in: name), let v = Int(String(name[r])), (1900...2100).contains(v) else { continue }
+            return v
+        }
+        return nil
+    }
+
     static func standard(from name: String) -> String? {
         let n = name.lowercased()
         if n.contains("8k") || n.contains("4320") { return "8k" }

@@ -183,6 +183,182 @@ extension SiteOverride {
         subtitleField: "small_descr"
     )
 
+    // MARK: - 通用站逐站实测修正（2026-09 上传页批量探测：分类表/豆瓣字段/标签/动态分类）
+
+    /// 北理工PT：imdb/豆瓣为裸 ID 字段，标签为 span[] 数字值
+    static let btschool = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "imdbid",
+        doubanField: "doubanid",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr",
+        tagField: "span[]",
+        tagMap: ["chinese_sub": "6", "forbid": "1", "first": "2", "diy": "4"]
+    )
+
+    /// 动漫花园 U2：多 Tab 表单（动漫/漫画/音乐），标题取 .torrent 文件名；type 值实测
+    static let u2 = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleMode: "torrentName",
+        imdbField: "imdbid",
+        categoryField: "type",
+        categoryMap: ["movie": 12, "series": 12, "tvshow": 12, "anime": 22, "documentary": 12, "music": 30, "other": 40],
+        extraUploadFields: ["uplver": "yes"]
+    )
+
+    /// GGPT（游戏站）：分类仅 412 PC / 418 其他；codec 下拉实为年份（动态年份匹配）
+    static let ggpt = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 412, "series": 412, "tvshow": 412, "anime": 412, "documentary": 412, "music": 418, "other": 418],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// 海棠（戏曲曲艺站）：无影视分类，统一入 小曲
+    static let haitang = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 4099, "series": 4099, "tvshow": 4099, "anime": 4099, "documentary": 4099, "music": 4099, "other": 4099],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// 好学（教育站）：纪录片入 410，其余入 教育
+    static let haoxue = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 406, "series": 406, "tvshow": 406, "anime": 406, "documentary": 410, "music": 406, "other": 406],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// TCCF（电驴教学）：纪录片 624，其余入 Elearning 杂项
+    static let tccf = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 628, "series": 628, "tvshow": 628, "anime": 628, "documentary": 624, "music": 628, "other": 628],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// DiscFan：电影按地区细分，转发统一入 世界
+    static let discfan = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        categoryMap: ["movie": 410, "series": 411, "tvshow": 416, "anime": 419, "documentary": 413, "music": 414, "other": 410],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// 杏坛（学术站）：type 下拉由 ajax.php 异步生成；分类 = 学科
+    static let xingtan = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        ajaxCategoryPath: "ajax.php",
+        ajaxCategoryModes: ["movie": 94, "series": 94, "tvshow": 94, "anime": 94, "documentary": 94, "music": 93, "other": 220],
+        ajaxCategorySubMap: ["movie": 842, "anime": 849, "other": 1968],
+        ajaxCategoryKeywords: ["series": "广播电视", "tvshow": "戏剧影视文学", "documentary": "电影学", "music": "音乐"],
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// HDArea：豆瓣字段为 dburl（URL 型）
+    static let hdarea = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        doubanField: "dburl",
+        doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// PTT：imdb 为裸 ID，豆瓣为 dburl
+    static let ptt = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "imdb_id",
+        doubanField: "dburl",
+        doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// PTHome：豆瓣为裸 ID
+    static let pthome = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        doubanField: "douban_id",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// TLF：豆瓣为 douban_url（URL 型）
+    static let tlf = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        doubanField: "douban_url",
+        doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// HDVideo：豆瓣为 douban_url（URL 型）
+    static let hdvideo = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        doubanField: "douban_url",
+        doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
     /// 影（StarSpace）：自定义 NexusPHP 变体，分类值是字母 token，源介质需 medium+resolution 组合选值
     static let shadow = SiteOverride(
         uploadPath: "p_torrent/video_upload.php",
