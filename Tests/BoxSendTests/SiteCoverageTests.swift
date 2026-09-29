@@ -258,6 +258,35 @@ final class SiteCoverageTests: XCTestCase {
         XCTAssertEqual(merged2.sourceSites.count, merged.sourceSites.count)
     }
 
+    func testPipelineAutoEnablesExplicitTargets() {
+        var cfg = AppConfig.template()
+        // 模拟新站默认停用，但用户勾选了目标
+        cfg.sourceSites = cfg.sourceSites.map { s in
+            var s = s
+            if s.id == "city13" { s.enabled = false }
+            return s
+        }
+        cfg.targetSites = ["city13"]
+        let client = HTTPClient(cookies: CookieStore(), userAgent: "t")
+        let dl = DownloaderFactory.make(cfg, client: client)
+        let pipe = ReseedPipeline(config: cfg, cookies: CookieStore(),
+                                  state: StateStore(dataDir: "/tmp/boxsend-test-\(UUID().uuidString)"),
+                                  downloader: dl)
+        // 勾选目标后流水线内应自动启用
+        XCTAssertEqual(pipe.config.site("city13")?.enabled, true)
+        // 未列入目标的停用站保持停用
+        var cfg2 = cfg
+        cfg2.sourceSites = cfg2.sourceSites.map { s in
+            var s = s
+            if s.id == "blutopia" { s.enabled = false }
+            return s
+        }
+        let pipe2 = ReseedPipeline(config: cfg2, cookies: CookieStore(),
+                                   state: StateStore(dataDir: "/tmp/boxsend-test-\(UUID().uuidString)"),
+                                   downloader: dl)
+        XCTAssertEqual(pipe2.config.site("blutopia")?.enabled, false)
+    }
+
     func testRosterFrameworks() {
         let sites = SiteRegistry.prioritySites
         let ids = Set(sites.map { $0.id })

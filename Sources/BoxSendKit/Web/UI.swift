@@ -202,6 +202,7 @@ function collectFromForm(){
   document.querySelectorAll('#limits-tb input').forEach(i=>{ const v=mb2b(i.value); if(v>0) su[i.dataset.id]=v; });
   cfg.downloader.siteUpLimits=su;
   cfg.targetSites=[...document.querySelectorAll('#targets input')].filter(c=>c.checked).map(c=>c.dataset.id);
+  (cfg.sourceSites||[]).forEach(s=>{ if(cfg.targetSites.includes(s.id) && !s.enabled) s.enabled=true; });
   $('json').value=JSON.stringify(cfg, null, 2);
 }
 async function saveAll(){

@@ -10,7 +10,15 @@ public final class ReseedPipeline {
     let downloader: Downloader
 
     public init(config: AppConfig, cookies: CookieStore, state: StateStore, downloader: Downloader) {
-        self.config = config
+        // 显式列入 targetSites 的站视为启用（内置表新站默认 enabled=false，
+        // 避免"勾选了目标却因未启用被跳过"）
+        var c = config
+        c.sourceSites = c.sourceSites.map { site in
+            var site = site
+            if c.targetSites.contains(site.id) && !site.enabled { site.enabled = true }
+            return site
+        }
+        self.config = c
         self.cookies = cookies
         self.client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
         self.state = state

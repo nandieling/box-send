@@ -159,6 +159,12 @@ final class AppModel: ObservableObject {
                 targets.append(s.id)
             }
             c.targetSites = targets
+            // 勾选为目标即自动启用（内置表新站默认 enabled=false，避免还要手动开开关）
+            c.sourceSites = c.sourceSites.map { site in
+                var site = site
+                if targets.contains(site.id) && !site.enabled { site.enabled = true }
+                return site
+            }
             config = c
             let data = try JSONEncoder().encode(c)
             try FileManager.default.createDirectory(atPath: AppPaths.dir, withIntermediateDirectories: true)
