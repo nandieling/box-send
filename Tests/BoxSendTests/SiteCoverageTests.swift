@@ -348,6 +348,31 @@ final class SiteCoverageTests: XCTestCase {
         }
     }
 
+    /// 旧配置兼容：无 managed 字段时按 enabled 推断（启用的站视为已添加）
+    func testSiteConfigLegacyManagedDecoding() throws {
+        let on = """
+        {"id":"x","name":"X","url":"https://x.pt/","framework":"NexusPHP","enabled":true}
+        """
+        let s1 = try JSONDecoder().decode(SiteConfig.self, from: Data(on.utf8))
+        XCTAssertEqual(s1.enabled, true)
+        XCTAssertEqual(s1.managed, true)
+
+        let off = """
+        {"id":"y","name":"Y","url":"https://y.pt/","framework":"NexusPHP","enabled":false}
+        """
+        let s2 = try JSONDecoder().decode(SiteConfig.self, from: Data(off.utf8))
+        XCTAssertEqual(s2.enabled, false)
+        XCTAssertEqual(s2.managed, false)
+
+        // 显式 managed 值优先
+        let mixed = """
+        {"id":"z","name":"Z","url":"https://z.pt/","framework":"NexusPHP","enabled":false,"managed":true}
+        """
+        let s3 = try JSONDecoder().decode(SiteConfig.self, from: Data(mixed.utf8))
+        XCTAssertEqual(s3.enabled, false)
+        XCTAssertEqual(s3.managed, true)
+    }
+
     /// 已存在的用户配置按注册表站名同步（改名后旧配置自动更新）
     func testRosterNameSyncIntoUserConfig() {
         var cfg = AppConfig.template()

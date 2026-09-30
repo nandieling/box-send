@@ -29,11 +29,23 @@ public final class ReseedPipeline {
         public var skipReseed = false
         public var skipPush = false
         public var targets: [String]?    // nil = 用 config.targetSites
+        /// 逐站实时事件（GUI 卡片状态用）：siteID / 状态文案 / ok（nil = 进行中）
+        public var onSiteEvent: ((String, String, Bool?) -> Void)?
+        /// 目标站自己的 .torrent 推送事件（转种成功后逐站推送）
+        public var onSitePush: ((String, String, Bool?) -> Void)?
+        /// 源站种子推送到下载器的事件
+        public var onSourcePush: ((String, Bool?) -> Void)?
 
-        public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil) {
+        public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil,
+                    onSiteEvent: ((String, String, Bool?) -> Void)? = nil,
+                    onSitePush: ((String, String, Bool?) -> Void)? = nil,
+                    onSourcePush: ((String, Bool?) -> Void)? = nil) {
             self.skipReseed = skipReseed
             self.skipPush = skipPush
             self.targets = targets
+            self.onSiteEvent = onSiteEvent
+            self.onSitePush = onSitePush
+            self.onSourcePush = onSourcePush
         }
     }
 
@@ -134,8 +146,10 @@ public final class ReseedPipeline {
                         report.outcomes.append((tid, false, "已禁用"))
                         continue
                     }
+                    opts.onSiteEvent?(tid, "转种中…", nil)
                     if state.isUploaded(site: tid, key: release.dedupKey) {
                         report.outcomes.append((tid, true, "已转种过，跳过"))
+                        opts.onSiteEvent?(tid, "已转种过（跳过）", true)
                         if let tu = state.targetURL(site: tid, key: release.dedupKey) {
                             targetPushes.append((tid, tu))
                         }
@@ -145,6 +159,7 @@ public final class ReseedPipeline {
                         let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
                         if let exists = try tAdapter.searchExists(release), !(ts.overrides?.searchURL ?? "").isEmpty {
                             report.outcomes.append((tid, true, "已存在: \(exists)"))
+                            opts.onSiteEvent?(tid, "已存在（跳过）", true)
                             state.markUploaded(site: tid, key: release.dedupKey)
                             continue
                         }
@@ -152,6 +167,7 @@ public final class ReseedPipeline {
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
                             state.note("reseed OK \(tid) <- \(release.summary)")
+                            opts.onSiteEvent?(tid, "转种成功", true)
                             if let u = outcome.detailURL {
                                 state.markTargetURL(site: tid, key: release.dedupKey, url: u)
                                 targetPushes.append((tid, u))
@@ -160,10 +176,12 @@ public final class ReseedPipeline {
                             }
                         } else {
                             state.note("reseed FAIL \(tid) <- \(release.summary): \(outcome.message)")
+                            opts.onSiteEvent?(tid, "转种失败: \(outcome.message)", false)
                         }
                         report.outcomes.append((tid, outcome.success, outcome.message))
                     } catch {
                         report.outcomes.append((tid, false, "\(error.localizedDescription)"))
+                        opts.onSiteEvent?(tid, "转种失败: \(error.localizedDescription)", false)
                     }
                 }
             }
@@ -186,8 +204,10 @@ public final class ReseedPipeline {
                 report.pushed = true
                 report.pushID = "already pushed"
                 state.note("push: 已推送过，跳过: \(release.summary)")
+                opts.onSourcePush?("已推送过（跳过）", true)
             } else {
                 do {
+                    opts.onSourcePush?("推送到下载器中…", nil)
                     let result = try downloader.addTorrent(
                         data: torrentData, filename: filename,
                         savePath: config.downloader.savePath,
@@ -201,8 +221,10 @@ public final class ReseedPipeline {
                     var note = "push OK \(release.summary) upLimit=\(upLimit)"
                     if !result.note.isEmpty { note += " [\(result.note)]" }
                     state.note(note)
+                    opts.onSourcePush?("已推送到下载器", true)
                 } catch {
                     state.note("push FAIL \(release.summary): \(error.localizedDescription)")
+                    opts.onSourcePush?("推送失败: \(error.localizedDescription)", false)
                     throw error
                 }
             }
@@ -214,8 +236,10 @@ public final class ReseedPipeline {
         if !opts.skipPush {
             for item in targetPushes {
                 let pushKey = "\(item.siteID)#\(item.detailURL)"
+                opts.onSitePush?(item.siteID, "推送该站种子中…", nil)
                 if state.isPushed(key: pushKey) {
                     report.pushes.append((item.siteID, true, "已推送过，跳过"))
+                    opts.onSitePush?(item.siteID, "已推送过（跳过）", true)
                     continue
                 }
                 do {
@@ -239,9 +263,11 @@ public final class ReseedPipeline {
                     if !result.note.isEmpty { msg += " [\(result.note)]" }
                     report.pushes.append((item.siteID, true, msg))
                     state.note("push[\(item.siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
+                    opts.onSitePush?(item.siteID, "已推送", true)
                 } catch {
                     report.pushes.append((item.siteID, false, error.localizedDescription))
                     state.note("push[\(item.siteID)] FAIL \(item.detailURL): \(error.localizedDescription)")
+                    opts.onSitePush?(item.siteID, "推送失败: \(error.localizedDescription)", false)
                 }
             }
         }

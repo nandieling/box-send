@@ -30,6 +30,7 @@ struct ContentView: View {
                 .tabItem { Label("RSS", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(5)
         }
+        .padding(.top, 12)   // 全屏时顶部留白
         .safeAreaInset(edge: .bottom) { statusBar }
     }
 
@@ -80,60 +81,161 @@ struct IntLimitField: View {
 
 struct RunView: View {
     @EnvironmentObject var model: AppModel
+    @State private var showHistory = false
 
     var body: some View {
-        Form {
-            Section("种子链接") {
-                HStack(spacing: 0) {
-                    TextField("", text: $model.detailURL)
-                        .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity)
-                }
-                HStack(spacing: 20) {
-                    Toggle("转种到目标站", isOn: $model.doReseed)
-                    Toggle("推送到下载器", isOn: $model.doPush)
-                    Button(model.running ? "运行中…" : "开始运行") { model.run() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.running)
-                }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                seedCard
+                targetsSection
+                historySection
             }
-            Section("转种目标站（勾选参与本次转种）") {
-                if model.config.sourceSites.contains(where: { $0.enabled }) {
-                    ForEach(model.config.sourceSites.filter { $0.enabled }, id: \.id) { s in
-                        Toggle(s.name, isOn: targetBinding(s.id))
-                    }
-                } else {
-                    Text("还没有开启的站点：到「站点与限速」页打开站点开关。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+            .padding(16)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // MARK: 种子链接（左对齐输入框）
+
+    private var seedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("种子链接").font(.headline)
+                Spacer()
+                if let e = model.sourcePushEvent { eventChip(e) }
+            }
+            TextField("粘贴种子详情页链接（如 https://…/details.php?id=…）", text: $model.detailURL)
+                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 20) {
+                Toggle("转种到目标站", isOn: $model.doReseed)
+                Toggle("推送到下载器", isOn: $model.doPush)
+                Spacer()
+                Button(model.running ? "运行中…" : "开始运行") { model.run() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.running)
             }
             if model.running {
-                Section {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text(model.runningStep).foregroundStyle(.secondary)
-                    }
+                Text(model.runningStep).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .runCard()
+    }
+
+    // MARK: 转种目标（分组卡片，组级选择 + 逐站微调）
+
+    private var targetsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("转种目标站（按分组选择）").font(.headline)
+            if model.managedSites.filter(\.enabled).isEmpty {
+                Text("还没有开启的站点：到「站点与限速」页添加并开启。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.config.groups.indices, id: \.self) { gi in
+                groupCard(gi)
+            }
+            if !model.groupMembers(-1).filter(\.enabled).isEmpty {
+                groupCard(-1)
+            }
+        }
+    }
+
+    private func groupCard(_ gi: Int) -> some View {
+        let g = gi >= 0 ? model.config.groups[gi] : GroupConfig(name: "无分组")
+        let members = model.groupMembers(gi).filter(\.enabled)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Toggle("", isOn: groupAllBinding(gi, members: members))
+                    .labelsHidden()
+                    .help("整组选中 / 取消")
+                Text(g.name).fontWeight(.semibold)
+                Text("\(members.count) 站").font(.caption).foregroundStyle(.secondary)
+                if gi >= 0, g.upLimitMB > 0 {
+                    Text("带宽上限 \(g.upLimitMB) MB/s").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if model.running {
+                    ProgressView().controlSize(.small)
                 }
             }
-            Section("最近一次结果") {
+            ForEach(members, id: \.id) { s in
+                HStack(spacing: 10) {
+                    Toggle(s.name, isOn: siteBinding(s.id))
+                        .frame(maxWidth: 200, alignment: .leading)
+                    if let e = model.reseedEvents[s.id] { eventChip(e) }
+                    if let e = model.pushEvents[s.id] { eventChip(e) }
+                    Spacer()
+                }
+            }
+        }
+        .runCard()
+    }
+
+    // MARK: 运行记录（点开才显示）
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                showHistory.toggle()
+            } label: {
+                Label(showHistory ? "收起运行记录" : "运行记录",
+                      systemImage: showHistory ? "chevron.up" : "chevron.down")
+            }
+            .buttonStyle(.bordered)
+            if showHistory {
                 Text(model.lastReport.isEmpty ? "（还没有运行记录）" : model.lastReport)
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
                     .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
-        .formStyle(.grouped)
     }
 
-    private func targetBinding(_ id: String) -> Binding<Bool> {
+    // MARK: bindings / 状态提示
+
+    private func groupAllBinding(_ gi: Int, members: [SiteConfig]) -> Binding<Bool> {
+        Binding(
+            get: { !members.isEmpty && members.allSatisfy { model.selectedTargets.contains($0.id) } },
+            set: { on in
+                for m in members {
+                    if on { model.selectedTargets.insert(m.id) } else { model.selectedTargets.remove(m.id) }
+                }
+                model.saveConfig()
+            }
+        )
+    }
+
+    private func siteBinding(_ id: String) -> Binding<Bool> {
         Binding(get: { model.selectedTargets.contains(id) },
                 set: { on in
                     if on { model.selectedTargets.insert(id) } else { model.selectedTargets.remove(id) }
                     model.saveConfig()
                 })
+    }
+
+    @ViewBuilder
+    private func eventChip(_ e: AppModel.TargetEvent) -> some View {
+        Text(e.text)
+            .font(.caption)
+            .foregroundStyle(e.ok == nil ? Color.secondary : (e.ok == true ? Color.green : Color.red))
+            .lineLimit(1)
+    }
+}
+
+extension View {
+    /// 运行页卡片样式
+    func runCard() -> some View {
+        self
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+            )
     }
 }
 
@@ -147,109 +249,83 @@ struct SitesView: View {
     @EnvironmentObject var model: AppModel
     @State private var newGroupName = ""
     @State private var newGroupMB = ""
+    @State private var showAddSites = false
 
     var body: some View {
         Form {
-            Section {
-                ForEach(model.config.sourceSites, id: \.id) { s in
-                    let idx = model.siteIndex(s.id)
-                    HStack(spacing: 8) {
-                        Toggle("", isOn: enabledBinding(s.id))
-                            .labelsHidden()
-                            .help(s.enabled ? "已开启：参与转种目标 / cookie 检测 / 同步" : "未开启：不参与转种 / 检测 / 同步")
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(s.name).fontWeight(.medium)
-                                .foregroundStyle(s.enabled ? Color.primary : Color.secondary)
-                            Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        cookieStatusView(for: s)
-                        Spacer()
-                        Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
-                            model.checkCookie(siteID: s.id)
-                        }
-                        .font(.caption)
-                        .frame(width: 40)
-                        VStack(spacing: 0) {
-                            Button { model.moveSite(siteID: s.id, delta: -1) } label: {
-                                Image(systemName: "chevron.up")
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(idx <= 0)
-                            Button { model.moveSite(siteID: s.id, delta: 1) } label: {
-                                Image(systemName: "chevron.down")
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(idx >= model.config.sourceSites.count - 1)
-                        }
-                        .font(.caption2)
-                        .frame(width: 18)
-                        Picker("分组", selection: groupBinding(s.id)) {
-                            Text("无分组").tag(-1)
-                            ForEach(model.config.groups.indices, id: \.self) { i in
-                                Text(model.config.groups[i].name).tag(i)
-                            }
-                        }
-                        .frame(maxWidth: 110)
-                        IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0) { mb in
-                            model.setSiteUpLimitMBInt(mb, siteID: s.id)
-                            model.saveConfig()
-                        }
-                        .frame(width: 70)
-                        Text("MB/s").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                Text("开关：未开启的站不作为转种站点（不参与转种目标 / cookie 检测 / 同步）。上下箭头手动调整站点顺序。「检测」验证该站 cookie 是否仍登录；限速 = 该站种子推送到下载器后的上传速度上限（整数 MB/s，空 = 不限速），与所属分组的带宽上限取更严格者。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("站点（开启 / 排序 / 限速 / 分组）")
-            }
-            Section {
-                if model.config.groups.isEmpty {
-                    Text("还没有分组。把多个目标站放入同一分组，可共用带宽上限，避免 VPS 上传带宽超限。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                ForEach(Array(model.config.groups.enumerated()), id: \.offset) { idx, g in
-                    HStack(spacing: 8) {
-                        TextField("", text: groupNameBinding(idx))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 140)
-                        IntLimitField(initial: g.upLimitMB) { mb in
-                            model.config.groups[idx].upLimitMB = max(0, mb ?? 0)
-                            model.saveConfig()
-                        }
-                        .frame(width: 70)
-                        Text("MB/s").font(.caption).foregroundStyle(.secondary)
-                        Text("\(g.sites.count) 站").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button(role: .destructive) { model.removeGroup(at: idx) } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
+            Section("添加分组和站点") {
                 HStack(spacing: 8) {
-                    TextField("", text: $newGroupName)
+                    TextField("分组名", text: $newGroupName)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 140)
-                    TextField("", text: $newGroupMB)
+                    TextField("MB/s（空 = 不限）", text: $newGroupMB)
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.trailing)
-                        .frame(width: 70)
+                        .frame(width: 140)
                         .onChange(of: newGroupMB) { v in
                             let filtered = v.filter { $0.isNumber }
                             if filtered != v { newGroupMB = filtered }
                         }
-                    Text("MB/s").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
                     Button("添加分组") {
                         model.addGroup(name: newGroupName, upLimitMB: Int(newGroupMB) ?? 0)
                         newGroupName = ""
                         newGroupMB = ""
                     }
                     .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Spacer()
+                    Button {
+                        showAddSites = true
+                    } label: {
+                        Label("添加站点", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-            } header: {
-                Text("目标站分组（带宽）")
+                Text("站点按分组区块显示；「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并批量勾选（可指定加入分组）。关闭站点开关后，该站不参与转种 / cookie 检测 / 同步。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.config.groups.indices, id: \.self) { gi in
+                Section {
+                    HStack(spacing: 8) {
+                        TextField("分组名", text: groupNameBinding(gi))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 140)
+                        IntLimitField(initial: model.config.groups[gi].upLimitMB) { mb in
+                            model.config.groups[gi].upLimitMB = max(0, mb ?? 0)
+                            model.saveConfig()
+                        }
+                        .frame(width: 70)
+                        Text("MB/s 带宽上限").font(.caption).foregroundStyle(.secondary)
+                        Text("\(model.groupMembers(gi).count) 站").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button(role: .destructive) { model.removeGroup(at: gi) } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("删除分组（组内站点移到无分组）")
+                    }
+                    ForEach(model.groupMembers(gi), id: \.id) { s in
+                        siteRow(s)
+                    }
+                    if model.groupMembers(gi).isEmpty {
+                        Text("该分组还没有站点：「添加站点」时选择此分组，或在站点行右侧改分组。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("分组：\(model.config.groups[gi].name)")
+                }
+            }
+            if !model.unassignedManagedSites.isEmpty {
+                Section("无分组") {
+                    ForEach(model.unassignedManagedSites, id: \.id) { s in
+                        siteRow(s)
+                    }
+                }
+            }
+            if model.managedSites.isEmpty {
+                Section {
+                    Text("还没有添加站点：点上方「添加站点」批量选择。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section {
                 HStack {
@@ -269,7 +345,62 @@ struct SitesView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showAddSites) { AddSitesSheet() }
         .onAppear { model.autoCheckSites() }
+    }
+
+    /// 站点行：开关 / cookie 状态 / 检测 / 排序 / 分组 / 限速 / 移除
+    private func siteRow(_ s: SiteConfig) -> some View {
+        let pos = model.managedSitePosition(s.id)
+        return HStack(spacing: 8) {
+            Toggle("", isOn: enabledBinding(s.id))
+                .labelsHidden()
+                .help(s.enabled ? "已开启：参与转种目标 / cookie 检测 / 同步" : "未开启：不参与转种 / 检测 / 同步")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(s.name).fontWeight(.medium)
+                    .foregroundStyle(s.enabled ? Color.primary : Color.secondary)
+                Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            cookieStatusView(for: s)
+            Spacer()
+            Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
+                model.checkCookie(siteID: s.id)
+            }
+            .font(.caption)
+            .frame(width: 40)
+            VStack(spacing: 0) {
+                Button { model.moveManagedSite(s.id, delta: -1) } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.borderless)
+                .disabled(pos.index <= 0)
+                Button { model.moveManagedSite(s.id, delta: 1) } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.borderless)
+                .disabled(pos.index >= pos.count - 1)
+            }
+            .font(.caption2)
+            .frame(width: 18)
+            Picker("分组", selection: groupBinding(s.id)) {
+                Text("无分组").tag(-1)
+                ForEach(model.config.groups.indices, id: \.self) { i in
+                    Text(model.config.groups[i].name).tag(i)
+                }
+            }
+            .frame(maxWidth: 110)
+            IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0) { mb in
+                model.setSiteUpLimitMBInt(mb, siteID: s.id)
+                model.saveConfig()
+            }
+            .frame(width: 70)
+            Text("MB/s").font(.caption).foregroundStyle(.secondary)
+            Button { model.removeManagedSite(s.id) } label: {
+                Image(systemName: "xmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .help("从站点列表移除（保留 cookie 与配置）")
+        }
     }
 
     /// 行内 cookie 状态：未开启 / 无 cookie / 检测中 / 未检测 / 已登录 / 失效
@@ -300,9 +431,80 @@ struct SitesView: View {
         Binding(get: { model.groupIndex(of: id) },
                 set: { model.setGroup(index: $0, for: id) })
     }
+
     private func groupNameBinding(_ idx: Int) -> Binding<String> {
         Binding(get: { model.config.groups[idx].name },
                 set: { model.config.groups[idx].name = $0; model.saveConfig() })
+    }
+}
+
+/// 批量添加站点：搜索内置名录 + 多选 + 指定分组
+struct AddSitesSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var selection = Set<String>()
+    @State private var targetGroup = -1
+
+    private var candidates: [SiteConfig] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return model.config.sourceSites.filter { s in
+            !s.managed && (q.isEmpty
+                || s.name.localizedCaseInsensitiveContains(q)
+                || s.id.localizedCaseInsensitiveContains(q)
+                || s.url.localizedCaseInsensitiveContains(q))
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("批量添加站点").font(.headline)
+                Spacer()
+                Text("已选 \(selection.count)").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("搜索站名 / id / 地址", text: $query)
+                }
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 260)
+                Picker("加入分组", selection: $targetGroup) {
+                    Text("无分组").tag(-1)
+                    ForEach(model.config.groups.indices, id: \.self) { i in
+                        Text(model.config.groups[i].name).tag(i)
+                    }
+                }
+                .frame(maxWidth: 150)
+                Spacer()
+            }
+            List(selection: $selection) {
+                ForEach(candidates, id: \.id) { s in
+                    HStack(spacing: 8) {
+                        Text(s.name).fontWeight(.medium)
+                        Text(s.id).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(s.framework.rawValue).font(.caption).foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            HStack {
+                Text("添加后默认开启；在「运行」页按分组选择参与转种。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("添加 \(selection.count) 个站点") {
+                    model.addManagedSites(Array(selection), group: targetGroup)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selection.isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 540, height: 500)
     }
 }
 

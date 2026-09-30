@@ -22,8 +22,39 @@ public struct SiteConfig: Codable {
     public var url: String            // 结尾带 /
     public var framework: SiteFramework
     public var enabled: Bool
+    /// 用户已添加：「站点」页只展示已添加的站点（按分组区块显示）；
+    /// 未添加的站点只存在于内置名录，可通过「添加站点」批量加入
+    public var managed: Bool
     /// 详情/列表/搜索入口覆盖（M1 主要靠 NexusPHP 默认值 + 这里微调）
     public var overrides: SiteOverride?
+
+    public init(id: String, name: String, url: String, framework: SiteFramework,
+                enabled: Bool, managed: Bool = false, overrides: SiteOverride? = nil) {
+        self.id = id
+        self.name = name
+        self.url = url
+        self.framework = framework
+        self.enabled = enabled
+        self.managed = managed
+        self.overrides = overrides
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        url = try c.decode(String.self, forKey: .url)
+        framework = try c.decode(SiteFramework.self, forKey: .framework)
+        let enabledVal = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        enabled = enabledVal
+        // 旧配置无 managed 字段：已启用的站视为已添加（9 个优先站默认进列表）
+        managed = try c.decodeIfPresent(Bool.self, forKey: .managed) ?? enabledVal
+        overrides = try c.decodeIfPresent(SiteOverride.self, forKey: .overrides)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, url, framework, enabled, managed, overrides
+    }
 }
 
 /// 每站覆盖配置：把框架通用行为收敛到站点差异。
@@ -404,7 +435,11 @@ public struct AppConfig: Codable {
         let existing = Set(sourceSites.map(\.id))
         let added = SiteRegistry.prioritySites.filter { !existing.contains($0.id) }
         guard renamed || !added.isEmpty else { return self }
-        cfg.sourceSites += added
+        cfg.sourceSites += added.map { s in
+            var s = s
+            s.managed = s.enabled   // 优先站并入时默认已添加，其余站待用户批量添加
+            return s
+        }
         return cfg
     }
 
@@ -412,7 +447,11 @@ public struct AppConfig: Codable {
         // 模板由 Config/boxsend.json 承担，这里给最小可运行值
         AppConfig(
             dataDir: ".boxsend",
-            sourceSites: SiteRegistry.prioritySites,
+            sourceSites: SiteRegistry.prioritySites.map { s in
+                var s = s
+                s.managed = s.enabled   // 默认启用的优先站视为已添加
+                return s
+            },
             targetSites: ["luckpt", "hdsky", "chdbits", "hdhome", "cmct", "audiences", "ttg", "pter"],
             downloader: DownloaderConfig(
                 type: .qbittorrent, url: "http://127.0.0.1:8080",

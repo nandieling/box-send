@@ -19,6 +19,10 @@ final class AppModel: ObservableObject {
     @Published var gistAuto: Bool = false
 
     // MARK: 运行
+    public struct TargetEvent: Equatable {
+        public var text: String
+        public var ok: Bool?    // nil = 进行中
+    }
     @Published var detailURL: String = ""
     @Published var selectedTargets: Set<String> = []
     @Published var doReseed = true
@@ -26,6 +30,10 @@ final class AppModel: ObservableObject {
     @Published var running = false
     @Published var runningStep = ""
     @Published var lastReport: String = ""
+    /// 逐站实时状态（运行页卡片显示）：siteID -> 转种状态 / 该站种子推送状态 / 源站推送状态
+    @Published var reseedEvents: [String: TargetEvent] = [:]
+    @Published var pushEvents: [String: TargetEvent] = [:]
+    @Published var sourcePushEvent: TargetEvent? = nil
 
     // MARK: RSS 自动转种
     @Published var rssAuto = false
@@ -226,7 +234,10 @@ final class AppModel: ObservableObject {
         cookies.importRawString(host: host, text)
         // 添加 cookie 即视为使用该站：启用并加入转种目标（未勾选项下次运行前仍可取消）
         var cfg = config
-        if let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) { cfg.sourceSites[i].enabled = true }
+        if let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) {
+            cfg.sourceSites[i].enabled = true
+            cfg.sourceSites[i].managed = true
+        }
         if !cfg.targetSites.contains(siteID) { cfg.targetSites.append(siteID) }
         config = cfg
         selectedTargets.insert(siteID)
@@ -256,7 +267,7 @@ final class AppModel: ObservableObject {
         cookieMessage = "已删除 \(site.name)（\(host)）的 cookie"
     }
 
-    // MARK: 站点开关 / 排序
+    // MARK: 站点开关 / 排序 / 添加
 
     /// 开启/停用站点：停用的站不参与转种目标、cookie 检测与同步
     func setSiteEnabled(siteID: String, _ on: Bool) {
@@ -269,18 +280,89 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
-    /// 手动排序：站点列表上下移
-    func moveSite(siteID: String, delta: Int) {
-        guard let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
-        let j = i + delta
-        guard config.sourceSites.indices.contains(j) else { return }
-        let site = config.sourceSites.remove(at: i)
-        config.sourceSites.insert(site, at: j)
+    /// 用户已添加的站点（「站点」页展示；未添加的站只在内置名录中）
+    var managedSites: [SiteConfig] { config.sourceSites.filter { $0.managed } }
+
+    /// 未分组的已添加站点
+    var unassignedManagedSites: [SiteConfig] {
+        managedSites.filter { groupIndex(of: $0.id) < 0 }
+    }
+
+    /// 分组的已添加站点（按 group.sites 顺序）；gi = -1 返回未分组
+    func groupMembers(_ gi: Int) -> [SiteConfig] {
+        if gi < 0 { return unassignedManagedSites }
+        guard config.groups.indices.contains(gi) else { return [] }
+        return config.groups[gi].sites.compactMap { id in
+            config.sourceSites.first { $0.id == id && $0.managed }
+        }
+    }
+
+    /// 批量添加内置站点到指定分组（gi = -1 不分组）；添加即默认开启
+    func addManagedSites(_ ids: [String], group gi: Int) {
+        guard !ids.isEmpty else { return }
+        var changed = false
+        config.sourceSites = config.sourceSites.map { site in
+            var site = site
+            if ids.contains(site.id) {
+                site.managed = true
+                site.enabled = true
+                changed = true
+            }
+            return site
+        }
+        if gi >= 0, config.groups.indices.contains(gi) {
+            for other in config.groups.indices where other != gi {
+                config.groups[other].sites.removeAll { ids.contains($0) }
+            }
+            for id in ids where !config.groups[gi].sites.contains(id) {
+                config.groups[gi].sites.append(id)
+            }
+        }
+        guard changed else { return }
         saveConfig()
     }
 
-    func siteIndex(_ id: String) -> Int {
-        config.sourceSites.firstIndex { $0.id == id } ?? -1
+    /// 从站点列表移除（保留 cookie 与启用状态，之后可再次添加）
+    func removeManagedSite(_ id: String) {
+        guard let i = config.sourceSites.firstIndex(where: { $0.id == id }) else { return }
+        config.sourceSites[i].managed = false
+        for g in config.groups.indices { config.groups[g].sites.removeAll { $0 == id } }
+        selectedTargets.remove(id)
+        saveConfig()
+    }
+
+    /// 手动排序：所在区块（分组内 / 未分组）上下移
+    func moveManagedSite(_ siteID: String, delta: Int) {
+        let gi = groupIndex(of: siteID)
+        if gi >= 0 {
+            let sites = config.groups[gi].sites
+            guard let i = sites.firstIndex(of: siteID) else { return }
+            let j = i + delta
+            guard sites.indices.contains(j) else { return }
+            config.groups[gi].sites.swapAt(i, j)
+        } else {
+            let order = unassignedManagedSites.map { s in s.id }
+            guard let k = order.firstIndex(of: siteID) else { return }
+            let kk = k + delta
+            guard order.indices.contains(kk) else { return }
+            let idA = config.sourceSites.firstIndex { $0.id == siteID }
+            let idB = config.sourceSites.firstIndex { $0.id == order[kk] }
+            if let a = idA, let b = idB { config.sourceSites.swapAt(a, b) }
+        }
+        saveConfig()
+    }
+
+    /// 区块内位置（上下按钮禁用判断）
+    func managedSitePosition(_ siteID: String) -> (index: Int, count: Int) {
+        let gi = groupIndex(of: siteID)
+        if gi >= 0 {
+            let sites = config.groups[gi].sites
+            if let i = sites.firstIndex(of: siteID) { return (i, sites.count) }
+        } else {
+            let order = unassignedManagedSites.map { s in s.id }
+            if let k = order.firstIndex(of: siteID) { return (k, order.count) }
+        }
+        return (-1, 0)
     }
 
     /// 站点列表自动检测：已启用且有 cookie、尚未检测的站分批（每批 4 个并发）检测
@@ -601,6 +683,9 @@ final class AppModel: ObservableObject {
         let cookieJar = cookies
         let st = state
         let doR = doReseed, doP = doPush
+        reseedEvents = [:]
+        pushEvents = [:]
+        sourcePushEvent = nil
         Task.detached {
             let pipeline = ReseedPipeline(config: cfg, cookies: cookieJar, state: st,
                                           downloader: DownloaderFactory.make(cfg,
@@ -609,6 +694,21 @@ final class AppModel: ObservableObject {
             o.skipReseed = !doR
             o.skipPush = !doP
             o.targets = targets.isEmpty ? nil : targets
+            o.onSiteEvent = { [weak self] siteID, text, ok in
+                Task { @MainActor in
+                    self?.reseedEvents[siteID] = TargetEvent(text: text, ok: ok)
+                }
+            }
+            o.onSitePush = { [weak self] siteID, text, ok in
+                Task { @MainActor in
+                    self?.pushEvents[siteID] = TargetEvent(text: text, ok: ok)
+                }
+            }
+            o.onSourcePush = { [weak self] text, ok in
+                Task { @MainActor in
+                    self?.sourcePushEvent = TargetEvent(text: text, ok: ok)
+                }
+            }
             let reportText: String
             do {
                 let report = try pipeline.run(detailURL: url, sourceSiteID: nil, opts: o)
