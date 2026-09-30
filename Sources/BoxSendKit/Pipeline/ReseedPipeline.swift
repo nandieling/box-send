@@ -194,7 +194,7 @@ public final class ReseedPipeline {
             }
         }
 
-        // 5. 推下载器（站点限速 + 分组带宽上限）
+        // 5. 推下载器（站点限速，以「站点分组」页为准）
         let upLimit = config.effectiveUpLimit(siteID: release.siteID)
         report.upLimit = upLimit
         let reseedOk = report.outcomes.allSatisfy { $0.ok } || report.outcomes.isEmpty

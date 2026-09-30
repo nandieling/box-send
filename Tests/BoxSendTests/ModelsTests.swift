@@ -148,7 +148,7 @@ final class ModelsTests: XCTestCase {
         XCTAssertNil(cfg.webToken)
     }
 
-    func testGroupEffectiveUpLimit() {
+    func testEffectiveUpLimitSiteAuthoritative() {
         let dl = DownloaderConfig(type: .qbittorrent, url: "u", username: "", password: "",
                                   savePath: nil, category: nil, skipChecking: true,
                                   defaultUpLimit: 0,
@@ -158,13 +158,13 @@ final class ModelsTests: XCTestCase {
         let g2 = GroupConfig(name: "g2", sites: ["d"], upLimitMB: 0)
         let cfg = AppConfig(dataDir: "d", sourceSites: [], targetSites: [], downloader: dl,
                             gistSync: nil, userAgent: "ua", webToken: nil, groups: [g1, g2])
-        // 仅站点限速
+        // 站点限速（以「站点分组」页为准）
         XCTAssertEqual(cfg.effectiveUpLimit(siteID: "a"), 5 * 1_048_576)
-        // 仅分组上限
-        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "b"), 2 * 1_048_576)
-        // 两者取小
-        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "c"), 2 * 1_048_576)
-        // 站点与分组都未设 = 不限
+        // 站点未设 = 不限（分组 upLimitMB 不再参与限速）
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "b"), 0)
+        // 站点已设 = 按站点值（不被分组 upLimitMB 截断）
+        XCTAssertEqual(cfg.effectiveUpLimit(siteID: "c"), 5 * 1_048_576)
+        // 未设 = 不限
         XCTAssertEqual(cfg.effectiveUpLimit(siteID: "d"), 0)
     }
 

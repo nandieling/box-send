@@ -151,9 +151,6 @@ struct RunView: View {
                     .help("整组选中 / 取消")
                 Text(g.name).fontWeight(.semibold)
                 Text("\(members.count) 站").font(.caption).foregroundStyle(.secondary)
-                if gi >= 0, g.upLimitMB > 0 {
-                    Text("带宽上限 \(g.upLimitMB) MB/s").font(.caption).foregroundStyle(.secondary)
-                }
                 Spacer()
                 if model.running {
                     ProgressView().controlSize(.small)
@@ -273,9 +270,11 @@ extension SiteConfig: Identifiable {}
 struct SitesView: View {
     @EnvironmentObject var model: AppModel
     @State private var newGroupName = ""
-    @State private var newGroupMB = ""
+    @State private var newGroupMB = "10"
     @State private var showAddSites = false
     @State private var manualCookieSite: SiteConfig?
+    @State private var draggingGroup: String?
+    @State private var groupSortNum: [String: String] = [:]
 
     private let cardColumns = [GridItem(.adaptive(minimum: 260), spacing: 12)]
 
@@ -283,14 +282,15 @@ struct SitesView: View {
         Form {
             Section("添加分组和站点") {
                 HStack(spacing: 8) {
-                    TextField("分组名", text: $newGroupName)
+                    TextField("分组名", text: $newGroupName, prompt: Text("分组名"))
                         .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 140)
+                        .multilineTextAlignment(.leading)
+                        .frame(width: 140)
+                    Spacer(minLength: 20)
                     Text("上传限速").foregroundStyle(.secondary)
-                    TextField("", text: $newGroupMB)
+                    TextField("", text: $newGroupMB, prompt: Text("10"))
                         .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.center)
+                        .multilineTextAlignment(.leading)
                         .frame(width: 90)
                         .onChange(of: newGroupMB) { v in
                             let filtered = v.filter { $0.isNumber }
@@ -300,7 +300,7 @@ struct SitesView: View {
                     Button("添加分组") {
                         model.addGroup(name: newGroupName, upLimitMB: Int(newGroupMB) ?? 10)
                         newGroupName = ""
-                        newGroupMB = ""
+                        newGroupMB = "10"
                     }
                     .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
                     Button {
@@ -311,33 +311,63 @@ struct SitesView: View {
                     .buttonStyle(.borderedProminent)
                     Spacer()
                 }
-                Text("站点按分组区块以卡片显示；「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并批量勾选（可指定加入分组，默认上传限速 10 MB/s）。关闭站点开关后，该站不参与转种 / cookie 检测 / 同步。")
+                Text("站点按分组区块以卡片显示；「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并打勾添加（卡片可拖拽或按序号排序，可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。关闭站点开关后，该站不参与转种 / cookie 检测 / 同步。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(model.config.groups.indices, id: \.self) { gi in
+                let gname = model.config.groups[gi].name
                 Section {
-                    HStack(spacing: 8) {
-                        Text("\(model.groupMembers(gi).count) 站").font(.caption).foregroundStyle(.secondary)
-                        Button(model.groupChecking(gi) ? "检测中…" : "检测 Cookie") {
-                            model.checkGroupCookies(gi)
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "line.3.horizontal")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 14, height: 18)
+                                .onDrag {
+                                    draggingGroup = gname
+                                    return NSItemProvider(object: gname as NSString)
+                                }
+                                .help("按住拖拽可调整分组顺序")
+                            Text("\(model.groupMembers(gi).count) 站").font(.caption).foregroundStyle(.secondary)
+                            Button(model.groupChecking(gi) ? "检测中…" : "检测 Cookie") {
+                                model.checkGroupCookies(gi)
+                            }
+                            .font(.caption)
+                            .disabled(model.groupChecking(gi))
+                            .help("批量检测该分组所有已开启站点的 cookie 有效性")
+                            Button("同步 Gist") {
+                                model.gistSyncNow { model.checkGroupCookies(gi) }
+                            }
+                            .font(.caption)
+                            .help("通过 Gist 批量同步所有站点 cookie，完成后重检该分组")
+                            HStack(spacing: 4) {
+                                Text("序").font(.caption).foregroundStyle(.secondary)
+                                TextField("", text: groupNumBinding(gname))
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 40)
+                                    .multilineTextAlignment(.center)
+                                    .font(.caption)
+                                    .onSubmit { applyGroupSort() }
+                            }
+                            .help("输入排序序号，回车或点「按序号排序」调整分组顺序")
+                            Button("按序号排序") { applyGroupSort() }
+                                .font(.caption)
+                            Spacer()
+                            Button(role: .destructive) { model.removeGroup(at: gi) } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("删除分组（组内站点移到无分组）")
                         }
-                        .font(.caption)
-                        .disabled(model.groupChecking(gi))
-                        .help("批量检测该分组所有已开启站点的 cookie 有效性")
-                        Spacer()
-                        Button(role: .destructive) { model.removeGroup(at: gi) } label: {
-                            Image(systemName: "trash")
+                        siteCardGrid(model.groupMembers(gi))
+                        if model.groupMembers(gi).isEmpty {
+                            Text("该分组还没有站点：「添加站点」时选择此分组。")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.borderless)
-                        .help("删除分组（组内站点移到无分组）")
                     }
-                    siteCardGrid(model.groupMembers(gi))
-                    if model.groupMembers(gi).isEmpty {
-                        Text("该分组还没有站点：「添加站点」时选择此分组。")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    .onDrop(of: [.text], delegate: GroupReorderDrop(target: gname, dragging: $draggingGroup,
+                        onMove: { from, to in model.moveGroup(named: from, before: to) }))
                 } header: {
-                    Text("分组：\(model.config.groups[gi].name)")
+                    Text("分组：\(gname)")
                 }
             }
             if !model.unassignedManagedSites.isEmpty {
@@ -350,6 +380,11 @@ struct SitesView: View {
                         .font(.caption)
                         .disabled(model.groupChecking(-1))
                         .help("批量检测无分组所有已开启站点的 cookie 有效性")
+                        Button("同步 Gist") {
+                            model.gistSyncNow { model.checkGroupCookies(-1) }
+                        }
+                        .font(.caption)
+                        .help("通过 Gist 批量同步所有站点 cookie，完成后重检无分组站点")
                         Spacer()
                     }
                     siteCardGrid(model.unassignedManagedSites)
@@ -362,18 +397,11 @@ struct SitesView: View {
                 }
             }
             Section {
-                HStack {
-                    IntLimitField(initial: Int((Double(model.config.downloader.defaultUpLimit) / 1048576.0).rounded()), center: true) { mb in
-                        model.config.downloader.defaultUpLimit = Int64(mb ?? 0) * 1_048_576
-                        model.saveConfig()
-                    }
-                    .frame(width: 90)
-                    Text("MB/s — 默认上传限速（未单独设置的站点）").foregroundStyle(.secondary)
-                }
                 Picker("推送策略", selection: $model.config.downloader.pushPolicy) {
                     Text("总是推送（转种失败也推）").tag(PushPolicy.always)
                     Text("仅全部转种成功时推送").tag(PushPolicy.onSuccess)
                 }
+                .help("推送策略：「总是推送」= 无论目标站转种是否成功，都把该种子推送到 VPS 下载器；「仅全部转种成功时推送」= 全部目标站转种成功才推送，任一失败则本次跳过推送")
             } header: {
                 Text("全局")
             }
@@ -416,10 +444,8 @@ struct SitesView: View {
             cookieStatusView(for: s)
             if let r = model.siteCheckResults[s.id], !r.ok {
                 HStack(spacing: 8) {
-                    Text("cookie 失效：同步 Gist 或手动添加")
+                    Text("cookie 失效：用上方「同步 Gist」或手动添加")
                         .font(.caption).foregroundStyle(.orange)
-                    Button("同步 Gist") { model.gistSyncNow() }
-                        .font(.caption).buttonStyle(.bordered).controlSize(.small)
                     Button("手动添加") { manualCookieSite = s }
                         .font(.caption).buttonStyle(.bordered).controlSize(.small)
                 }
@@ -467,23 +493,68 @@ struct SitesView: View {
         Binding(get: { model.config.sourceSites.first { $0.id == id }?.enabled ?? false },
                 set: { model.setSiteEnabled(siteID: id, $0) })
     }
+
+    private func groupNumBinding(_ name: String) -> Binding<String> {
+        Binding(get: { groupSortNum[name] ?? "" },
+                set: { groupSortNum[name] = $0.filter { $0.isNumber } })
+    }
+
+    private func applyGroupSort() {
+        var nums: [String: Int] = [:]
+        for (k, v) in groupSortNum { if let n = Int(v), n > 0 { nums[k] = n } }
+        guard !nums.isEmpty else { return }
+        model.sortGroups(by: nums)
+    }
 }
 
-/// 批量添加站点：搜索内置名录 + 多选 + 指定分组
+/// 分组区块拖拽排序（拖拽把手 -> 目标分组区块）
+final class GroupReorderDrop: DropDelegate {
+    let target: String
+    @Binding var dragging: String?
+    let onMove: (String, String) -> Void
+
+    init(target: String, dragging: Binding<String?>, onMove: @escaping (String, String) -> Void) {
+        self.target = target
+        self._dragging = dragging
+        self.onMove = onMove
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let d = dragging, d != target else { return }
+        withAnimation { onMove(d, target) }
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { dragging = nil; return true }
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+}
+
+/// 批量添加站点：卡片网格（只显示站名）+ 打勾添加 + 拖拽/序号排序
 struct AddSitesSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
-    @State private var selection = Set<String>()
+    @State private var checked = Set<String>()
     @State private var targetGroup = -1
+    @State private var order: [String] = []
+    @State private var sortNum: [String: String] = [:]
+    @State private var dragging: String?
 
-    private var candidates: [SiteConfig] {
+    private let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
+
+    private var allCandidateIDs: [String] {
+        model.config.sourceSites.filter { !$0.managed }.map { $0.id }
+    }
+
+    private var displayIDs: [String] {
+        let valid = Set(allCandidateIDs)
         let q = query.trimmingCharacters(in: .whitespaces)
-        return model.config.sourceSites.filter { s in
-            !s.managed && (q.isEmpty
-                || s.name.localizedCaseInsensitiveContains(q)
+        return order.filter { id in
+            guard valid.contains(id) else { return false }
+            if q.isEmpty { return true }
+            guard let s = model.config.sourceSites.first(where: { $0.id == id }) else { return false }
+            return s.name.localizedCaseInsensitiveContains(q)
                 || s.id.localizedCaseInsensitiveContains(q)
-                || s.url.localizedCaseInsensitiveContains(q))
+                || s.url.localizedCaseInsensitiveContains(q)
         }
     }
 
@@ -492,7 +563,7 @@ struct AddSitesSheet: View {
             HStack {
                 Text("批量添加站点").font(.headline)
                 Spacer()
-                Text("已选 \(selection.count)").font(.caption).foregroundStyle(.secondary)
+                Text("已勾选 \(checked.count)").font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
@@ -500,43 +571,140 @@ struct AddSitesSheet: View {
                     TextField("搜索站名 / id / 地址", text: $query)
                 }
                 .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 260)
+                .frame(maxWidth: 220)
                 Picker("加入分组", selection: $targetGroup) {
                     Text("无分组").tag(-1)
                     ForEach(model.config.groups.indices, id: \.self) { i in
                         Text(model.config.groups[i].name).tag(i)
                     }
                 }
-                .frame(maxWidth: 150)
+                .frame(maxWidth: 140)
+                Button("按序号排序") { applySortNumbers() }
+                    .font(.caption)
+                    .help("按输入的序号重排卡片；未填序号的保持相对顺序")
                 Spacer()
             }
-            List(selection: $selection) {
-                ForEach(candidates, id: \.id) { s in
-                    HStack(spacing: 8) {
-                        Text(s.name).fontWeight(.medium)
-                        Text(s.id).font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Text(s.framework.rawValue).font(.caption).foregroundStyle(.tertiary)
+            ScrollView {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                    ForEach(displayIDs, id: \.self) { id in
+                        card(id)
                     }
                 }
+                .padding(2)
             }
             HStack {
-                Text("添加后默认开启（上传限速默认 10 MB/s）；在「批量转种」页按分组选择参与转种。")
+                Text("打勾要添加的站点；拖拽卡片右侧把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("添加 \(selection.count) 个站点") {
-                    model.addManagedSites(Array(selection), group: targetGroup)
+                Button("添加 \(checked.count) 个站点") {
+                    model.addManagedSites(displayIDs.filter { checked.contains($0) }, group: targetGroup)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(selection.isEmpty)
+                .disabled(checked.isEmpty)
             }
         }
         .padding()
-        .frame(width: 540, height: 500)
+        .frame(width: 640, height: 540)
+        .onAppear { order = allCandidateIDs }
     }
+
+    private func card(_ id: String) -> some View {
+        let s = model.config.sourceSites.first { $0.id == id }
+        return Group {
+            if let s {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Toggle("", isOn: checkBinding(id))
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                        Text(s.name).fontWeight(.medium).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12, height: 16)
+                            .onDrag {
+                                dragging = id
+                                return NSItemProvider(object: id as NSString)
+                            }
+                            .help("按住拖拽调整顺序")
+                    }
+                    HStack(spacing: 4) {
+                        Text("序").font(.caption).foregroundStyle(.secondary)
+                        TextField("", text: numBinding(id))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 46)
+                            .multilineTextAlignment(.center)
+                            .font(.caption)
+                    }
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(dragging == id ? Color.accentColor : Color(nsColor: .separatorColor),
+                                      lineWidth: dragging == id ? 2 : 1)
+                )
+            }
+        }
+        .opacity(dragging == id ? 0.4 : 1)
+        .onDrop(of: [.text], delegate: SiteReorderDrop(target: id, dragging: $dragging, order: $order))
+    }
+
+    private func checkBinding(_ id: String) -> Binding<Bool> {
+        Binding(get: { checked.contains(id) },
+                set: { on in
+                    if on { checked.insert(id) } else { checked.remove(id) }
+                })
+    }
+
+    private func numBinding(_ id: String) -> Binding<String> {
+        Binding(get: { sortNum[id] ?? "" },
+                set: { sortNum[id] = $0.filter { $0.isNumber } })
+    }
+
+    private func applySortNumbers() {
+        var nums: [String: Int] = [:]
+        for (k, v) in sortNum { if let n = Int(v), n > 0 { nums[k] = n } }
+        guard !nums.isEmpty else { return }
+        let indexed = order.enumerated().map { (offset: $0.offset, id: $0.element) }
+        let sorted = indexed.sorted { a, b in
+            let na = nums[a.id] ?? Int.max
+            let nb = nums[b.id] ?? Int.max
+            if na != nb { return na < nb }
+            return a.offset < b.offset
+        }
+        withAnimation { order = sorted.map { $0.id } }
+    }
+}
+
+/// 添加站点弹窗卡片拖拽排序
+final class SiteReorderDrop: DropDelegate {
+    let target: String
+    @Binding var dragging: String?
+    @Binding var order: [String]
+
+    init(target: String, dragging: Binding<String?>, order: Binding<[String]>) {
+        self.target = target
+        self._dragging = dragging
+        self._order = order
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let d = dragging, d != target,
+              let from = order.firstIndex(of: d),
+              let to = order.firstIndex(of: target) else { return }
+        withAnimation {
+            order.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { dragging = nil; return true }
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
 }
 
 /// 手动添加站点 cookie（卡片「手动添加」按钮弹出）

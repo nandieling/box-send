@@ -324,11 +324,11 @@ public struct GistSyncConfig: Codable {
     public static let empty = GistSyncConfig(gistID: "", token: "", encryptionKey: "", pollMinutes: 30)
 }
 
-/// 目标站分组：共用带宽上限（避免 VPS 上传带宽超限）
+/// 目标站分组：upLimitMB = 组内新增站点的默认上传限速（MB/s，0 = 用 10）
 public struct GroupConfig: Codable, Equatable {
     public var name: String
     public var sites: [String]     // 成员站点 id
-    public var upLimitMB: Int      // 分组带宽上限 MB/s，0 = 不限
+    public var upLimitMB: Int      // 新增站点默认上传限速 MB/s，0 = 用 10
 
     public init(name: String, sites: [String] = [], upLimitMB: Int = 0) {
         self.name = name
@@ -345,7 +345,7 @@ public struct AppConfig: Codable {
     public var gistSync: GistSyncConfig?
     public var userAgent: String
     public var webToken: String?        // web 控制台访问令牌，nil/空 = 不启用
-    public var groups: [GroupConfig]    // 目标站分组（限速/单日量上限）
+    public var groups: [GroupConfig]    // 目标站分组（upLimitMB = 新增站点默认上传限速）
     public var rss: RssConfig?          // RSS 自动转种
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
 
@@ -395,16 +395,9 @@ public struct AppConfig: Codable {
         groups.first { $0.sites.contains(siteID) }
     }
 
-    /// 实际生效的上传限速（bytes/s）：站点限速与所属分组带宽上限取小，0 = 不限
+    /// 实际生效的上传限速（bytes/s）：以「站点分组」页设置的站点限速为准，0 = 不限
     public func effectiveUpLimit(siteID: String) -> Int64 {
-        let siteLimit = downloader.upLimitFor(originSiteID: siteID)
-        let groupLimit = Int64(groupOf(siteID: siteID)?.upLimitMB ?? 0) * 1_048_576
-        switch (siteLimit, groupLimit) {
-        case (0, 0): return 0
-        case (0, _): return groupLimit
-        case (_, 0): return siteLimit
-        default: return min(siteLimit, groupLimit)
-        }
+        downloader.siteUpLimits[siteID] ?? 0
     }
 
     public static func load(path: String) -> AppConfig? {

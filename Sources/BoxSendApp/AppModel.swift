@@ -158,6 +158,28 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
+    /// 拖拽排序分组：把名为 dragged 的分组移到 target 之前
+    func moveGroup(named dragged: String, before target: String) {
+        guard dragged != target,
+              let from = config.groups.firstIndex(where: { $0.name == dragged }),
+              let to = config.groups.firstIndex(where: { $0.name == target }) else { return }
+        config.groups.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        saveConfig()
+    }
+
+    /// 按序号排序分组（未填序号的分组保持相对顺序）
+    func sortGroups(by nums: [String: Int]) {
+        let indexed = config.groups.enumerated().map { (offset: $0.offset, group: $0.element) }
+        let sorted = indexed.sorted { a, b in
+            let na = nums[a.group.name] ?? Int.max
+            let nb = nums[b.group.name] ?? Int.max
+            if na != nb { return na < nb }
+            return a.offset < b.offset
+        }
+        config.groups = sorted.map { $0.group }
+        saveConfig()
+    }
+
     func saveConfig() {
         do {
             var c = config
@@ -318,9 +340,11 @@ final class AppModel: ObservableObject {
                 config.groups[gi].sites.append(id)
             }
         }
-        // 添加的站点默认上传限速 10 MB/s（已有单独设置的保留）
+        // 新增站点默认限速：取所在分组的「上传限速」（未设 = 10 MB/s）；已有单独设置的保留
+        let defaultMB = (gi >= 0 && config.groups.indices.contains(gi) && config.groups[gi].upLimitMB > 0)
+            ? config.groups[gi].upLimitMB : 10
         for id in ids where config.downloader.siteUpLimits[id] == nil {
-            config.downloader.siteUpLimits[id] = 10 * 1_048_576
+            config.downloader.siteUpLimits[id] = Int64(defaultMB) * 1_048_576
         }
         guard changed else { return }
         saveConfig()
@@ -445,7 +469,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func gistSyncNow() {
+    func gistSyncNow(completion: (() -> Void)? = nil) {
         guard let g = config.gistSync, !g.gistID.isEmpty else {
             cookieMessage = "先在上方填写 Gist 配置（gistID + token + 备份密码）"
             return
@@ -459,6 +483,7 @@ final class AppModel: ObservableObject {
                 refreshCookieStats()
                 cookieMessage = "Gist 同步成功：\(r.cookieCount) 条 cookie（备份时间 \(r.backupTime)）" + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
                 lastGistSyncText = Self.dateText(state.lastGistSync ?? 0)
+                completion?()
             } catch {
                 cookieMessage = "Gist 同步失败：\(error.localizedDescription)"
             }
