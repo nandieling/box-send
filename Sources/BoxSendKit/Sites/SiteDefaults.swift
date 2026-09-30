@@ -170,6 +170,11 @@ extension SiteOverride {
         subtitleField: "small_descr"
     )
 
+    /// yemapt（YemaPT）：umi.js SPA + REST API；查重走 findImdbTorrentList（imdb 必填才生效）
+    static let yemapt = SiteOverride(
+        searchURL: "api/torrent/findImdbTorrentList?imdbId={imdb}"
+    )
+
     /// byr（BYR）：分类走 auto_feed 实测 type 表（电影408 剧集401 综艺405 音乐402 动漫404 纪录410）
     /// haidan（HAIDAN 海胆之家）：NexusPHP 后端，豆瓣字段 durl，tag_list[] 由动态标签匹配（3中字/4DIY/7原盘）
     static let haidan = SiteOverride(

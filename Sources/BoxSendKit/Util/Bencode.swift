@@ -57,6 +57,43 @@ public enum Bencode {
         return sha1Hex(Data(data[start..<end]))
     }
 
+    /// YemaPT piecesHash：info 字典内 `pieces` 整个 bencoded 值（含 `<len>:` 前缀）的 SHA-1，40 位 hex
+    public static func piecesHashHex(_ data: Data) -> String? {
+        var i = 0
+        guard i < data.count, data[i] == 0x64 else { return nil }   // 'd'
+        i += 1
+        while i < data.count {
+            if data[i] == 0x65 { break }
+            guard let (key, ni) = readString(at: i, data) else { return nil }
+            i = ni
+            if key == "info" {
+                guard i < data.count, data[i] == 0x64 else { return nil }
+                var j = i + 1
+                while j < data.count {
+                    if data[j] == 0x65 { break }
+                    guard let (k, nj) = readString(at: j, data) else { return nil }
+                    j = nj
+                    if k == "pieces" {
+                        // 值形如 <len>:<bytes>；站点 piecesHash = 整个 bencoded 值的 sha1
+                        var p = j
+                        while p < data.count, data[p] >= 0x30, data[p] <= 0x39 { p += 1 }
+                        guard p < data.count, p > j, data[p] == 0x3a else { return nil }
+                        guard let n = Int(String(bytes: data.subdata(in: j..<p), encoding: .ascii)!) else { return nil }
+                        let s = p + 1
+                        guard s + n <= data.count else { return nil }
+                        return sha1Hex(data.subdata(in: j..<(s + n)))
+                    }
+                    guard let nj2 = skipValue(at: j, data) else { return nil }
+                    j = nj2
+                }
+                return nil
+            }
+            guard let ni2 = skipValue(at: i, data) else { return nil }
+            i = ni2
+        }
+        return nil
+    }
+
     /// info 值在原始数据中的区间 [start, end)
     static func infoRange(_ data: Data) -> (Int, Int)? {
         var i = 0

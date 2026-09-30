@@ -11,6 +11,7 @@ public enum SiteFramework: String, Codable {
     case blu = "Blu"
     case tnode = "TNode"
     case haidan = "Haidan"
+    case yemapt = "YemaPT"
     case xbtit = "XBTIT"
     case custom = "custom"
 }
