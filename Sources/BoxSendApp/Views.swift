@@ -166,9 +166,20 @@ struct SitesView: View {
                         }
                         .frame(width: 70)
                         Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                        Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
+                            model.checkCookie(siteID: s.id)
+                        }
+                        .font(.caption)
+                        .frame(width: 40)
+                        if let r = model.siteCheckResults[s.id] {
+                            Text(r.ok ? "已登录" : "失效")
+                                .font(.caption)
+                                .foregroundStyle(r.ok ? Color.secondary : Color.red)
+                                .help(r.message)
+                        }
                     }
                 }
-                Text("限速 = 该站种子推送到下载器后的上传速度上限（整数 MB/s，空 = 不限速）；与所属分组的带宽上限取更严格者。")
+                Text("限速 = 该站种子推送到下载器后的上传速度上限（整数 MB/s，空 = 不限速）；与所属分组的带宽上限取更严格者。「检测」验证该站 cookie 是否仍登录。")
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
                 Text("站点（限速 / 分组）")
@@ -255,6 +266,8 @@ struct SitesView: View {
 
 struct CookiesView: View {
     @EnvironmentObject var model: AppModel
+    @State private var singleCookieSite = ""
+    @State private var singleCookieText = ""
     @State private var zipPassword = ""
 
     var body: some View {
@@ -296,6 +309,29 @@ struct CookiesView: View {
                 Button("清空本地 Cookie", role: .destructive) { model.clearCookies() }
             } header: {
                 Text("PT-depiler 本地备份")
+            }
+            Section {
+                Picker("站点", selection: $singleCookieSite) {
+                    ForEach(model.config.sourceSites, id: \.id) { site in
+                        Text("\(site.name)（\(model.siteHost(site))）").tag(site.id)
+                    }
+                }
+                TextField("name1=value1; name2=value2", text: $singleCookieText)
+                    .textFieldStyle(.roundedBorder)
+                HStack(spacing: 8) {
+                    Button("保存（覆盖该站）") {
+                        model.addSiteCookie(siteID: singleCookieSite, raw: singleCookieText)
+                        singleCookieText = ""
+                    }
+                    .disabled(singleCookieText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button("删除该站 Cookie", role: .destructive) {
+                        model.removeSiteCookies(siteID: singleCookieSite)
+                    }
+                }
+                Text("浏览器开发者工具复制单站 Cookie 头后粘贴；保存即覆盖该站本地已有 cookie，适合只更新一个站而不导出整包备份。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("单站 Cookie（手动添加）")
             }
             Section {
                 HStack {
@@ -349,6 +385,11 @@ struct CookiesView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            if singleCookieSite.isEmpty {
+                singleCookieSite = model.config.sourceSites.first?.id ?? ""
+            }
+        }
     }
 
     private func pickZip() {

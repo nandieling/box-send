@@ -204,6 +204,47 @@ final class AppModel: ObservableObject {
         cookieMessage = "已清空本地 cookie"
     }
 
+    // MARK: 单站 cookie（手动添加 / 删除）
+
+    func siteHost(_ site: SiteConfig) -> String {
+        (URL(string: site.url)?.host ?? site.url).lowercased()
+    }
+
+    func addSiteCookie(siteID: String, raw: String) {
+        guard let site = config.site(siteID) else {
+            cookieMessage = "未配置的站点 id: \(siteID)"
+            return
+        }
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            cookieMessage = "先粘贴该站的 cookie 内容"
+            return
+        }
+        let host = siteHost(site)
+        cookies.importRawString(host: host, text)
+        persistCookies()
+        refreshCookieStats()
+        let n = cookies.snapshot()[host]?.count ?? 0
+        state.note("cookies: 单站添加 \(site.id) -> \(n) 条")
+        cookieMessage = "已保存 \(site.name)（\(host)）\(n) 条 cookie，已覆盖该站原有 cookie"
+    }
+
+    func removeSiteCookies(siteID: String) {
+        guard let site = config.site(siteID) else {
+            cookieMessage = "未配置的站点 id: \(siteID)"
+            return
+        }
+        let host = siteHost(site)
+        guard cookies.removeHost(host) else {
+            cookieMessage = "\(site.name)（\(host)）本地还没有 cookie"
+            return
+        }
+        persistCookies()
+        refreshCookieStats()
+        state.note("cookies: 单站删除 \(site.id)")
+        cookieMessage = "已删除 \(site.name)（\(host)）的 cookie"
+    }
+
     private func persistCookies() {
         if let data = cookies.exportBackupJSON() {
             try? FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
@@ -308,6 +349,28 @@ final class AppModel: ObservableObject {
     // MARK: cookie 检测
     @Published var cookieChecking = false
     @Published var cookieCheckLines: [String] = []
+    public struct SiteCookieCheckResult: Equatable {
+        public var ok: Bool
+        public var message: String
+    }
+    /// 「站点与限速」页逐站检测的结果（siteID -> 结果）
+    @Published var siteCheckResults: [String: SiteCookieCheckResult] = [:]
+    @Published var siteChecking: Set<String> = []
+
+    func checkCookie(siteID: String) {
+        guard let site = config.site(siteID), !siteChecking.contains(siteID) else { return }
+        let cookieJar = cookies
+        let cfg = config
+        siteChecking.insert(siteID)
+        Task.detached {
+            let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
+            let r = CookieCheck.check(site: site, client: client)
+            await MainActor.run {
+                self.siteChecking.remove(siteID)
+                self.siteCheckResults[siteID] = SiteCookieCheckResult(ok: r.ok, message: r.message)
+            }
+        }
+    }
 
     func checkCookies() {
         guard !cookieChecking else { return }

@@ -294,11 +294,27 @@ final class SiteCoverageTests: XCTestCase {
         for id in ["blutopia", "monika", "hdspace", "opencd", "iptorrents", "byr", "shadow"] {
             XCTAssertTrue(ids.contains(id), "missing \(id)")
         }
+        // savept.icu 扩充的长尾站（部分抽查）
+        for id in ["azusa", "kamept", "musopia", "xdy", "ourbits", "gpw", "mteam",
+                   "milkie", "ptneko", "alpharatio", "animez", "sportscult",
+                   "hdtorrents", "beyondhd", "torrentleech", "sjtu"] {
+            XCTAssertTrue(ids.contains(id), "missing \(id)")
+        }
+        // 无重复 id
+        XCTAssertEqual(ids.count, sites.count)
         // 框架正确
         XCTAssertEqual(sites.first { $0.id == "blutopia" }?.framework, .blu)
         XCTAssertEqual(sites.first { $0.id == "hdspace" }?.framework, .gazelle)
         XCTAssertEqual(sites.first { $0.id == "shadow" }?.framework, .nexusPHP)
-        // 适配器可实例化（不崩）
+        XCTAssertEqual(sites.first { $0.id == "azusa" }?.framework, .nexusPHP)
+        XCTAssertEqual(sites.first { $0.id == "ourbits" }?.framework, .custom)
+        XCTAssertEqual(sites.first { $0.id == "mteam" }?.framework, .unit3D)
+        XCTAssertEqual(sites.first { $0.id == "hdtorrents" }?.framework, .xbtit)
+        XCTAssertEqual(sites.first { $0.id == "alpharatio" }?.framework, .gazelle)
+        // 域名迁移后的站点地址
+        XCTAssertEqual(sites.first { $0.id == "ziran" }?.url, "https://naturept.top/")
+        XCTAssertEqual(sites.first { $0.id == "gtk" }?.url, "https://pt.gtkpw.xyz/")
+        // 适配器可实例化（不崩；unit3D/custom 回退 NexusPHP 通用适配器）
         let c = HTTPClient(cookies: CookieStore(), userAgent: "t")
         for s in sites {
             _ = SiteRegistry.adapter(for: s, client: c)

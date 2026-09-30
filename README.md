@@ -22,7 +22,7 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 
 > 推送时**源站与每个目标站各自推送该站自己的 .torrent**：各站 .torrent 内嵌的 tracker 不同、info hash 通常也不同，在下载器中是相互独立的种子；每个 torrent 按**对应站点**的上传限速（站点/分组取更严格者）添加，避免某一站上传过快被盯上。
 
-### 支持站（内置 ~90 站，参照 auto_feed 站点清单，全部可作源站）
+### 支持站（内置 ~145 站，参照 auto_feed + savept.icu 存活清单，全部可作源站）
 
 - **9 个优先站**（默认启用，内置逐站实测的完整上传参数：分类/质量下拉/标签/制作组/搜索查重）：pt.luckpt.de、hdsky.me、ptchdbits.co、hdhome.org、springsunday.net（CMCT）、audiences.me、totheglory.im（TTG）、pterclub.net、hhanclub.net（仅作源站；一般用户无发种权限）。
 - **Blu 家族**（Layuout UI 适配器）：blutopia.cc、monikadesign.uk —— 详情页解析（标题/简介/MediaInfo/IMDb/种子直链）、上传自动填 category_id / type_id（媒介）/ resolution_id（分辨率）/ 季集数 / IMDb，值表为 2026-09-29 实测创建页选项。
@@ -40,7 +40,14 @@ PT 站批量转种 + 推送下载器（按源站点限速）。**主体是 macOS
 - **TNode（REST API + SPA，2026-09-30 实测）**：ZHUQUE（zhuque.in）—— 选项/详情/下载/搜索/发种全走 `/api/torrent/*` JSON API：分类（电影/剧集/动漫/节目/其它）、媒介（UHD Blu-ray / Remux / WEB-DL…）、编码（H264/H265/Other）、分辨率、标签（中字/禁转/杜比视界/HDR10/完结/分集）全部按 `/api/torrent/option` 返回的选项动态匹配；TMDB id 经 `/api/tmdb/findByImdb` 自动查询；截图从源站简介 `<img>` 提取；MediaInfo 填独立 `mediainfo` 字段；需 `x-csrf-token`（自动从页面 meta 提取）。源站解析（详情/下载/禁转标记）同样走 API。
 - **HAIDAN（海胆之家，2026-09-30 实测）**：NexusPHP 后端 + 自定义详情布局（`movie-content`）—— 详情解析走专属 `HaidanAdapter`（标题块/副标题/`#kdescr` 简介/MediaInfo fieldset/`download.php?id=&passkey=` 直链/豆瓣 `durl` 字段）；上传走经典表单（`takeupload.php`），分类（电影401/剧集402/综艺403/纪录404/动漫405/体育407/音乐408）动态匹配，`tag_list[]` 标签（3中字/4DIY/5国语/7原盘/10粤语/11外语）按标签文案动态勾选。
 - **YemaPT（umi.js SPA + REST API，2026-09-30 实测）**：www.yemapt.org —— 选项/详情/下载/查重/发种全走 `/api/torrent/*` JSON API：分类树（电影/剧集/综艺/动漫/纪录片/体育/短剧/MV）、媒介、分辨率、编码、音轨、地区多选（上限 3）、制作组、标签（禁转/中字/杜比视界/HDR10/Atmos/完结…）全部按 `/api/torrent/fetchUploadOptions` 返回的选项动态匹配；详情 longDesc 为 Markdown（与内部 HTML 简介双向转换：图片、链接转 `text (url)` 文本）；截图从源站简介 `<img>` 提取（补 `screenshotList`/`picture` 字段）；MediaInfo 填独立 `mediaInfo` 字段；剧集自动识别 `season`；匿名发种默认值跟随站点 `uploadConfig` 配置。查重双重兜底：`existTorrentWithPiecesHash`（piecesHash = pieces 整个 bencoded 值的 SHA-1）+ IMDb 可用时 `findImdbTorrentList` 名称查重。
-- **暂未适配（M3）**：OurBits / GPW（新版自研系统）、MTeam / PTP / HDB / BTN / CinemaZ 等（无账号 cookie 或表单为新版结构）。这些站可先在「运行」页作**源站**使用（源站解析走 NexusPHP 通用逻辑），作为转种目标待后续实测。
+- **长尾与海外站（参照 [savept.icu](https://savept.icu) 2026-09-30 存活清单新增 53 站，已死亡站不收录）**：
+  - 中文 NexusPHP（通用动态适配）：梓喵、海豚、Depth Studio、龟站、南洋、Kelu、PlayLet、大香蕉、朋友、我的PT、太乙、TU88、VC-Lib、忘年桥、肉丝、思齐、阳光、瞬间、音乐乌托邦、老师、Tokyo、修道院、星湾、HDCity、Generation-Free。
+  - Unit3D 家族（馒头 M-Team、奶昔 Milkie、超科学PT喵 PTNeko、Anthelion、BrokenStones、ExoticaZ、FileList、HappyFappy、Jpopsuki、Nebulance、Orpheus、峨眉派 Empornium）：暂走 NexusPHP 通用逻辑作源站，专属适配器见 M3。
+  - 经典 Gazelle 家族：AlphaRatio、AnimeZ、SportsCult；xbtit 家族：BeyondHD、ClearJAV、Fappaizuri、HUNO、HD-Torrents（走 Gazelle/xbtit 适配器）。
+  - 自研系统（Aither、BitPorn、海豹 GPW、LST、MyAnonamouse、我堡 OurBits、葡萄 SJTU、TorrentLeech）：走 NexusPHP 通用逻辑尽力而为，待实测。
+  - 新站上传表单/详情页**未逐站实测**，转种字段如有偏差请在「站点 overrides」补配置。
+  - 域名迁移（旧域名已失效）：自然 zrpt.cc → naturept.top、GTK pt.gtk.pw → pt.gtkpw.xyz。
+- **暂未适配（M3）**：PTP / HDB / BTN / CinemaZ 等新版 Unit3D 自研表单站（无账号 cookie 或未实测）。以上长尾站可作**源站**使用（按框架通用逻辑解析），作为转种目标待后续实测。
 
 ## 快速开始（Mac，约 5 分钟）
 
@@ -128,7 +135,8 @@ open dist/BoxSend.app
 
 - **运行**：粘贴详情页链接（一行说明 + 一行输入框）→ 勾选「转种到目标站」「推送到下载器」→ 勾选参与本次转种的目标站 → 「开始运行」。结果含每站转种状态 + 推送状态 + 生效的上传限速。转种成功的目标站会**自动拉取该站新种子的 .torrent 并单独推送到下载器**（按目标站限速），无需手动添加。
 - **站点与限速**：每个站一行，设置**该站种子的上传限速（整数 MB/s，空 = 不限速）**（推送到下载器时生效，避免上传速度过高被站管/带宽策略盯上）、并把它**加入分组**；**目标站分组**为组内站点提供共用带宽上限（整数 MB/s，空 = 不限），用于避免 VPS 上传带宽超限；生效限速 = 站点限速与分组带宽取更严格者；另有全局默认限速、推送策略（总是推 / 全部转种成功才推）。转种目标站在「运行」页勾选。
-- **Cookie**：Gist 同步（手动/自动，最上）→ PT-depiler 本地备份 zip 导入 → **备份目录监控**（填监控目录/备份密码/间隔，目录出现新 PTD_backup*.zip 自动导入）→ 已同步的 Cookie 详情（站点数/总数/站点列表 + 「检测登录状态」逐站探测 cookie 是否失效，最下）。
+- **Cookie**：Gist 同步（手动/自动，最上）→ PT-depiler 本地备份 zip 导入 → **单站 Cookie（手动添加）**：选站点 + 粘贴浏览器 Cookie 头（`k1=v1; k2=v2`），保存即覆盖该站本地 cookie，也可单站删除（只更新一个站时无需导出整包备份）→ **备份目录监控**（填监控目录/备份密码/间隔，目录出现新 PTD_backup*.zip 自动导入）→ 已同步的 Cookie 详情（站点数/总数/站点列表 + 「检测登录状态」整页探测，最下）。
+- **Cookie 有效性检测**：「站点与限速」页每行有「检测」按钮（单站异步检测，行内显示 已登录/失效 + 悬停详情）；Cookie 页「检测登录状态」整页批量检测。按框架分级判定：YemaPT 走 `fetchUploadOptions` API、TNode 走 `api/torrent/option`（401/403 或 success=false 判失效）、NexusPHP 家族首页标记探测 + `userdetails.php` 二次确认、其余首页探测。
 - **下载器**：qBittorrent/Transmission 参数 + 连接检测 + **大小检测**：填「VPS 剩余空间(GB)」与「安全边际(GB)」（默认 5），策略选「提醒」或「跳过」；种子大小超过剩余空间（含边际）时，提醒模式只提示、跳过模式直接不转种不推送。剩余空间请手动维护（qB 的 WebAPI 没有磁盘剩余接口）。
 - **RSS**：自动转种。给各源站填 RSS passkey（留空不参与）、设轮询间隔（分钟）、开「启用 RSS 自动转种」或点「立即轮询一次」；新种自动走完整流水线（查重 → 大小检测 → 转种 → 按站限速推送）。每个 RSS 条目按 guid/link 去重（每站记录 500 条），处理过的不会重复转种。
 - **日志**：最近 500 条运行日志（转种/推送/cookie 变更）。
@@ -151,7 +159,9 @@ box-send import-zip --file <PTD_backup_*.zip> [--password <备份密码>]   导�
 box-send gist-sync [--loop]    从 Gist 同步 cookie（--loop 常驻轮询）
 box-send rss-sync             轮询一次 RSS：自动转种 + 推下载器（需配置 rss）
 box-send import-watch         扫描备份目录，自动导入新 PTD_backup*.zip（需配置 zipWatch）
-box-send check-cookies [--site <id>]   检测各站 cookie 登录态
+box-send check-cookies [--site <id>]   检测各站 cookie 登录态（YemaPT/TNode 走 API 判定）
+box-send add-cookie --site <id> --cookie "k1=v1; k2=v2"   手动添加/覆盖单站 cookie
+box-send remove-cookie --site <id>     删除单站 cookie
 box-send test-downloader       测试下载器连接
 box-send serve [--port 8088] [--token xxx]   Web 控制台（可选，局域网访问用）
 box-send cookies / notes / template / list --site <id>
@@ -199,7 +209,7 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
 
 ## 测试
 
-`swift test`（87 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入、新版 NexusPHP 动态质量/标签/technical_info 填充（多 data-mode 下拉、ajax 子分类、年份兜底选编码）、TNode（ZHUQUE）真实 API 响应解析与字段映射（选项分组/详情/截图提取/分类媒介编码分辨率标签/TMDB）、HAIDAN 自定义详情布局解析与经典上传字段映射（tag_list 标签/豆瓣 durl）、YemaPT 真实 API 响应解析（详情/选项/IMDb 查重列表）与上传字段映射（分类树/媒介/分辨率/编码/音轨/地区/标签/季集/匿名）、Markdown 与 HTML 简介互转、piecesHash（bencoded pieces 值 SHA-1）。
+`swift test`（88 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入、新版 NexusPHP 动态质量/标签/technical_info 填充（多 data-mode 下拉、ajax 子分类、年份兜底选编码）、TNode（ZHUQUE）真实 API 响应解析与字段映射（选项分组/详情/截图提取/分类媒介编码分辨率标签/TMDB）、HAIDAN 自定义详情布局解析与经典上传字段映射（tag_list 标签/豆瓣 durl）、YemaPT 真实 API 响应解析（详情/选项/IMDb 查重列表）与上传字段映射（分类树/媒介/分辨率/编码/音轨/地区/标签/季集/匿名）、Markdown 与 HTML 简介互转、piecesHash（bencoded pieces 值 SHA-1）、savept 长尾 144 站注册表（框架映射/无重复 id/域名迁移）、cookie 单站导入覆盖与删除。
 
 ## 里程碑
 

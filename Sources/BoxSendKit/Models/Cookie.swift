@@ -148,6 +148,16 @@ public final class CookieStore {
         return h
     }
 
+    /// 移除某个 host 的全部 cookie（按归一化 host 匹配）
+    @discardableResult
+    public func removeHost(_ host: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let h = normalized(host)
+        guard let key = byHost.keys.first(where: { normalized($0) == h }) else { return false }
+        byHost.removeValue(forKey: key)
+        return true
+    }
+
     /// 清空全部 cookie
     public func clear() {
         lock.lock(); defer { lock.unlock() }

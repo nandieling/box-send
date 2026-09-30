@@ -78,7 +78,10 @@ do {
                                     Web 控制台：网页编辑 boxsend.json / 手动转种 / 同步
               test-downloader       测试下载器连接（登录检测）
               cookies               查看本地 cookie 状态
-              check-cookies [--site <id>]   检测各站 cookie 是否仍然登录
+              check-cookies [--site <id>]   检测各站 cookie 是否仍然登录（SPA 站走 API 判定）
+              add-cookie --site <id> --cookie "k1=v1; k2=v2"
+                                    手动添加/覆盖单个站点的 cookie（浏览器 Cookie 头原文）
+              remove-cookie --site <id>     删除单个站点的本地 cookie
               template              生成模板配置 Config/boxsend.json
               notes                 查看最近运行日志
 
@@ -240,6 +243,31 @@ do {
             print("\(r.ok ? "OK  " : "FAIL") [\(site.id)] \(r.message)")
         }
         if !any { die("没有可检测的站点 cookie（--site 或同步 cookie 后重试）") }
+
+    case "add-cookie":
+        let siteID = required("--site")
+        let raw = required("--cookie")
+        guard let site = config.site(siteID) else { die("配置里没有站点 id: \(siteID)（用 `box-send sites` 查看）") }
+        let host = (URL(string: site.url)?.host ?? site.url).lowercased()
+        cookies.importRawString(host: host, raw)
+        if let data = cookies.exportBackupJSON() {
+            try? data.write(to: localCookieFile, options: .atomic)
+        }
+        let n = cookies.snapshot()[host]?.count ?? 0
+        print("已保存 \(site.name)（\(host)）\(n) 条 cookie（覆盖该站旧值），写入 \(localCookieFile.path)")
+
+    case "remove-cookie":
+        let siteID = required("--site")
+        guard let site = config.site(siteID) else { die("配置里没有站点 id: \(siteID)") }
+        let host = (URL(string: site.url)?.host ?? site.url).lowercased()
+        if cookies.removeHost(host) {
+            if let data = cookies.exportBackupJSON() {
+                try? data.write(to: localCookieFile, options: .atomic)
+            }
+            print("已删除 \(site.name)（\(host)）的 cookie")
+        } else {
+            print("\(site.name)（\(host)）本地没有 cookie")
+        }
 
     case "notes":
         for n in state.recentNotes { print(n) }

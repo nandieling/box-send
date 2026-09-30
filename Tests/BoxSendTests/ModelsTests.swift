@@ -15,6 +15,24 @@ final class ModelsTests: XCTestCase {
         XCTAssertNil(store.cookieHeader(forHost: "other.org"))
     }
 
+    func testCookieStoreRawImportAndRemoveHost() {
+        let store = CookieStore()
+        store.importRawString(host: "example.org", "a=1; b=2")
+        store.importRawString(host: "other.org", "c=3")
+        XCTAssertEqual(store.hosts().count, 2)
+        // 同 host 再次导入 = 覆盖（单站添加语义）
+        store.importRawString(host: "example.org", "a=9")
+        XCTAssertEqual(store.snapshot()["example.org"]?.count, 1)
+        // 子域名命中父域 cookie
+        XCTAssertNotNil(store.cookieHeader(forHost: "sub.example.org"))
+        // 删除单站
+        XCTAssertTrue(store.removeHost("example.org"))
+        XCTAssertFalse(store.removeHost("example.org"))
+        XCTAssertEqual(store.hosts(), ["other.org"])
+        XCTAssertNil(store.cookieHeader(forHost: "example.org"))
+        XCTAssertNotNil(store.cookieHeader(forHost: "sub.other.org"))
+    }
+
     func testCookieStoreSetCookie() {
         let store = CookieStore()
         store.importSetCookie("SID=abcdef; path=/; HttpOnly", host: "127.0.0.1")

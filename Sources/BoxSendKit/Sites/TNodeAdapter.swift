@@ -31,7 +31,8 @@ final class TNodeAdapter: SiteAdapter {
         }
         csrfFetched = true
         let html = String(data: try client.get(site.url, referer: site.url).data, encoding: .utf8) ?? ""
-        guard let m = HTMLUtil.firstMatch(html, "name=[\"']x-csrf-token[\"']\\s+content=[\"']([^\"']+)[\"']") else {
+        // 取 content 捕获组（firstMatch 返回完整匹配串会带 name= 前缀，导致 API 400）
+        guard let m = HTMLUtil.group(html, "name=[\"']x-csrf-token[\"']\\s+content=[\"']([^\"']+)[\"']") else {
             throw BoxSendError.badInput("\(site.id) 页面缺少 x-csrf-token（cookie 失效或页面结构变化）")
         }
         csrfCache = m
