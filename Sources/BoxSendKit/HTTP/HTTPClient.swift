@@ -12,6 +12,8 @@ public final class HTTPClient {
     var followRedirects = true
     /// 调试时保留最后一段响应体
     var lastResponseBody = ""
+    /// 单测/调试用：注入的响应（跳过真实网络）
+    var performOverride: ((URLRequest) throws -> Response)?
     /// 自动把 Set-Cookie 存入 CookieStore（qBittorrent SID 等场景需要）
     var storeSetCookies = true
 
@@ -139,6 +141,7 @@ public final class HTTPClient {
     }
 
     private func perform(_ req: URLRequest) throws -> Response {
+        if let override = performOverride { return try override(req) }
         let sem = DispatchSemaphore(value: 0)
         var result: Result<Response, Error> = .failure(BoxSendError.badInput("no response"))
         let task = session.dataTask(with: req) { data, response, error in

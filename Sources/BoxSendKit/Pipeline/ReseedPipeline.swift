@@ -198,7 +198,8 @@ public final class ReseedPipeline {
         let upLimit = config.effectiveUpLimit(siteID: release.siteID)
         report.upLimit = upLimit
         let reseedOk = report.outcomes.allSatisfy { $0.ok } || report.outcomes.isEmpty
-        let shouldPush = !opts.skipPush && (config.downloader.pushPolicy == .always || reseedOk)
+        // 推送策略：转种成功才推送（全部成功才推；纯推送不转种时 outcomes 为空，照常推）
+        let shouldPush = !opts.skipPush && reseedOk
         if shouldPush {
             if state.isPushed(key: release.dedupKey) {
                 report.pushed = true

@@ -167,16 +167,46 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
-    /// 按序号排序分组（未填序号的分组保持相对顺序）
-    func sortGroups(by nums: [String: Int]) {
-        let indexed = config.groups.enumerated().map { (offset: $0.offset, group: $0.element) }
-        let sorted = indexed.sorted { a, b in
-            let na = nums[a.group.name] ?? Int.max
-            let nb = nums[b.group.name] ?? Int.max
-            if na != nb { return na < nb }
-            return a.offset < b.offset
+    /// 分组内站点排序：把 siteID 移到 targetID 之前（无分组时在 sourceSites 整体顺序中移动）
+    func moveSite(_ siteID: String, before targetID: String) {
+        guard siteID != targetID else { return }
+        let gi = groupIndex(of: siteID)
+        if gi >= 0 {
+            let sites = config.groups[gi].sites
+            guard let from = sites.firstIndex(of: siteID),
+                  let to = sites.firstIndex(of: targetID) else { return }
+            config.groups[gi].sites.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        } else {
+            let ids = config.sourceSites.map { $0.id }
+            guard let from = ids.firstIndex(of: siteID),
+                  let to = ids.firstIndex(of: targetID) else { return }
+            config.sourceSites.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         }
-        config.groups = sorted.map { $0.group }
+        saveConfig()
+    }
+
+    /// 按序号排序分组内站点卡片（gi = -1 为无分组区块）
+    func sortGroupSites(_ gi: Int, by nums: [String: Int]) {
+        func stableSorted(_ ids: [String]) -> [String] {
+            let indexed = ids.enumerated().map { (offset: $0.offset, id: $0.element) }
+            return indexed.sorted { a, b in
+                let na = nums[a.id] ?? Int.max
+                let nb = nums[b.id] ?? Int.max
+                if na != nb { return na < nb }
+                return a.offset < b.offset
+            }.map { $0.id }
+        }
+        if gi >= 0, config.groups.indices.contains(gi) {
+            config.groups[gi].sites = stableSorted(config.groups[gi].sites)
+        } else {
+            let order = unassignedManagedSites.map { $0.id }
+            var remaining = stableSorted(order)
+            config.sourceSites = config.sourceSites.map { site in
+                guard order.contains(site.id) else { return site }
+                let newID = remaining.removeFirst()
+                return config.sourceSites.first { $0.id == newID } ?? site
+            }
+        }
         saveConfig()
     }
 
@@ -442,6 +472,13 @@ final class AppModel: ObservableObject {
         checkSitesCookies(groupMembers(gi), force: true)
     }
 
+    /// 全局检测：所有分组已添加的站点（强制重检）
+    func checkAllManagedCookies() {
+        checkSitesCookies(managedSites, force: true)
+    }
+
+    var anyChecking: Bool { !siteChecking.isEmpty }
+
     func groupChecking(_ gi: Int) -> Bool {
         groupMembers(gi).contains { siteChecking.contains($0.id) }
     }
@@ -498,6 +535,46 @@ final class AppModel: ObservableObject {
             let mins = max(5, config.gistSync?.pollMinutes ?? 30)
             gistTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.gistSyncNow() }
+            }
+        }
+    }
+
+    // MARK: CookieCloud
+
+    @Published var cookieCloudAuto = false
+    private var cookieCloudTimer: Timer?
+
+    func cookieCloudNow(completion: (() -> Void)? = nil) {
+        guard let cc = config.cookieCloud, !cc.token.isEmpty else {
+            cookieMessage = "先在 Cookie 页填写 CookieCloud 配置（API Token）"
+            return
+        }
+        Task {
+            do {
+                let client = HTTPClient(cookies: CookieStore(), userAgent: config.userAgent)
+                let sites = config.sourceSites.map { (id: $0.id, name: $0.name, host: siteHost($0)) }
+                let r = try CookieCloudSync(config: cc, client: client).pull(into: cookies, knownSites: sites)
+                let removed = trimCookiesToEnabled()
+                persistCookies()
+                refreshCookieStats()
+                cookieMessage = "CookieCloud 同步成功：\(r.imported) 个站点的 cookie"
+                    + (r.skipped > 0 ? "（跳过 \(r.skipped) 条无法识别的条目）" : "")
+                    + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
+                completion?()
+            } catch {
+                cookieMessage = "CookieCloud 同步失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    func setCookieCloudAuto(_ on: Bool) {
+        cookieCloudAuto = on
+        cookieCloudTimer?.invalidate()
+        cookieCloudTimer = nil
+        if on {
+            let mins = max(5, config.cookieCloud?.pollMinutes ?? 30)
+            cookieCloudTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.cookieCloudNow() }
             }
         }
     }

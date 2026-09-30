@@ -305,6 +305,7 @@ public struct ZipWatchConfig: Codable {
 }
 
 public enum DownloaderType: String, Codable { case qbittorrent, transmission }
+/// 已废弃：推送策略固定为「转种成功才推送」，字段仅为旧配置兼容保留
 public enum PushPolicy: String, Codable { case always, onSuccess }
 
 public struct GistSyncConfig: Codable {
@@ -322,6 +323,21 @@ public struct GistSyncConfig: Codable {
     }
 
     public static let empty = GistSyncConfig(gistID: "", token: "", encryptionKey: "", pollMinutes: 30)
+}
+
+/// CookieCloud 同步（cookiecloud.co，PT 站 cookie 云端备份）
+public struct CookieCloudConfig: Codable, Equatable {
+    public var baseURL: String      // 默认 https://cookiecloud.co
+    public var token: String        // API Token（Authorization: Bearer）
+    public var pollMinutes: Int     // 自动同步间隔（分钟）
+
+    public init(baseURL: String = "https://cookiecloud.co", token: String = "", pollMinutes: Int = 30) {
+        self.baseURL = baseURL
+        self.token = token
+        self.pollMinutes = pollMinutes
+    }
+
+    public static let empty = CookieCloudConfig()
 }
 
 /// 目标站分组：upLimitMB = 组内新增站点的默认上传限速（MB/s，0 = 用 10）
@@ -343,6 +359,7 @@ public struct AppConfig: Codable {
     public var targetSites: [String]        // 转种目标站 id 列表（按顺序执行）
     public var downloader: DownloaderConfig
     public var gistSync: GistSyncConfig?
+    public var cookieCloud: CookieCloudConfig?
     public var userAgent: String
     public var webToken: String?        // web 控制台访问令牌，nil/空 = 不启用
     public var groups: [GroupConfig]    // 目标站分组（upLimitMB = 新增站点默认上传限速）
@@ -350,7 +367,7 @@ public struct AppConfig: Codable {
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, userAgent, webToken, groups, rss, zipWatch
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -361,6 +378,7 @@ public struct AppConfig: Codable {
         targetSites = try c.decode([String].self, forKey: .targetSites)
         downloader = try c.decode(DownloaderConfig.self, forKey: .downloader)
         gistSync = try c.decodeIfPresent(GistSyncConfig.self, forKey: .gistSync)
+        cookieCloud = try c.decodeIfPresent(CookieCloudConfig.self, forKey: .cookieCloud)
         userAgent = try c.decode(String.self, forKey: .userAgent)
         webToken = try c.decodeIfPresent(String.self, forKey: .webToken)
         groups = try c.decodeIfPresent([GroupConfig].self, forKey: .groups) ?? []
@@ -369,7 +387,8 @@ public struct AppConfig: Codable {
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
-                downloader: DownloaderConfig, gistSync: GistSyncConfig?, userAgent: String,
+                downloader: DownloaderConfig, gistSync: GistSyncConfig?, cookieCloud: CookieCloudConfig? = nil,
+                userAgent: String,
                 webToken: String?, groups: [GroupConfig] = [], rss: RssConfig? = nil,
                 zipWatch: ZipWatchConfig? = nil) {
         self.dataDir = dataDir
@@ -377,6 +396,7 @@ public struct AppConfig: Codable {
         self.targetSites = targetSites
         self.downloader = downloader
         self.gistSync = gistSync
+        self.cookieCloud = cookieCloud
         self.userAgent = userAgent
         self.webToken = webToken
         self.groups = groups
