@@ -24,7 +24,7 @@ func die(_ m: String) -> Never {
 let configPath = opt("--config") ?? "Config/boxsend.json"
 let command = args.first ?? "help"
 // 没有配置文件时只有 template 可跑（负责生成它）
-let config: AppConfig
+var config: AppConfig
 if let loaded = AppConfig.load(path: configPath) {
     config = loaded
 } else if command == "template" {
@@ -78,7 +78,7 @@ do {
                                     Web 控制台：网页编辑 boxsend.json / 手动转种 / 同步
               test-downloader       测试下载器连接（登录检测）
               cookies               查看本地 cookie 状态
-              check-cookies [--site <id>]   检测各站 cookie 是否仍然登录（SPA 站走 API 判定）
+              check-cookies [--site <id>]   检测各站 cookie 是否仍然登录（仅已开启的站；--site 可指定单站）
               add-cookie --site <id> --cookie "k1=v1; k2=v2"
                                     手动添加/覆盖单个站点的 cookie（浏览器 Cookie 头原文）
               remove-cookie --site <id>     删除单个站点的本地 cookie
@@ -103,7 +103,7 @@ do {
     case "sites":
         for s in config.sourceSites {
             let mark = s.enabled ? "on " : "off"
-            print("[\(mark)] \(s.id) (\(s.framework.rawValue)) \(s.url)")
+            print("[\(mark)] \(s.name) (\(s.id)) (\(s.framework.rawValue)) \(s.url)")
         }
         print("targets: \(config.targetSites.joined(separator: ", "))")
         let d = config.downloader
@@ -231,7 +231,9 @@ do {
     case "check-cookies":
         let only = opt("--site")
         let checkClient = HTTPClient(cookies: cookies, userAgent: config.userAgent)
-        let sites = config.sourceSites.filter { only == nil || $0.id == only }
+        let sites = config.sourceSites.filter { site in
+            only == nil ? site.enabled : site.id == only
+        }
         var any = false
         for site in sites {
             guard cookies.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil else {
@@ -250,11 +252,21 @@ do {
         guard let site = config.site(siteID) else { die("配置里没有站点 id: \(siteID)（用 `box-send sites` 查看）") }
         let host = (URL(string: site.url)?.host ?? site.url).lowercased()
         cookies.importRawString(host: host, raw)
+        // 添加 cookie 即视为使用该站：开启并加入转种目标
+        if !site.enabled || !config.targetSites.contains(siteID) {
+            if let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) {
+                config.sourceSites[i].enabled = true
+            }
+            if !config.targetSites.contains(siteID) { config.targetSites.append(siteID) }
+            if let data = try? JSONEncoder().encode(config) {
+                try? data.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+            }
+        }
         if let data = cookies.exportBackupJSON() {
             try? data.write(to: localCookieFile, options: .atomic)
         }
         let n = cookies.snapshot()[host]?.count ?? 0
-        print("已保存 \(site.name)（\(host)）\(n) 条 cookie（覆盖该站旧值），写入 \(localCookieFile.path)")
+        print("已保存 \(site.name)（\(host)）\(n) 条 cookie（覆盖该站旧值），已开启该站并加入转种目标，写入 \(localCookieFile.path)")
 
     case "remove-cookie":
         let siteID = required("--site")

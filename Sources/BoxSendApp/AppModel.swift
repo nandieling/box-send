@@ -188,9 +188,10 @@ final class AppModel: ObservableObject {
     func importZipFile(_ url: URL, password: String) {
         do {
             let n = try PTDZipImport.importZip(url: url, password: password, into: cookies)
+            let removed = trimCookiesToEnabled()
             persistCookies()
             refreshCookieStats()
-            cookieMessage = "导入成功：\(n) 条 cookie（\(cookies.hosts().count) 个站点）"
+            cookieMessage = "导入成功：\(n) 条 cookie（\(cookies.hosts().count) 个站点）" + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
             state.note("cookies: 导入 PT-depiler 本地备份 \(url.lastPathComponent) -> \(n) 条")
         } catch {
             cookieMessage = "导入失败：\(error.localizedDescription)"
@@ -199,6 +200,7 @@ final class AppModel: ObservableObject {
 
     func clearCookies() {
         cookies.clear()
+        siteCheckResults = [:]
         persistCookies()
         refreshCookieStats()
         cookieMessage = "已清空本地 cookie"
@@ -222,11 +224,19 @@ final class AppModel: ObservableObject {
         }
         let host = siteHost(site)
         cookies.importRawString(host: host, text)
+        // 添加 cookie 即视为使用该站：启用并加入转种目标（未勾选项下次运行前仍可取消）
+        var cfg = config
+        if let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) { cfg.sourceSites[i].enabled = true }
+        if !cfg.targetSites.contains(siteID) { cfg.targetSites.append(siteID) }
+        config = cfg
+        selectedTargets.insert(siteID)
+        saveConfig()
         persistCookies()
         refreshCookieStats()
+        siteCheckResults[siteID] = nil   // cookie 已变，旧检测结果作废
         let n = cookies.snapshot()[host]?.count ?? 0
         state.note("cookies: 单站添加 \(site.id) -> \(n) 条")
-        cookieMessage = "已保存 \(site.name)（\(host)）\(n) 条 cookie，已覆盖该站原有 cookie"
+        cookieMessage = "已保存 \(site.name)（\(host)）\(n) 条 cookie，已覆盖该站原有 cookie，并启用该站"
     }
 
     func removeSiteCookies(siteID: String) {
@@ -241,8 +251,91 @@ final class AppModel: ObservableObject {
         }
         persistCookies()
         refreshCookieStats()
+        siteCheckResults[siteID] = nil
         state.note("cookies: 单站删除 \(site.id)")
         cookieMessage = "已删除 \(site.name)（\(host)）的 cookie"
+    }
+
+    // MARK: 站点开关 / 排序
+
+    /// 开启/停用站点：停用的站不参与转种目标、cookie 检测与同步
+    func setSiteEnabled(siteID: String, _ on: Bool) {
+        guard let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
+        config.sourceSites[i].enabled = on
+        if !on {
+            // 停用即移出本次运行勾选；saveConfig 会把 targetSites 一并修剪
+            selectedTargets.remove(siteID)
+        }
+        saveConfig()
+    }
+
+    /// 手动排序：站点列表上下移
+    func moveSite(siteID: String, delta: Int) {
+        guard let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
+        let j = i + delta
+        guard config.sourceSites.indices.contains(j) else { return }
+        let site = config.sourceSites.remove(at: i)
+        config.sourceSites.insert(site, at: j)
+        saveConfig()
+    }
+
+    func siteIndex(_ id: String) -> Int {
+        config.sourceSites.firstIndex { $0.id == id } ?? -1
+    }
+
+    /// 站点列表自动检测：已启用且有 cookie、尚未检测的站分批（每批 4 个并发）检测
+    func autoCheckSites() {
+        let cookieJar = cookies
+        let cfg = config
+        let pending = cfg.sourceSites.filter { site in
+            site.enabled
+                && siteCheckResults[site.id] == nil
+                && !siteChecking.contains(site.id)
+                && cookieJar.cookieHeader(forHost: siteHost(site)) != nil
+        }
+        guard !pending.isEmpty else { return }
+        siteChecking.formUnion(pending.map(\.id))
+        Task.detached {
+            let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
+            var i = 0
+            while i < pending.count {
+                let batch = Array(pending[i..<min(i + 4, pending.count)])
+                var results: [String: SiteCookieCheckResult] = [:]
+                await withTaskGroup(of: (String, Bool, String).self) { group in
+                    for site in batch {
+                        group.addTask {
+                            let r = CookieCheck.check(site: site, client: client)
+                            return (site.id, r.ok, r.message)
+                        }
+                    }
+                    for await (id, ok, message) in group {
+                        results[id] = SiteCookieCheckResult(ok: ok, message: message)
+                    }
+                }
+                i += 4
+                let r = results
+                await MainActor.run {
+                    for (id, res) in r { self.siteCheckResults[id] = res }
+                    self.siteChecking.subtract(r.keys)
+                }
+            }
+        }
+    }
+
+    func hasCookie(for site: SiteConfig) -> Bool {
+        cookies.cookieHeader(forHost: siteHost(site)) != nil
+    }
+
+    /// 同步导入后只保留已启用站点的 cookie（PT-depiler 全量备份含用户未启用的站）；返回清理的站点数
+    @discardableResult
+    func trimCookiesToEnabled() -> Int {
+        let hosts = Set(config.sourceSites.filter(\.enabled).map { siteHost($0) })
+        var removed = 0
+        for host in cookies.hosts() where !hosts.contains(host) {
+            _ = cookies.removeHost(host)
+            removed += 1
+        }
+        return removed
     }
 
     private func persistCookies() {
@@ -261,9 +354,10 @@ final class AppModel: ObservableObject {
             do {
                 let client = HTTPClient(cookies: CookieStore(), userAgent: config.userAgent)
                 let r = try GistSync(config: g, client: client).pull(into: cookies, state: state)
+                let removed = trimCookiesToEnabled()
                 persistCookies()
                 refreshCookieStats()
-                cookieMessage = "Gist 同步成功：\(r.cookieCount) 条 cookie（备份时间 \(r.backupTime)）"
+                cookieMessage = "Gist 同步成功：\(r.cookieCount) 条 cookie（备份时间 \(r.backupTime)）" + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
                 lastGistSyncText = Self.dateText(state.lastGistSync ?? 0)
             } catch {
                 cookieMessage = "Gist 同步失败：\(error.localizedDescription)"
@@ -385,13 +479,16 @@ final class AppModel: ObservableObject {
         Task.detached {
             let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
             var lines: [String] = []
-            for site in cfg.sourceSites {
+            var results: [String: SiteCookieCheckResult] = [:]
+            for site in cfg.sourceSites where site.enabled {
                 guard cookieJar.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil else { continue }
                 let r = CookieCheck.check(site: site, client: client)
                 lines.append("\(r.ok ? "OK  " : "FAIL") [\(site.id)] \(r.message)")
+                results[site.id] = SiteCookieCheckResult(ok: r.ok, message: r.message)
             }
             await MainActor.run {
                 self.cookieCheckLines = lines
+                self.siteCheckResults.merge(results) { _, new in new }
                 self.cookieChecking = false
             }
         }
@@ -449,10 +546,12 @@ final class AppModel: ObservableObject {
             let imported = ZipWatcher.scanOnce(dir: dir, password: pw, store: cookieJar, state: st)
             await MainActor.run {
                 self.cookies.mergeFrom(cookieJar)
+                let removed = self.trimCookiesToEnabled()
                 self.refreshCookieStats()
                 self.persistCookies()
                 self.zipRunning = false
-                self.zipMessage = imported.isEmpty ? "扫描完成：无新备份" : "扫描完成：已导入 \(imported.joined(separator: ", "))"
+                let base = imported.isEmpty ? "扫描完成：无新备份" : "扫描完成：已导入 \(imported.joined(separator: ", "))"
+                self.zipMessage = base + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
                 self.notes = st.recentNotes
             }
         }
@@ -497,7 +596,7 @@ final class AppModel: ObservableObject {
         guard !running else { return }
         running = true
         runningStep = "解析源站详情…"
-        let targets = config.targetSites.filter { selectedTargets.contains($0) }
+        let targets = config.targetSites.filter { selectedTargets.contains($0) && config.site($0)?.enabled == true }
         let cfg = config
         let cookieJar = cookies
         let st = state

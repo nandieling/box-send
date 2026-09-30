@@ -320,4 +320,51 @@ final class SiteCoverageTests: XCTestCase {
             _ = SiteRegistry.adapter(for: s, client: c)
         }
     }
+
+    /// 站点中文名（与用户需求清单一致）
+    func testRosterChineseNames() {
+        let sites = SiteRegistry.prioritySites
+        let expected: [String: String] = [
+            "luckpt": "幸运", "hdsky": "天空", "chdbits": "彩虹岛", "hdhome": "家园",
+            "cmct": "春天", "audiences": "观众", "ttg": "套", "pter": "猫",
+            "hhanclub": "憨憨", "monika": "莫妮卡", "opencd": "皇后", "iptorrents": "IPT",
+            "byr": "北邮", "ptba": "1PT", "agsvpt": "末日", "railgun": "Railgun",
+            "carpt": "车站", "crabpt": "蟹黄堡", "cyanbug": "大青虫", "discfan": "蝶粉",
+            "dragonhd": "龙之家", "march": "三月", "hdarea": "高清视界", "hdbao": "海德堡",
+            "hddolby": "杜比", "hdfans": "红豆饭", "hdtime": "时光", "hitpt": "百川",
+            "hudbt": "蝴蝶", "kufei": "库非", "lajidui": "垃圾堆", "longpt": "龙",
+            "iloli": "爱萝莉", "njtupt": "蒲园", "okpt": "OK", "oshen": "奥申",
+            "baozi": "包子", "panda": "熊猫", "piggo": "猪猪", "freefarm": "农场",
+            "aling": "爱玲", "btschool": "学校", "tlf": "吐鲁番", "hdclone": "独自",
+            "itzmx": "Itz", "novahd": "nova", "soulvoice": "聆音", "hdu": "好多油",
+            "ptcafe": "咖啡", "pthome": "铂金家", "ptlgs": "劳改所", "ptsbao": "烧包",
+            "ptskit": "拾刻", "ptt": "时间", "ptzone": "葡萄汁", "qingwa": "青蛙",
+            "tjupt": "北洋园", "ubits": "优堡", "wtsakura": "冬樱", "zmpt": "织梦",
+            "u2": "幼儿圈", "zhuque": "朱雀", "haidan": "海胆", "yemapt": "野马",
+            "hdcity": "城市"
+        ]
+        for (id, name) in expected {
+            XCTAssertEqual(sites.first { $0.id == id }?.name, name, "id: \(id)")
+        }
+    }
+
+    /// 已存在的用户配置按注册表站名同步（改名后旧配置自动更新）
+    func testRosterNameSyncIntoUserConfig() {
+        var cfg = AppConfig.template()
+        cfg.sourceSites = cfg.sourceSites.map { s in
+            var s = s
+            if s.id == "hdsky" { s.name = "HDSky" }       // 旧名
+            if s.id == "luckpt" { s.name = "LuckPT" }     // 旧名
+            return s
+        }
+        let merged = cfg.mergedWithRoster()
+        XCTAssertEqual(merged.sourceSites.first { $0.id == "hdsky" }?.name, "天空")
+        XCTAssertEqual(merged.sourceSites.first { $0.id == "luckpt" }?.name, "幸运")
+        // 自定义站（不在注册表）站名不被覆盖
+        var custom = SiteConfig(id: "mycustom", name: "我的站", url: "https://my.pt/", framework: .custom, enabled: true, overrides: nil)
+        var cfg2 = AppConfig.template()
+        cfg2.sourceSites.append(custom)
+        let merged2 = cfg2.mergedWithRoster()
+        XCTAssertEqual(merged2.sourceSites.first { $0.id == "mycustom" }?.name, "我的站")
+    }
 }

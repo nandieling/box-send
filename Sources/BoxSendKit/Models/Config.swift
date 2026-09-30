@@ -387,14 +387,24 @@ public struct AppConfig: Codable {
         return nil
     }
 
-    /// 内置站点表新增的站点自动并入 sourceSites（已存在的条目原样保留）
-    /// 用户在 GUI 勾选启用/作为目标，默认 enabled=false 不干扰现有工作流
+    /// 内置站点表新增的站点自动并入 sourceSites；已存在的内置站点以注册表站名为准
+    /// （用户自定义站 id 不在注册表中的，原样保留）
     public func mergedWithRoster() -> AppConfig {
+        let roster = Dictionary(uniqueKeysWithValues: SiteRegistry.prioritySites.map { ($0.id, $0) })
+        var cfg = self
+        var renamed = false
+        cfg.sourceSites = sourceSites.map { site in
+            var site = site
+            if let r = roster[site.id], site.name != r.name {
+                site.name = r.name
+                renamed = true
+            }
+            return site
+        }
         let existing = Set(sourceSites.map(\.id))
         let added = SiteRegistry.prioritySites.filter { !existing.contains($0.id) }
-        guard !added.isEmpty else { return self }
-        var cfg = self
-        cfg.sourceSites = sourceSites + added
+        guard renamed || !added.isEmpty else { return self }
+        cfg.sourceSites += added
         return cfg
     }
 

@@ -13,3 +13,6 @@ Config/boxsend.json
 # 系统
 .DS_Store
 dist/
+
+# 图标构建中间产物（make-app.sh 从 1.webp 重新生成）
+build/

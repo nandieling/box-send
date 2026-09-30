@@ -99,8 +99,13 @@ struct RunView: View {
                 }
             }
             Section("转种目标站（勾选参与本次转种）") {
-                ForEach(model.config.sourceSites, id: \.id) { s in
-                    Toggle(s.name, isOn: targetBinding(s.id))
+                if model.config.sourceSites.contains(where: { $0.enabled }) {
+                    ForEach(model.config.sourceSites.filter { $0.enabled }, id: \.id) { s in
+                        Toggle(s.name, isOn: targetBinding(s.id))
+                    }
+                } else {
+                    Text("还没有开启的站点：到「站点与限速」页打开站点开关。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
             if model.running {
@@ -147,42 +152,56 @@ struct SitesView: View {
         Form {
             Section {
                 ForEach(model.config.sourceSites, id: \.id) { s in
-                    HStack(spacing: 10) {
+                    let idx = model.siteIndex(s.id)
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: enabledBinding(s.id))
+                            .labelsHidden()
+                            .help(s.enabled ? "已开启：参与转种目标 / cookie 检测 / 同步" : "未开启：不参与转种 / 检测 / 同步")
                         VStack(alignment: .leading, spacing: 1) {
                             Text(s.name).fontWeight(.medium)
+                                .foregroundStyle(s.enabled ? Color.primary : Color.secondary)
                             Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
+                        cookieStatusView(for: s)
                         Spacer()
+                        Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
+                            model.checkCookie(siteID: s.id)
+                        }
+                        .font(.caption)
+                        .frame(width: 40)
+                        VStack(spacing: 0) {
+                            Button { model.moveSite(siteID: s.id, delta: -1) } label: {
+                                Image(systemName: "chevron.up")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(idx <= 0)
+                            Button { model.moveSite(siteID: s.id, delta: 1) } label: {
+                                Image(systemName: "chevron.down")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(idx >= model.config.sourceSites.count - 1)
+                        }
+                        .font(.caption2)
+                        .frame(width: 18)
                         Picker("分组", selection: groupBinding(s.id)) {
                             Text("无分组").tag(-1)
                             ForEach(model.config.groups.indices, id: \.self) { i in
                                 Text(model.config.groups[i].name).tag(i)
                             }
                         }
-                        .frame(maxWidth: 140)
+                        .frame(maxWidth: 110)
                         IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0) { mb in
                             model.setSiteUpLimitMBInt(mb, siteID: s.id)
                             model.saveConfig()
                         }
                         .frame(width: 70)
                         Text("MB/s").font(.caption).foregroundStyle(.secondary)
-                        Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
-                            model.checkCookie(siteID: s.id)
-                        }
-                        .font(.caption)
-                        .frame(width: 40)
-                        if let r = model.siteCheckResults[s.id] {
-                            Text(r.ok ? "已登录" : "失效")
-                                .font(.caption)
-                                .foregroundStyle(r.ok ? Color.secondary : Color.red)
-                                .help(r.message)
-                        }
                     }
                 }
-                Text("限速 = 该站种子推送到下载器后的上传速度上限（整数 MB/s，空 = 不限速）；与所属分组的带宽上限取更严格者。「检测」验证该站 cookie 是否仍登录。")
+                Text("开关：未开启的站不作为转种站点（不参与转种目标 / cookie 检测 / 同步）。上下箭头手动调整站点顺序。「检测」验证该站 cookie 是否仍登录；限速 = 该站种子推送到下载器后的上传速度上限（整数 MB/s，空 = 不限速），与所属分组的带宽上限取更严格者。")
                     .font(.caption).foregroundStyle(.secondary)
             } header: {
-                Text("站点（限速 / 分组）")
+                Text("站点（开启 / 排序 / 限速 / 分组）")
             }
             Section {
                 if model.config.groups.isEmpty {
@@ -250,6 +269,31 @@ struct SitesView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { model.autoCheckSites() }
+    }
+
+    /// 行内 cookie 状态：未开启 / 无 cookie / 检测中 / 未检测 / 已登录 / 失效
+    @ViewBuilder
+    private func cookieStatusView(for s: SiteConfig) -> some View {
+        if !s.enabled {
+            Text("未开启").font(.caption).foregroundStyle(.tertiary)
+        } else if model.siteChecking.contains(s.id) {
+            Text("检测中…").font(.caption).foregroundStyle(.secondary)
+        } else if !model.hasCookie(for: s) {
+            Text("无 cookie").font(.caption).foregroundStyle(.secondary)
+        } else if let r = model.siteCheckResults[s.id] {
+            Text(r.ok ? "已登录" : "cookie 失效")
+                .font(.caption)
+                .foregroundStyle(r.ok ? Color.green : Color.red)
+                .help(r.message)
+        } else {
+            Text("未检测").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func enabledBinding(_ id: String) -> Binding<Bool> {
+        Binding(get: { model.config.sourceSites.first { $0.id == id }?.enabled ?? false },
+                set: { model.setSiteEnabled(siteID: id, $0) })
     }
 
     private func groupBinding(_ id: String) -> Binding<Int> {
