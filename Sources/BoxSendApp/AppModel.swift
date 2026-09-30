@@ -318,6 +318,10 @@ final class AppModel: ObservableObject {
                 config.groups[gi].sites.append(id)
             }
         }
+        // 添加的站点默认上传限速 10 MB/s（已有单独设置的保留）
+        for id in ids where config.downloader.siteUpLimits[id] == nil {
+            config.downloader.siteUpLimits[id] = 10 * 1_048_576
+        }
         guard changed else { return }
         saveConfig()
     }
@@ -365,14 +369,14 @@ final class AppModel: ObservableObject {
         return (-1, 0)
     }
 
-    /// 站点列表自动检测：已启用且有 cookie、尚未检测的站分批（每批 4 个并发）检测
-    func autoCheckSites() {
+    /// 批量 cookie 检测（每批 4 个并发）；force = 已检测过的也重新检测（分组「检测」按钮用）
+    func checkSitesCookies(_ sites: [SiteConfig], force: Bool = false) {
         let cookieJar = cookies
         let cfg = config
-        let pending = cfg.sourceSites.filter { site in
+        let pending = sites.filter { site in
             site.enabled
-                && siteCheckResults[site.id] == nil
                 && !siteChecking.contains(site.id)
+                && (force || siteCheckResults[site.id] == nil)
                 && cookieJar.cookieHeader(forHost: siteHost(site)) != nil
         }
         guard !pending.isEmpty else { return }
@@ -402,6 +406,20 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// 进入站点分组页时自动检测已添加且未检测的站
+    func autoCheckSites() {
+        checkSitesCookies(managedSites, force: false)
+    }
+
+    /// 分组批量检测（gi = -1 为无分组区块）
+    func checkGroupCookies(_ gi: Int) {
+        checkSitesCookies(groupMembers(gi), force: true)
+    }
+
+    func groupChecking(_ gi: Int) -> Bool {
+        groupMembers(gi).contains { siteChecking.contains($0.id) }
     }
 
     func hasCookie(for site: SiteConfig) -> Bool {
@@ -529,7 +547,7 @@ final class AppModel: ObservableObject {
         public var ok: Bool
         public var message: String
     }
-    /// 「站点与限速」页逐站检测的结果（siteID -> 结果）
+    /// 「站点分组」页逐站检测的结果（siteID -> 结果）
     @Published var siteCheckResults: [String: SiteCookieCheckResult] = [:]
     @Published var siteChecking: Set<String> = []
 

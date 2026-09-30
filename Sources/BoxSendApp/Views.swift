@@ -12,10 +12,10 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $tab) {
             RunView()
-                .tabItem { Label("运行", systemImage: "paperplane.fill") }
+                .tabItem { Label("批量转种", systemImage: "paperplane.fill") }
                 .tag(0)
             SitesView()
-                .tabItem { Label("站点与限速", systemImage: "server.rack") }
+                .tabItem { Label("站点分组", systemImage: "server.rack") }
                 .tag(1)
             CookiesView()
                 .tabItem { Label("Cookie", systemImage: "key.fill") }
@@ -55,17 +55,19 @@ struct ContentView: View {
 struct IntLimitField: View {
     @State private var text: String
     private let commit: (Int?) -> Void
+    private let center: Bool
     @FocusState private var focused: Bool
 
-    init(initial: Int, commit: @escaping (Int?) -> Void) {
+    init(initial: Int, center: Bool = false, commit: @escaping (Int?) -> Void) {
         _text = State(initialValue: initial == 0 ? "" : String(initial))
         self.commit = commit
+        self.center = center
     }
 
     var body: some View {
         TextField("", text: $text)
             .textFieldStyle(.roundedBorder)
-            .multilineTextAlignment(.trailing)
+            .multilineTextAlignment(center ? .center : .trailing)
             .focused($focused)
             .onChange(of: text) { v in
                 let filtered = v.filter { $0.isNumber }
@@ -109,10 +111,10 @@ struct RunView: View {
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
-                Spacer()
                 Button(model.running ? "运行中…" : "开始运行") { model.run() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.running)
+                Spacer()
             }
             if model.running {
                 Text(model.runningStep).font(.caption).foregroundStyle(.secondary)
@@ -125,9 +127,9 @@ struct RunView: View {
 
     private var targetsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("转种目标站（按分组选择）").font(.headline)
+            Text("转种分组").font(.headline)
             if model.managedSites.filter(\.enabled).isEmpty {
-                Text("还没有开启的站点：到「站点与限速」页添加并开启。")
+                Text("还没有开启的站点：到「站点分组」页添加并开启。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(model.config.groups.indices, id: \.self) { gi in
@@ -157,17 +159,38 @@ struct RunView: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            ForEach(members, id: \.id) { s in
-                HStack(spacing: 10) {
-                    Toggle(s.name, isOn: siteBinding(s.id))
-                        .frame(maxWidth: 200, alignment: .leading)
-                    if let e = model.reseedEvents[s.id] { eventChip(e) }
-                    if let e = model.pushEvents[s.id] { eventChip(e) }
-                    Spacer()
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 10)], alignment: .leading, spacing: 10) {
+                ForEach(members, id: \.id) { s in
+                    targetSiteCard(s)
                 }
             }
         }
         .runCard()
+    }
+
+    /// 目标站点卡片：名称 + 上传限速 + 转种/推送实时状态
+    private func targetSiteCard(_ s: SiteConfig) -> some View {
+        let limit = model.config.effectiveUpLimit(siteID: s.id)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Toggle("", isOn: siteBinding(s.id))
+                    .labelsHidden()
+                Text(s.name).fontWeight(.medium).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            Text(limit > 0 ? "上传限速 \(Int((Double(limit) / 1048576.0).rounded())) MB/s" : "上传限速 不限速")
+                .font(.caption).foregroundStyle(.secondary)
+            if let e = model.reseedEvents[s.id] { eventChip(e) }
+            if let e = model.pushEvents[s.id] { eventChip(e) }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
     }
 
     // MARK: 运行记录（点开才显示）
@@ -243,13 +266,18 @@ extension AppModel {
     func siteName(_ id: String) -> String { config.site(id)?.name ?? id }
 }
 
-// MARK: - 站点与限速
+// MARK: - 站点分组
+
+extension SiteConfig: Identifiable {}
 
 struct SitesView: View {
     @EnvironmentObject var model: AppModel
     @State private var newGroupName = ""
     @State private var newGroupMB = ""
     @State private var showAddSites = false
+    @State private var manualCookieSite: SiteConfig?
+
+    private let cardColumns = [GridItem(.adaptive(minimum: 260), spacing: 12)]
 
     var body: some View {
         Form {
@@ -257,45 +285,45 @@ struct SitesView: View {
                 HStack(spacing: 8) {
                     TextField("分组名", text: $newGroupName)
                         .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: 140)
-                    TextField("MB/s（空 = 不限）", text: $newGroupMB)
+                    Text("上传限速").foregroundStyle(.secondary)
+                    TextField("", text: $newGroupMB)
                         .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 140)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 90)
                         .onChange(of: newGroupMB) { v in
                             let filtered = v.filter { $0.isNumber }
                             if filtered != v { newGroupMB = filtered }
                         }
+                    Text("MB/s，默认=10").font(.caption).foregroundStyle(.secondary)
                     Button("添加分组") {
-                        model.addGroup(name: newGroupName, upLimitMB: Int(newGroupMB) ?? 0)
+                        model.addGroup(name: newGroupName, upLimitMB: Int(newGroupMB) ?? 10)
                         newGroupName = ""
                         newGroupMB = ""
                     }
                     .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
-                    Spacer()
                     Button {
                         showAddSites = true
                     } label: {
                         Label("添加站点", systemImage: "plus")
                     }
                     .buttonStyle(.borderedProminent)
+                    Spacer()
                 }
-                Text("站点按分组区块显示；「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并批量勾选（可指定加入分组）。关闭站点开关后，该站不参与转种 / cookie 检测 / 同步。")
+                Text("站点按分组区块以卡片显示；「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并批量勾选（可指定加入分组，默认上传限速 10 MB/s）。关闭站点开关后，该站不参与转种 / cookie 检测 / 同步。")
                     .font(.caption).foregroundStyle(.secondary)
             }
             ForEach(model.config.groups.indices, id: \.self) { gi in
                 Section {
                     HStack(spacing: 8) {
-                        TextField("分组名", text: groupNameBinding(gi))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 140)
-                        IntLimitField(initial: model.config.groups[gi].upLimitMB) { mb in
-                            model.config.groups[gi].upLimitMB = max(0, mb ?? 0)
-                            model.saveConfig()
-                        }
-                        .frame(width: 70)
-                        Text("MB/s 带宽上限").font(.caption).foregroundStyle(.secondary)
                         Text("\(model.groupMembers(gi).count) 站").font(.caption).foregroundStyle(.secondary)
+                        Button(model.groupChecking(gi) ? "检测中…" : "检测 Cookie") {
+                            model.checkGroupCookies(gi)
+                        }
+                        .font(.caption)
+                        .disabled(model.groupChecking(gi))
+                        .help("批量检测该分组所有已开启站点的 cookie 有效性")
                         Spacer()
                         Button(role: .destructive) { model.removeGroup(at: gi) } label: {
                             Image(systemName: "trash")
@@ -303,11 +331,9 @@ struct SitesView: View {
                         .buttonStyle(.borderless)
                         .help("删除分组（组内站点移到无分组）")
                     }
-                    ForEach(model.groupMembers(gi), id: \.id) { s in
-                        siteRow(s)
-                    }
+                    siteCardGrid(model.groupMembers(gi))
                     if model.groupMembers(gi).isEmpty {
-                        Text("该分组还没有站点：「添加站点」时选择此分组，或在站点行右侧改分组。")
+                        Text("该分组还没有站点：「添加站点」时选择此分组。")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 } header: {
@@ -316,9 +342,17 @@ struct SitesView: View {
             }
             if !model.unassignedManagedSites.isEmpty {
                 Section("无分组") {
-                    ForEach(model.unassignedManagedSites, id: \.id) { s in
-                        siteRow(s)
+                    HStack(spacing: 8) {
+                        Text("\(model.unassignedManagedSites.count) 站").font(.caption).foregroundStyle(.secondary)
+                        Button(model.groupChecking(-1) ? "检测中…" : "检测 Cookie") {
+                            model.checkGroupCookies(-1)
+                        }
+                        .font(.caption)
+                        .disabled(model.groupChecking(-1))
+                        .help("批量检测无分组所有已开启站点的 cookie 有效性")
+                        Spacer()
                     }
+                    siteCardGrid(model.unassignedManagedSites)
                 }
             }
             if model.managedSites.isEmpty {
@@ -329,11 +363,11 @@ struct SitesView: View {
             }
             Section {
                 HStack {
-                    IntLimitField(initial: Int((Double(model.config.downloader.defaultUpLimit) / 1048576.0).rounded())) { mb in
+                    IntLimitField(initial: Int((Double(model.config.downloader.defaultUpLimit) / 1048576.0).rounded()), center: true) { mb in
                         model.config.downloader.defaultUpLimit = Int64(mb ?? 0) * 1_048_576
                         model.saveConfig()
                     }
-                    .frame(width: 70)
+                    .frame(width: 90)
                     Text("MB/s — 默认上传限速（未单独设置的站点）").foregroundStyle(.secondary)
                 }
                 Picker("推送策略", selection: $model.config.downloader.pushPolicy) {
@@ -346,64 +380,71 @@ struct SitesView: View {
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showAddSites) { AddSitesSheet() }
+        .sheet(item: $manualCookieSite) { site in
+            ManualCookieSheet(site: site)
+        }
         .onAppear { model.autoCheckSites() }
     }
 
-    /// 站点行：开关 / cookie 状态 / 检测 / 排序 / 分组 / 限速 / 移除
-    private func siteRow(_ s: SiteConfig) -> some View {
-        let pos = model.managedSitePosition(s.id)
-        return HStack(spacing: 8) {
-            Toggle("", isOn: enabledBinding(s.id))
-                .labelsHidden()
-                .help(s.enabled ? "已开启：参与转种目标 / cookie 检测 / 同步" : "未开启：不参与转种 / 检测 / 同步")
-            VStack(alignment: .leading, spacing: 1) {
-                Text(s.name).fontWeight(.medium)
-                    .foregroundStyle(s.enabled ? Color.primary : Color.secondary)
-                Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    private func siteCardGrid(_ sites: [SiteConfig]) -> some View {
+        LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 12) {
+            ForEach(sites, id: \.id) { s in
+                siteCard(s)
             }
-            cookieStatusView(for: s)
-            Spacer()
-            Button(model.siteChecking.contains(s.id) ? "…" : "检测") {
-                model.checkCookie(siteID: s.id)
-            }
-            .font(.caption)
-            .frame(width: 40)
-            VStack(spacing: 0) {
-                Button { model.moveManagedSite(s.id, delta: -1) } label: {
-                    Image(systemName: "chevron.up")
-                }
-                .buttonStyle(.borderless)
-                .disabled(pos.index <= 0)
-                Button { model.moveManagedSite(s.id, delta: 1) } label: {
-                    Image(systemName: "chevron.down")
-                }
-                .buttonStyle(.borderless)
-                .disabled(pos.index >= pos.count - 1)
-            }
-            .font(.caption2)
-            .frame(width: 18)
-            Picker("分组", selection: groupBinding(s.id)) {
-                Text("无分组").tag(-1)
-                ForEach(model.config.groups.indices, id: \.self) { i in
-                    Text(model.config.groups[i].name).tag(i)
-                }
-            }
-            .frame(maxWidth: 110)
-            IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0) { mb in
-                model.setSiteUpLimitMBInt(mb, siteID: s.id)
-                model.saveConfig()
-            }
-            .frame(width: 70)
-            Text("MB/s").font(.caption).foregroundStyle(.secondary)
-            Button { model.removeManagedSite(s.id) } label: {
-                Image(systemName: "xmark.circle")
-            }
-            .buttonStyle(.borderless)
-            .help("从站点列表移除（保留 cookie 与配置）")
         }
     }
 
-    /// 行内 cookie 状态：未开启 / 无 cookie / 检测中 / 未检测 / 已登录 / 失效
+    /// 站点卡片：名称 / 地址 / cookie 有效性 / 上传限速（失效时提示同步 Gist 或手动添加）
+    private func siteCard(_ s: SiteConfig) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Toggle("", isOn: enabledBinding(s.id))
+                    .labelsHidden()
+                    .help(s.enabled ? "已开启：参与转种目标 / cookie 检测 / 同步" : "未开启：不参与转种 / 检测 / 同步")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(s.name).fontWeight(.medium)
+                        .foregroundStyle(s.enabled ? Color.primary : Color.secondary)
+                    Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Button { model.removeManagedSite(s.id) } label: {
+                    Image(systemName: "xmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("从站点列表移除（保留 cookie 与配置）")
+            }
+            cookieStatusView(for: s)
+            if let r = model.siteCheckResults[s.id], !r.ok {
+                HStack(spacing: 8) {
+                    Text("cookie 失效：同步 Gist 或手动添加")
+                        .font(.caption).foregroundStyle(.orange)
+                    Button("同步 Gist") { model.gistSyncNow() }
+                        .font(.caption).buttonStyle(.bordered).controlSize(.small)
+                    Button("手动添加") { manualCookieSite = s }
+                        .font(.caption).buttonStyle(.bordered).controlSize(.small)
+                }
+            }
+            HStack(spacing: 6) {
+                Text("上传限速").font(.caption).foregroundStyle(.secondary)
+                IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0, center: true) { mb in
+                    model.setSiteUpLimitMBInt(mb, siteID: s.id)
+                    model.saveConfig()
+                }
+                .frame(width: 70)
+                Text("MB/s").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+        )
+    }
+
+    /// 卡片内 cookie 状态：未开启 / 无 cookie / 检测中 / 未检测 / 已登录 / 失效
     @ViewBuilder
     private func cookieStatusView(for s: SiteConfig) -> some View {
         if !s.enabled {
@@ -425,16 +466,6 @@ struct SitesView: View {
     private func enabledBinding(_ id: String) -> Binding<Bool> {
         Binding(get: { model.config.sourceSites.first { $0.id == id }?.enabled ?? false },
                 set: { model.setSiteEnabled(siteID: id, $0) })
-    }
-
-    private func groupBinding(_ id: String) -> Binding<Int> {
-        Binding(get: { model.groupIndex(of: id) },
-                set: { model.setGroup(index: $0, for: id) })
-    }
-
-    private func groupNameBinding(_ idx: Int) -> Binding<String> {
-        Binding(get: { model.config.groups[idx].name },
-                set: { model.config.groups[idx].name = $0; model.saveConfig() })
     }
 }
 
@@ -490,7 +521,7 @@ struct AddSitesSheet: View {
                 }
             }
             HStack {
-                Text("添加后默认开启；在「运行」页按分组选择参与转种。")
+                Text("添加后默认开启（上传限速默认 10 MB/s）；在「批量转种」页按分组选择参与转种。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
@@ -505,6 +536,39 @@ struct AddSitesSheet: View {
         }
         .padding()
         .frame(width: 540, height: 500)
+    }
+}
+
+/// 手动添加站点 cookie（卡片「手动添加」按钮弹出）
+struct ManualCookieSheet: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    let site: SiteConfig
+    @State private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("添加 \(site.name)（\(model.siteHost(site))）的 cookie")
+                .font(.headline)
+            TextField("name1=value1; name2=value2（浏览器 Cookie 头原文）", text: $text, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(3...6)
+            HStack(alignment: .firstTextBaseline) {
+                Text("保存即覆盖该站原有 cookie，并自动开启该站")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    model.addSiteCookie(siteID: site.id, raw: text)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 480)
     }
 }
 
