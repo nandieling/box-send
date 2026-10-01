@@ -216,4 +216,21 @@ final class ModelsTests: XCTestCase {
         let none = NexusPHPAdapter.searchNameInResults(html: html, releaseName: "The Whole Truth 2016 BluRay REMUX 1080p AVC DTS-HD MA 5.1-HDS", base: base)
         XCTAssertNil(none)
     }
+
+
+    /// 日志时间戳应为北京时间（Asia/Shanghai）的 yyyy-MM-dd HH:mm:ss，而非 UTC ISO8601
+    func testStampIsBeijingTime() {
+        let stamp = ISO8601Time.stamp()
+        let re = try! NSRegularExpression(pattern: #"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"#)
+        let full = NSRange(stamp.startIndex..<stamp.endIndex, in: stamp)
+        XCTAssertNotNil(re.firstMatch(in: stamp, range: full), "stamp 格式异常: \(stamp)")
+        XCTAssertFalse(stamp.contains("T"), "不应是 ISO8601/UTC: \(stamp)")
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        let expected = f.date(from: f.string(from: Date()))!
+        let actual = f.date(from: stamp)!
+        XCTAssertLessThanOrEqual(abs(expected.timeIntervalSince(actual)), 2)
+    }
 }

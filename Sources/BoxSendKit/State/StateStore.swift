@@ -133,8 +133,12 @@ public final class StateStore {
 }
 
 public enum ISO8601Time {
+    /// 日志时间戳：北京时间（Asia/Shanghai）
     public static func stamp() -> String {
-        let f = ISO8601DateFormatter()
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         return f.string(from: Date())
     }
 }

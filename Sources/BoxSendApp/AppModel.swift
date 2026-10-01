@@ -108,7 +108,9 @@ final class AppModel: ObservableObject {
 
     static func dateText(_ t: Double) -> String {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
         return f.string(from: Date(timeIntervalSince1970: t))
     }
 
@@ -528,7 +530,7 @@ final class AppModel: ObservableObject {
 
     @Published var cookieSyncBusy = false
 
-    enum CookieSource { case gist, cookieCloud }
+    enum CookieSource { case gist, cookieCloud, both }
 
     func gistSyncNow() { syncCookies(from: .gist) }
 
@@ -540,30 +542,61 @@ final class AppModel: ObservableObject {
     func syncCookies(from source: CookieSource) {
         guard !cookieSyncBusy else { return }
         let cfg = config
-        let other: CookieSource = (source == .gist) ? .cookieCloud : .gist
-        let label = (source == .gist) ? "Gist" : "CookieCloud"
+        let label: String
+        switch source {
+        case .gist: label = "Gist"
+        case .cookieCloud: label = "CookieCloud"
+        case .both: label = "Cookie"
+        }
         cookieSyncBusy = true
         Task.detached { [weak self] in
             guard let self else { return }
             do {
-                let f = try Self.fetchSourceRaw(source: source, cfg: cfg)
-                await MainActor.run {
-                    let (imported, kept) = self.mergedImportCookies(f.raws)
-                    if source == .gist {
-                        self.state.setLastGistSync(Date().timeIntervalSince1970)
-                        self.lastGistSyncText = Self.dateText(self.state.lastGistSync ?? 0)
+                let raws: [String: String]
+                let timeText: String
+                var failedNotes: [String] = []
+                if source == .both {
+                    let f = try Self.fetchBothSources(cfg: cfg)
+                    raws = f.raws
+                    timeText = f.timeText
+                    failedNotes = f.failedNotes
+                    if f.gistOK {
+                        await MainActor.run {
+                            self.state.setLastGistSync(Date().timeIntervalSince1970)
+                            self.lastGistSyncText = Self.dateText(self.state.lastGistSync ?? 0)
+                        }
                     }
+                } else {
+                    let f = try Self.fetchSourceRaw(source: source, cfg: cfg)
+                    raws = f.raws
+                    timeText = f.timeText
+                    if source == .gist {
+                        await MainActor.run {
+                            self.state.setLastGistSync(Date().timeIntervalSince1970)
+                            self.lastGistSyncText = Self.dateText(self.state.lastGistSync ?? 0)
+                        }
+                    }
+                }
+                await MainActor.run {
+                    let (imported, kept) = self.mergedImportCookies(raws)
                     let removed = self.trimCookiesToEnabled()
                     self.persistCookies()
                     self.refreshCookieStats()
                     var msg = "\(label) 同步成功：导入 \(imported) 个站点"
                     if kept > 0 { msg += "，保留本地有效 \(kept) 个" }
-                    if !f.timeText.isEmpty { msg += "（\(f.timeText)）" }
+                    if !timeText.isEmpty { msg += "（\(timeText)）" }
                     if removed > 0 { msg += "；已清理 \(removed) 个未启用站点的 cookie" }
+                    if !failedNotes.isEmpty { msg += "；部分来源未成功：\(failedNotes.joined(separator: "；"))" }
                     self.cookieMessage = msg
                     self.checkSitesCookies(self.managedSites, force: true) {
-                        Task { @MainActor in
-                            self.crossFillInvalid(from: other, baseMessage: msg)
+                        if source == .both {
+                            // 两个来源都已合并导入，无需再互补
+                            Task { @MainActor in self.cookieSyncBusy = false }
+                        } else {
+                            let other: CookieSource = (source == .gist) ? .cookieCloud : .gist
+                            Task { @MainActor in
+                                self.crossFillInvalid(from: other, baseMessage: msg)
+                            }
                         }
                     }
                 }
@@ -574,6 +607,32 @@ final class AppModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// 同时拉取 Gist + CookieCloud（Gist 优先，CookieCloud 补齐 Gist 没有的条目）；单来源失败不中断
+    nonisolated private static func fetchBothSources(cfg: AppConfig) throws -> (raws: [String: String], timeText: String, failedNotes: [String], gistOK: Bool) {
+        var merged: [String: String] = [:]
+        var timeText = ""
+        var failedNotes: [String] = []
+        var gistOK = false
+        do {
+            let g = try fetchSourceRaw(source: .gist, cfg: cfg)
+            merged = g.raws
+            timeText = g.timeText
+            gistOK = true
+        } catch {
+            failedNotes.append("Gist（\(error.localizedDescription)）")
+        }
+        do {
+            let c = try fetchSourceRaw(source: .cookieCloud, cfg: cfg)
+            for (k, v) in c.raws where merged[k] == nil { merged[k] = v }
+        } catch {
+            failedNotes.append("CookieCloud（\(error.localizedDescription)）")
+        }
+        guard !merged.isEmpty else {
+            throw BoxSendError.badInput(failedNotes.joined(separator: "；"))
+        }
+        return (merged, timeText, failedNotes, gistOK)
     }
 
     /// 后台拉取来源 → {host: "k=v; k=v"}（timeText 仅 Gist 有备份时间）
@@ -594,6 +653,8 @@ final class AppModel: ObservableObject {
                 throw BoxSendError.badInput("先在 Cookie 页填写 CookieCloud 配置（服务器地址 + KEY + 加密密码）")
             }
             return (try CookieCloudSync(config: cc, client: client).fetch(), "")
+        case .both:
+            fatalError("fetchBothSources 会拆分为两个单来源拉取")
         }
     }
 

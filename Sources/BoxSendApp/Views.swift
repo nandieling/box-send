@@ -317,6 +317,12 @@ struct SitesView: View {
                         Spacer()
                     }
                     HStack(spacing: 8) {
+                        Button(model.cookieSyncBusy ? "同步中…" : "同步 Cookie") {
+                            model.syncCookies(from: .both)
+                        }
+                        .font(.caption)
+                        .disabled(model.cookieSyncBusy)
+                        .help("同时同步 PT-depiler Gist 与 CookieCloud 的 cookie 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点）")
                         Button(model.anyChecking ? "检测中…" : "检测 Cookie") {
                             model.checkAllManagedCookies()
                         }
@@ -325,7 +331,7 @@ struct SitesView: View {
                         .help("批量检测所有分组已添加站点的 cookie 有效性")
                         Spacer()
                     }
-                    Text("站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并打勾添加（可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
+                    Text("顶部「同步 Cookie」同时同步 PT-depiler Gist 与 CookieCloud 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点），「检测 Cookie」批量检测所有分组已添加站点。站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并点击选中（加深色）添加（可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .runCard()
@@ -334,6 +340,7 @@ struct SitesView: View {
                     let gname = model.config.groups[gi].name
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
+                            Text("分组：\(gname)").font(.headline)
                             Button {
                                 confirmReq = ConfirmRequest(kind: .removeGroup, index: gi,
                                                             name: gname,
@@ -346,7 +353,6 @@ struct SitesView: View {
                             .controlSize(.small)
                             .tint(.red)
                             .help("删除分组（组内站点移到无分组），需两次确认")
-                            Text("分组：\(gname)").font(.headline)
                             Spacer()
                         }
                         groupToolbar(gi)
@@ -410,19 +416,13 @@ struct SitesView: View {
         .onAppear { model.autoCheckSites() }
     }
 
-    /// 分组工具栏：N 站 / 同步 Gist / 全选（切换） / 手动添加 / 移除站点
+    /// 分组工具栏：N 站 / 全选（切换） / 手动添加 / 移除站点
     private func groupToolbar(_ gi: Int) -> some View {
         let members = model.groupMembers(gi)
         let enabledMembers = members.filter(\.enabled)
         let allOn = !members.isEmpty && members.allSatisfy(\.enabled)
         return HStack(spacing: 8) {
             Text("\(members.count) 站").font(.caption).foregroundStyle(.secondary)
-            Button(model.cookieSyncBusy ? "同步中…" : "同步 Gist") {
-                model.syncCookies(from: .gist)
-            }
-            .font(.caption)
-            .disabled(model.cookieSyncBusy)
-            .help("通过 Gist 批量同步所有站点 cookie（与 CookieCloud 互为补充：本地有效的保留，失效的自动用另一来源补充）")
             Button(allOn ? "全不选" : "全选") { model.setGroupSitesEnabled(gi, on: !allOn) }
                 .font(.caption)
                 .disabled(members.isEmpty)
@@ -454,32 +454,37 @@ struct SitesView: View {
         }
     }
 
-    /// 站点卡片：名称 / 地址 / cookie 有效性 / 上传限速 / 序号
+    /// 站点卡片：名称 / 序号 / 地址 / cookie 有效性 / 上传限速
     /// 点击卡片开启 / 停用（加深色 = 已开启）；组内可拖拽或输入序号排序
     private func siteCard(_ s: SiteConfig, gi: Int) -> some View {
         let on = s.enabled
         return VStack(alignment: .leading, spacing: 6) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(s.name).fontWeight(on ? .semibold : .medium).lineLimit(1)
-                            .foregroundStyle(on ? Color.primary : Color.secondary)
-                        Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "line.3.horizontal")
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 12, height: 16)
-                        .onDrag {
-                            draggingSite = s.id
-                            return NSItemProvider(object: s.id as NSString)
-                        }
-                        .help("按住拖拽调整组内位置")
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(s.name).fontWeight(on ? .semibold : .medium).lineLimit(1)
+                        .foregroundStyle(on ? Color.primary : Color.secondary)
+                    Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                cookieStatusView(for: s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { model.setSiteEnabled(siteID: s.id, !on) }
+                TextField("", text: siteNumBinding(s.id), prompt: Text("\(siteOrderHint(s, gi: gi))"))
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 40)
+                    .font(.caption)
+                    .onSubmit { applySiteSort(gi) }
+                    .help("输入排序序号，回车重排组内卡片")
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12, height: 16)
+                    .onDrag {
+                        draggingSite = s.id
+                        return NSItemProvider(object: s.id as NSString)
+                    }
+                    .help("按住拖拽调整组内位置")
             }
-            .contentShape(Rectangle())
-            .onTapGesture { model.setSiteEnabled(siteID: s.id, !on) }
+            cookieStatusView(for: s)
             HStack(spacing: 6) {
                 Text("上传限速").font(.caption).foregroundStyle(.secondary)
                 IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0, center: true) { mb in
@@ -488,17 +493,6 @@ struct SitesView: View {
                 }
                 .frame(width: 60)
                 Text("MB/s").font(.caption).foregroundStyle(.secondary)
-            }
-            HStack(spacing: 6) {
-                Text("序").font(.caption).foregroundStyle(.secondary)
-                TextField("", text: siteNumBinding(s.id), prompt: Text("\(siteOrderHint(s, gi: gi))"))
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 44)
-                    .font(.caption)
-                    .onSubmit { applySiteSort(gi) }
-                    .help("输入排序序号，回车或点区块「按序号排序」重排卡片")
-                Spacer()
             }
         }
         .padding(10)
@@ -604,12 +598,16 @@ struct AddSitesSheet: View {
         }
     }
 
+    private var allChecked: Bool {
+        !displayIDs.isEmpty && displayIDs.allSatisfy { checked.contains($0) }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             HStack {
                 Text("批量添加站点").font(.headline)
                 Spacer()
-                Text("已勾选 \(checked.count)").font(.caption).foregroundStyle(.secondary)
+                Text("已选 \(checked.count)").font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
                 HStack(spacing: 4) {
@@ -625,9 +623,11 @@ struct AddSitesSheet: View {
                     }
                 }
                 .frame(maxWidth: 140)
-                Button("按序号排序") { applySortNumbers() }
-                    .font(.caption)
-                    .help("按输入的序号重排卡片；未填序号的保持相对顺序")
+                Button(allChecked ? "全不选" : "全选") {
+                    if allChecked { checked.removeAll() } else { checked = Set(displayIDs) }
+                }
+                .font(.caption)
+                .help("一键选中 / 取消当前列表中全部站点")
                 Spacer()
             }
             ScrollView {
@@ -639,7 +639,7 @@ struct AddSitesSheet: View {
                 .padding(2)
             }
             HStack {
-                Text("打勾要添加的站点；拖拽卡片右侧把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
+                Text("点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
@@ -663,11 +663,26 @@ struct AddSitesSheet: View {
             if let s {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Toggle("", isOn: checkBinding(id))
-                            .labelsHidden()
-                            .toggleStyle(.checkbox)
-                        Text(s.name).fontWeight(.medium).lineLimit(1)
-                        Spacer(minLength: 0)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(s.name)
+                                .fontWeight(checked.contains(id) ? .semibold : .medium)
+                                .lineLimit(1)
+                            Text(s.url)
+                                .font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if checked.contains(id) { checked.remove(id) } else { checked.insert(id) }
+                        }
+                        TextField("", text: numBinding(id), prompt: Text("序"))
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.center)
+                            .font(.caption)
+                            .frame(width: 38)
+                            .onSubmit { applySortNumbers() }
+                            .help("输入排序序号，回车重排卡片")
                         Image(systemName: "line.3.horizontal")
                             .foregroundStyle(.secondary)
                             .frame(width: 12, height: 16)
@@ -677,35 +692,20 @@ struct AddSitesSheet: View {
                             }
                             .help("按住拖拽调整顺序")
                     }
-                    HStack(spacing: 4) {
-                        Text("序").font(.caption).foregroundStyle(.secondary)
-                        TextField("", text: numBinding(id))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 46)
-                            .multilineTextAlignment(.center)
-                            .font(.caption)
-                    }
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(checked.contains(id) ? Color.accentColor.opacity(0.22) : Color(nsColor: .controlBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(dragging == id ? Color.accentColor : Color(nsColor: .separatorColor),
-                                      lineWidth: dragging == id ? 2 : 1)
+                        .strokeBorder((checked.contains(id) || dragging == id) ? Color.accentColor : Color(nsColor: .separatorColor),
+                                      lineWidth: (checked.contains(id) || dragging == id) ? 1.5 : 1)
                 )
             }
         }
         .opacity(dragging == id ? 0.4 : 1)
         .onDrop(of: [.text], delegate: SiteReorderDrop(target: id, dragging: $dragging, order: $order))
-    }
-
-    private func checkBinding(_ id: String) -> Binding<Bool> {
-        Binding(get: { checked.contains(id) },
-                set: { on in
-                    if on { checked.insert(id) } else { checked.remove(id) }
-                })
     }
 
     private func numBinding(_ id: String) -> Binding<String> {
@@ -845,161 +845,145 @@ struct ConfirmRequest {
     }
 }
 
+
+/// Cookie / 下载器页自定义卡片区块（Form 会把行内 TextField 抽到右列，这里用自定义布局保证：功能名上一行、输入框下一行、内容居左）
+private struct CardSection<Content: View>: View {
+    let title: String
+    let content: Content
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline).padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 12) {
+                content
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+}
+
+/// 功能名称在上一行、输入框在下一行（输入框全宽、内容居左）
+private struct LabeledRow<Field: View>: View {
+    let label: String
+    let field: Field
+    init(_ label: String, @ViewBuilder field: () -> Field) {
+        self.label = label
+        self.field = field()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            field
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 // MARK: - Cookie
 
 struct CookiesView: View {
     @EnvironmentObject var model: AppModel
-    @State private var singleCookieSite = ""
-    @State private var singleCookieText = ""
     @State private var zipPassword = ""
 
     var body: some View {
-        Form {
-            Section {
-                TextField("gistID", text: gistStringBinding(\.gistID))
-                    .textFieldStyle(.roundedBorder)
-                SecureField("GitHub token", text: gistStringBinding(\.token))
-                    .textFieldStyle(.roundedBorder)
-                SecureField("PT-depiler 备份密码", text: gistStringBinding(\.encryptionKey))
-                    .textFieldStyle(.roundedBorder)
-                HStack {
-                    TextField("轮询", text: pollBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 60)
-                    Text("（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Toggle("自动定时同步", isOn: autoBinding)
-                    Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.gistSyncNow() }
-                        .disabled(model.cookieSyncBusy)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                CardSection("PT-depiler Gist 同步") {
+                    LabeledRow("gistID") {
+                        TextField("", text: gistStringBinding(\.gistID)).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("GitHub token") {
+                        SecureField("", text: gistStringBinding(\.token)).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("PT-depiler 备份密码") {
+                        SecureField("", text: gistStringBinding(\.encryptionKey)).textFieldStyle(.roundedBorder)
+                    }
+                    HStack(alignment: .bottom) {
+                        LabeledRow("轮询（自动同步间隔，分钟，最小 5）") {
+                            TextField("", text: pollBinding).textFieldStyle(.roundedBorder).frame(width: 60)
+                        }
+                        Spacer()
+                        Toggle("自动定时同步", isOn: autoBinding)
+                        Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.gistSyncNow() }
+                            .disabled(model.cookieSyncBusy)
+                    }
+                    if !model.lastGistSyncText.isEmpty {
+                        LabeledContent("上次 Gist 同步", value: model.lastGistSyncText)
+                    }
+                    Text("与 PT-depiler 的 Gist 备份联动；「立即同步」只拉取本来源，站点分组页顶部「同步 Cookie」同时同步 Gist 与 CookieCloud（互为补充）。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                if !model.lastGistSyncText.isEmpty {
-                    LabeledContent("上次 Gist 同步", value: model.lastGistSyncText)
+                CardSection("CookieCloud 同步") {
+                    LabeledRow("服务器地址") {
+                        TextField("", text: ccStringBinding(\.host), prompt: Text("http://vps:8088 或 https://cookiecloud.xxx")).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("KEY（UUID）") {
+                        TextField("", text: ccStringBinding(\.key)).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("端对端加密密码") {
+                        SecureField("", text: ccStringBinding(\.password)).textFieldStyle(.roundedBorder)
+                    }
+                    HStack(alignment: .bottom) {
+                        LabeledRow("轮询（自动同步间隔，分钟，最小 5）") {
+                            TextField("", text: ccPollBinding).textFieldStyle(.roundedBorder).frame(width: 60)
+                        }
+                        Spacer()
+                        Toggle("自动定时同步", isOn: ccAutoBinding)
+                        Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.cookieCloudNow() }
+                            .disabled(model.cookieSyncBusy)
+                    }
+                    if let msg = model.cookieMessage, !msg.isEmpty {
+                        Text(msg).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("用 CookieCloud 扩展（easychen/CookieCloud）生成的 KEY（UUID）+ 端对端加密密码连接：服务器只存密文，解密在本地，拉取后覆盖本地 cookie。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                Text("与 PT-depiler 的 Gist 备份联动，无需手动导入。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("Gist 同步")
-            }
-            Section {
-                TextField("服务器地址", text: ccStringBinding(\.host), prompt: Text("http://vps:8088 或 https://cookiecloud.xxx"))
-                    .textFieldStyle(.roundedBorder)
-                TextField("KEY（UUID）", text: ccStringBinding(\.key))
-                    .textFieldStyle(.roundedBorder)
-                SecureField("端对端加密密码", text: ccStringBinding(\.password))
-                    .textFieldStyle(.roundedBorder)
-                HStack {
-                    TextField("轮询", text: ccPollBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 60)
-                    Text("（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Toggle("自动定时同步", isOn: ccAutoBinding)
-                    Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.cookieCloudNow() }
-                        .disabled(model.cookieSyncBusy)
-                }
-                if let msg = model.cookieMessage, !msg.isEmpty {
-                    Text(msg).font(.caption).foregroundStyle(.secondary)
-                }
-                Text("用 CookieCloud 扩展（easychen/CookieCloud）生成的 KEY（UUID）+ 端对端加密密码连接：服务器只存密文，解密在本地，拉取后覆盖本地 cookie。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("CookieCloud 同步")
-            }
-            Section {
-                HStack(spacing: 8) {
+                CardSection("PT-depiler 本地备份") {
+                    LabeledRow("备份密码") {
+                        SecureField("", text: $zipPassword).textFieldStyle(.roundedBorder)
+                    }
                     Button("导入 PTD_backup_*.zip …") { pickZip() }
-                    Text("备份密码").font(.callout).foregroundStyle(.secondary)
-                    SecureField("", text: $zipPassword)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 180)
+                    Text("在 PT-depiler 中「备份 → 本地备份」导出 zip 后导入；导入会整体替换本地 cookie。")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("清空本地 Cookie", role: .destructive) { model.clearCookies() }
                 }
-                Text("在 PT-depiler 中「备份 → 本地备份」导出 zip 后导入；导入会整体替换本地 cookie。")
-                    .font(.caption).foregroundStyle(.secondary)
-                Button("清空本地 Cookie", role: .destructive) { model.clearCookies() }
-            } header: {
-                Text("PT-depiler 本地备份")
-            }
-            Section {
-                Picker("站点", selection: $singleCookieSite) {
-                    ForEach(model.config.sourceSites, id: \.id) { site in
-                        Text("\(site.name)（\(model.siteHost(site))）").tag(site.id)
+                CardSection("备份目录监控") {
+                    LabeledRow("监控目录") {
+                        TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) })).textFieldStyle(.roundedBorder)
                     }
-                }
-                TextField("name1=value1; name2=value2", text: $singleCookieText)
-                    .textFieldStyle(.roundedBorder)
-                HStack(spacing: 8) {
-                    Button("保存（覆盖该站）") {
-                        model.addSiteCookie(siteID: singleCookieSite, raw: singleCookieText)
-                        singleCookieText = ""
+                    HStack(alignment: .bottom) {
+                        LabeledRow("备份密码") {
+                            SecureField("", text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) })).textFieldStyle(.roundedBorder).frame(width: 180)
+                        }
+                        LabeledRow("轮询（分钟）") {
+                            IntLimitField(initial: model.config.zipWatch?.pollMinutes ?? 5) { model.setZipPollMinutes($0 ?? 5) }.frame(width: 60)
+                        }
+                        Spacer()
+                        Toggle("启用备份目录监控", isOn: Binding(get: { model.zipAuto }, set: { model.setZipAuto($0) }))
+                        Button("立即扫描") { model.zipScanNow() }
+                            .disabled(model.zipRunning)
                     }
-                    .disabled(singleCookieText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    Button("删除该站 Cookie", role: .destructive) {
-                        model.removeSiteCookies(siteID: singleCookieSite)
+                    if model.zipRunning {
+                        Text("扫描中…").font(.caption).foregroundStyle(.secondary)
                     }
-                }
-                Text("浏览器开发者工具复制单站 Cookie 头后粘贴；保存即覆盖该站本地已有 cookie，适合只更新一个站而不导出整包备份。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("单站 Cookie（手动添加）")
-            }
-            Section {
-                HStack {
-                    Text("监控目录").font(.callout).foregroundStyle(.secondary)
-                    TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) }))
-                        .textFieldStyle(.roundedBorder)
-                }
-                HStack {
-                    Text("备份密码").font(.callout).foregroundStyle(.secondary)
-                    SecureField("", text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) }))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 180)
-                    IntLimitField(initial: model.config.zipWatch?.pollMinutes ?? 5) { model.setZipPollMinutes($0 ?? 5) }
-                        .frame(width: 60)
-                    Text("（分钟）").font(.caption).foregroundStyle(.secondary)
-                }
-                HStack {
-                    Toggle("启用备份目录监控", isOn: Binding(get: { model.zipAuto }, set: { model.setZipAuto($0) }))
-                    Spacer()
-                    Button("立即扫描") { model.zipScanNow() }
-                        .disabled(model.zipRunning)
-                }
-                if model.zipRunning {
-                    Text("扫描中…").font(.caption).foregroundStyle(.secondary)
-                }
-                if let m = model.zipMessage {
-                    Text(m).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                Text("目录出现新的 PTD_backup*.zip 时自动导入（整体替换本地 cookie），失败的下次重试。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("备份目录监控")
-            }
-            Section("已同步的 Cookie 详情") {
-                LabeledContent("站点数", value: "\(model.cookieHosts.count)")
-                LabeledContent("Cookie 总数", value: "\(model.cookieTotal)")
-                if !model.cookieHosts.isEmpty {
-                    Text(model.cookieHosts.joined(separator: "  "))
-                        .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                } else {
-                    Text("（还没有 cookie）").font(.caption).foregroundStyle(.secondary)
-                }
-                Button("检测登录状态") { model.checkCookies() }
-                    .disabled(model.cookieChecking)
-                if model.cookieChecking {
-                    Text("检测中（逐站访问首页，需十几秒）…").font(.caption).foregroundStyle(.secondary)
-                }
-                ForEach(model.cookieCheckLines, id: \.self) { line in
-                    Text(line).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    if let m = model.zipMessage {
+                        Text(m).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                    Text("目录出现新的 PTD_backup*.zip 时自动导入（整体替换本地 cookie），失败的下次重试。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            .padding(20)
         }
-        .formStyle(.grouped)
-        .onAppear {
-            if singleCookieSite.isEmpty {
-                singleCookieSite = model.config.sourceSites.first?.id ?? ""
-            }
-        }
+        .background(Color(nsColor: .windowBackgroundColor))
     }
+
 
     private func pickZip() {
         let panel = NSOpenPanel()
@@ -1050,64 +1034,72 @@ struct DownloaderView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        Form {
-            Section {
-                Picker("类型", selection: $model.config.downloader.type) {
-                    Text("qBittorrent").tag(DownloaderType.qbittorrent)
-                    Text("Transmission").tag(DownloaderType.transmission)
-                }
-                TextField("URL（VPS 隧道地址）", text: $model.config.downloader.url)
-                    .textFieldStyle(.roundedBorder)
-                TextField("用户名", text: $model.config.downloader.username)
-                    .textFieldStyle(.roundedBorder)
-                SecureField("密码", text: $model.config.downloader.password)
-                    .textFieldStyle(.roundedBorder)
-                TextField("保存路径（空 = 下载器默认）", text: optBinding(\.savePath))
-                    .textFieldStyle(.roundedBorder)
-                TextField("分类（空 = 无）", text: optBinding(\.category))
-                    .textFieldStyle(.roundedBorder)
-                Toggle("添加后跳过校验（skipChecking）", isOn: $model.config.downloader.skipChecking)
-            } header: {
-                Text("qBittorrent / Transmission（VPS 上）")
-            }
-            Section {
-                HStack(spacing: 12) {
-                    Button(model.testingDownloader ? "测试中…" : "测试连接") { model.testDownloader() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.testingDownloader)
-                    if model.testingDownloader { ProgressView() }
-                }
-                if let r = model.downloaderTestResult {
-                    Text(r)
-                        .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
-                        .textSelection(.enabled)
-                }
-            } header: {
-                Text("连接检测")
-            }
-            Section {
-                HStack {
-                    IntLimitField(initial: model.config.downloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }
-                        .frame(width: 60)
-                    Text("VPS 剩余空间（GB，空 = 不做大小检测）").font(.caption).foregroundStyle(.secondary)
-                }
-                HStack {
-                    Picker("超过剩余空间时", selection: $model.config.downloader.sizeGuardMode) {
-                        Text("提醒（继续转种）").tag(SizeGuardMode.warn)
-                        Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                CardSection("qBittorrent / Transmission（VPS 上）") {
+                    LabeledRow("类型") {
+                        Picker("", selection: $model.config.downloader.type) {
+                            Text("qBittorrent").tag(DownloaderType.qbittorrent)
+                            Text("Transmission").tag(DownloaderType.transmission)
+                        }
+                        .labelsHidden()
                     }
-                    IntLimitField(initial: model.config.downloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
-                        .frame(width: 50)
-                    Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
+                    LabeledRow("URL（VPS 隧道地址）") {
+                        TextField("", text: $model.config.downloader.url).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("用户名") {
+                        TextField("", text: $model.config.downloader.username).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("密码") {
+                        SecureField("", text: $model.config.downloader.password).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("保存路径（空 = 下载器默认）") {
+                        TextField("", text: optBinding(\.savePath)).textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("分类（空 = 无）") {
+                        TextField("", text: optBinding(\.category)).textFieldStyle(.roundedBorder)
+                    }
+                    Toggle("添加后跳过校验（skipChecking）", isOn: $model.config.downloader.skipChecking)
                 }
-                Text("可用空间 = 剩余 - 边际；剩余空间需手动维护（qB WebAPI 无磁盘接口），空间变化大时记得更新。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("种子大小检测")
+                CardSection("连接检测") {
+                    HStack(spacing: 12) {
+                        Button(model.testingDownloader ? "测试中…" : "测试连接") { model.testDownloader() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.testingDownloader)
+                        if model.testingDownloader { ProgressView() }
+                    }
+                    if let r = model.downloaderTestResult {
+                        Text(r)
+                            .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
+                            .textSelection(.enabled)
+                    }
+                }
+                CardSection("种子大小检测") {
+                    LabeledRow("VPS 剩余空间（GB，空 = 不做大小检测）") {
+                        IntLimitField(initial: model.config.downloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }.frame(width: 60)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("超过剩余空间时").font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Picker("", selection: $model.config.downloader.sizeGuardMode) {
+                                Text("提醒（继续转种）").tag(SizeGuardMode.warn)
+                                Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
+                            }
+                            .labelsHidden()
+                            IntLimitField(initial: model.config.downloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
+                                .frame(width: 50)
+                            Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("可用空间 = 剩余 - 边际；剩余空间需手动维护（qB WebAPI 无磁盘接口），空间变化大时记得更新。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
+            .padding(20)
         }
-        .formStyle(.grouped)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
+
 
     private func optBinding(_ kp: WritableKeyPath<DownloaderConfig, String?>) -> Binding<String> {
         Binding(get: { model.config.downloader[keyPath: kp] ?? "" },
