@@ -78,8 +78,9 @@ public final class CookieCloudSync {
         return nil
     }
 
+    /// 拉取并解密（不做导入）；返回 {归一化 host: "k=v; k=v"}，供互补同步在后台线程调用
     @discardableResult
-    public func pull(into store: CookieStore, knownSites: [(id: String, name: String, host: String)] = []) throws -> PullResult {
+    public func fetch() throws -> [String: String] {
         var base = config.host.trimmingCharacters(in: .whitespaces)
         while base.hasSuffix("/") { base.removeLast() }
         let key = config.key.trimmingCharacters(in: .whitespaces)
@@ -108,14 +109,23 @@ public final class CookieCloudSync {
         guard !data.isEmpty else {
             throw BoxSendError.badInput("CookieCloud 返回 0 条 cookie（请检查 KEY 与扩展里的备份域名）")
         }
-        var imported = 0
-        var skipped = 0
+        var out: [String: String] = [:]
         for (host, cookies) in data {
             let raw = cookies.compactMap { c -> String? in
                 guard let n = c["name"] as? String, let v = c["value"] as? String else { return nil }
                 return n + "=" + v
             }.joined(separator: "; ")
-            guard !raw.isEmpty else { skipped += 1; continue }
+            if !raw.isEmpty { out[Self.normalize(host)] = raw }
+        }
+        return out
+    }
+
+    @discardableResult
+    public func pull(into store: CookieStore, knownSites: [(id: String, name: String, host: String)] = []) throws -> PullResult {
+        let raws = try fetch()
+        var imported = 0
+        var skipped = 0
+        for (host, raw) in raws {
             let h: String
             if knownSites.isEmpty {
                 h = host

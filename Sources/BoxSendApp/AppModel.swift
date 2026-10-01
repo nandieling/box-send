@@ -438,8 +438,9 @@ final class AppModel: ObservableObject {
         return (-1, 0)
     }
 
-    /// 批量 cookie 检测（每批 4 个并发）；force = 已检测过的也重新检测（分组「检测」按钮用）
-    func checkSitesCookies(_ sites: [SiteConfig], force: Bool = false) {
+    /// 批量 cookie 检测（每批 4 个并发）；force = 已检测过的也重新检测（分组「检测」按钮用）；
+    /// onDone = 全部检测完成后在主线程回调（无可检站点时立即回调）
+    func checkSitesCookies(_ sites: [SiteConfig], force: Bool = false, onDone: (() -> Void)? = nil) {
         let cookieJar = cookies
         let cfg = config
         let pending = sites.filter { site in
@@ -448,7 +449,7 @@ final class AppModel: ObservableObject {
                 && (force || siteCheckResults[site.id] == nil)
                 && cookieJar.cookieHeader(forHost: siteHost(site)) != nil
         }
-        guard !pending.isEmpty else { return }
+        guard !pending.isEmpty else { onDone?(); return }
         siteChecking.formUnion(pending.map(\.id))
         Task.detached {
             let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
@@ -469,9 +470,11 @@ final class AppModel: ObservableObject {
                 }
                 i += 4
                 let r = results
+                let isLast = i >= pending.count
                 await MainActor.run {
                     for (id, res) in r { self.siteCheckResults[id] = res }
                     self.siteChecking.subtract(r.keys)
+                    if isLast { onDone?() }
                 }
             }
         }
@@ -521,23 +524,167 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func gistSyncNow(completion: (() -> Void)? = nil) {
-        guard let g = config.gistSync, !g.gistID.isEmpty else {
-            cookieMessage = "先在上方填写 Gist 配置（gistID + token + 备份密码）"
+    // MARK: Cookie 同步（Gist / CookieCloud 互为补充；拉取全程后台线程，不卡 UI）
+
+    @Published var cookieSyncBusy = false
+
+    enum CookieSource { case gist, cookieCloud }
+
+    func gistSyncNow() { syncCookies(from: .gist) }
+
+    /// 互补同步：
+    /// 1. 后台拉取来源备份（不阻塞主线程）
+    /// 2. 本地 cookie 已检测为有效 → 保留本地，不被备份中的旧值覆盖（同步不新增失效）
+    /// 3. 其余站点导入备份值
+    /// 4. 全部重检后，仍失效的站点自动用「另一来源」补充
+    func syncCookies(from source: CookieSource) {
+        guard !cookieSyncBusy else { return }
+        let cfg = config
+        let other: CookieSource = (source == .gist) ? .cookieCloud : .gist
+        let label = (source == .gist) ? "Gist" : "CookieCloud"
+        cookieSyncBusy = true
+        Task.detached { [weak self] in
+            guard let self else { return }
+            do {
+                let f = try Self.fetchSourceRaw(source: source, cfg: cfg)
+                await MainActor.run {
+                    let (imported, kept) = self.mergedImportCookies(f.raws)
+                    if source == .gist {
+                        self.state.setLastGistSync(Date().timeIntervalSince1970)
+                        self.lastGistSyncText = Self.dateText(self.state.lastGistSync ?? 0)
+                    }
+                    let removed = self.trimCookiesToEnabled()
+                    self.persistCookies()
+                    self.refreshCookieStats()
+                    var msg = "\(label) 同步成功：导入 \(imported) 个站点"
+                    if kept > 0 { msg += "，保留本地有效 \(kept) 个" }
+                    if !f.timeText.isEmpty { msg += "（\(f.timeText)）" }
+                    if removed > 0 { msg += "；已清理 \(removed) 个未启用站点的 cookie" }
+                    self.cookieMessage = msg
+                    self.checkSitesCookies(self.managedSites, force: true) {
+                        Task { @MainActor in
+                            self.crossFillInvalid(from: other, baseMessage: msg)
+                        }
+                    }
+                }
+            } catch {
+                Task { @MainActor in
+                    self.cookieMessage = "\(label) 同步失败：\(error.localizedDescription)"
+                    self.cookieSyncBusy = false
+                }
+            }
+        }
+    }
+
+    /// 后台拉取来源 → {host: "k=v; k=v"}（timeText 仅 Gist 有备份时间）
+    nonisolated private static func fetchSourceRaw(source: CookieSource, cfg: AppConfig) throws -> (raws: [String: String], timeText: String) {
+        let client = HTTPClient(cookies: CookieStore(), userAgent: cfg.userAgent)
+        switch source {
+        case .gist:
+            guard let g = cfg.gistSync, !g.gistID.isEmpty else {
+                throw BoxSendError.badInput("先在 Cookie 页填写 Gist 配置（gistID + token + 备份密码）")
+            }
+            let f = try GistSync(config: g, client: client).fetch()
+            return (try rawStrings(from: f.data), "备份时间 \(f.backupTime)")
+        case .cookieCloud:
+            guard let cc = cfg.cookieCloud,
+                  !cc.host.trimmingCharacters(in: .whitespaces).isEmpty,
+                  !cc.key.trimmingCharacters(in: .whitespaces).isEmpty,
+                  !cc.password.isEmpty else {
+                throw BoxSendError.badInput("先在 Cookie 页填写 CookieCloud 配置（服务器地址 + KEY + 加密密码）")
+            }
+            return (try CookieCloudSync(config: cc, client: client).fetch(), "")
+        }
+    }
+
+    /// Gist 解密后的 {host: [cookie...]} JSON → {host: "k=v; k=v"}
+    nonisolated static func rawStrings(from cookieJSON: Data) throws -> [String: String] {
+        guard let obj = (try? JSONSerialization.jsonObject(with: cookieJSON)) as? [String: Any] else {
+            throw BoxSendError.badInput("Gist 备份解密内容不是 JSON（备份密码可能不正确）")
+        }
+        let map = (obj["cookies"] as? [String: Any]) ?? obj
+        var out: [String: String] = [:]
+        for (host, value) in map where !host.lowercased().hasPrefix("http") {
+            guard let arr = value as? [[String: Any]] else { continue }
+            let raw = arr.compactMap { c -> String? in
+                guard let n = c["name"] as? String, let v = c["value"] as? String else { return nil }
+                return n + "=" + v
+            }.joined(separator: "; ")
+            if !raw.isEmpty { out[normHost(host)] = raw }
+        }
+        return out
+    }
+
+    nonisolated static func normHost(_ host: String) -> String {
+        var h = host.lowercased().trimmingCharacters(in: .whitespaces)
+        if h.hasPrefix(".") { h.removeFirst() }
+        if let i = h.firstIndex(of: "/") { h = String(h[..<i]) }
+        if let i = h.firstIndex(of: ":") { h = String(h[..<i]) }
+        return h
+    }
+
+    nonisolated static func hostMatches(_ a: String, _ b: String) -> Bool {
+        let na = normHost(a), nb = normHost(b)
+        guard !na.isEmpty, !nb.isEmpty else { return false }
+        return na == nb || na.hasSuffix("." + nb) || nb.hasSuffix("." + na)
+    }
+
+    /// 互补合并导入：本地 cookie 已检测有效 → 保留（防止备份旧值覆盖成新的失效）；否则导入备份值。
+    /// 返回 (导入站点数, 保留本地站点数)
+    func mergedImportCookies(_ raws: [String: String]) -> (imported: Int, kept: Int) {
+        var imported = 0
+        var kept = 0
+        for (host, raw) in raws {
+            guard !raw.isEmpty else { continue }
+            guard let site = managedSites.first(where: { Self.hostMatches(siteHost($0), host) }) else { continue }
+            if hasCookie(for: site) && siteCheckResults[site.id]?.ok == true {
+                kept += 1
+                continue
+            }
+            cookies.importRawString(host: siteHost(site), raw)
+            imported += 1
+        }
+        return (imported: imported, kept: kept)
+    }
+
+    /// 主同步后仍失效的站点 → 拉「另一来源」补充（另一来源未配置 / 无对应条目时静默结束）
+    private func crossFillInvalid(from other: CookieSource, baseMessage: String) {
+        let otherLabel = (other == .gist) ? "Gist" : "CookieCloud"
+        let invalid = managedSites.filter { site in
+            site.enabled
+                && hasCookie(for: site)
+                && siteCheckResults[site.id].map { !$0.ok } ?? false
+        }
+        let cfg = config
+        guard !invalid.isEmpty else {
+            cookieSyncBusy = false
             return
         }
-        Task {
+        let hostSet = Set(invalid.map { Self.normHost(siteHost($0)) })
+        Task.detached { [weak self] in
+            guard let self else { return }
             do {
-                let client = HTTPClient(cookies: CookieStore(), userAgent: config.userAgent)
-                let r = try GistSync(config: g, client: client).pull(into: cookies, state: state)
-                let removed = trimCookiesToEnabled()
-                persistCookies()
-                refreshCookieStats()
-                cookieMessage = "Gist 同步成功：\(r.cookieCount) 条 cookie（备份时间 \(r.backupTime)）" + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
-                lastGistSyncText = Self.dateText(state.lastGistSync ?? 0)
-                completion?()
+                let f = try Self.fetchSourceRaw(source: other, cfg: cfg)
+                let subset = f.raws.filter { hostSet.contains(Self.normHost($0.key)) }
+                guard !subset.isEmpty else {
+                    Task { @MainActor in
+                        self.cookieMessage = baseMessage + "；仍有失效站点，但 \(otherLabel) 没有这些站点的备份"
+                        self.cookieSyncBusy = false
+                    }
+                    return
+                }
+                await MainActor.run {
+                    let (filled, _) = self.mergedImportCookies(subset)
+                    _ = self.trimCookiesToEnabled()
+                    self.persistCookies()
+                    self.refreshCookieStats()
+                    self.cookieMessage = baseMessage + "；已用 \(otherLabel) 补充 \(filled) 个失效站点的 cookie"
+                    self.checkSitesCookies(invalid, force: true) {
+                        Task { @MainActor in self.cookieSyncBusy = false }
+                    }
+                }
             } catch {
-                cookieMessage = "Gist 同步失败：\(error.localizedDescription)"
+                Task { @MainActor in self.cookieSyncBusy = false }
             }
         }
     }
@@ -559,31 +706,7 @@ final class AppModel: ObservableObject {
     @Published var cookieCloudAuto = false
     private var cookieCloudTimer: Timer?
 
-    func cookieCloudNow(completion: (() -> Void)? = nil) {
-        guard let cc = config.cookieCloud,
-              !cc.host.trimmingCharacters(in: .whitespaces).isEmpty,
-              !cc.key.trimmingCharacters(in: .whitespaces).isEmpty,
-              !cc.password.isEmpty else {
-            cookieMessage = "先在 Cookie 页填写 CookieCloud 配置（服务器地址 + KEY + 加密密码）"
-            return
-        }
-        Task {
-            do {
-                let client = HTTPClient(cookies: CookieStore(), userAgent: config.userAgent)
-                let sites = config.sourceSites.map { (id: $0.id, name: $0.name, host: siteHost($0)) }
-                let r = try CookieCloudSync(config: cc, client: client).pull(into: cookies, knownSites: sites)
-                let removed = trimCookiesToEnabled()
-                persistCookies()
-                refreshCookieStats()
-                cookieMessage = "CookieCloud 同步成功：\(r.imported) 个站点的 cookie"
-                    + (r.skipped > 0 ? "（跳过 \(r.skipped) 条无法识别的条目）" : "")
-                    + (removed > 0 ? "；已清理 \(removed) 个未启用站点的 cookie" : "")
-                completion?()
-            } catch {
-                cookieMessage = "CookieCloud 同步失败：\(error.localizedDescription)"
-            }
-        }
-    }
+    func cookieCloudNow() { syncCookies(from: .cookieCloud) }
 
     func setCookieCloudAuto(_ on: Bool) {
         cookieCloudAuto = on

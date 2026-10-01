@@ -18,6 +18,11 @@ public final class GistSync {
         self.client = client
     }
 
+    public struct FetchResult {
+        public var data: Data          // 解密后的 {host: [cookie...]} JSON
+        public var backupTime: String
+    }
+
     public struct PullResult {
         public var hosts: [String]
         public var cookieCount: Int
@@ -25,32 +30,19 @@ public final class GistSync {
         public var changed: Bool
     }
 
-    @discardableResult
-    public func pull(into store: CookieStore, state: StateStore) throws -> PullResult {
-        var req = URLRequest(url: URL(string: "https://api.github.com/gists/\(config.gistID)")!)
-        req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-
-        let sem = DispatchSemaphore(value: 0)
-        var respData: Data?
-        var respStatus = 0
-        var respError: Error?
-        let task = client.session0.dataTask(with: req) { d, r, e in
-            defer { sem.signal() }
-            respData = d
-            respStatus = (r as? HTTPURLResponse)?.statusCode ?? 0
-            respError = e
+    /// 拉取 gist 并解密（不做导入）；供互补同步在后台线程调用，避免阻塞 UI
+    public func fetch() throws -> FetchResult {
+        let resp = try client.get("https://api.github.com/gists/\(config.gistID)",
+                                  extraHeaders: [
+                                      "Authorization": "Bearer \(config.token)",
+                                      "Accept": "application/vnd.github+json",
+                                      "X-GitHub-Api-Version": "2022-11-28",
+                                  ])
+        guard (200..<300).contains(resp.status) else {
+            throw BoxSendError.http(status: resp.status, url: "api.github.com/gists/\(config.gistID)",
+                                    body: String(data: resp.data.prefix(300), encoding: .utf8) ?? "")
         }
-        task.resume()
-        _ = sem.wait(timeout: .now() + 30)
-        if let e = respError { throw e }
-        guard let raw = respData else { throw BoxSendError.badInput("gist 无响应") }
-        guard (200..<300).contains(respStatus) else {
-            throw BoxSendError.http(status: respStatus, url: "api.github.com/gists/\(config.gistID)",
-                                    body: String(data: raw.prefix(300), encoding: .utf8) ?? "")
-        }
-        guard let obj = try? JSONSerialization.jsonObject(with: raw) as? [String: Any],
+        guard let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
               let files = obj["files"] as? [String: [String: Any]] else {
             throw BoxSendError.badInput("gist 响应结构异常")
         }
@@ -85,11 +77,16 @@ public final class GistSync {
         } else {
             decrypted = Data(content.utf8)
         }
+        return FetchResult(data: decrypted, backupTime: backupTime)
+    }
 
-        let imported = try store.importBackupJSON(decrypted)
+    @discardableResult
+    public func pull(into store: CookieStore, state: StateStore) throws -> PullResult {
+        let f = try fetch()
+        let imported = try store.importBackupJSON(f.data)
         state.setLastGistSync(Date().timeIntervalSince1970)
         let hosts = store.hosts()
-        return PullResult(hosts: hosts, cookieCount: imported, backupTime: backupTime,
+        return PullResult(hosts: hosts, cookieCount: imported, backupTime: f.backupTime,
                           changed: true)
     }
 }

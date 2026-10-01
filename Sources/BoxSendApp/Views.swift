@@ -271,7 +271,10 @@ struct SitesView: View {
     @State private var newGroupName = ""
     @State private var newGroupMB = "10"
     @State private var showAddSites = false
-    @State private var manualCookieSite: SiteConfig?
+    @State private var manualCookiePick: SitePick?
+    @State private var confirmReq: ConfirmRequest?
+    @State private var showConfirm1 = false
+    @State private var showConfirm2 = false
     @State private var draggingSite: String?
     @State private var siteSortNum: [String: String] = [:]
 
@@ -320,10 +323,9 @@ struct SitesView: View {
                         .font(.caption)
                         .disabled(model.anyChecking)
                         .help("批量检测所有分组已添加站点的 cookie 有效性")
-                        Text("检测所有已添加站点").font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }
-                    Text("站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选 / 全不选」批量操作，「移除站点」移除选中的站点。「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并打勾添加（可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
+                    Text("站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并打勾添加（可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .runCard()
@@ -332,13 +334,20 @@ struct SitesView: View {
                     let gname = model.config.groups[gi].name
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
+                            Button {
+                                confirmReq = ConfirmRequest(kind: .removeGroup, index: gi,
+                                                            name: gname,
+                                                            count: model.groupMembers(gi).count)
+                                showConfirm1 = true
+                            } label: {
+                                Label("移除分组", systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .tint(.red)
+                            .help("删除分组（组内站点移到无分组），需两次确认")
                             Text("分组：\(gname)").font(.headline)
                             Spacer()
-                            Button(role: .destructive) { model.removeGroup(at: gi) } label: {
-                                Image(systemName: "trash")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("删除分组（组内站点移到无分组）")
                         }
                         groupToolbar(gi)
                         siteCardGrid(model.groupMembers(gi), gi: gi)
@@ -370,32 +379,69 @@ struct SitesView: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .sheet(isPresented: $showAddSites) { AddSitesSheet() }
-        .sheet(item: $manualCookieSite) { site in
-            ManualCookieSheet(site: site)
+        .sheet(item: $manualCookiePick) { pick in
+            ManualCookieSheet(sites: pick.sites)
+        }
+        .alert(confirmReq?.firstTitle ?? "确认", isPresented: $showConfirm1) {
+            Button("取消", role: .cancel) {
+                showConfirm1 = false
+                confirmReq = nil
+            }
+            Button("继续", role: .destructive) {
+                showConfirm1 = false
+                showConfirm2 = true
+            }
+        } message: {
+            Text(confirmReq?.firstMessage ?? "")
+        }
+        .alert("再次确认", isPresented: $showConfirm2) {
+            Button("取消", role: .cancel) {
+                showConfirm2 = false
+                confirmReq = nil
+            }
+            Button("确定移除", role: .destructive) {
+                confirmReq?.perform(model)
+                showConfirm2 = false
+                confirmReq = nil
+            }
+        } message: {
+            Text(confirmReq?.secondMessage ?? "")
         }
         .onAppear { model.autoCheckSites() }
     }
 
-    /// 分组工具栏：N 站 / 同步 Gist / 全选 / 全不选 / 移除站点
+    /// 分组工具栏：N 站 / 同步 Gist / 全选（切换） / 手动添加 / 移除站点
     private func groupToolbar(_ gi: Int) -> some View {
         let members = model.groupMembers(gi)
+        let enabledMembers = members.filter(\.enabled)
+        let allOn = !members.isEmpty && members.allSatisfy(\.enabled)
         return HStack(spacing: 8) {
             Text("\(members.count) 站").font(.caption).foregroundStyle(.secondary)
-            Button("同步 Gist") {
-                model.gistSyncNow { model.checkGroupCookies(gi) }
+            Button(model.cookieSyncBusy ? "同步中…" : "同步 Gist") {
+                model.syncCookies(from: .gist)
             }
             .font(.caption)
-            .help("通过 Gist 批量同步所有站点 cookie，完成后重检该分组")
-            Button("全选") { model.setGroupSitesEnabled(gi, on: true) }
+            .disabled(model.cookieSyncBusy)
+            .help("通过 Gist 批量同步所有站点 cookie（与 CookieCloud 互为补充：本地有效的保留，失效的自动用另一来源补充）")
+            Button(allOn ? "全不选" : "全选") { model.setGroupSitesEnabled(gi, on: !allOn) }
                 .font(.caption)
-                .help("开启该分组全部站点")
-            Button("全不选") { model.setGroupSitesEnabled(gi, on: false) }
-                .font(.caption)
-                .help("停用该分组全部站点")
-            Button("移除站点") { model.removeEnabledSitesInGroup(gi) }
-                .font(.caption)
-                .disabled(!members.contains(where: { $0.enabled }))
-                .help("移除当前选中（加深色）的站点，保留 cookie 与设置")
+                .disabled(members.isEmpty)
+                .help(allOn ? "停用该分组全部站点" : "开启该分组全部站点")
+            Button("手动添加") {
+                manualCookiePick = SitePick(sites: enabledMembers)
+            }
+            .font(.caption)
+            .disabled(enabledMembers.isEmpty)
+            .help("为选中（加深色）的站点手动填写 cookie")
+            Button("移除站点") {
+                let gname = gi >= 0 && gi < model.config.groups.count ? model.config.groups[gi].name : "无分组"
+                confirmReq = ConfirmRequest(kind: .removeSites, index: gi,
+                                            name: gname, count: enabledMembers.count)
+                showConfirm1 = true
+            }
+            .font(.caption)
+            .disabled(enabledMembers.isEmpty)
+            .help("移除当前选中（加深色）的站点，保留 cookie 与设置，需两次确认")
             Spacer()
         }
     }
@@ -434,10 +480,6 @@ struct SitesView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { model.setSiteEnabled(siteID: s.id, !on) }
-            if let r = model.siteCheckResults[s.id], !r.ok {
-                Button("手动添加") { manualCookieSite = s }
-                    .font(.caption).buttonStyle(.bordered).controlSize(.small)
-            }
             HStack(spacing: 6) {
                 Text("上传限速").font(.caption).foregroundStyle(.secondary)
                 IntLimitField(initial: model.siteUpLimitMBInt[s.id] ?? 0, center: true) { mb in
@@ -711,17 +753,34 @@ final class SiteReorderDrop: DropDelegate {
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
 }
 
-/// 手动添加站点 cookie（卡片「手动添加」按钮弹出）
+/// 手动添加站点 cookie（分组工具栏「手动添加」按钮弹出；选中多个站点时可在弹窗内切换）
 struct ManualCookieSheet: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    let site: SiteConfig
+    let sites: [SiteConfig]
+    @State private var siteID: String = ""
     @State private var text = ""
+
+    private var current: SiteConfig? {
+        sites.first(where: { $0.id == siteID }) ?? sites.first
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("添加 \(site.name)（\(model.siteHost(site))）的 cookie")
-                .font(.headline)
+            if let c = current {
+                Text("添加 \(c.name)（\(model.siteHost(c))）的 cookie")
+                    .font(.headline)
+            }
+            if sites.count > 1 {
+                Picker("站点", selection: $siteID) {
+                    ForEach(sites) { s in
+                        Text(s.name).tag(s.id)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 220)
+            }
             TextField("name1=value1; name2=value2（浏览器 Cookie 头原文）", text: $text, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
@@ -732,15 +791,57 @@ struct ManualCookieSheet: View {
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("保存") {
-                    model.addSiteCookie(siteID: site.id, raw: text)
+                    if let c = current {
+                        model.addSiteCookie(siteID: c.id, raw: text)
+                    }
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || current == nil)
             }
         }
         .padding()
         .frame(width: 480)
+        .onAppear { siteID = sites.first?.id ?? "" }
+    }
+}
+
+/// 手动添加 cookie 的站点集合（点击选中卡片后点「手动添加」弹出）
+struct SitePick: Identifiable {
+    let id = UUID()
+    let sites: [SiteConfig]
+}
+
+/// 两次确认请求（移除分组 / 移除站点）：第一次确认 → 「继续」→ 第二次确认 → 「确定移除」
+struct ConfirmRequest {
+    enum Kind { case removeGroup, removeSites }
+    var kind: Kind
+    var index: Int
+    var name: String
+    var count: Int
+
+    var firstTitle: String { kind == .removeGroup ? "移除分组" : "移除站点" }
+    var firstMessage: String {
+        switch kind {
+        case .removeGroup:
+            return "将移除分组「\(name)」，组内 \(count) 个站点会移到「无分组」区块。"
+        case .removeSites:
+            return "将移除分组「\(name)」中当前选中（加深色）的 \(count) 个站点（保留 cookie 与限速设置）。"
+        }
+    }
+    var secondMessage: String {
+        switch kind {
+        case .removeGroup:
+            return "再次确认：确定移除分组「\(name)」？此操作不可撤销。"
+        case .removeSites:
+            return "再次确认：确定移除选中的 \(count) 个站点？此操作不可撤销。"
+        }
+    }
+    @MainActor func perform(_ model: AppModel) {
+        switch kind {
+        case .removeGroup: model.removeGroup(at: index)
+        case .removeSites: model.removeEnabledSitesInGroup(index)
+        }
     }
 }
 
@@ -768,7 +869,8 @@ struct CookiesView: View {
                     Text("（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Toggle("自动定时同步", isOn: autoBinding)
-                    Button("立即同步") { model.gistSyncNow() }
+                    Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.gistSyncNow() }
+                        .disabled(model.cookieSyncBusy)
                 }
                 if !model.lastGistSyncText.isEmpty {
                     LabeledContent("上次 Gist 同步", value: model.lastGistSyncText)
@@ -792,7 +894,8 @@ struct CookiesView: View {
                     Text("（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Toggle("自动定时同步", isOn: ccAutoBinding)
-                    Button("立即同步") { model.cookieCloudNow() }
+                    Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.cookieCloudNow() }
+                        .disabled(model.cookieSyncBusy)
                 }
                 if let msg = model.cookieMessage, !msg.isEmpty {
                     Text(msg).font(.caption).foregroundStyle(.secondary)
