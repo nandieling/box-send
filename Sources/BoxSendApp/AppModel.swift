@@ -380,6 +380,21 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
+    /// 分组内站点批量开启/关闭（gi = -1 未分组）
+    func setGroupSitesEnabled(_ gi: Int, on: Bool) {
+        for s in groupMembers(gi) where s.enabled != on {
+            setSiteEnabled(siteID: s.id, on)
+        }
+    }
+
+    /// 移除分组内当前已选中（开启）的站点（gi = -1 未分组），返回移除数
+    @discardableResult
+    func removeEnabledSitesInGroup(_ gi: Int) -> Int {
+        let members = groupMembers(gi).filter { $0.enabled }
+        for s in members { removeManagedSite(s.id) }
+        return members.count
+    }
+
     /// 从站点列表移除（保留 cookie 与启用状态，之后可再次添加）
     func removeManagedSite(_ id: String) {
         guard let i = config.sourceSites.firstIndex(where: { $0.id == id }) else { return }
@@ -545,8 +560,11 @@ final class AppModel: ObservableObject {
     private var cookieCloudTimer: Timer?
 
     func cookieCloudNow(completion: (() -> Void)? = nil) {
-        guard let cc = config.cookieCloud, !cc.token.isEmpty else {
-            cookieMessage = "先在 Cookie 页填写 CookieCloud 配置（API Token）"
+        guard let cc = config.cookieCloud,
+              !cc.host.trimmingCharacters(in: .whitespaces).isEmpty,
+              !cc.key.trimmingCharacters(in: .whitespaces).isEmpty,
+              !cc.password.isEmpty else {
+            cookieMessage = "先在 Cookie 页填写 CookieCloud 配置（服务器地址 + KEY + 加密密码）"
             return
         }
         Task {

@@ -325,19 +325,46 @@ public struct GistSyncConfig: Codable {
     public static let empty = GistSyncConfig(gistID: "", token: "", encryptionKey: "", pollMinutes: 30)
 }
 
-/// CookieCloud 同步（cookiecloud.co，PT 站 cookie 云端备份）
+/// CookieCloud 同步（easychen/CookieCloud，PT 站 cookie 端对端加密云备份）
+/// 用 CookieCloud 浏览器扩展生成的 KEY（UUID）+ 端对端加密密码连接：
+/// 服务器只存密文（GET {host}/get/{key}），解密在本地进行。
 public struct CookieCloudConfig: Codable, Equatable {
-    public var baseURL: String      // 默认 https://cookiecloud.co
-    public var token: String        // API Token（Authorization: Bearer）
+    public var host: String         // 服务器地址（自架 http://vps:8088 或第三方服务器）
+    public var key: String          // KEY（扩展生成的 UUID）
+    public var password: String     // 端对端加密密码
     public var pollMinutes: Int     // 自动同步间隔（分钟）
 
-    public init(baseURL: String = "https://cookiecloud.co", token: String = "", pollMinutes: Int = 30) {
-        self.baseURL = baseURL
-        self.token = token
+    public init(host: String = "", key: String = "", password: String = "", pollMinutes: Int = 30) {
+        self.host = host
+        self.key = key
+        self.password = password
         self.pollMinutes = pollMinutes
     }
 
     public static let empty = CookieCloudConfig()
+
+    private enum CodingKeys: String, CodingKey {
+        case host, key, password, pollMinutes, baseURL, token
+    }
+
+    // 兼容旧字段（baseURL/token）
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        host = (try? c.decodeIfPresent(String.self, forKey: .host))
+            ?? (try? c.decodeIfPresent(String.self, forKey: .baseURL)) ?? ""
+        key = (try? c.decodeIfPresent(String.self, forKey: .key))
+            ?? (try? c.decodeIfPresent(String.self, forKey: .token)) ?? ""
+        password = (try? c.decodeIfPresent(String.self, forKey: .password)) ?? ""
+        pollMinutes = (try? c.decodeIfPresent(Int.self, forKey: .pollMinutes)) ?? 30
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(host, forKey: .host)
+        try c.encode(key, forKey: .key)
+        try c.encode(password, forKey: .password)
+        try c.encode(pollMinutes, forKey: .pollMinutes)
+    }
 }
 
 /// 目标站分组：upLimitMB = 组内新增站点的默认上传限速（MB/s，0 = 用 10）

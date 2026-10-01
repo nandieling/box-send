@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CommonCrypto)
+import CommonCrypto
+#endif
 
 /// 与 CryptoJS (OpenSSL 格式) 兼容的解密工具。
 /// PT-depiler 的 Gist 备份: AES-256-CBC, 口令派生 = EVP_BytesToKey(MD5)。
@@ -307,6 +310,35 @@ enum CryptoJSCompat {
             throw BoxSendError.badInput("PKCS7 padding 校验失败")
         }
         return out.dropLast(Int(pad))
+    }
+
+    /// AES-128-CBC 解密（CookieCloud 新格式：key = 16 个 hex 字符的 UTF-8 字节，固定零 IV，PKCS7）
+    static func aes128CBCDecrypt(data: Data, key: [UInt8], iv: [UInt8]) throws -> Data {
+        #if canImport(CommonCrypto)
+        precondition(key.count == 16, "AES-128 key 应为 16 字节")
+        precondition(data.count % 16 == 0, "AES-CBC 密文长度应为 16 的倍数")
+        var outBuf = [UInt8](repeating: 0, count: data.count + 16)
+        let avail = outBuf.count
+        var moved = 0
+        let st: CCCryptorStatus = key.withUnsafeBufferPointer { kp in
+            iv.withUnsafeBufferPointer { vp in
+                data.withUnsafeBytes { dp in
+                    outBuf.withUnsafeMutableBufferPointer { op in
+                        CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding),
+                                kp.baseAddress, key.count, vp.baseAddress,
+                                dp.baseAddress, data.count, op.baseAddress, avail, &moved)
+                    }
+                }
+            }
+        }
+        guard st == kCCSuccess else {
+            throw BoxSendError.badInput("AES-128-CBC 解密失败（加密密码或 KEY 可能不正确）")
+        }
+        return Data(outBuf.prefix(moved))
+        #else
+        _ = (data, key, iv)
+        throw BoxSendError.badInput("当前平台缺少 CommonCrypto")
+        #endif
     }
 
     // MARK: - OpenSSL EVP 格式 (Salted__ + AES-256-CBC)
