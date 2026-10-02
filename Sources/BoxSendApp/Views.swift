@@ -40,6 +40,27 @@ struct AppTheme: Identifiable, Hashable {
     static let `default` = all[0]
 }
 
+extension Color {
+    /// 功能区块表面：叠在主题渐变/壁纸之上的半透明色（主题色、壁纸与透明度透出，同时保证文字可读性）
+    static func blockSurface(_ dark: Bool) -> Color { dark ? .black.opacity(0.38) : .white.opacity(0.62) }
+    /// 文字密集区块表面（运行记录 / 日志）：不透明度更高，保证密集文字可读
+    static func textSurface(_ dark: Bool) -> Color { dark ? .black.opacity(0.45) : .white.opacity(0.75) }
+}
+
+/// 功能区块背景：半透明表面，让主题渐变 + 壁纸 + 透明度覆盖到各功能区块（同时保证文字可读）
+private struct BlockSurfaceModifier: ViewModifier {
+    @EnvironmentObject var model: AppModel
+    var dense: Bool = false
+    func body(content: Content) -> some View {
+        let dark = model.theme.dark
+        content.background(dense ? Color.textSurface(dark) : Color.blockSurface(dark))
+    }
+}
+extension View {
+    /// 功能区块背景（主题/壁纸透出）；dense = 文字密集区（运行记录/日志）
+    func blockSurface(_ dense: Bool = false) -> some View { modifier(BlockSurfaceModifier(dense: dense)) }
+}
+
 /// 全局背景层：主题渐变 + 可选背景图片（透明度由设置控制）；只填充窗口，不改变窗口/弹窗尺寸
 struct BoxSendBackground: View {
     @EnvironmentObject var model: AppModel
@@ -288,7 +309,10 @@ struct RunView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? Color.accentColor.opacity(0.22) : Color(nsColor: .windowBackgroundColor))
+        .background {
+            Color.blockSurface(model.theme.dark)
+            Color.accentColor.opacity(selected ? 0.3 : 0)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -320,7 +344,7 @@ struct RunView: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
-                    .background(Color(nsColor: .textBackgroundColor))
+                    .blockSurface(true)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -343,7 +367,7 @@ extension View {
         self
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .blockSurface()
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -402,12 +426,6 @@ struct SitesView: View {
                             newGroupMB = "10"
                         }
                         .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
-                        Button {
-                            addSheetReq = AddSitesRequest(group: -1)
-                        } label: {
-                            Label("添加站点", systemImage: "plus")
-                        }
-                        .buttonStyle(.borderedProminent)
                         Spacer()
                     }
                     HStack(spacing: 8) {
@@ -425,7 +443,7 @@ struct SitesView: View {
                         .help("批量检测所有分组已添加站点的 cookie 有效性")
                         Spacer()
                     }
-                    Text("顶部「同步 Cookie」同时同步 PT-depiler Gist 与 CookieCloud 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点），「检测 Cookie」批量检测所有分组已添加站点。站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。「添加站点」可从内置 \(model.config.sourceSites.count) 个站点中搜索并点击选中（加深色）添加（可指定加入分组，新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
+                    Text("顶部「同步 Cookie」同时同步 PT-depiler Gist 与 CookieCloud 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点），「检测 Cookie」批量检测所有分组已添加站点。站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。每个分组卡片旁的「添加站点」批量添加（弹窗锁定该分组、无需再选分组；可搜索内置 \(model.config.sourceSites.count) 个站点并点击选中（加深色），新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .runCard()
@@ -460,7 +478,7 @@ struct SitesView: View {
                         groupToolbar(gi)
                         siteCardGrid(model.groupMembers(gi), gi: gi)
                         if model.groupMembers(gi).isEmpty {
-                            Text("该分组还没有站点：「添加站点」时选择此分组。")
+                            Text("该分组还没有站点：点分组名旁的「添加站点」添加。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -477,7 +495,7 @@ struct SitesView: View {
                 }
 
                 if model.managedSites.isEmpty {
-                    Text("还没有添加站点：点上方「添加站点」批量选择。")
+                    Text("还没有添加站点：点分组卡片上的「添加站点」批量选择。")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .runCard()
@@ -600,7 +618,10 @@ struct SitesView: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(on ? Color.accentColor.opacity(0.22) : Color(nsColor: .controlBackgroundColor))
+        .background {
+            Color.blockSurface(model.theme.dark)
+            Color.accentColor.opacity(on ? 0.3 : 0)
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -688,6 +709,8 @@ struct AddSitesSheet: View {
     }
     @State private var sortNum: [String: String] = [:]
     @State private var dragging: String?
+    @State private var dupAlert = ""
+    @State private var showDupAlert = false
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
 
@@ -769,6 +792,11 @@ struct AddSitesSheet: View {
         .padding()
         .frame(width: 640, height: 540)
         .onAppear { order = allCandidateIDs }
+        .alert("序号重复", isPresented: $showDupAlert) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(dupAlert)
+        }
         .boxsendAppearance()
     }
 
@@ -810,7 +838,10 @@ struct AddSitesSheet: View {
                 }
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(checked.contains(id) ? Color.accentColor.opacity(0.22) : Color(nsColor: .controlBackgroundColor))
+                .background {
+                    Color.blockSurface(model.theme.dark)
+                    Color.accentColor.opacity(checked.contains(id) ? 0.3 : 0)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
@@ -823,6 +854,10 @@ struct AddSitesSheet: View {
         .onDrop(of: [.text], delegate: SiteReorderDrop(target: id, dragging: $dragging, order: $order))
     }
 
+    private func siteName(_ id: String) -> String {
+        model.config.sourceSites.first { $0.id == id }?.name ?? id
+    }
+
     private func numBinding(_ id: String) -> Binding<String> {
         Binding(get: { sortNum[id] ?? "" },
                 set: { sortNum[id] = $0.filter { $0.isNumber } })
@@ -833,6 +868,16 @@ struct AddSitesSheet: View {
         var nums: [String: Int] = [:]
         for (k, v) in sortNum { if let n = Int(v), n > 0 { nums[k] = n } }
         guard !nums.isEmpty else { return }
+        // 重复检测：多个站点填了同一序号 → 弹窗提醒（与哪个站点、哪个序号重复），不重排
+        var dupParts: [String] = []
+        for (n, ids) in Dictionary(grouping: nums.keys, by: { nums[$0]! }).sorted(by: { $0.key < $1.key }) where ids.count > 1 {
+            dupParts.append("「\(ids.map { siteName($0) }.joined(separator: "、"))」都填了序号 \(n)")
+        }
+        if !dupParts.isEmpty {
+            dupAlert = "序号重复：\(dupParts.joined(separator: "；"))。请修改重复序号后再回车排序。"
+            showDupAlert = true
+            return
+        }
         let count = order.count
         let index = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
         let numbered = order.filter { nums[$0] != nil }
@@ -993,7 +1038,7 @@ private struct CardSection<Content: View>: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .blockSurface()
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
@@ -1257,7 +1302,7 @@ struct LogsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
             }
-            .background(Color(nsColor: .textBackgroundColor))
+            .blockSurface(true)
         }
         .padding()
     }
@@ -1321,7 +1366,7 @@ struct ThemeView: View {
                 .foregroundStyle(selected ? .primary : .secondary)
         }
         .padding(6)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .blockSurface()
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
