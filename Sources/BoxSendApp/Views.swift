@@ -3,6 +3,83 @@ import AppKit
 import UniformTypeIdentifiers
 import BoxSendKit
 
+// MARK: - 主题（渐变色）与外观
+
+extension Color {
+    /// "#rrggbb" 十六进制
+    init(hex: String) {
+        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if h.hasPrefix("#") { h.removeFirst() }
+        var v: UInt64 = 0
+        Scanner(string: h).scanHexInt64(&v)
+        self.init(red: Double((v >> 16) & 0xff) / 255,
+                  green: Double((v >> 8) & 0xff) / 255,
+                  blue: Double(v & 0xff) / 255)
+    }
+}
+
+/// 内置渐变主题
+struct AppTheme: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let colorsHex: [String]
+    let dark: Bool
+    let accentHex: String
+
+    var colors: [Color] { colorsHex.map { Color(hex: $0) } }
+    var accent: Color { Color(hex: accentHex) }
+
+    static let all: [AppTheme] = [
+        AppTheme(id: "deepBlue", name: "深空蓝", colorsHex: ["#0f2027", "#203a43", "#2c5364"], dark: true, accentHex: "#4fc3f7"),
+        AppTheme(id: "aurora", name: "极光紫", colorsHex: ["#1a0b2e", "#43227a", "#7b2ff7"], dark: true, accentHex: "#b39ddb"),
+        AppTheme(id: "jade", name: "翡翠绿", colorsHex: ["#07271c", "#0f5132", "#198754"], dark: true, accentHex: "#34d399"),
+        AppTheme(id: "sunset", name: "落日橙", colorsHex: ["#2b1106", "#8a3a12", "#d97706"], dark: true, accentHex: "#fbbf24"),
+        AppTheme(id: "rose", name: "玫瑰粉", colorsHex: ["#2d0b1c", "#7a1f3d", "#c2185b"], dark: true, accentHex: "#f48fb1"),
+        AppTheme(id: "cloud", name: "云端白", colorsHex: ["#dceafa", "#eef6fd", "#ffffff"], dark: false, accentHex: "#0284c7"),
+    ]
+    static let `default` = all[0]
+}
+
+/// 全局背景层：主题渐变 + 可选背景图片（透明度由设置控制）；只填充窗口，不改变窗口/弹窗尺寸
+struct BoxSendBackground: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        let t = model.theme
+        ZStack {
+            LinearGradient(colors: t.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            if let img = model.backgroundNSImage {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(model.config.appearance.bgOpacity)
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+/// 统一外观：渐变/背景图 + 主题强调色 + 明暗模式（主题色与背景覆盖所有窗口与区块）
+private struct BoxSendAppearanceModifier: ViewModifier {
+    @EnvironmentObject var model: AppModel
+    func body(content: Content) -> some View {
+        content
+            .background(BoxSendBackground())
+            .tint(model.theme.accent)
+            .preferredColorScheme(model.theme.dark ? .dark : .light)
+    }
+}
+
+extension View {
+    func boxsendAppearance() -> some View { modifier(BoxSendAppearanceModifier()) }
+}
+
+/// 打开「批量添加站点」弹窗的请求（item 驱动，避免 sheet(isPresented:) 闭包读到过期状态）
+struct AddSitesRequest: Identifiable {
+    let id = UUID()
+    /// -1 = 未指定分组（弹窗内可选）；>=0 = 锁定该分组
+    let group: Int
+}
+
 // MARK: - 主框架
 
 struct ContentView: View {
@@ -29,9 +106,13 @@ struct ContentView: View {
             RSSView()
                 .tabItem { Label("RSS", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(5)
+            ThemeView()
+                .tabItem { Label("主题", systemImage: "paintpalette.fill") }
+                .tag(6)
         }
         .padding(.top, 12)   // 全屏时顶部留白
         .safeAreaInset(edge: .bottom) { statusBar }
+        .boxsendAppearance()
     }
 
     @ViewBuilder
@@ -79,6 +160,27 @@ struct IntLimitField: View {
     }
 }
 
+/// 带「显示」按钮的密码输入框（默认黑点，点右侧眼睛切换明文 / 黑点）
+struct RevealField: View {
+    @Binding var text: String
+    @State private var revealed = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Group {
+                if revealed { TextField("", text: $text) } else { SecureField("", text: $text) }
+            }
+            .textFieldStyle(.roundedBorder)
+            Button { revealed.toggle() } label: {
+                Image(systemName: revealed ? "eye.slash.fill" : "eye.fill")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(revealed ? "隐藏" : "显示")
+        }
+    }
+}
+
 // MARK: - 运行
 
 struct RunView: View {
@@ -94,7 +196,6 @@ struct RunView: View {
             }
             .padding(16)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     // MARK: 种子链接（左对齐输入框）
@@ -111,8 +212,6 @@ struct RunView: View {
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
-                Toggle("跳过检验", isOn: skipCheckingBinding)
-                    .help("推送 qBittorrent 时勾选 skip_checking（跳过种子完整性校验，直接开始下载）")
                 Button(model.running ? "运行中…" : "开始运行") { model.run() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.running)
@@ -229,11 +328,6 @@ struct RunView: View {
 
     // MARK: bindings / 状态提示
 
-    private var skipCheckingBinding: Binding<Bool> {
-        Binding(get: { model.config.downloader.skipChecking },
-                set: { model.config.downloader.skipChecking = $0; model.saveConfig() })
-    }
-
     @ViewBuilder
     private func eventChip(_ e: AppModel.TargetEvent) -> some View {
         Text(e.text)
@@ -270,7 +364,7 @@ struct SitesView: View {
     @EnvironmentObject var model: AppModel
     @State private var newGroupName = ""
     @State private var newGroupMB = "10"
-    @State private var showAddSites = false
+    @State private var addSheetReq: AddSitesRequest?
     @State private var manualCookiePick: SitePick?
     @State private var confirmReq: ConfirmRequest?
     @State private var showConfirm1 = false
@@ -309,7 +403,7 @@ struct SitesView: View {
                         }
                         .disabled(newGroupName.trimmingCharacters(in: .whitespaces).isEmpty)
                         Button {
-                            showAddSites = true
+                            addSheetReq = AddSitesRequest(group: -1)
                         } label: {
                             Label("添加站点", systemImage: "plus")
                         }
@@ -341,6 +435,14 @@ struct SitesView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
                             Text("分组：\(gname)").font(.headline)
+                            Button {
+                                addSheetReq = AddSitesRequest(group: gi)
+                            } label: {
+                                Label("添加站点", systemImage: "plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("为此分组添加站点（弹窗中无需再选分组）")
                             Button {
                                 confirmReq = ConfirmRequest(kind: .removeGroup, index: gi,
                                                             name: gname,
@@ -383,8 +485,9 @@ struct SitesView: View {
             }
             .padding(16)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
-        .sheet(isPresented: $showAddSites) { AddSitesSheet() }
+        .sheet(item: $addSheetReq) { req in
+            AddSitesSheet(fixedGroup: req.group)
+        }
         .sheet(item: $manualCookiePick) { pick in
             ManualCookieSheet(sites: pick.sites)
         }
@@ -574,8 +677,15 @@ struct AddSitesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var checked = Set<String>()
-    @State private var targetGroup = -1
+    @State private var targetGroup: Int
     @State private var order: [String] = []
+    /// >= 0：从分组头部「添加站点」进入，弹窗锁定该分组，不再显示分组选择
+    let fixedGroup: Int
+
+    init(fixedGroup: Int = -1) {
+        self.fixedGroup = fixedGroup
+        _targetGroup = State(initialValue: fixedGroup)
+    }
     @State private var sortNum: [String: String] = [:]
     @State private var dragging: String?
 
@@ -605,7 +715,9 @@ struct AddSitesSheet: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Text("批量添加站点").font(.headline)
+                Text(fixedGroup >= 0
+                     ? "批量添加站点（加入分组：\(model.config.groups[fixedGroup].name)）"
+                     : "批量添加站点").font(.headline)
                 Spacer()
                 Text("已选 \(checked.count)").font(.caption).foregroundStyle(.secondary)
             }
@@ -616,13 +728,15 @@ struct AddSitesSheet: View {
                 }
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 220)
-                Picker("加入分组", selection: $targetGroup) {
-                    Text("无分组").tag(-1)
-                    ForEach(model.config.groups.indices, id: \.self) { i in
-                        Text(model.config.groups[i].name).tag(i)
+                if fixedGroup < 0 {
+                    Picker("加入分组", selection: $targetGroup) {
+                        Text("无分组").tag(-1)
+                        ForEach(model.config.groups.indices, id: \.self) { i in
+                            Text(model.config.groups[i].name).tag(i)
+                        }
                     }
+                    .frame(maxWidth: 140)
                 }
-                .frame(maxWidth: 140)
                 Button(allChecked ? "全不选" : "全选") {
                     if allChecked { checked.removeAll() } else { checked = Set(displayIDs) }
                 }
@@ -655,6 +769,7 @@ struct AddSitesSheet: View {
         .padding()
         .frame(width: 640, height: 540)
         .onAppear { order = allCandidateIDs }
+        .boxsendAppearance()
     }
 
     private func card(_ id: String) -> some View {
@@ -682,7 +797,7 @@ struct AddSitesSheet: View {
                             .font(.caption)
                             .frame(width: 38)
                             .onSubmit { applySortNumbers() }
-                            .help("输入排序序号，回车重排卡片")
+                            .help("输入数字 = 排到该序号位置（如 2 = 第 2 位），回车生效")
                         Image(systemName: "line.3.horizontal")
                             .foregroundStyle(.secondary)
                             .frame(width: 12, height: 16)
@@ -714,17 +829,32 @@ struct AddSitesSheet: View {
     }
 
     private func applySortNumbers() {
+        // 序号 = 目标位置：输入 N 将该站点排到第 N 位；位置冲突时顺移/回移；未输入序号的保持相对顺序填充剩余位置
         var nums: [String: Int] = [:]
         for (k, v) in sortNum { if let n = Int(v), n > 0 { nums[k] = n } }
         guard !nums.isEmpty else { return }
-        let indexed = order.enumerated().map { (offset: $0.offset, id: $0.element) }
-        let sorted = indexed.sorted { a, b in
-            let na = nums[a.id] ?? Int.max
-            let nb = nums[b.id] ?? Int.max
-            if na != nb { return na < nb }
-            return a.offset < b.offset
+        let count = order.count
+        let index = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
+        let numbered = order.filter { nums[$0] != nil }
+            .sorted { a, b in
+                let na = nums[a]!, nb = nums[b]!
+                if na != nb { return na < nb }
+                return index[a]! < index[b]!
+            }
+        var final: [String?] = Array(repeating: nil, count: count)
+        for id in numbered {
+            let target = min(max(nums[id]! - 1, 0), count - 1)
+            var t = target
+            while t < count && final[t] != nil { t += 1 }
+            if t == count {
+                t = target
+                while t > 0 && final[t] != nil { t -= 1 }
+            }
+            final[t] = id
         }
-        withAnimation { order = sorted.map { $0.id } }
+        var un = order.filter { nums[$0] == nil }.makeIterator()
+        for i in 0..<count where final[i] == nil { final[i] = un.next() }
+        withAnimation { order = final.compactMap { $0 } }
     }
 }
 
@@ -803,6 +933,7 @@ struct ManualCookieSheet: View {
         .padding()
         .frame(width: 480)
         .onAppear { siteID = sites.first?.id ?? "" }
+        .boxsendAppearance()
     }
 }
 
@@ -899,16 +1030,16 @@ struct CookiesView: View {
                         TextField("", text: gistStringBinding(\.gistID)).textFieldStyle(.roundedBorder)
                     }
                     LabeledRow("GitHub token") {
-                        SecureField("", text: gistStringBinding(\.token)).textFieldStyle(.roundedBorder)
+                        RevealField(text: gistStringBinding(\.token))
                     }
                     LabeledRow("PT-depiler 备份密码") {
                         SecureField("", text: gistStringBinding(\.encryptionKey)).textFieldStyle(.roundedBorder)
                     }
-                    HStack(alignment: .bottom) {
-                        LabeledRow("轮询（自动同步间隔，分钟，最小 5）") {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("轮询（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
                             TextField("", text: pollBinding).textFieldStyle(.roundedBorder).frame(width: 60)
                         }
-                        Spacer()
                         Toggle("自动定时同步", isOn: autoBinding)
                         Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.gistSyncNow() }
                             .disabled(model.cookieSyncBusy)
@@ -924,16 +1055,16 @@ struct CookiesView: View {
                         TextField("", text: ccStringBinding(\.host), prompt: Text("http://vps:8088 或 https://cookiecloud.xxx")).textFieldStyle(.roundedBorder)
                     }
                     LabeledRow("KEY（UUID）") {
-                        TextField("", text: ccStringBinding(\.key)).textFieldStyle(.roundedBorder)
+                        RevealField(text: ccStringBinding(\.key))
                     }
                     LabeledRow("端对端加密密码") {
-                        SecureField("", text: ccStringBinding(\.password)).textFieldStyle(.roundedBorder)
+                        RevealField(text: ccStringBinding(\.password))
                     }
-                    HStack(alignment: .bottom) {
-                        LabeledRow("轮询（自动同步间隔，分钟，最小 5）") {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("轮询（自动同步间隔，分钟，最小 5）").font(.caption).foregroundStyle(.secondary)
                             TextField("", text: ccPollBinding).textFieldStyle(.roundedBorder).frame(width: 60)
                         }
-                        Spacer()
                         Toggle("自动定时同步", isOn: ccAutoBinding)
                         Button(model.cookieSyncBusy ? "同步中…" : "立即同步") { model.cookieCloudNow() }
                             .disabled(model.cookieSyncBusy)
@@ -957,14 +1088,15 @@ struct CookiesView: View {
                     LabeledRow("监控目录") {
                         TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) })).textFieldStyle(.roundedBorder)
                     }
-                    HStack(alignment: .bottom) {
-                        LabeledRow("备份密码") {
+                    HStack(alignment: .bottom, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("备份密码").font(.caption).foregroundStyle(.secondary)
                             SecureField("", text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) })).textFieldStyle(.roundedBorder).frame(width: 180)
                         }
-                        LabeledRow("轮询（分钟）") {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("轮询（分钟）").font(.caption).foregroundStyle(.secondary)
                             IntLimitField(initial: model.config.zipWatch?.pollMinutes ?? 5) { model.setZipPollMinutes($0 ?? 5) }.frame(width: 60)
                         }
-                        Spacer()
                         Toggle("启用备份目录监控", isOn: Binding(get: { model.zipAuto }, set: { model.setZipAuto($0) }))
                         Button("立即扫描") { model.zipScanNow() }
                             .disabled(model.zipRunning)
@@ -981,7 +1113,6 @@ struct CookiesView: View {
             }
             .padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
 
@@ -1051,7 +1182,7 @@ struct DownloaderView: View {
                         TextField("", text: $model.config.downloader.username).textFieldStyle(.roundedBorder)
                     }
                     LabeledRow("密码") {
-                        SecureField("", text: $model.config.downloader.password).textFieldStyle(.roundedBorder)
+                        RevealField(text: $model.config.downloader.password)
                     }
                     LabeledRow("保存路径（空 = 下载器默认）") {
                         TextField("", text: optBinding(\.savePath)).textFieldStyle(.roundedBorder)
@@ -1097,7 +1228,6 @@ struct DownloaderView: View {
             }
             .padding(20)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
 
@@ -1130,6 +1260,76 @@ struct LogsView: View {
             .background(Color(nsColor: .textBackgroundColor))
         }
         .padding()
+    }
+}
+
+// MARK: - 主题
+
+struct ThemeView: View {
+    @EnvironmentObject var model: AppModel
+
+    private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                CardSection("主题（渐变色）") {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(AppTheme.all) { t in
+                            themeCard(t)
+                        }
+                    }
+                    Text("点击卡片切换主题；主题渐变、强调色与明暗模式覆盖所有窗口与区块，保持风格统一。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                CardSection("背景图片") {
+                    HStack(spacing: 10) {
+                        Button(model.config.appearance.bgImage == nil ? "选择图片…" : "更换图片…") {
+                            model.chooseBackgroundImage()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        if model.config.appearance.bgImage != nil {
+                            Button("移除背景图片", role: .destructive) { model.clearBackgroundImage() }
+                                .controlSize(.small)
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        Text("背景图片透明度").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: Binding(get: { model.config.appearance.bgOpacity },
+                                              set: { model.setBackgroundOpacity($0) }),
+                               in: 0...1)
+                        Text("\(Int((model.config.appearance.bgOpacity * 100).rounded()))%")
+                            .font(.caption).frame(width: 44, alignment: .trailing)
+                    }
+                    .disabled(model.config.appearance.bgImage == nil)
+                    Text("背景图片铺满窗口（cover 裁切），不改变窗口与各弹窗的大小比例；主题色、背景图片与透明度覆盖所有窗口与区块，风格统一。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    private func themeCard(_ t: AppTheme) -> some View {
+        let selected = model.config.appearance.themeID == t.id
+        return VStack(alignment: .leading, spacing: 4) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(LinearGradient(colors: t.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(height: 64)
+            Text(t.name)
+                .font(.caption)
+                .foregroundStyle(selected ? .primary : .secondary)
+        }
+        .padding(6)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(selected ? t.accent : Color(nsColor: .separatorColor), lineWidth: selected ? 3 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onTapGesture { model.setTheme(t.id) }
+        .help("切换到「\(t.name)」主题")
     }
 }
 

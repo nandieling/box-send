@@ -59,6 +59,8 @@ final class AppModel: ObservableObject {
     private var gistTimer: Timer?
     private var rssTimer: Timer?
     private var zipTimer: Timer?
+    /// 当前背景图片（nil = 纯渐变主题）
+    private(set) var backgroundNSImage: NSImage?
 
     init() {
         dataDir = AppPaths.dir
@@ -92,6 +94,7 @@ final class AppModel: ObservableObject {
         }
         notes = state.recentNotes
         selectedTargets = Set(config.targetSites)
+        reloadBackgroundImage()
         refreshCookieStats()
         if config.gistSync != nil {
             lastGistSyncText = state.lastGistSync.map { Self.dateText($0) } ?? "从未同步"
@@ -210,6 +213,55 @@ final class AppModel: ObservableObject {
             }
         }
         saveConfig()
+    }
+
+    // MARK: 主题 / 背景图片 / 透明度
+
+    var theme: AppTheme {
+        AppTheme.all.first { $0.id == config.appearance.themeID } ?? AppTheme.default
+    }
+
+    func setTheme(_ id: String) {
+        config.appearance.themeID = id
+        saveConfig()
+    }
+
+    func setBackgroundOpacity(_ v: Double) {
+        config.appearance.bgOpacity = min(max(v, 0), 1)
+        saveConfig()
+    }
+
+    func chooseBackgroundImage() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .heic]
+        panel.allowsMultipleSelection = false
+        panel.message = "选择背景图片（覆盖显示，不改变窗口与弹窗大小）"
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let img = NSImage(data: data) else { return }
+        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
+        let name = "background.\(ext)"
+        try? FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
+        try? data.write(to: URL(fileURLWithPath: dataDir).appendingPathComponent(name))
+        config.appearance.bgImage = name
+        backgroundNSImage = img
+        saveConfig()
+    }
+
+    func clearBackgroundImage() {
+        if let name = config.appearance.bgImage {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: dataDir).appendingPathComponent(name))
+        }
+        config.appearance.bgImage = nil
+        backgroundNSImage = nil
+        saveConfig()
+    }
+
+    private func reloadBackgroundImage() {
+        guard let name = config.appearance.bgImage,
+              let data = try? Data(contentsOf: URL(fileURLWithPath: dataDir).appendingPathComponent(name)),
+              let img = NSImage(data: data) else { return }
+        backgroundNSImage = img
     }
 
     func saveConfig() {

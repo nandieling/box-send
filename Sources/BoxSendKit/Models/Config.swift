@@ -380,6 +380,19 @@ public struct GroupConfig: Codable, Equatable {
     }
 }
 
+/// 外观设置：主题（渐变色）/ 背景图片 / 背景图片透明度
+public struct AppearanceConfig: Codable, Equatable {
+    public var themeID: String = "deepBlue"   // 主题 id（见 AppTheme.all）
+    public var bgImage: String? = nil         // 背景图片文件名（存于 dataDir，nil = 纯渐变）
+    public var bgOpacity: Double = 0.45       // 背景图片透明度 0...1
+
+    public init(themeID: String = "deepBlue", bgImage: String? = nil, bgOpacity: Double = 0.45) {
+        self.themeID = themeID
+        self.bgImage = bgImage
+        self.bgOpacity = bgOpacity
+    }
+}
+
 public struct AppConfig: Codable {
     public var dataDir: String
     public var sourceSites: [SiteConfig]    // 可作为源站的站点（任一支持站均可）
@@ -392,9 +405,10 @@ public struct AppConfig: Codable {
     public var groups: [GroupConfig]    // 目标站分组（upLimitMB = 新增站点默认上传限速）
     public var rss: RssConfig?          // RSS 自动转种
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
+    public var appearance: AppearanceConfig // 主题 / 背景图片 / 透明度
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch, appearance
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -411,13 +425,14 @@ public struct AppConfig: Codable {
         groups = try c.decodeIfPresent([GroupConfig].self, forKey: .groups) ?? []
         rss = try c.decodeIfPresent(RssConfig.self, forKey: .rss)
         zipWatch = try c.decodeIfPresent(ZipWatchConfig.self, forKey: .zipWatch)
+        appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? AppearanceConfig()
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
                 downloader: DownloaderConfig, gistSync: GistSyncConfig?, cookieCloud: CookieCloudConfig? = nil,
                 userAgent: String,
                 webToken: String?, groups: [GroupConfig] = [], rss: RssConfig? = nil,
-                zipWatch: ZipWatchConfig? = nil) {
+                zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig()) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -429,6 +444,7 @@ public struct AppConfig: Codable {
         self.groups = groups
         self.rss = rss
         self.zipWatch = zipWatch
+        self.appearance = appearance
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
