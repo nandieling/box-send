@@ -105,7 +105,7 @@ struct AddSitesRequest: Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
-    @State private var tab = 0
+    @State private var tab = Int(ProcessInfo.processInfo.environment["BOXSEND_START_TAB"] ?? "") ?? 0
 
     var body: some View {
         TabView(selection: $tab) {
@@ -127,8 +127,8 @@ struct ContentView: View {
             RSSView()
                 .tabItem { Label("RSS", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag(5)
-            ThemeView()
-                .tabItem { Label("主题", systemImage: "paintpalette.fill") }
+            SettingsView()
+                .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag(6)
         }
         .padding(.top, 12)   // 全屏时顶部留白
@@ -443,8 +443,6 @@ struct SitesView: View {
                         .help("批量检测所有分组已添加站点的 cookie 有效性")
                         Spacer()
                     }
-                    Text("顶部「同步 Cookie」同时同步 PT-depiler Gist 与 CookieCloud 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点），「检测 Cookie」批量检测所有分组已添加站点。站点按分组区块以卡片显示；点击卡片开启 / 停用（加深色 = 已开启），区块「全选」一键切换全部开启 / 停用，「手动添加」为选中的站点填写 cookie，「移除站点」移除选中站点、「移除分组」删除分组（均两次确认）。每个分组卡片旁的「添加站点」批量添加（弹窗锁定该分组、无需再选分组；可搜索内置 \(model.config.sourceSites.count) 个站点并点击选中（加深色），新增站点限速默认取分组上传限速，未设 = 10 MB/s）。分组内站点卡片可拖拽或输入序号排序；窗口越宽，一行显示的卡片越多。未开启的站不参与转种 / cookie 检测 / 同步。")
-                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .runCard()
 
@@ -791,7 +789,13 @@ struct AddSitesSheet: View {
         }
         .padding()
         .frame(width: 640, height: 540)
-        .onAppear { order = allCandidateIDs }
+        .onAppear {
+            // 默认排序：数字开头的名称在前，其余按拼音字母顺序
+            order = model.config.sourceSites
+                .filter { !$0.managed }
+                .sorted { NameSort.isBefore($0.name, $1.name) }
+                .map { $0.id }
+        }
         .alert("序号重复", isPresented: $showDupAlert) {
             Button("知道了", role: .cancel) {}
         } message: {
@@ -1310,14 +1314,28 @@ struct LogsView: View {
 
 // MARK: - 主题
 
-struct ThemeView: View {
+struct SettingsView: View {
     @EnvironmentObject var model: AppModel
+    @State private var showTutorial = false
 
     private let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                CardSection("使用教程") {
+                    HStack(spacing: 10) {
+                        Button {
+                            showTutorial = true
+                        } label: {
+                            Label("查看使用教程", systemImage: "book.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Text("图文教程：添加站点分组、配置 Cookie、批量转种、推送下载器与外观设置。")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
                 CardSection("主题（渐变色）") {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(AppTheme.all) { t in
@@ -1353,6 +1371,9 @@ struct ThemeView: View {
             }
             .padding(20)
         }
+        .sheet(isPresented: $showTutorial) {
+            TutorialSheet()
+        }
     }
 
     private func themeCard(_ t: AppTheme) -> some View {
@@ -1375,6 +1396,90 @@ struct ThemeView: View {
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onTapGesture { model.setTheme(t.id) }
         .help("切换到「\(t.name)」主题")
+    }
+}
+
+/// 使用教程弹窗（图文教程，配图打包于 Resources/tutorial/）
+struct TutorialSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text("BoxSend 使用教程").font(.headline)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    section("1. 添加站点与分组", image: "sites", steps: [
+                        "「站点分组」页顶部输入分组名并设置上传限速（默认 10 MB/s），点「添加分组」。",
+                        "点分组名旁的「添加站点」批量添加：搜索站点、点击卡片选中（加深色 = 已选），拖拽或输入序号排序（序号重复会弹窗提示），点「添加」。",
+                        "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加」为选中站点填写 cookie。",
+                        "「检测 Cookie」批量检查 cookie 有效性；「移除站点」「移除分组」均需两次确认。",
+                    ])
+                    section("2. 配置与备份 Cookie", image: "cookies", steps: [
+                        "PT-depiler Gist 同步：填写 GitHub Token 与 Gist ID，可开启自动同步 / 自动扫描并设置间隔秒数。",
+                        "CookieCloud 同步备份：填写用户 KEY、UUID 与端对端加密密码。",
+                        "两路备份互为补充：某一站点在一处的 cookie 失效时，同步后自动用另一来源补充。",
+                        "「同步 Cookie」立即执行两路同步；「立即扫描」检查 PT-depiler 备份目录。",
+                    ])
+                    section("3. 批量转种", image: "run", steps: [
+                        "「批量转种」页粘贴种子详情页链接，勾选「转种到目标站」与「推送到下载器」。",
+                        "勾选转种分组（「全选」= 全部分组）后点「开始运行」。",
+                        "按分组顺序执行：获取种子 → 依次上传到组内已开启站点（限速取分组上传限速）→ 转种成功的种子自动推送到下载器。",
+                        "点「运行记录」展开查看每个站点的转种 / 推送结果。",
+                    ])
+                    section("4. 推送到 VPS 下载器", image: "downloader", steps: [
+                        "填写下载器（qBittorrent Web UI）地址、端口与密码，通常经 de5 隧道连接 VPS。",
+                        "「检验连接」验证可用性；勾选「跳过检验」后推送时不再校验。",
+                        "转种成功的种子会自动推送到下载器开始下载。",
+                    ])
+                    section("5. 外观设置", image: "settings", steps: [
+                        "「设置」页选择渐变主题；主题渐变、强调色与明暗模式覆盖所有窗口与区块。",
+                        "可添加背景图片（PNG/JPG/HEIC）并用滑块调整透明度，不改变窗口与各弹窗的大小比例。",
+                        "「使用教程」按钮可随时查看本图文教程。",
+                    ])
+                }
+                .padding(2)
+            }
+            HStack {
+                Text("提示：截图为深色主题示例，实际外观随「设置」页的主题 / 壁纸变化。")
+                    .font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("关闭") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding()
+        .frame(width: 640, height: 540)
+        .boxsendAppearance()
+    }
+
+    private func section(_ title: String, image: String, steps: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline).fontWeight(.semibold)
+            ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("\(i + 1).").font(.caption).foregroundStyle(.secondary)
+                        .frame(width: 14, alignment: .trailing)
+                    Text(step).font(.caption)
+                }
+            }
+            tutorialImage(image)
+                .padding(.top, 4)
+        }
+    }
+
+    private func tutorialImage(_ name: String) -> some View {
+        Group {
+            if let url = Bundle.main.url(forResource: name, withExtension: "jpg", subdirectory: "tutorial"),
+               let img = NSImage(contentsOf: url) {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Label("教程配图缺失（Resources/tutorial/\(name).jpg）", systemImage: "photo")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

@@ -22,6 +22,12 @@ if [[ -f 1.webp ]]; then
     iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 fi
 
+# 使用教程配图
+if ls Resources/tutorial/*.jpg >/dev/null 2>&1; then
+    mkdir -p "$APP/Contents/Resources/tutorial"
+    cp Resources/tutorial/*.jpg "$APP/Contents/Resources/tutorial/"
+fi
+
 cat > "$APP/Contents/Info.plist" <<'PLIST' 
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
