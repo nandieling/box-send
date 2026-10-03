@@ -148,6 +148,19 @@ final class ModelsTests: XCTestCase {
         XCTAssertNil(cfg.webToken)
     }
 
+    /// 旧配置无 unmanagedSiteOrder 字段时可解码（默认空）；新字段可往返
+    func testAppConfigUnmanagedSiteOrderCompat() throws {
+        let jsonStr = #"{"dataDir":"d","sourceSites":[],"targetSites":[],"downloader":{"type":"qbittorrent","url":"u","username":"","password":"","savePath":null,"category":null,"skipChecking":true,"defaultUpLimit":0,"siteUpLimits":{},"pushPolicy":"always"},"userAgent":"ua"}"#
+        let cfg = try JSONDecoder().decode(AppConfig.self, from: Data(jsonStr.utf8))
+        XCTAssertEqual(cfg.unmanagedSiteOrder, [])
+
+        var cfg2 = cfg
+        cfg2.unmanagedSiteOrder = ["b", "a"]
+        let data = try JSONEncoder().encode(cfg2)
+        let back = try JSONDecoder().decode(AppConfig.self, from: data)
+        XCTAssertEqual(back.unmanagedSiteOrder, ["b", "a"])
+    }
+
     func testEffectiveUpLimitSiteAuthoritative() {
         let dl = DownloaderConfig(type: .qbittorrent, url: "u", username: "", password: "",
                                   savePath: nil, category: nil, skipChecking: true,

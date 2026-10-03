@@ -406,9 +406,10 @@ public struct AppConfig: Codable {
     public var rss: RssConfig?          // RSS 自动转种
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
     public var appearance: AppearanceConfig // 主题 / 背景图片 / 透明度
+    public var unmanagedSiteOrder: [String] // 未加入分组的站点手动排序（批量添加站点弹窗，跨会话保留）
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch, appearance
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch, appearance, unmanagedSiteOrder
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -426,13 +427,15 @@ public struct AppConfig: Codable {
         rss = try c.decodeIfPresent(RssConfig.self, forKey: .rss)
         zipWatch = try c.decodeIfPresent(ZipWatchConfig.self, forKey: .zipWatch)
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? AppearanceConfig()
+        unmanagedSiteOrder = try c.decodeIfPresent([String].self, forKey: .unmanagedSiteOrder) ?? []
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
                 downloader: DownloaderConfig, gistSync: GistSyncConfig?, cookieCloud: CookieCloudConfig? = nil,
                 userAgent: String,
                 webToken: String?, groups: [GroupConfig] = [], rss: RssConfig? = nil,
-                zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig()) {
+                zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
+                unmanagedSiteOrder: [String] = []) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -445,6 +448,7 @@ public struct AppConfig: Codable {
         self.rss = rss
         self.zipWatch = zipWatch
         self.appearance = appearance
+        self.unmanagedSiteOrder = unmanagedSiteOrder
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()

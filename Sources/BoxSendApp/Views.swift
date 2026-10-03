@@ -547,7 +547,7 @@ struct SitesView: View {
                 .font(.caption)
                 .disabled(members.isEmpty)
                 .help(allOn ? "停用该分组全部站点" : "开启该分组全部站点")
-            Button("手动添加") {
+            Button("手动添加cookie") {
                 manualCookiePick = SitePick(sites: enabledMembers)
             }
             .font(.caption)
@@ -791,11 +791,18 @@ struct AddSitesSheet: View {
         .padding()
         .frame(width: 640, height: 540)
         .onAppear {
-            // 默认排序：数字开头的名称在前，其余按拼音字母顺序
-            order = model.config.sourceSites
-                .filter { !$0.managed }
-                .sorted { NameSort.isBefore($0.name, $1.name) }
-                .map { $0.id }
+            // 优先沿用用户手动排序；未保存过的按名称默认排序（数字开头在前，其余拼音字母序）
+            let all = model.config.sourceSites.filter { !$0.managed }.map { $0.id }
+            let valid = Set(all)
+            let saved = model.config.unmanagedSiteOrder.filter { valid.contains($0) }
+            let rest = all.filter { !saved.contains($0) }
+                .sorted { a, b in NameSort.isBefore(model.config.site(a)?.name ?? a, model.config.site(b)?.name ?? b) }
+            order = saved + rest
+        }
+        // 手动排序（拖拽 / 序号）持久化，关闭弹窗后不再恢复默认顺序
+        .onChange(of: order) { _ in
+            model.config.unmanagedSiteOrder = order
+            model.saveConfig()
         }
         .alert("序号重复", isPresented: $showDupAlert) {
             Button("知道了", role: .cancel) {}
@@ -1136,7 +1143,11 @@ struct CookiesView: View {
                 }
                 CardSection("备份目录监控") {
                     LabeledRow("监控目录") {
-                        TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) })).textFieldStyle(.roundedBorder)
+                        HStack(spacing: 8) {
+                            TextField("", text: Binding(get: { model.zipDir() }, set: { model.setZipDir($0) })).textFieldStyle(.roundedBorder)
+                            Button("选择目录…") { pickZipDir() }
+                                .controlSize(.small)
+                        }
                     }
                     HStack(alignment: .bottom, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1174,6 +1185,18 @@ struct CookiesView: View {
         panel.allowedContentTypes = [UTType.zip]
         if panel.runModal() == .OK, let url = panel.url {
             model.importZipFile(url, password: zipPassword)
+        }
+    }
+
+    private func pickZipDir() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "选择 PT-depiler 备份 zip 所在的目录"
+        panel.directoryURL = URL(fileURLWithPath: (model.zipDir() as NSString).expandingTildeInPath)
+        if panel.runModal() == .OK, let url = panel.url {
+            model.setZipDir(url.path)
         }
     }
 
@@ -1412,7 +1435,7 @@ struct TutorialSheet: View {
                     section("1. 添加站点与分组", image: "sites", steps: [
                         "「站点分组」页顶部输入分组名并设置上传限速（默认 10 MB/s），点「添加分组」。",
                         "点分组名旁的「添加站点」批量添加：搜索站点、点击卡片选中（加深色 = 已选），拖拽或输入序号排序（序号重复会弹窗提示），点「添加」。",
-                        "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加」为选中站点填写 cookie。",
+                        "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加cookie」为选中站点填写 cookie。",
                         "「检测 Cookie」批量检查 cookie 有效性；「移除站点」「移除分组」均需两次确认。",
                     ])
                     section("2. 配置与备份 Cookie", image: "cookies", steps: [
@@ -1428,7 +1451,7 @@ struct TutorialSheet: View {
                         "点「运行记录」展开查看每个站点的转种 / 推送结果。",
                     ])
                     section("4. 推送到 VPS 下载器", image: "downloader", steps: [
-                        "填写下载器（qBittorrent Web UI）地址、端口与密码，通常经 de5 隧道连接 VPS。",
+                        "填写下载器（qBittorrent Web UI）地址、用户名与密码。",
                         "「检验连接」验证可用性；勾选「跳过检验」后推送时不再校验。",
                         "转种成功的种子会自动推送到下载器开始下载。",
                     ])
