@@ -409,7 +409,8 @@ struct SitesView: View {
                         TextField("", text: $newGroupName, prompt: Text("分组名"))
                             .textFieldStyle(.roundedBorder)
                             .multilineTextAlignment(.center)
-                            .frame(width: 150)
+                            // 固定宽度下长文本只显示末尾（看似偏右），宽度随输入扩展以保证始终居中
+                            .frame(width: CGFloat(max(150, min(360, newGroupName.count * 14 + 44))))
                         Text("上传限速").foregroundStyle(.secondary)
                         TextField("", text: $newGroupMB, prompt: Text("10"))
                             .textFieldStyle(.roundedBorder)
@@ -1448,7 +1449,7 @@ struct TutorialSheet: View {
             }
         }
         .padding()
-        .frame(width: 640, height: 540)
+        .frame(width: 800, height: 640)
         .boxsendAppearance()
     }
 
