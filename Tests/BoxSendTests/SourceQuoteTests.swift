@@ -42,10 +42,11 @@ final class SourceQuoteTests: XCTestCase {
                        "手填引用应取代自动官种致谢，不该出现两句转载自")
     }
 
-    func testNoManualQuoteKeepsAutoPrefix() throws {
+    /// 官种自动致谢已移除：不勾选源站引用就不往简介里塞任何东西
+    func testNoManualQuoteAddsNoAutoPrefix() throws {
         let d = try descr("crabpt", source())!
-        XCTAssertTrue(d.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n"),
-                      "未勾选时保持原有行为（官种自动注明出处），实际开头: \(d.prefix(120))")
+        XCTAssertFalse(d.contains("感谢发布者"),
+                       "源站是官种但没勾选源站引用：不该自动加转载自，实际开头: \(d.prefix(120))")
     }
 
     /// cmct 的 descr 实为「附加信息」：手填引用直接作为该区块内容，不再套引用块

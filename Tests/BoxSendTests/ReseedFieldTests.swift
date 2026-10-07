@@ -140,7 +140,8 @@ final class ReseedFieldTests: XCTestCase {
         XCTAssertEqual(first(f, "audiocodec_sel[4]"), "7", "无 PCM/LPCM 选项时应选 Other，不是 WAV")
         XCTAssertTrue(values(f, "tags[4][]").contains("12"), "完结")
         guard let descr = first(f, "descr") else { return XCTFail("无 descr") }
-        XCTAssertTrue(descr.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n"), String(descr.prefix(60)))  // 源站标签含官方=官种：来源用独立引用块
+        // 织梦 overrides 明确写了 descrSourcePrefix：仍加一行纯文本来源（与官种自动引用无关）
+        XCTAssertTrue(descr.hasPrefix("转载自LuckPT，感谢发布者。\n"), String(descr.prefix(60)))
     }
 
     // MARK: 10 整季剧集 -> 完结

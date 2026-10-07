@@ -44,6 +44,17 @@ final class TargetSiteFixTests: XCTestCase {
         XCTAssertTrue(tags.contains("9") && tags.contains("3"), "中字/完结照旧")
     }
 
+    /// 首发同官方一样是源站概念：目标站这条不是首发，只有源站发官种时才跟随
+    func testFirstReleaseTagOnlyFollowsOfficialSource() throws {
+        var info = try sourceRelease()
+        info.sourceTags = ["首发", "中字", "完结"]
+        let plain = QualityTokens.canonicalTags(info)
+        XCTAssertFalse(plain.contains("first"), "源站没标官种：首发不该跟随")
+        XCTAssertTrue(plain.contains("chinese_sub") && plain.contains("completed"), "其余标签照旧")
+        info.sourceTags = ["官种", "首发", "中字"]
+        XCTAssertTrue(QualityTokens.canonicalTags(info).contains("first"), "源站发官种：首发可以跟随")
+    }
+
     // MARK: 3 财神：按源站类别勾题材标签（缺题材标签审核不通过）
 
     func testGenreTagsFromSourceCategory() throws {

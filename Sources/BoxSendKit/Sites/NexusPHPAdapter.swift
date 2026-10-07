@@ -1061,16 +1061,16 @@ class NexusPHPAdapter: SiteAdapter {
 
     private func canonicalTags(_ info: ReleaseInfo) -> [String] { QualityTokens.canonicalTags(info) }
 
-    /// 简介最前面的转种来源：配置要求的站点（如织梦）加一行纯文本；源站是官种的用独立引用块注明出处
-    /// （不并入源简介自带引用块，那里可能是 MediaInfo 或剧集信息）
+    /// 简介最前面的转种来源：只认「批量转种」页手填的源站引用（可选项），
+    /// 再加上个别站点配置要求的纯文本一行（如织梦）。源站是官种不再自动加
+    /// 「转载自X，感谢发布者」引用块——转载种是否注明来源由用户决定，
+    /// 也避免和源简介自带的引用块叠成两段。
     private func withSourcePrefix(_ text: String, _ info: ReleaseInfo) -> String {
         let line = "转载自\(sourceLabel(info))，感谢发布者。"
-        // 用户在「批量转种」页填了源站引用：以它为准，不再叠加自动官种引用（否则两个引用块）
         if !info.extraQuoteText.isEmpty {
             return ((override?.descrFormat ?? "bbcode") == "html"
                     ? info.extraQuoteHTML : info.extraQuoteBBCode) + text
         }
-        if info.isOfficialSource { return "[quote]\n\(line)\n[/quote]\n" + text }
         var out = text
         if override?.descrSourcePrefix == true { out = line + "\n" + out }
         // 源页没解析出简介（版式特殊/页面异常）时兜一句：目标站几乎都把简介设成必填，

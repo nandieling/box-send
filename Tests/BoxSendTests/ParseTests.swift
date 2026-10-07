@@ -453,7 +453,8 @@ final class ParseTests: XCTestCase {
 
         let descr = dict["descr"] ?? ""
         // bbcode 引用框：[quote] 独占一行，内容紧随
-        XCTAssertTrue(descr.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n[quote]\n原盘来自U2:"), "开头:\n\(String(descr.prefix(120)))")
+        XCTAssertFalse(descr.contains("感谢发布者"), "官种自动致谢已移除：来源以手填源站引用为准")
+        XCTAssertTrue(descr.hasPrefix("[quote]\n原盘来自U2:"), "开头:\n\(String(descr.prefix(120)))")
         XCTAssertTrue(descr.contains("字幕来自华盟字幕社\n[/quote]"))
         // 引用后紧跟海报 [img]（无空行），其后一个空行再进正文
         XCTAssertTrue(descr.contains("[/quote]\n[img]https://img3.pixhost.to/images/6151/778181861_douban-poster.jpg[/img]\n\n◎译"))

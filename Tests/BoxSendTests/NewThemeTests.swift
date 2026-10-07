@@ -45,10 +45,18 @@ final class NewThemeTests: XCTestCase {
         XCTAssertEqual(f["team_sel[4]"], "4", "转种没有本站制作组，选 Other")
     }
 
-    func testOfficialSourceAddsQuotedAttribution() {
-        let f = fields("hdvideo", info, hdvPage)
-        XCTAssertTrue((f["descr"] ?? "").hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n"),
-                      String((f["descr"] ?? "").prefix(80)))
+    /// 来源引用以「批量转种」页的源站引用可选项为准，官种不再自动加致谢
+    func testSourceQuoteFollowsManualOptionOnly() {
+        var manual = self.info
+        manual.descr = "<p>剧情简介</p>"
+        manual.extraQuote = "转载自LuckPT，感谢发布者。"
+        XCTAssertTrue((fields("hdvideo", manual, hdvPage)["descr"] ?? "")
+                      .hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n"),
+                      String((fields("hdvideo", manual, hdvPage)["descr"] ?? "").prefix(80)))
+        var plain = self.info
+        plain.descr = "<p>剧情简介</p>"
+        let d = fields("hdvideo", plain, hdvPage)["descr"] ?? ""
+        XCTAssertFalse(d.hasPrefix("[quote]"), "未勾选源站引用：简介原样，不自动加引用块 \(d.prefix(60))")
     }
 
     func testSeasonAndEpisodeFields() {

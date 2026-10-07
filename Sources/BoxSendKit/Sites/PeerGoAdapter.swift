@@ -400,11 +400,8 @@ final class PeerGoAdapter: SiteAdapter {
         let html = NexusPHPAdapter.preprocessDescription(info.descr, base: site.url, dropScreenshots: false)
         var out = BBCode.fromHTML(html, base: URL(string: site.url))
         if out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out = NexusPHPAdapter.fallbackDescr(info) }
-        if !info.extraQuoteText.isEmpty { return info.extraQuoteBBCode + out }
-        if info.isOfficialSource {
-            out = "[quote]\n转载自\(info.sourceName.isEmpty ? info.siteID : info.sourceName)，感谢发布者。\n[/quote]\n" + out
-        }
-        return out
+        // 来源引用只认「批量转种」页手填的源站引用（可选项），官种不再自动加致谢
+        return info.extraQuoteBBCode + out
     }
 
     private func save(_ kind: String, _ text: String) {

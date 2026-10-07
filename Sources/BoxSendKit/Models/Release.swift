@@ -52,7 +52,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     }
 
     /// 源站把该种子标成官种/官方发布。目标站的种子不是官种（不该打官方标签），
-    /// 但要在简介注明来源，见 NexusPHPAdapter.sourcePrefix。
+    /// 「首发」标签也只有源站是官种时才跟随，见 QualityTokens.canonicalTags。
     public var isOfficialSource: Bool {
         sourceTags.contains { t in
             let n = t.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

@@ -149,10 +149,13 @@ enum QualityTokens {
         if medium(from: info.name, kind: info.kind) == "remux" { tags.append("remux") }
         if info.kind == .anime { tags.append("anime") }
         if isCompletedRelease(info) { tags.append("completed") }
-        // 源站"标签"行是打标最权威的依据（官方/英字/应求等无法从发布名推断）
+        // 源站"标签"行是打标最权威的依据（官方/英字/应求等无法从发布名推断）。
+        // 表里刻意没有 official：官种是源站概念，转出去的种子不是官种。
+        // "首发"同理——目标站这条不是首发，只有源站自己发官种时才跟随。
         for raw in info.sourceTags {
             let s = raw.lowercased()
             for (tag, keywords) in tagTextMap where !tags.contains(tag) {
+                if tag == "first" && !info.isOfficialSource { continue }
                 if keywords.contains(where: { s.contains($0) }) { tags.append(tag) }
             }
         }
