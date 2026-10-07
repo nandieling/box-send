@@ -45,17 +45,21 @@ public final class ReseedPipeline {
         public var onSitePush: ((String, String, Bool?) -> Void)?
         /// 源站种子推送到下载器的事件
         public var onSourcePush: ((String, Bool?) -> Void)?
+        /// 转种成功但需要人工注意的提示（siteID / 提示文案），例如附加信息留空
+        public var onSiteWarning: ((String, String) -> Void)?
 
         public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil,
                     onSiteEvent: ((String, String, Bool?) -> Void)? = nil,
                     onSitePush: ((String, String, Bool?) -> Void)? = nil,
-                    onSourcePush: ((String, Bool?) -> Void)? = nil) {
+                    onSourcePush: ((String, Bool?) -> Void)? = nil,
+                    onSiteWarning: ((String, String) -> Void)? = nil) {
             self.skipReseed = skipReseed
             self.skipPush = skipPush
             self.targets = targets
             self.onSiteEvent = onSiteEvent
             self.onSitePush = onSitePush
             self.onSourcePush = onSourcePush
+            self.onSiteWarning = onSiteWarning
         }
     }
 
@@ -70,6 +74,8 @@ public final class ReseedPipeline {
         public var pushes: [(site: String, ok: Bool, message: String)]
         public var sizeSkipped: Bool
         public var sizeGuardWarning: String?
+        /// 转种成功但需要人工注意的提示（如附加信息留空）
+        public var warnings: [(site: String, message: String)] = []
 
         public var description: String {
             var lines: [String] = ["[\(release.summary)] torrent \(torrentBytes) bytes"]
@@ -82,6 +88,9 @@ public final class ReseedPipeline {
             }
             for o in outcomes {
                 lines.append("  reseed \(o.site): \(o.ok ? "OK" : "FAIL") \(o.message)")
+            }
+            for w in warnings {
+                lines.append("  reseed \(w.site): 提示 \(w.message)")
             }
             lines.append("  push: \(pushed ? "OK (\(pushID ?? "")) upLimit=\(upLimit == 0 ? "unlimited" : "\(upLimit) B/s")" : "skipped")")
             for p in pushes {
@@ -118,7 +127,7 @@ public final class ReseedPipeline {
         }
         // 「批量转种」页勾选的源站引用：由各适配器按目标站简介格式包裹后置顶
         release.extraQuote = opts.sourceQuote.trimmingCharacters(in: .whitespacesAndNewlines)
-        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [], sizeSkipped: false, sizeGuardWarning: nil)
+        var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [], sizeSkipped: false, sizeGuardWarning: nil, warnings: [])
 
         // 3. 下载 .torrent，用 bencode 校正大小；发布名保持源站详情页主标题
         //（.torrent 的 info.name 常带站方前缀/点分文件名，不宜作为目标站主标题）
@@ -201,6 +210,14 @@ public final class ReseedPipeline {
                             } else {
                                 state.note("reseed OK \(tid) <- \(release.summary)")
                                 opts.onSiteEvent?(tid, "转种成功", true)
+                                // cmct / 劳改所：附加信息只认手填源站引用，没填就提醒（不算失败）
+                                if release.extraQuoteText.isEmpty,
+                                   SiteRegistry.needsSourceQuoteField(ts) {
+                                    let w = "未填「源站引用」：该站附加信息/其它信息（转种来源）留空"
+                                    state.note("reseed WARN \(tid): \(w)")
+                                    report.warnings.append((tid, w))
+                                    opts.onSiteWarning?(tid, w)
+                                }
                                 if let u = outcome.detailURL {
                                     let uAbs = absoluteTargetURL(tid, u)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)

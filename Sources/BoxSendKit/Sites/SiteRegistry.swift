@@ -39,6 +39,12 @@ public enum SiteRegistry {
 
     /// 配置层 overrides 与内置表合并（内置为底，配置优先；旧配置缺的新字段自动用内置值）
     /// 配置里整段 overrides 缺失时也应用内置值（如馒头未带 overrides 仍需 API Key 标识）
+    /// 该站的「附加信息 / 其它信息」框只放用户手填的源站引用（cmct、劳改所）：
+    /// 没填时区块留空，转种时提示用户去填
+    public static func needsSourceQuoteField(_ site: SiteConfig) -> Bool {
+        effectiveSite(site).overrides?.descrStyle == "reseedSource"
+    }
+
     public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {
         let builtinSite = prioritySites.first(where: { $0.id == site.id })
         var s = site

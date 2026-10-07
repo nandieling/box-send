@@ -953,24 +953,6 @@ class NexusPHPAdapter: SiteAdapter {
         return all.filter { $0 != poster }
     }
 
-    /// 源简介引用框（<fieldset><legend>引用</legend>）内部原始 HTML（去 legend、首尾 <br>/空白），
-    /// 用于 cmct 等站"附加信息=转种来源"
-    static func quoteHTML(from descrHTML: String) -> String? {
-        let re = try! NSRegularExpression(pattern: "<fieldset[^>]*>(.*?)</fieldset>",
-                                          options: [.caseInsensitive, .dotMatchesLineSeparators])
-        guard let m = re.firstMatch(in: descrHTML, options: [], range: NSRange(descrHTML.startIndex..., in: descrHTML)),
-              m.numberOfRanges > 1, let r = Range(m.range(at: 1), in: descrHTML) else { return nil }
-        var inner = String(descrHTML[r])
-        inner = inner.replacingOccurrences(of: "\r\n", with: "\n", options: [])
-        inner = inner.replacingOccurrences(of: "\r", with: "\n", options: [])
-        inner = inner.replacingOccurrences(of: "<legend>.*?</legend>", with: "",
-                                           options: [.regularExpression, .caseInsensitive])
-        inner = inner.replacingOccurrences(of: "^(?:\\s|<br\\s*/?>)+", with: "", options: .regularExpression)
-        inner = inner.replacingOccurrences(of: "(?:\\s*<br\\s*/?>)*\\s*$", with: "", options: .regularExpression)
-        inner = inner.trimmingCharacters(in: .whitespacesAndNewlines)
-        return inner.isEmpty ? nil : inner
-    }
-
     /// bbcode 目标站简介 HTML 预清洗：
     /// 1) fieldset 引用框内部首尾的 <br>/空白（源页排版用）去掉；
     /// 2) 海报 div：存在同图独立 <img> 时整块去掉，否则保留 div 内 img；
@@ -1028,14 +1010,10 @@ class NexusPHPAdapter: SiteAdapter {
         return s
     }
 
-    /// cmct 等站"附加信息"：转种来源（源站引用框内容 + 致谢前缀）。
-    /// 用户在「批量转种」页填了源站引用时直接用它（这类站该区块本就是手填转载说明）
-    func reseedSourceText(_ info: ReleaseInfo) -> String {
-        if !info.extraQuoteText.isEmpty { return info.extraQuoteText }
-        var t = "转载自\(sourceLabel(info))，感谢发布者。"
-        if let q = Self.quoteHTML(from: info.descr) { t += q }
-        return t
-    }
+    /// cmct / 劳改所等站的「附加信息 / 其它信息」：只放「批量转种」页填的源站引用。
+    /// 这类站该区块本就是转载说明，不自动写致谢（与其他站的简介规则一致）；
+    /// 没勾选源站引用时留空，由流水线提示用户，见 ReseedPipeline。
+    func reseedSourceText(_ info: ReleaseInfo) -> String { info.extraQuoteText }
 
     static func isImageURL(_ s: String) -> Bool {
         let path = (s as NSString).deletingPathExtension.lowercased()

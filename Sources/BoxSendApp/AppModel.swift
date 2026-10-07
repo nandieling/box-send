@@ -23,6 +23,8 @@ final class AppModel: ObservableObject {
         public var text: String
         public var ok: Bool?    // nil = 进行中
     }
+    /// 转种成功但需要人工注意的提示（siteID -> 文案）
+    @Published var siteWarnings: [String: String] = [:]
     @Published var detailURL: String = ""
     @Published var selectedTargets: Set<String> = []
     @Published var doReseed = true
@@ -441,6 +443,23 @@ final class AppModel: ObservableObject {
 
     /// 用户已添加的站点（「站点」页展示；未添加的站只在内置名录中）
     var managedSites: [SiteConfig] { config.sourceSites.filter { $0.managed } }
+
+    /// 勾选的目标站中「附加信息 / 其它信息」只放手填源站引用的站点（cmct、劳改所）
+    var targetsNeedingSourceQuote: [SiteConfig] {
+        config.sourceSites.filter {
+            $0.managed && selectedTargets.contains($0.id) && SiteRegistry.needsSourceQuoteField($0)
+        }
+    }
+
+    /// 运行页提示：这些站的附加信息只认源站引用，没填会留空
+    var sourceQuoteHint: String? {
+        let filled = sourceQuoteEnabled
+            && !sourceQuoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !filled else { return nil }
+        let names = targetsNeedingSourceQuote.map(\.name)
+        guard !names.isEmpty else { return nil }
+        return "\(names.joined(separator: "、")) 的「附加信息」只填源站引用：未填写时该区块留空，可能被站方打回"
+    }
 
     /// 未分组的已添加站点
     var unassignedManagedSites: [SiteConfig] {
@@ -1205,6 +1224,7 @@ final class AppModel: ObservableObject {
         let pickedSource = sourceSiteID
         reseedEvents = [:]
         pushEvents = [:]
+        siteWarnings = [:]
         sourcePushEvent = nil
         Task.detached {
             let pipeline = ReseedPipeline(config: cfg, cookies: cookieJar, state: st,
@@ -1228,6 +1248,11 @@ final class AppModel: ObservableObject {
             o.onSourcePush = { [weak self] text, ok in
                 Task { @MainActor in
                     self?.sourcePushEvent = TargetEvent(text: text, ok: ok)
+                }
+            }
+            o.onSiteWarning = { [weak self] siteID, text in
+                Task { @MainActor in
+                    self?.siteWarnings[siteID] = text
                 }
             }
             let reportText: String

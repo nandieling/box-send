@@ -55,6 +55,24 @@ final class SourceQuoteTests: XCTestCase {
         XCTAssertEqual(d, manual)
     }
 
+    /// 不勾选源站引用：这类站的「附加信息」留空（由流水线给出提示，而不是自动写致谢）
+    func testReseedSourceStyleIsEmptyWithoutManualQuote() throws {
+        XCTAssertEqual(try descr("cmct", source()), "")
+    }
+
+    /// 提示的判定依据：只有「附加信息 = 转种来源」型站点需要手填源站引用
+    func testNeedsSourceQuoteFieldOnlyForThoseSites() throws {
+        for id in ["cmct", "ptlgs"] {
+            let s = SiteRegistry.prioritySites.first { $0.id == id }!
+            XCTAssertTrue(SiteRegistry.needsSourceQuoteField(s), id)
+        }
+        XCTAssertFalse(SiteRegistry.needsSourceQuoteField(SiteRegistry.prioritySites.first { $0.id == "crabpt" }!))
+        // 用户配置里的旧快照（overrides 没带 descrStyle）也要按内置表判定
+        var stale = SiteRegistry.prioritySites.first { $0.id == "cmct" }!
+        stale.overrides = SiteOverride()
+        XCTAssertTrue(SiteRegistry.needsSourceQuoteField(stale))
+    }
+
     func testExtraQuoteSurvivesCodableRoundTrip() throws {
         let info = try source(quote: "转载自测试站")
         let data = try JSONEncoder().encode(info)

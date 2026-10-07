@@ -239,6 +239,10 @@ struct RunView: View {
             }
             .onChange(of: model.sourceQuoteEnabled) { _ in model.saveConfig() }
             .onChange(of: model.sourceQuoteText) { _ in model.saveConfig() }
+            if let hint = model.sourceQuoteHint {
+                Text(hint).font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
@@ -336,6 +340,11 @@ struct RunView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if let e = model.reseedEvents[s.id] { eventChip(e) }
             if let e = model.pushEvents[s.id] { eventChip(e) }
+            if let w = model.siteWarnings[s.id] {
+                Text(w).font(.caption).foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1578,7 +1587,7 @@ struct TutorialSheet: View {
                         "源站默认按链接域名识别（「种子链接」旁的「源站」菜单会显示识别结果）；站点分组里添加过的站点都能点名作源站。",
                         "勾选转种分组（「全选」= 全部分组）后点「开始运行」。",
                         "按分组顺序执行：获取种子 → 依次上传到组内已开启站点（限速取分组上传限速）→ 转种成功的种子自动推送到下载器。",
-                        "源站简介没有转载说明时，勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介的最上面；源站自带引用的不用勾。",
+                        "需要注明转种来源时勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介的最上面；源站自带引用的不用勾。cmct、劳改所的「附加信息」框只用这段文字，没勾选时留空并在站点卡片上提示。",
                         "点「运行记录」展开查看每个站点的转种 / 推送结果。",
                     ])
                     section("4. 推送到 VPS 下载器", image: "downloader", steps: [

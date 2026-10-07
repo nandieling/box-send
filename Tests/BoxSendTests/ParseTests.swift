@@ -419,8 +419,10 @@ final class ParseTests: XCTestCase {
         https://img3.pixhost.to/images/6083/776555875_02.png
         https://img3.pixhost.to/images/6083/776555987_03.png
         """)
-        // 附加信息 = 转种来源（源站名 + 引用框原文）
-        XCTAssertEqual(dict["descr"],
+        // 附加信息只认手填的源站引用：没填就留空（不再自动拼源站名 + 引用框原文）
+        XCTAssertEqual(dict["descr"] ?? "", "", "未勾选源站引用时附加信息应留空")
+        info.extraQuote = "转载自LuckPT，感谢发布者。原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)<br />\n字幕来自华盟字幕社"
+        XCTAssertEqual(adapter.buildUploadFields(info, page: page).first { $0.name == "descr" }?.value,
             "转载自LuckPT，感谢发布者。原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)<br />\n字幕来自华盟字幕社")
         // MediaInfo 独立提交
         XCTAssertTrue((dict["Media_BDInfo"] ?? "").contains("Unique ID"))
