@@ -31,15 +31,16 @@ enum QualityMatcher {
             "encode": Rule(match: ["encode", "rip", "压制"], exclude: []),
             "other": Rule(match: ["other", "其它", "其他"], exclude: []),
         ],
-        // 站点常写裸数字（"1080"）或合并写法（"1080p/1080i/FHD"），裸数字兜底不可缺
+        // 站点常写裸数字（"1080"）或合并写法（"1080p/1080i/FHD"），裸数字兜底不可缺。
+        // 3D 选项一律排除：52PT 的 "1080P-3D" 前缀更长会盖过 "2K/1080p"
         "standard": [
-            "8k": Rule(match: ["8k", "4320"], exclude: []),
-            "2160p": Rule(match: ["2160", "4k"], exclude: []),
-            "1440p": Rule(match: ["1440", "2k"], exclude: []),
-            "1080p": Rule(match: ["1080p", "1080"], exclude: []),
-            "1080i": Rule(match: ["1080i", "1080"], exclude: []),
-            "720p": Rule(match: ["720"], exclude: []),
-            "sd": Rule(match: ["sd", "480", "576"], exclude: []),
+            "8k": Rule(match: ["8k", "4320"], exclude: ["3d"]),
+            "2160p": Rule(match: ["2160", "4k"], exclude: ["3d"]),
+            "1440p": Rule(match: ["1440", "2k"], exclude: ["3d"]),
+            "1080p": Rule(match: ["1080p", "1080"], exclude: ["3d"]),
+            "1080i": Rule(match: ["1080i", "1080"], exclude: ["3d"]),
+            "720p": Rule(match: ["720"], exclude: ["3d"]),
+            "sd": Rule(match: ["sd", "480", "576"], exclude: ["3d"]),
             "other": Rule(match: ["other", "其它", "其他"], exclude: []),
         ],
         "codec": [
@@ -54,7 +55,8 @@ enum QualityMatcher {
             "prores": Rule(match: ["prores"], exclude: []),
         ],
         "audiocodec": [
-            "dtsma": Rule(match: ["dtshdma"], exclude: []),
+            // 站点常只写 "DTS-HD"（劳改所），不能因为缺 "MA" 就退到 TrueHD
+            "dtsma": Rule(match: ["dtshdma", "dtshd"], exclude: []),
             "truehd": Rule(match: ["truehd"], exclude: []),
             "dtsx": Rule(match: ["dtsx"], exclude: []),
             "dtsc": Rule(match: ["dtsc"], exclude: []),
@@ -211,10 +213,13 @@ enum QualityMatcher {
                 && !rule.exclude.contains(where: { o.norm.contains($0) })
                 && (!otherOnly || isOtherLabel(o.norm)) {
                 var score = 10 - min(o.order, 9)            // 同分时保持原有顺序偏好
-                for pat in rule.match {
-                    if o.norm == pat { score += 8 }
-                    else if o.norm.hasPrefix(pat) { score += 5 }
-                    else if o.norm.contains(pat) { score += 2 }
+                for (i, pat) in rule.match.enumerated() {
+                    var hit = 0
+                    if o.norm == pat { hit = 8 }
+                    else if o.norm.hasPrefix(pat) { hit = 5 }
+                    else if o.norm.contains(pat) { hit = 2 }
+                    // 主关键词（列表第一项）优先：DTS-HD MA 先选 "DTS-HD MA"，没有才选 "DTS-HD"
+                    if hit > 0 { score += i == 0 ? hit : hit - 1 }
                 }
                 if ["uhd", "4k", "2160"].contains(where: { o.norm.contains($0) }) {
                     score += ctx.isUHD ? 7 : -7      // 4K 发布要盖过"Remux"这类更短的精确项

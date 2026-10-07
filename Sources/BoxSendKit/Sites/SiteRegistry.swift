@@ -40,10 +40,17 @@ public enum SiteRegistry {
     /// 配置层 overrides 与内置表合并（内置为底，配置优先；旧配置缺的新字段自动用内置值）
     /// 配置里整段 overrides 缺失时也应用内置值（如馒头未带 overrides 仍需 API Key 标识）
     public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {
-        guard let builtin = prioritySites.first(where: { $0.id == site.id })?.overrides else {
-            return site
-        }
+        let builtinSite = prioritySites.first(where: { $0.id == site.id })
         var s = site
+        // 站点强制 https（如吐鲁番：http 会 301 到 https）时，把用户配置里遗留的 http 地址升级掉：
+        // POST 跟 301 跳转时请求体会被丢掉，站点只收到空表单，报「请填写必填项目」
+        if let b = builtinSite, s.url.hasPrefix("http://"), b.url.hasPrefix("https://"),
+           URL(string: s.url)?.host == URL(string: b.url)?.host {
+            s.url = b.url
+        }
+        guard let builtin = builtinSite?.overrides else {
+            return s
+        }
         s.overrides = (site.overrides ?? SiteOverride()).merged(over: builtin)
         return s
     }
@@ -114,7 +121,7 @@ public enum SiteRegistry {
         SiteConfig(id: "freefarm", name: "农场", url: "https://pt.0ff.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "aling", name: "爱玲", url: "https://pt.aling.de/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "btschool", name: "学校", url: "https://pt.btschool.club/", framework: .nexusPHP, enabled: false, overrides: .btschool),
-        SiteConfig(id: "tlf", name: "吐鲁番", url: "http://pt.eastgame.org/", framework: .nexusPHP, enabled: false, overrides: .tlf),
+        SiteConfig(id: "tlf", name: "吐鲁番", url: "https://pt.eastgame.org/", framework: .nexusPHP, enabled: false, overrides: .tlf),
         SiteConfig(id: "gtk", name: "GTK", url: "https://pt.gtkpw.xyz/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdclone", name: "独自", url: "https://pt.hdclone.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "itzmx", name: "Itz", url: "https://pt.itzmx.com/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
@@ -127,7 +134,7 @@ public enum SiteRegistry {
         SiteConfig(id: "ptcafe", name: "咖啡", url: "https://ptcafe.club/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "ptfans", name: "PTFans", url: "https://ptfans.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "pthome", name: "铂金家", url: "https://www.pthome.net/", framework: .nexusPHP, enabled: false, overrides: .pthome),
-        SiteConfig(id: "ptlgs", name: "劳改所", url: "https://ptlgs.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "ptlgs", name: "劳改所", url: "https://ptlgs.org/", framework: .nexusPHP, enabled: false, overrides: .ptlgs),
         SiteConfig(id: "ptsbao", name: "烧包", url: "https://ptsbao.club/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "ptskit", name: "拾刻", url: "https://www.ptskit.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "ptt", name: "时间", url: "https://www.pttime.org/", framework: .nexusPHP, enabled: false, overrides: .ptt),

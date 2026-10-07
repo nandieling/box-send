@@ -25,6 +25,14 @@ public final class ReseedPipeline {
         self.downloader = downloader
     }
 
+    /// 目标站种子详情页链接补全：旧版 state 里存过相对链接（details.php?id=1），
+    /// 直接当 URL 用会 unsupported URL，按站点主页补成绝对地址
+    func absoluteTargetURL(_ siteID: String, _ url: String) -> String {
+        guard !url.lowercased().hasPrefix("http"), let base = config.site(siteID)?.url,
+              let u = URL(string: base) else { return url }
+        return HTMLUtil.resolveURL(url, against: u)
+    }
+
     public struct Options {
         public var skipReseed = false
         public var skipPush = false
@@ -154,13 +162,14 @@ public final class ReseedPipeline {
                         report.outcomes.append((tid, true, "已转种过，跳过"))
                         opts.onSiteEvent?(tid, "已转种过（跳过）", true)
                         if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                            targetPushes.append((tid, tu))
+                            targetPushes.append((tid, absoluteTargetURL(tid, tu)))
                         }
                         continue
                     }
                     do {
                         let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
-                        if let exists = try tAdapter.searchExists(release), !(ts.overrides?.searchURL ?? "").isEmpty {
+                        if !(ts.overrides?.searchURL ?? "").isEmpty,
+                           let exists = try tAdapter.searchExists(release) {
                             report.outcomes.append((tid, true, "已存在: \(exists)"))
                             opts.onSiteEvent?(tid, "已存在（跳过）", true)
                             state.markUploaded(site: tid, key: release.dedupKey)
@@ -177,8 +186,9 @@ public final class ReseedPipeline {
                                     existing = try? tAdapter.searchExists(release)
                                 }
                                 if let u = existing {
-                                    state.markTargetURL(site: tid, key: release.dedupKey, url: u)
-                                    targetPushes.append((tid, u))
+                                    let uAbs = absoluteTargetURL(tid, u)
+                                    state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
+                                    targetPushes.append((tid, uAbs))
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
                                     opts.onSiteEvent?(tid, "已存在（跳过，推送已有种子）", true)
                                 } else {
@@ -189,8 +199,9 @@ public final class ReseedPipeline {
                                 state.note("reseed OK \(tid) <- \(release.summary)")
                                 opts.onSiteEvent?(tid, "转种成功", true)
                                 if let u = outcome.detailURL {
-                                    state.markTargetURL(site: tid, key: release.dedupKey, url: u)
-                                    targetPushes.append((tid, u))
+                                    let uAbs = absoluteTargetURL(tid, u)
+                                    state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
+                                    targetPushes.append((tid, uAbs))
                                 } else {
                                     state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
                                 }
@@ -210,7 +221,7 @@ public final class ReseedPipeline {
             // skipReseed：从已有记录补齐目标站新种子链接，保证目标站 torrent 也能推送
             for tid in targets {
                 if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                    targetPushes.append((tid, tu))
+                    targetPushes.append((tid, absoluteTargetURL(tid, tu)))
                 }
             }
         }

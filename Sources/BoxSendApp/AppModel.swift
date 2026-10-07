@@ -77,6 +77,10 @@ final class AppModel: ObservableObject {
         }
 
         state = StateStore(dataDir: dataDir)
+
+        // 数据目录以 GUI 自己的 AppPaths.dir 为准：配置里可能留着历史相对值（".boxsend"），
+        // 相对路径会让转种失败现场（debug/ 下的响应页与字段清单）落到 GUI 进程的工作目录（"/"）而静默丢失
+        config.dataDir = dataDir
         state.onNote = { [weak self] line in
             DispatchQueue.main.async {
                 guard let self else { return }

@@ -178,29 +178,56 @@ enum QualityTokens {
         return out
     }
 
-    /// 完结/整季判定：源站「标签」行或文案有完结标记，或是整季包（S03 且无单集标记）。
-    /// 目标站有"完结"标签时应当勾选（猫/麒麟/青蛙/咖啡/蟹黄堡等均有该标签）。
+    /// 连载类（动漫/剧集/综艺）之外一律不打"完结"：电影、纪录片的简介里出现
+    /// "完结"/"Complete name"（MediaInfo 字段）曾被误判成整季完结（多站误勾完结标签）。
+    /// 判定顺序：连载类闸门 -> 源站"连载中/完结"标记 -> 文案完结标记 -> 整季包启发式。
     static func isCompletedRelease(_ info: ReleaseInfo) -> Bool {
-        let raw = HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.name
-        let cleaned = raw.replacingOccurrences(of: "未完结", with: "")
-            .replacingOccurrences(of: "未完結", with: "")
+        guard [.anime, .series, .tvshow].contains(info.kind ?? .other) else { return false }
         // 源站明确标注连载中时，一票否决（整季包启发式也不能翻案）
         if info.sourceTags.contains(where: {
-            ["未完结", "未完結", "连载", "連載", "更新中", "正在更新"].contains($0)
+            ["未完结", "未完結", "连载", "連載", "更新中", "正在更新", "分集"].contains($0)
         }) { return false }
         if info.sourceTags.contains(where: {
             ($0.contains("完结") || $0.contains("完結")) && !$0.contains("未")
         }) { return true }
-        for kw in ["完结", "完結", "全集", "complete", "finished"] where cleaned.lowercased().contains(kw) {
+        let raw = (HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.name)
+            .replacingOccurrences(of: "未完结", with: "")
+            .replacingOccurrences(of: "未完結", with: "")
+        if raw.range(of: "完结|完結|全集", options: .regularExpression) != nil { return true }
+        if raw.range(of: "全\\s*\\d+\\s*[集话話]", options: .regularExpression) != nil { return true }
+        // 英文 complete/finished：排除 MediaInfo 的 "Complete name" 字段行
+        if raw.range(of: #"(?i)\b(complete|finished)\b(?!\s*name)"#, options: .regularExpression) != nil {
             return true
         }
-        if cleaned.range(of: "全\\s*\\d+\\s*[集话話]", options: .regularExpression) != nil { return true }
-        guard [.anime, .series, .tvshow].contains(info.kind ?? .other) else { return false }
         let n = info.name.uppercased()
         let season = n.range(of: #"S\d{1,2}(?![\dE])"#, options: .regularExpression) != nil
         let singleEpisode = n.range(of: #"(E\d{1,3}|第\s*\d+\s*[集话])"#, options: .regularExpression) != nil
         return season && !singleEpisode
     }
+
+    /// 分类/标签文案的繁体字形归一：站点分类表多用繁体或中英混排（"紀錄教育""卡通動漫"），
+    /// 只按简体关键词匹配会整批漏掉（1PTBA、麒麟、咖啡的纪录片分类曾因此上传失败）
+    static func toSimplified(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for c in s { out.append(tradToSimp[c] ?? c) }
+        return out
+    }
+
+    /// 关键词匹配用的归一形式：小写 + 去空白 + 繁体转简体
+    static func normLabel(_ s: String) -> String {
+        toSimplified(s).lowercased()
+            .replacingOccurrences(of: "[\\s\u{3000}\u{00A0}]+", with: "", options: .regularExpression)
+    }
+
+    private static let tradToSimp: [Character: Character] = {
+        let t = Array("紀錄電視劇綜藝動樂會體賽軟遊戲書結質圖頭羅時兒愛驚曆戰險畫壓過網從為與廣慶態發種專業個們說話漢簡聯訊腦絡資優麗應臺張")
+        let s = Array("纪录电视剧综艺动乐会体赛软游戏书结质图头罗时儿爱惊历战险画压过网从为与广庆态发种专业个们说话汉简联讯脑络资优丽应台张")
+        precondition(t.count == s.count, "繁简映射表两侧字数必须一致")
+        var m: [Character: Character] = [:]
+        for (i, c) in t.enumerated() { m[c] = s[i] }
+        return m
+    }()
 
     static func year(from name: String) -> Int? {
         guard let re = try? NSRegularExpression(pattern: "(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])") else { return nil }

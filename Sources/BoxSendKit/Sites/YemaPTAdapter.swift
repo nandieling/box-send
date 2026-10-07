@@ -277,6 +277,9 @@ final class YemaPTAdapter: SiteAdapter {
     /// 内部 HTML -> YemaPT 的 Markdown 简介（图片独立行、去标签、解码实体）
     static func htmlToMarkdown(_ html: String) -> String {
         var out = html
+        // 引用框的 <legend>（"引用""代码"）不是内容，去掉后简介才不会被顶上一行标签
+        out = out.replacingOccurrences(of: "(?s)<legend[^>]*>.*?</legend>", with: "",
+                                       options: [.regularExpression, .caseInsensitive])
         // 换行语义
         for tag in ["<br />", "<br>", "<br/>", "</p>", "</div>", "</li>", "</tr>", "</h1>", "</h2>", "</h3>", "</h4>", "</blockquote>", "</pre>"] {
             out = out.replacingOccurrences(of: tag, with: "\n")
@@ -333,8 +336,8 @@ final class YemaPTAdapter: SiteAdapter {
     }
 
     func fetchDetail(detailURL: String) throws -> ReleaseInfo {
-        guard let m = HTMLUtil.firstMatch(detailURL,
-                                          #"(?:torrent/detail/|detail%2F|detail\?id=|id=)(\d+)"#),
+        guard let m = HTMLUtil.group(detailURL,
+                                     #"(?:torrent/detail/|detail%2F|detail\?id=|id=)(\d+)"#),
               let id = Int(m) else {
             throw BoxSendError.badInput("无法解析 YemaPT 详情链接: \(detailURL)")
         }

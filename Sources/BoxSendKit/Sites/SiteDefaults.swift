@@ -128,7 +128,9 @@ extension SiteOverride {
     )
 
     /// ttg（TTG）
+    /// .torrent 直链为 /dl/<id>/<随机号>（页面另有 /dl/<id>/zip/<n> 截图包与 /dl/<id>/<32位hex> 种子链接）
     static let ttg = SiteOverride(
+        torrentLinkPattern: "/dl/\\d+/\\d+$",
         uploadActionPath: "takeupload.php",
         titleField: "name",
         imdbField: "imdb_c",
@@ -397,6 +399,21 @@ extension SiteOverride {
         doubanField: "dburl",
         doubanValueTemplate: "https://movie.douban.com/subject/{douban}/",
         categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
+    /// 劳改所（PTLGS）：海报/截图/MediaInfo 各有独立输入框，"其它信息"（descr）只放转种来源与源站引用
+    static let ptlgs = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        posterField: "cover",
+        descrStyle: "reseedSource",
+        categoryField: "type",
+        screenshotField: "screenshots",
         extraUploadFields: ["uplver": "yes"],
         subtitleField: "small_descr"
     )

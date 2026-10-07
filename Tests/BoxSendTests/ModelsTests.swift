@@ -224,7 +224,8 @@ final class ModelsTests: XCTestCase {
             + "<tr><td><a href=\"details.php?id=1002&amp;hit=1\">Food, Inc 2 2023 REPACK 1080p USA Blu-ray AVC DTS-HD MA 5.1-SQUY</a></td></tr></table>"
         let base = URL(string: "https://pt.luckpt.de/")!
         let hit = NexusPHPAdapter.searchNameInResults(html: html, releaseName: "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu", base: base)
-        XCTAssertEqual(HTMLUtil.resolveURL(hit?.href ?? "", against: base), "https://pt.luckpt.de/details.php?id=1001&hit=1")
+        // 返回值必须是绝对地址：EXIST 路径会直接拿它推送下载器
+        XCTAssertEqual(hit?.href, "https://pt.luckpt.de/details.php?id=1001&hit=1")
         // 只有别的发行版 -> 不命中
         let none = NexusPHPAdapter.searchNameInResults(html: html, releaseName: "The Whole Truth 2016 BluRay REMUX 1080p AVC DTS-HD MA 5.1-HDS", base: base)
         XCTAssertNil(none)

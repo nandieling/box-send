@@ -244,6 +244,19 @@ public final class HTTPClient {
         }
     }
 
+    /// 站点把 http 强制跳到 https 时，URLSession 跟随 301/302 会把带请求体的 POST 降级成无体请求，
+    /// PHP 只收到空 $_POST（NexusPHP 表现为「请填写必填项目」）。识别"整条链路只换了 scheme"的跳转，
+    /// 返回应当用 https 原样重发的请求；不需要重发时返回 nil。
+    static func httpsUpgradedRequest(_ req: URLRequest, finalURL: String) -> URLRequest? {
+        guard req.httpBody?.isEmpty == false, (req.httpMethod ?? "GET") != "GET",
+              let from = req.url, from.scheme == "http",
+              let to = URL(string: finalURL), to.scheme == "https",
+              to.host == from.host, to.path == from.path, to.query == from.query else { return nil }
+        var up = req
+        up.url = to
+        return up
+    }
+
     /// URLSession 会把多个 Set-Cookie 头合并成一个逗号分隔串；逗号同样出现在 Expires 日期里，
     /// 所以只在"逗号后紧跟 name="处切分（日期里逗号后是 "09 Jun 2026…"，不会误切）
     static func splitSetCookieHeader(_ merged: String) -> [String] {
@@ -261,6 +274,17 @@ public final class HTTPClient {
     }
 
     private func performOnce(_ req: URLRequest) throws -> Response {
+        if let override = performOverride { return try override(req) }
+        if let dump = ProcessInfo.processInfo.environment["BOXSEND_DUMP_REQ"] {
+            var lines = ["\(req.httpMethod ?? "GET") \(req.url?.absoluteString ?? "")"]
+            for (k, v) in (req.allHTTPHeaderFields ?? [:]) { lines.append("\(k): \(v)") }
+            lines.append("httpBody.count=\(req.httpBody?.count ?? -1)")
+            if let body = req.httpBody, dump == "body" {
+                let keep = body.prefix(3000)
+                lines.append(String(data: keep, encoding: .utf8) ?? "<二进制 \(body.count) 字节>")
+            }
+            try? lines.joined(separator: "\n").data(using: .utf8)?.write(to: URL(fileURLWithPath: dump))
+        }
         let sem = DispatchSemaphore(value: 0)
         var result: Result<Response, Error> = .failure(BoxSendError.badInput("no response"))
         let task = session.dataTask(with: req) { data, response, error in
@@ -291,7 +315,11 @@ public final class HTTPClient {
         }
         task.resume()
         _ = sem.wait(timeout: .now() + timeout + 30)
-        return try result.get()
+        let resp = try result.get()
+        if let up = Self.httpsUpgradedRequest(req, finalURL: resp.finalURL) {
+            return try performOnce(up)        // 请求体要跟着换到 https 上重发一次
+        }
+        return resp
     }
 
     /// 便捷方法：GET 并返回 HTML 文本；登录失效（302 到登录页 / 403）时抛 cookieExpired。

@@ -49,9 +49,15 @@ final class DynamicNexusTests: XCTestCase {
     }
 
     func testQualityMatcherFallback() {
-        // 无 DTS-HD MA 选项（btschool 风格）-> 回退 TrueHD
+        // 无 "DTS-HD MA" 选项但有 "DTS-HD"（btschool/劳改所风格）-> 选 DTS-HD，不能退到 TrueHD
         let audio: [(String, String)] = [("0", "请选择"), ("11", "TrueHD"), ("3", "DTS-HD/DTS"), ("10", "AC3"), ("1", "FLAC")]
-        XCTAssertEqual(QualityMatcher.match(token: "dtsma", attr: "audiocodec", options: audio), "11")
+        XCTAssertEqual(QualityMatcher.match(token: "dtsma", attr: "audiocodec", options: audio), "3")
+        // 只有 TrueHD 时才回退 TrueHD
+        let audio2: [(String, String)] = [("0", "请选择"), ("11", "TrueHD"), ("10", "AC3"), ("1", "FLAC")]
+        XCTAssertEqual(QualityMatcher.match(token: "dtsma", attr: "audiocodec", options: audio2), "11")
+        // 3D 分辨率选项不算 1080p（52PT 的 "1080P-3D" 会盖过 "2K/1080p"）
+        let std3d: [(String, String)] = [("0", "请选择"), ("1", "2K/1080p"), ("4", "1080P-3D")]
+        XCTAssertEqual(QualityMatcher.match(token: "1080p", attr: "standard", options: std3d), "1")
         // 无 HEVC -> 回退 AVC
         let codec: [(String, String)] = [("0", "请选择"), ("1", "H.264"), ("2", "VC-1")]
         XCTAssertEqual(QualityMatcher.match(token: "hevc", attr: "codec", options: codec), "1")

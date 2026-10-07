@@ -4,6 +4,25 @@ import XCTest
 /// 真实页面/种子解析回归测试（fixture 抓自 LuckPT #42211 + HDSky upload.php）
 final class ParseTests: XCTestCase {
 
+    /// divContent 必须按 UTF-16 偏移换算索引：站点页面常用 CRLF 换行、标题里带 emoji，
+    /// 用 String.index(offsetBy:) 会把 NSRange 当 Character 数，轻则截错、重则越界崩溃
+    func testDivContentHandlesUTF16Offsets() {
+        let html = ["<html>",
+                    "<div id=\"kdescr\">",
+                    "  前菜 🍿",
+                    "  <div class=\"quote\">引用 🎬 内容</div>",
+                    "  正文 Food Inc 2009（豆瓣 8.9★）",
+                    "</div>",
+                    "<footer>",
+                    "</footer>",
+                    "</html>"].joined(separator: "\r\n")
+        let body = HTMLUtil.divContent(html, id: "kdescr")
+        XCTAssertNotNil(body, "CRLF + emoji 页面应能提取 div 内容")
+        XCTAssertTrue(body?.contains("正文 Food Inc 2009") == true, "实际: \(body ?? "nil")")
+        XCTAssertTrue(body?.contains("引用") == true)
+        XCTAssertFalse(body?.contains("<footer>") == true, "配对应停在最近的闭合 div")
+    }
+
     /// LuckPT #42211 详情页"副标题"行的完整内容（回归基准）
     let FULL_SUBTITLE = "毒食难肥/美味代价(台) | 导演：罗伯特·肯纳 | 第8届华盛顿影评人协会奖获奖纪录片 | 内封LuckPT原创简繁中字及Now官方翻译中字 *美国食品安全纪录片*"
 

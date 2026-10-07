@@ -63,14 +63,19 @@ enum HTMLUtil {
             let r = NSRange(idx..., in: html)
             guard let dm = divRe.firstMatch(in: html, options: [], range: r),
                   dm.range.location >= r.location else { return nil }
-            let tag = html[Range(dm.range, in: html)!]
+            // NSRange 是 UTF-16 偏移：必须用 Range(_:in:) 换算，
+            // 不能用 index(offsetBy:)（按 Character 计），否则遇到 CRLF/emoji 会越界崩溃
+            guard let dr = Range(NSRange(location: dm.range.location, length: dm.range.length), in: html) else {
+                return nil
+            }
+            let tag = html[dr]
             if tag.hasPrefix("</div") {
                 depth -= 1
-                if depth == 0 { return String(html[contentStart..<Range(dm.range, in: html)!.lowerBound]) }
+                if depth == 0 { return String(html[contentStart..<dr.lowerBound]) }
             } else {
                 depth += 1
             }
-            idx = html.index(html.startIndex, offsetBy: dm.range.location + dm.range.length)
+            idx = dr.upperBound
         }
         return nil
     }
