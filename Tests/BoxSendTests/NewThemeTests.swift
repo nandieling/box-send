@@ -202,3 +202,31 @@ final class CodecTokenTests: XCTestCase {
         XCTAssertNil(NexusPHPAdapter.codecFormatOption(opts, token: "vc1", value: "2"), "没有压制器对应关系就不动")
     }
 }
+
+/// 制作组匹配：CHDBits 的 KAN 不该被发布组 "LuckAni" 子串命中
+final class TeamValueTests: XCTestCase {
+    private let chdbits: [String: Int] = ["CHDBits": 14, "CHDHKTV": 11, "CHDWEB": 12, "CHDTV": 2,
+                                          "CHDPAD": 15, "CHDBPM": 28, "GrammyFan": 29, "OneHD": 8,
+                                          "blucook": 16, "SGNB": 13, "REMUX": 1, "KAN": 19, "JKCT": 22,
+                                          "BMDru": 23, "Destiny": 25, "GrassTV": 27, "SP": 26]
+
+    func testUnlistedGroupSelectsNothing() {
+        XCTAssertEqual(NexusPHPAdapter.teamValue(
+            releaseName: "Fatekaleid liner Prisma Illya S01 2013 1080p Blu-ray Remux AVC LPCM 2.0-LuckAni",
+            patterns: chdbits, other: 0), 0, "本站没有这个制作组就不选")
+    }
+
+    func testExactAndPrefixMatchesStillWork() {
+        XCTAssertEqual(NexusPHPAdapter.teamValue(releaseName: "Some Movie 2013 1080p-x264-CHDBits",
+                                                 patterns: chdbits, other: 0), 14)
+        XCTAssertEqual(NexusPHPAdapter.teamValue(releaseName: "Some Show S01 1080p-KAN",
+                                                 patterns: chdbits, other: 0), 19)
+        XCTAssertEqual(NexusPHPAdapter.teamValue(releaseName: "X 1080p-HDSWEB",
+                                                 patterns: ["HDS": 1, "HDSWEB": 31], other: nil), 31,
+                       "同名精确优先于前缀")
+        XCTAssertEqual(NexusPHPAdapter.teamValue(releaseName: "X 1080p-HDSTV",
+                                                 patterns: ["HDS": 1, "HDSWEB": 31], other: nil), 1,
+                       "没同名的本站前缀组仍归前缀")
+        XCTAssertNil(NexusPHPAdapter.teamValue(releaseName: "X 1080p-Whatever", patterns: ["KAN": 19], other: nil))
+    }
+}

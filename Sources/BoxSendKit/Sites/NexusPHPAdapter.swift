@@ -1270,20 +1270,28 @@ class NexusPHPAdapter: SiteAdapter {
         return g.isEmpty || g.count > 40 ? "Unknown" : g
     }
 
-    /// 制作组：种子名最后一个 "-" 后的发布组名匹配 teamPatterns（长名优先）；未知 -> teamOtherValue
+    /// 制作组：种子名最后一个 "-" 后的发布组名匹配 teamPatterns；未收录 -> teamOtherValue
     private func resolveTeam(_ info: ReleaseInfo) -> Int? {
         guard let ov = override, ov.teamField != nil else { return nil }
-        var group = info.name
+        return Self.teamValue(releaseName: info.name, patterns: ov.teamPatterns, other: ov.teamOtherValue)
+    }
+
+    /// 发布组 -> 本站制作组选项值。先按同名精确匹配，再退到前/后缀（"HDSWEB" 归 HDS 系）；
+    /// 不做子串匹配——"LuckAni" 里含 "KAN"，CHDBits 的转种曾被错勾成 KAN 制作组。
+    static func teamValue(releaseName: String, patterns: [String: Int]?, other: Int?) -> Int? {
+        var group = releaseName
         if let i = group.lastIndex(of: "-") {
             group = String(group[group.index(after: i)...])
         }
         group = group.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if let pats = ov.teamPatterns {
-            for (k, v) in pats.sorted(by: { $0.key.count > $1.key.count }) {
-                if group.contains(k.uppercased()) { return v }
-            }
-        }
-        return ov.teamOtherValue
+        guard !group.isEmpty else { return other }
+        let ordered = (patterns ?? [:]).sorted { $0.key.count > $1.key.count }
+        if let hit = ordered.first(where: { $0.key.uppercased() == group }) { return hit.value }
+        if let hit = ordered.first(where: {
+            let k = $0.key.uppercased()
+            return k.count >= 3 && (group.hasPrefix(k) || group.hasSuffix(k))
+        }) { return hit.value }
+        return other
     }
 
     /// 构建上传表单字段（业务字段覆盖同名 hidden；标签字段同名多次追加在末尾）
