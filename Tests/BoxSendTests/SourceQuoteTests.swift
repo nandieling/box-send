@@ -28,6 +28,9 @@ final class SourceQuoteTests: XCTestCase {
     }
 
     private let manual = "转载自LuckPT，感谢发布者。原盘来自U2:摇曳百合 第三季\n字幕来自华盟字幕社"
+    /// 源简介 fieldset 引用块的纯文本形态（附加信息区块应随后带上）
+    private let srcQuoteBlock = "原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)\n字幕来自华盟字幕社"
+
 
     func testManualQuoteOnTopOfBBCodeDescr() throws {
         let d = try descr("crabpt", source(quote: manual))
@@ -49,15 +52,39 @@ final class SourceQuoteTests: XCTestCase {
                        "源站是官种但没勾选源站引用：不该自动加转载自，实际开头: \(d.prefix(120))")
     }
 
-    /// cmct 的 descr 实为「附加信息」：手填引用直接作为该区块内容，不再套引用块
+    /// cmct 的 descr 实为「附加信息」：手填引用在最前，源简介引用块随后，都不套引用块
     func testReseedSourceStyleTakesRawText() throws {
         let d = try descr("cmct", source(quote: manual))
-        XCTAssertEqual(d, manual)
+        XCTAssertEqual(d, manual + "\n" + srcQuoteBlock)
     }
 
-    /// 不勾选源站引用：这类站的「附加信息」留空（由流水线给出提示，而不是自动写致谢）
-    func testReseedSourceStyleIsEmptyWithoutManualQuote() throws {
-        XCTAssertEqual(try descr("cmct", source()), "")
+    /// 不勾选源站引用：附加信息取源简介自带的引用块（两处都没有才留空并提示）
+    func testReseedSourceStyleFallsBackToSourceQuote() throws {
+        XCTAssertEqual(try descr("cmct", source()), srcQuoteBlock)
+    }
+
+    /// 源简介也没有引用块时附加信息才是空的（流水线据此提示）
+    func testReseedSourceTextEmptyWithoutAnyQuote() throws {
+        var info = try source()
+        info.descr = info.descr.replacingOccurrences(
+            of: "<fieldset>[\\s\\S]*?</fieldset>", with: "", options: .regularExpression)
+        XCTAssertEqual(SiteRegistry.reseedSourceText(for: info), "")
+    }
+
+    /// MediaInfo 引用框不算制作信息：那是技术信息，目标站有独立输入框
+    func testMediainfoQuoteIsSkipped() throws {
+        let html = """
+        <div><fieldset><legend> MediaInfo </legend>General<br />Unique ID : 25738105<br />
+        Format : MPEG-4<br />File size : 77.4 GiB<br />Duration : 25 mn<br /></fieldset>
+        <p>正文</p></div>
+        """
+        XCTAssertEqual(NexusPHPAdapter.sourceQuoteBlocks(html), [])
+    }
+
+    /// 引用块正文：去 legend/标签、<br> 转换行、压掉空行与 CRLF
+    func testQuoteBlockText() throws {
+        let html = "<legend> 引用 </legend><br /><br />\n原盘来自U2：U2 原盘<br />\r\n字幕来自华盟字幕社<br />\n"
+        XCTAssertEqual(NexusPHPAdapter.quoteBlockText(html), "原盘来自U2：U2 原盘\n字幕来自华盟字幕社")
     }
 
     /// 提示的判定依据：只有「附加信息 = 转种来源」型站点需要手填源站引用

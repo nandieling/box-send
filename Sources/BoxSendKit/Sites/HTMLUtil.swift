@@ -255,7 +255,10 @@ enum HTMLUtil {
         }
     }
 
-    static func anchorText(_ html: String, hrefPattern: String) -> [(href: String, text: String)] {
+    /// 抓 <a href=...>锚文本</a>。includeTitle = true 时，对「title 属性比锚文本更完整」的锚点
+    /// 额外补一条以 title 为文本的候选：站点搜索结果页常把长标题截断显示，完整名在 title 里。
+    static func anchorText(_ html: String, hrefPattern: String,
+                           includeTitle: Bool = false) -> [(href: String, text: String)] {
         var out: [(String, String)] = []
         // 逐段处理更稳：找出所有 <a ...>...</a>
         // 属性值里可能含 ">"（如 xbtit 的 onmouseover="overlib('<img … border=0>')"），
@@ -278,8 +281,16 @@ enum HTMLUtil {
             } else {
                 hit = href.contains(hrefPattern)
             }
-            if hit {
-                out.append((href, text))
+            guard hit else { continue }
+            out.append((href, text))
+            if includeTitle {
+                let headEnd = Range(m.range(at: 2), in: html)!.lowerBound
+                let head = String(html[Range(m.range, in: html)!.lowerBound..<headEnd])
+                if let t = HTMLUtil.group(head, "(?:^|\\s)title=[\"']([^\"']{12,})[\"']",
+                                         group: 1, options: [.caseInsensitive]),
+                   stripTags(t).count > text.count {
+                    out.append((href, decodeEntities(t)))
+                }
             }
         }
         return out

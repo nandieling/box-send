@@ -447,9 +447,15 @@ class NexusPHPAdapter: SiteAdapter {
         return (resp.data, info.torrentName)
     }
 
-    func searchExists(_ info: ReleaseInfo) throws -> String? {
-        // 站点没配 searchURL 时退回 NexusPHP 通用检索端点：主要用于「已存在」时找回站内种子链接
-        // （上传前的查重仍由流水线按站点是否显式配置 searchURL 决定，不在这里扩大范围）
+    func searchExists(_ info: ReleaseInfo) throws -> String? { try searchExists(info, relaxed: false) }
+
+    /// 上传前可以主动查重：NexusPHP 家族都有通用检索端点（未配 searchURL 时退回 torrents.php?search=）
+    var canPrecheckDuplicate: Bool { true }
+
+    /// 站内检索找回已存在种子的详情链接。relaxed = true 时放宽到「按词元包含」判定：
+    /// 结果页常把长标题截断（…LPCM 2.0 2Audios..）、或在同名标题里插备注，严格互含判不出来。
+    /// 只在站点已经回答「已存在」、只差找回链接时使用；上传前查重仍走严格判定。
+    func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? {
         let tmpl = [override?.searchURL, "torrents.php?search={name}&notnewword=1"]
             .compactMap { $0 }.first { !$0.isEmpty } ?? ""
         guard !tmpl.isEmpty else { return nil }
@@ -470,6 +476,8 @@ class NexusPHPAdapter: SiteAdapter {
         if subtitle.count >= 6, subtitle != info.name {
             pairs.append((subtitle, subtitle))
         }
+        // 严格查重（上传前）只查前两个候选：整名与去组标签名，命中要求高，多查只是白等
+        if !relaxed { pairs = Array(pairs.prefix(2)) }
         var seen = Set<String>()
         for (name, target) in pairs where !seen.contains(name) {
             seen.insert(name)
@@ -489,30 +497,80 @@ class NexusPHPAdapter: SiteAdapter {
             let noResultMarkers = ["No torrents found", "没有种子", "没有相关", "no results", "No torrents"]
             if noResultMarkers.contains(where: { html.contains($0) }) { continue }
             // 结果行 = 详情链接的锚文本（各站搜索结果名称在 <a href="details.php?id=..">名称</a> 内）
-            if let hit = Self.searchNameInResults(html: html, releaseName: target, base: URL(string: url)!) {
+            if let hit = Self.searchNameInResults(html: html, releaseName: target,
+                                                  base: URL(string: url)!, relaxed: relaxed) {
                 return hit.href
             }
         }
         return nil
     }
 
-    /// 搜索结果页里按名称匹配已存在种子：任一结果行的归一化名称与发布名互含即命中
+    /// 搜索结果页里按名称匹配已存在种子：先按归一化互含，relaxed 时再按词元包含放宽。
+    /// 结果行的 title 属性也参与判定（站内常截断锚文本，完整名只在 title 里）。
     static func searchNameInResults(html: String, releaseName: String, base: URL,
-                                       hrefPattern: String = "details\\.php\\?id=|/torrents\\.php\\?id=") -> (href: String, text: String)? {
-        let anchors = HTMLUtil.anchorText(html, hrefPattern: hrefPattern)
+                                       hrefPattern: String = "details\\.php\\?id=|/torrents\\.php\\?id=",
+                                       relaxed: Bool = false) -> (href: String, text: String)? {
+        let anchors = HTMLUtil.anchorText(html, hrefPattern: hrefPattern, includeTitle: true)
         guard !anchors.isEmpty else { return nil }
-        let target = normalizeSearchName(releaseName)
-        guard target.count >= 8 else { return nil }
-        for a in anchors {
-            let cand = normalizeSearchName(a.text)
-            guard cand.count >= 8 else { continue }
-            if cand.contains(target) || (target.count >= 15 && target.contains(cand)) {
-                // 结果页常写相对链接（details.php?id=123）：必须补成绝对地址，否则推送下载器时
-                // 拿它当 URL 直接 unsupported URL
-                return (HTMLUtil.resolveURL(HTMLUtil.decodeEntities(a.href), against: base), a.text)
-            }
+        // 结果页常写相对链接（details.php?id=123）：必须补成绝对地址，否则推送下载器时
+        // 拿它当 URL 直接 unsupported URL
+        func resolved(_ a: (href: String, text: String)) -> (href: String, text: String) {
+            (HTMLUtil.resolveURL(HTMLUtil.decodeEntities(a.href), against: base), a.text)
+        }
+        if anchors.contains(where: { Self.searchNamesMatch($0.text, releaseName) }) {
+            return resolved(anchors.first { Self.searchNamesMatch($0.text, releaseName) }!)
+        }
+        guard relaxed else { return nil }
+        if anchors.contains(where: { Self.searchNamesMatch($0.text, releaseName, tokenTolerant: true) }) {
+            return resolved(anchors.first { Self.searchNamesMatch($0.text, releaseName, tokenTolerant: true) }!)
         }
         return nil
+    }
+
+    /// 两个名称是否指同一种子：归一化互含为准，tokenTolerant 时补一条词元包含判定
+    static func searchNamesMatch(_ candidate: String, _ releaseName: String,
+                                 tokenTolerant: Bool = false) -> Bool {
+        let c = normalizeSearchName(candidate), t = normalizeSearchName(releaseName)
+        guard c.count >= 8, t.count >= 8 else { return false }
+        if c.contains(t) || (t.count >= 15 && t.contains(c)) { return true }
+        guard tokenTolerant else { return false }
+        return nameTokensContained(releaseName, candidate)
+    }
+
+    /// 发布名的每个词元都能在候选名里找到（允许缺 1 个非关键字元）。
+    /// 站点常见差异：截断尾部（丢组名）、标题里多插 2Audios 一类备注——都不改变「同一种子」的事实。
+    static func nameTokensContained(_ name: String, _ other: String) -> Bool {
+        let target = nameTokens(name)
+        let cand = Set(nameTokens(other))
+        guard target.count >= 4, cand.count >= 4 else { return false }
+        let missing = target.filter { !cand.contains($0) }
+        return missing.count <= 1 && !missing.contains(where: { isDiscriminatingToken($0) })
+    }
+
+    /// 发布名分词：连字符不算分隔符（Blu-ray / WEB-DL / DTS-HD 各站写法不一），
+    /// 丢掉长度 <2 的词元（"2.0" 拆出的 "2"、"0" 是噪声）
+    static func nameTokens(_ s: String) -> [String] {
+        let joined = HTMLUtil.decodeEntities(HTMLUtil.stripTags(s))
+            .replacingOccurrences(of: "-", with: "")
+        return joined.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 2 }
+    }
+
+    /// 关键字元：季/集/年份/分辨率/编码音频对不上，说明是两个不同种子，不能算「已存在」
+    static let discriminatingTokens: Set<String> = [
+        "x264", "x265", "hevc", "h264", "h265", "avc", "vc1", "mpeg2", "av1", "vp9", "vp8",
+        "xvid", "divx", "prores", "bluray", "remux", "webdl", "webrip", "hdtv", "bdrip",
+        "dvdrip", "dvd", "hdcam", "flac", "lpcm", "pcm", "wav", "aac", "ac3", "eac3", "dts",
+        "dtshd", "dtsma", "truehd", "atmos", "mp3", "opus", "hdr10", "dolbyvision", "imax", "3d",
+    ]
+    static let discriminatingShape = try! NSRegularExpression(
+        pattern: "^(?:s\\d{1,2}|e\\d{1,3}|\\d{1,2}x\\d{1,3}|19\\d{2}|20\\d{2}|\\d{3,4}p|4k|uhd|sdr|hdr)$")
+
+    static func isDiscriminatingToken(_ t: String) -> Bool {
+        if discriminatingTokens.contains(t) { return true }
+        let r = NSRange(t.startIndex..., in: t)
+        return discriminatingShape.firstMatch(in: t, options: [], range: r) != nil
     }
 
     /// 搜索名称归一化：去标签/实体、小写、只留字母数字（CJK 按字母保留）
@@ -1111,10 +1169,47 @@ class NexusPHPAdapter: SiteAdapter {
         return s
     }
 
-    /// cmct / 劳改所等站的「附加信息 / 其它信息」：只放「批量转种」页填的源站引用。
-    /// 这类站该区块本就是转载说明，不自动写致谢（与其他站的简介规则一致）；
-    /// 没勾选源站引用时留空，由流水线提示用户，见 ReseedPipeline。
-    func reseedSourceText(_ info: ReleaseInfo) -> String { info.extraQuoteText }
+    /// cmct / 劳改所等站的「附加信息 / 其它信息」内容，见 SiteRegistry.reseedSourceText
+    func reseedSourceText(_ info: ReleaseInfo) -> String { SiteRegistry.reseedSourceText(for: info) }
+
+    /// 源简介里的引用块正文（fieldset / blockquote）转纯文本，供「附加信息」区块使用。
+    /// MediaInfo/BDInfo 引用框跳过——那是技术信息，目标站有独立输入框。
+    static func sourceQuoteBlocks(_ descrHTML: String) -> [String] {
+        var out: [String] = []
+        for pattern in ["<fieldset[^>]*>(.*?)</fieldset>", "<blockquote[^>]*>(.*?)</blockquote>"] {
+            for inner in HTMLUtil.allGroups(descrHTML, pattern, group: 1,
+                                           options: [.caseInsensitive, .dotMatchesLineSeparators]) {
+                let text = quoteBlockText(inner)
+                if !text.isEmpty, !out.contains(text) { out.append(text) }
+            }
+        }
+        return out
+    }
+
+    /// 引用块 HTML -> 纯文本：去 legend/标签、<br> 转换行、压掉空行；MediaInfo 框与简介正文跳过
+    static func quoteBlockText(_ html: String) -> String {
+        var s = html
+        s = s.replacingOccurrences(of: "<legend[\\s\\S]*?</legend>", with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: "<(?:br|/p|/div|/li|/tr)[^>]*>", with: "\n", options: .regularExpression)
+        let text = HTMLUtil.decodeEntities(HTMLUtil.stripTags(s))
+            .replacingOccurrences(of: "\u{00a0}", with: " ")
+            .replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        let lines = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let joined = lines.joined(separator: "\n")
+        guard joined.count >= 8, joined.count <= 2000, !joined.contains("◎译　　名"),
+              !isMediainfoQuote(joined) else { return "" }
+        return joined
+    }
+
+    /// 引用框是否是 MediaInfo/BDInfo（成行的「键 : 值」结构）
+    static func isMediainfoQuote(_ text: String) -> Bool {
+        let lines = text.components(separatedBy: "\n")
+        guard lines.count >= 5 else { return false }
+        let kv = lines.filter { $0.range(of: #"^\s*[A-Za-z][A-Za-z0-9 /()]{1,25}:"#, options: .regularExpression) != nil }
+        return kv.count >= max(3, lines.count / 2)
+    }
+
 
     static func isImageURL(_ s: String) -> Bool {
         let path = (s as NSString).deletingPathExtension.lowercased()
@@ -1617,17 +1712,22 @@ class NexusPHPAdapter: SiteAdapter {
 
         let finalURL = resp.finalURL.lowercased()
         let body = String(data: resp.data, encoding: .utf8) ?? ""
+        // 「种子已存在」必须排在成功特征之前判：重名/重传时站点常直接跳回已有种子的详情页，
+        // 先判成功特征会把「已存在」误报成「转种成功」。要求页面同时是失败/重复提示版式，
+        // 免得成功页里偶发出现「已存在」字样时反过来误判。
+        if Self.hasExistMarker(body), Self.looksLikeRejectedPage(body),
+           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL) {
+            return dup
+        }
         // 成功特征: 跳到新种子详情页 / 发布成功提示
         if let m = HTMLUtil.firstMatch(finalURL, "(?:details\\.php\\?id=\\d+|/torrents\\.php\\?id=\\d+)"), !m.isEmpty {
             let u = URL(string: uploadURL)!
-            return UploadOutcome(success: true, message: "发布成功",
-                                 detailURL: HTMLUtil.resolveURL(m, against: u))
+            return newSeedOutcome(detailURL: HTMLUtil.resolveURL(m, against: u), torrentData: torrentData)
         }
         // 站点自定义成功跳转（城市：/t-<id>），按 overrides.successIDPattern 取 id 组详情链接
         if let pat = override?.successIDPattern,
            let id = HTMLUtil.group(resp.finalURL, pat, group: 1) {
-            return UploadOutcome(success: true, message: "发布成功",
-                                 detailURL: site.url + "details.php?id=" + id)
+            return newSeedOutcome(detailURL: site.url + "details.php?id=" + id, torrentData: torrentData)
         }
         if resp.status == 200, body.contains("new torrent") || body.contains("发布成功") || body.contains("Torrent added") {
             return UploadOutcome(success: true, message: "发布成功", detailURL: nil)
@@ -1653,30 +1753,65 @@ class NexusPHPAdapter: SiteAdapter {
         // 站点提示同名/同 hash 种子已存在（如手动转过）：视为成功，不再重复发种
         // TTG 的重复提示是「种子已经上传！」，其他站多为「该种子已存在！」/ already exists
         // 同时检查原始 body，防止错误提取失败时漏判
-        if Self.hasExistMarker(msg) || Self.hasExistMarker(body) {
-            // 尽力从重复提示页提取已存在种子的详情链接（部分站会带上），供后续推送
-            var existingURL: String?
-            if let m = HTMLUtil.group(body, "href=[\"']([^\"']*?(?:details|torrents)\\.php\\?id=\\d+[^\"']*)[\"']", group: 1),
-               !m.contains("userdetails") {
-                let u = URL(string: uploadURL)!
-                existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: u)
-            }
-            if existingURL == nil,
-               let m = HTMLUtil.group(body, "(https?://[^\\s<>\"]+?(?:details|torrents)\\.php\\?id=\\d+[^\\s<>\"]*)", group: 1),
-               !m.contains("userdetails") {
-                existingURL = m
-            }
-            if existingURL == nil,
-               let m = HTMLUtil.group(body, "(?<![>\"\'=\\w])(?:details|torrents)\\.php\\?id=\\d+(?:&[^\\s<>\"]*)?", group: 1),
-               !m.contains("userdetails") {
-                let u = URL(string: uploadURL)!
-                existingURL = HTMLUtil.resolveURL(m, against: u)
-            }
-            return UploadOutcome(success: true, message: "已存在（查重兜底命中）", detailURL: existingURL, alreadyExists: true)
+        // 站点提示同名/同 hash 种子已存在（如手动转过）：视为成功，不再重复发种
+        // TTG 的重复提示是「种子已经上传！」，其他站多为「该种子已存在！」/ already exists
+        // 同时检查原始 body，防止错误提取失败时漏判
+        if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
+           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL) {
+            return dup
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
         }
         preconditionFailure("unreachable")
+    }
+
+    /// 站点跳到详情页不等于发了新种：站内已有同名种子时它也可能跳回那条详情页
+    /// （实测优堡/麒麟/蟹黄堡对同名不同 hash 的旧就这么回）。回查详情页的 Info Hash，
+    /// 与本次上传的种子对不上就按「已存在」报，链接仍给这条已有种子，供推送下载器。
+    private func newSeedOutcome(detailURL: String, torrentData: Data) -> UploadOutcome {
+        guard let mine = Bencode.infoHash(torrentData),
+              let page = try? client.fetchHTML(detailURL, referer: site.url),
+              let theirs = Self.pageInfoHash(page), theirs != mine else {
+            return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
+        }
+        return UploadOutcome(success: true, message: "已存在（站内已有同名种子，hash 不同）",
+                             detailURL: detailURL, alreadyExists: true)
+    }
+
+    /// 详情页上的种子 info_hash（「Hash码: …」/「Info Hash: …」），取不到返回 nil
+    static func pageInfoHash(_ html: String) -> String? {
+        let text = HTMLUtil.decodeEntities(HTMLUtil.stripTags(html))
+        return HTMLUtil.group(text, "(?i)hash[^0-9a-f]{0,12}([0-9a-f]{40})", group: 1)?.lowercased()
+    }
+
+    /// 页面是否是站点明确的失败/重复提示（而不是新种子详情页里的杂讯）
+    static func looksLikeRejectedPage(_ body: String) -> Bool {
+        let lower = body.lowercased()
+        return body.contains("上传失败") || body.contains("发布失败") || body.contains("已经上传")
+            || body.contains("已经存在") || body.contains("请勿重复") || body.contains("重复发布")
+            || body.contains("id=\"errorbox\"") || lower.contains("already exist")
+            || lower.contains("already upload") || lower.contains("duplicate")
+    }
+
+    /// 「已存在」提示页 -> 成功结果（尽力带上已有种子的详情链接，供后续推送下载器）
+    static func duplicateOutcome(body: String, uploadURL: String) -> UploadOutcome? {
+        var existingURL: String?
+        if let m = HTMLUtil.group(body, "href=[\"']([^\"']*?(?:details|torrents)\\.php\\?id=\\d+[^\"']*)[\"']", group: 1),
+           !m.contains("userdetails") {
+            existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: URL(string: uploadURL)!)
+        }
+        if existingURL == nil,
+           let m = HTMLUtil.group(body, "(https?://[^\\s<>\"]+?(?:details|torrents)\\.php\\?id=\\d+[^\\s<>\"]*)", group: 1),
+           !m.contains("userdetails") {
+            existingURL = m
+        }
+        if existingURL == nil,
+           let m = HTMLUtil.group(body, "(?<![>\"\'=\\w])(?:details|torrents)\\.php\\?id=\\d+(?:&[^\\s<>\"]*)?", group: 1),
+           !m.contains("userdetails") {
+            existingURL = HTMLUtil.resolveURL(m, against: URL(string: uploadURL)!)
+        }
+        return UploadOutcome(success: true, message: "已存在（查重兜底命中）",
+                             detailURL: existingURL, alreadyExists: true)
     }
 
     /// 站点回「必填项目缺失」这类整份 POST 疑似未送达的签名
@@ -1686,7 +1821,8 @@ class NexusPHPAdapter: SiteAdapter {
 
     /// 站点提示同名/同 hash 种子已存在（TTG 说「种子已经上传！」，多数站说「该种子已存在」）
     static func hasExistMarker(_ t: String) -> Bool {
-        t.contains("已存在") || t.contains("已经上传") || t.contains("上传过了") || t.contains("被人上传")
+        t.contains("已存在") || t.contains("已经存在") || t.contains("已经上传")
+            || t.contains("上传过了") || t.contains("被人上传")
             || t.lowercased().contains("already exists") || t.lowercased().contains("already uploaded")
     }
 }

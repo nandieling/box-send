@@ -39,10 +39,22 @@ public enum SiteRegistry {
 
     /// 配置层 overrides 与内置表合并（内置为底，配置优先；旧配置缺的新字段自动用内置值）
     /// 配置里整段 overrides 缺失时也应用内置值（如馒头未带 overrides 仍需 API Key 标识）
-    /// 该站的「附加信息 / 其它信息」框只放用户手填的源站引用（cmct、劳改所）：
-    /// 没填时区块留空，转种时提示用户去填
+    /// 该站的「附加信息 / 其它信息」框只放转种来源（cmct、劳改所）：
+    /// 内容为空时转种时提示用户去填源站引用
     public static func needsSourceQuoteField(_ site: SiteConfig) -> Bool {
         effectiveSite(site).overrides?.descrStyle == "reseedSource"
+    }
+
+    /// 「附加信息 / 其它信息」框会写入的文本：手填的源站引用在最前，随后带上源简介
+    /// 自带的引用块（原盘来自…／字幕来自…这类制作信息）。返回空串说明两处都没内容。
+    public static func reseedSourceText(for info: ReleaseInfo) -> String {
+        var parts: [String] = []
+        if !info.extraQuoteText.isEmpty { parts.append(info.extraQuoteText) }
+        for block in NexusPHPAdapter.sourceQuoteBlocks(info.descr)
+        where !parts.contains(where: { $0.contains(block) || block.contains($0) }) {
+            parts.append(block)
+        }
+        return parts.joined(separator: "\n")
     }
 
     public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {

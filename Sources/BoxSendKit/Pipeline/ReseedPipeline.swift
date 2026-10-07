@@ -180,11 +180,18 @@ public final class ReseedPipeline {
                     }
                     do {
                         let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
-                        if !(ts.overrides?.searchURL ?? "").isEmpty,
-                           let exists = try tAdapter.searchExists(release) {
-                            report.outcomes.append((tid, true, "已存在: \(exists)"))
-                            opts.onSiteEvent?(tid, "已存在（跳过）", true)
+                        // 上传前先站内查重：显式配了 searchURL 的站，或 NexusPHP 这类有通用检索端点的站。
+                        // 命中即跳过上传，并把站内已有种子推给下载器（转种的目的就是让目标站种子做种）
+                        // 查重失败（站点检索端点异常）不该让整站转种失败：查不到就照常上传
+                        let canPrecheck = !(ts.overrides?.searchURL ?? "").isEmpty || tAdapter.canPrecheckDuplicate
+                        if canPrecheck, let exists = try? tAdapter.searchExists(release) {
+                            let uAbs = absoluteTargetURL(tid, exists)
+                            report.outcomes.append((tid, true, "已存在: \(uAbs)"))
                             state.markUploaded(site: tid, key: release.dedupKey)
+                            state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
+                            targetPushes.append((tid, uAbs))
+                            state.note("reseed EXIST \(tid): 站内已有该种子，跳过上传，已有种子 \(uAbs)")
+                            opts.onSiteEvent?(tid, "已存在（跳过，推送已有种子）", true)
                             continue
                         }
                         let outcome = try tAdapter.upload(release, torrentData: torrentData, filename: filename)
@@ -195,7 +202,7 @@ public final class ReseedPipeline {
                                 var existing = outcome.detailURL
                                 // 各适配器自己决定怎么查（NexusPHP 没配 searchURL 会返回 nil）
                                 if existing == nil {
-                                    existing = try? tAdapter.searchExists(release)
+                                    existing = try? tAdapter.searchExists(release, relaxed: true)
                                 }
                                 if let u = existing {
                                     let uAbs = absoluteTargetURL(tid, u)
@@ -210,10 +217,11 @@ public final class ReseedPipeline {
                             } else {
                                 state.note("reseed OK \(tid) <- \(release.summary)")
                                 opts.onSiteEvent?(tid, "转种成功", true)
-                                // cmct / 劳改所：附加信息只认手填源站引用，没填就提醒（不算失败）
-                                if release.extraQuoteText.isEmpty,
+                                // cmct / 劳改所：附加信息 = 手填源站引用 + 源简介自带引用块，
+                                // 两处都没有就提醒（不算失败）
+                                if SiteRegistry.reseedSourceText(for: release).isEmpty,
                                    SiteRegistry.needsSourceQuoteField(ts) {
-                                    let w = "未填「源站引用」：该站附加信息/其它信息（转种来源）留空"
+                                    let w = "未填「源站引用」且源简介无引用块：该站附加信息/其它信息（转种来源）留空"
                                     state.note("reseed WARN \(tid): \(w)")
                                     report.warnings.append((tid, w))
                                     opts.onSiteWarning?(tid, w)

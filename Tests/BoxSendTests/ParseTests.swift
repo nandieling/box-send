@@ -399,6 +399,9 @@ final class ParseTests: XCTestCase {
 
     // MARK: - cmct 上传字段（海报/截图分离 + 附加信息=转种来源）
 
+    /// 源简介 fieldset 引用块的纯文本形态（附加信息区块应原样带上）
+    private let srcQuoteBlock = "原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)\n字幕来自华盟字幕社"
+
     func testCMCTUploadFields() throws {
         let html = fixtureStr("luckpt-56812-ajax.html")
         var info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=56812")
@@ -419,11 +422,11 @@ final class ParseTests: XCTestCase {
         https://img3.pixhost.to/images/6083/776555875_02.png
         https://img3.pixhost.to/images/6083/776555987_03.png
         """)
-        // 附加信息只认手填的源站引用：没填就留空（不再自动拼源站名 + 引用框原文）
-        XCTAssertEqual(dict["descr"] ?? "", "", "未勾选源站引用时附加信息应留空")
-        info.extraQuote = "转载自LuckPT，感谢发布者。原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)<br />\n字幕来自华盟字幕社"
+        // 附加信息 = 手填源站引用 + 源简介自带引用块；没手填时至少带上源简介的引用块
+        XCTAssertEqual(dict["descr"] ?? "", srcQuoteBlock, "未勾选源站引用时应带上源简介的引用块")
+        info.extraQuote = "转载自LuckPT，感谢发布者。"
         XCTAssertEqual(adapter.buildUploadFields(info, page: page).first { $0.name == "descr" }?.value,
-            "转载自LuckPT，感谢发布者。原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)<br />\n字幕来自华盟字幕社")
+                       "转载自LuckPT，感谢发布者。\n" + srcQuoteBlock)
         // MediaInfo 独立提交
         XCTAssertTrue((dict["Media_BDInfo"] ?? "").contains("Unique ID"))
     }

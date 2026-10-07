@@ -230,3 +230,95 @@ final class TeamValueTests: XCTestCase {
         XCTAssertNil(NexusPHPAdapter.teamValue(releaseName: "X 1080p-Whatever", patterns: ["KAN": 19], other: nil))
     }
 }
+
+// MARK: - 站内找回已存在种子 + 「已存在」先于成功特征判定
+
+/// 现场样本：LuckPT 43659（魔法少女伊莉雅 S01）转种，学校回「该种子已存在！」，
+/// 站内检索结果行把长标题截断成「…2.0 2Audios..」，完整名只在 a 标签的 title 里。
+final class ExistingSeedLookupTests: XCTestCase {
+    private func fixture(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures").appendingPathComponent(name)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private let release = "Fatekaleid liner Prisma Illya S01 2013 1080p Blu-ray Remux AVC LPCM 2.0-LuckAni"
+
+    func testTruncatedSearchRowFoundWhenRelaxed() throws {
+        let html = try fixture("search-btschool-truncated.html")
+        let base = URL(string: "https://pt.btschool.club/torrents.php?search=x")!
+        XCTAssertNil(NexusPHPAdapter.searchNameInResults(html: html, releaseName: release, base: base),
+                     "截断行不该被严格判定命中（避免上传前查重误判）")
+        let hit = NexusPHPAdapter.searchNameInResults(html: html, releaseName: release, base: base, relaxed: true)
+        XCTAssertEqual(hit?.href, "https://pt.btschool.club/details.php?id=260482&hit=1")
+    }
+
+    func testTokenMatchIgnoresExtraNoteButNotRealDifferences() {
+        XCTAssertTrue(NexusPHPAdapter.nameTokensContained(
+            release,
+            "Fatekaleid liner Prisma Illya S01 2013 1080p BluRay Remux AVC LPCM 2.0 2Audios-LuckAni"),
+            "站内标题多插 2Audios 备注仍是同一种子")
+        XCTAssertTrue(NexusPHPAdapter.nameTokensContained(
+            release, "Fatekaleid liner Prisma Illya S01 2013 1080p BluRay Remux AVC LPCM 2.0-LuckAni"))
+        XCTAssertFalse(NexusPHPAdapter.nameTokensContained(
+            release, "Fatekaleid liner Prisma Illya S02 2013 1080p BluRay Remux AVC LPCM 2.0-LuckAni"),
+            "季数不同是两个种子")
+        XCTAssertFalse(NexusPHPAdapter.nameTokensContained(
+            release, "Fate kaleid liner Prisma Illya S01 2013 1080p BluRay Remux AVC FLAC 2.0-AnimeF@ADE"),
+            "音频与制作组都不同")
+    }
+
+    func testDuplicatePageIsRecognisedAsRejected() throws {
+        let body = try fixture("btschool-duplicate.html")
+        XCTAssertTrue(NexusPHPAdapter.hasExistMarker(body))
+        XCTAssertTrue(NexusPHPAdapter.looksLikeRejectedPage(body))
+        let out = NexusPHPAdapter.duplicateOutcome(body: body, uploadURL: "https://pt.btschool.club/takeupload.php")
+        XCTAssertEqual(out?.success, true)
+        XCTAssertEqual(out?.alreadyExists, true)
+    }
+}
+
+// MARK: - 详情页 Info Hash 校验 + 宽松查重的协议分发
+
+final class UploadedSeedVerificationTests: XCTestCase {
+    /// 站内同名种子（hash 不同）：详情页 Hash 码要能取出来，用来判「其实没发新种」
+    func testPageInfoHashExtractsLabelledHash() {
+        let html = "<td><b>Hash码:</b> <code>BF25A390F33A36079B9B3A8659B155635094B206</code></td>"
+        XCTAssertEqual(NexusPHPAdapter.pageInfoHash(html), "bf25a390f33a36079b9b3a8659b155635094b206")
+        XCTAssertNil(NexusPHPAdapter.pageInfoHash("<p>没有哈希</p>"))
+    }
+
+    /// 记录型适配器：验证宽松查重经协议分发（协议扩展里的默认实现会静默顶掉具体实现，踩过这个坑）
+    private final class ProbeAdapter: SiteAdapter {
+        var calls: [Bool?] = []
+        let site: SiteConfig
+        let client: HTTPClient
+        let override: SiteOverride?
+        init(site: SiteConfig) {
+            self.site = site
+            client = HTTPClient(cookies: CookieStore(), userAgent: "t")
+            override = nil
+        }
+        func fetchTorrentList() throws -> [ReleaseInfo] { [] }
+        func fetchDetail(detailURL: String) throws -> ReleaseInfo {
+            ReleaseInfo(siteID: site.id, detailURL: detailURL, name: "x")
+        }
+        func downloadTorrentFile(_ info: ReleaseInfo) throws -> (data: Data, filename: String) { (Data(), "x") }
+        func searchExists(_ info: ReleaseInfo) throws -> String? { calls.append(nil); return nil }
+        func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? {
+            calls.append(relaxed)
+            return relaxed ? "https://x/details.php?id=1" : nil
+        }
+        func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
+            UploadOutcome(success: true, message: "ok", detailURL: nil)
+        }
+    }
+
+    func testRelaxedSearchReachesTheAdapterThroughTheProtocol() throws {
+        let probe = ProbeAdapter(site: SiteRegistry.prioritySites.first { $0.id == "btschool" }!)
+        let asProtocol: any SiteAdapter = probe
+        let info = ReleaseInfo(siteID: "btschool", detailURL: "https://x/details.php?id=1", name: "x")
+        XCTAssertEqual(try asProtocol.searchExists(info, relaxed: true), "https://x/details.php?id=1")
+        XCTAssertEqual(probe.calls, [true], "必须调到具体实现的 relaxed 版本，不能落到协议扩展默认值")
+    }
+}

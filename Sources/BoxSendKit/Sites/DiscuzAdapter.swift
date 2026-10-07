@@ -26,6 +26,9 @@ final class DiscuzAdapter: SiteAdapter {
         try base.downloadTorrentFile(info)
     }
     func searchExists(_ info: ReleaseInfo) throws -> String? { try base.searchExists(info) }
+    func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? {
+        try base.searchExists(info, relaxed: relaxed)
+    }
 
     func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)] {
         let page = try client.fetchHTML(site.url + uploadPath, referer: site.url)

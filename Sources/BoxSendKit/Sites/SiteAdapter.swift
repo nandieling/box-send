@@ -14,6 +14,10 @@ public protocol SiteAdapter: AnyObject {
     func downloadTorrentFile(_ info: ReleaseInfo) throws -> (data: Data, filename: String)
     /// 查重：返回已存在种子的详情页 URL，不存在返回 nil。未配置 searchURL 时返回 nil。
     func searchExists(_ info: ReleaseInfo) throws -> String?
+    /// 宽松查重：站点已回答「已存在」、只需找回站内链接时用（结果页常截断标题）
+    func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String?
+    /// 未配置 searchURL 时能否仍主动做站内查重（该框架有通用检索端点）
+    var canPrecheckDuplicate: Bool { get }
     /// 上传（转种）
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
     /// 上传字段预览（调试用，CLI info --preview）
@@ -24,6 +28,9 @@ extension SiteAdapter {
     func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)] {
         throw BoxSendError.badInput("\(site.id) 适配器不支持上传字段预览")
     }
+    var canPrecheckDuplicate: Bool { false }
+    /// 默认不支持宽松判定，退回严格查重
+    func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? { try searchExists(info) }
 }
 
 public struct UploadOutcome {

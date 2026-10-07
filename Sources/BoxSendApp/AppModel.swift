@@ -451,14 +451,15 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// 运行页提示：这些站的附加信息只认源站引用，没填会留空
+    /// 运行页提示：这些站的附加信息只由源站引用 + 源简介引用块组成，两处都没会留空
     var sourceQuoteHint: String? {
         let filled = sourceQuoteEnabled
             && !sourceQuoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard !filled else { return nil }
         let names = targetsNeedingSourceQuote.map(\.name)
         guard !names.isEmpty else { return nil }
-        return "\(names.joined(separator: "、")) 的「附加信息」只填源站引用：未填写时该区块留空，可能被站方打回"
+        return "\(names.joined(separator: "、")) 的「附加信息」= 源站引用 + 源简介自带引用块："
+            + "两处都没有内容时该区块留空，可能被站方打回"
     }
 
     /// 未分组的已添加站点
