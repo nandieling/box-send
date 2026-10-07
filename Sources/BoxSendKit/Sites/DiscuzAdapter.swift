@@ -261,6 +261,7 @@ final class DiscuzAdapter: SiteAdapter {
         let html = NexusPHPAdapter.preprocessDescription(info.descr, base: site.url, dropScreenshots: false)
         var out = BBCode.fromHTML(html, base: URL(string: site.url))
         out = BBCode.insertMediainfo(out, mediainfo: info.mediainfo)
+        if out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out = NexusPHPAdapter.fallbackDescr(info) }
         if !info.extraQuoteText.isEmpty { return info.extraQuoteBBCode + out }
         if info.isOfficialSource {
             out = "[quote]\n转载自\(info.sourceName.isEmpty ? info.siteID : info.sourceName)，感谢发布者。\n[/quote]\n" + out

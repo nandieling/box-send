@@ -28,6 +28,26 @@ final class TTGDetailTests: XCTestCase {
         XCTAssertTrue(info.torrentName.hasSuffix(".torrent"), "锚文本就是文件名：\(info.torrentName)")
     }
 
+    /// TTG 的「简述」在 <div id='kt_d'>，MediaInfo 在 <p class=sub>Quote:</p> + 虚线边框引用表里。
+    /// 之前两者都不认，简介解析成空串，导致所有目标站回「你必须填写简介！」
+    func testParseDescriptionMediainfoAndLinks() throws {
+        let info = try adapter().parseDetail(html: try fixture("ttg-detail-836735.html"),
+                                            detailURL: "https://totheglory.im/details.php?id=836735")
+        XCTAssertFalse(info.descr.isEmpty, "简介不能为空")
+        XCTAssertTrue(info.descr.contains("LuckPT首发"), "转载说明要留在简介里")
+        XCTAssertTrue(info.descr.contains("随着工业文明"), "正片简介要留下来")
+        XCTAssertFalse(info.descr.contains("Unique ID"), "MediaInfo 应从简介里摘出去，别贴两遍")
+        XCTAssertTrue(info.mediainfo.contains("Unique ID"), "MediaInfo 要提取到独立字段")
+        XCTAssertFalse(info.mediainfo.lowercased().contains("quote:"), "「Quote:」是引用表标题，不算内容")
+        XCTAssertEqual(info.imdb, "tt1286537")
+        XCTAssertEqual(info.douban, "3564499")
+        XCTAssertEqual(info.tmdb, "https://www.themoviedb.org/movie/18570")
+        XCTAssertEqual(info.genre, "纪录片")
+        XCTAssertEqual(info.region, "美国")
+        XCTAssertTrue(NexusPHPAdapter.screenshotURLs(from: info.descr, base: "https://totheglory.im/").isEmpty == false,
+                      "简介里的图要能当截图提取")
+    }
+
     /// 老 NexusPHP 失败页（h1 + p）要把站点原文报出来，而不是「未识别的返回」
     func testUploadErrorFromLegacyErrorPage() throws {
         let body = """

@@ -126,9 +126,12 @@ class NexusPHPAdapter: SiteAdapter {
             if !cleaned.isEmpty { name = cleaned }
         }
 
-        // 简介: #kdescr / #largedescribe（配对 div，支持嵌套）
+        // 简介: #kdescr / #largedescribe / #kt_d（配对 div，支持嵌套）
+        // TTG 的「简述」块是 <div id='kt_d'>，整页没有 kdescr：不认它会导致简介为空，
+        // 目标站一律回「你必须填写简介！」
         let descrRaw = HTMLUtil.divContent(html, id: "kdescr")
             ?? HTMLUtil.divContent(html, id: "largedescribe")
+            ?? HTMLUtil.divContent(html, id: "kt_d")
             ?? HTMLUtil.group(html, "<div[^>]*id=[\"'](descr|description)[\"'][^>]*>(.*?)</div>", group: 2, options: [.dotMatchesLineSeparators, .caseInsensitive])
             ?? ""
 
@@ -141,7 +144,8 @@ class NexusPHPAdapter: SiteAdapter {
             mediainfo = block.text
             if descrRaw.contains(block.html) { mediaBlockHTML = block.html }
         }
-        let descr = mediaBlockHTML.map { descrRaw.replacingOccurrences(of: $0, with: "") } ?? descrRaw
+        // 最后再剔引用表标题：放在剔除 MediaInfo 之后，否则引用表整块匹配不上、MediaInfo 会贴两遍
+        let descr = Self.dropQuoteLabels(mediaBlockHTML.map { descrRaw.replacingOccurrences(of: $0, with: "") } ?? descrRaw)
 
         // 副标题（译名）与类别：从简介纯文本的 "❁ 译　　名:　X" / "❁ 类　　别:　X" 行提取
         let plain = HTMLUtil.stripTags(descrRaw)
@@ -830,9 +834,12 @@ class NexusPHPAdapter: SiteAdapter {
     /// 返回纯文本与命中的原始 HTML（调用方据此从简介里剔除）。
     static func mediaInfoBlock(in html: String) -> (text: String, html: String)? {
         // <pre> 里的连续空格是排版，其它块里的 &nbsp; 缩进要压掉
+        // 末项：TTG 的引用表（<table class=main border=1 …><td style='border: 1px black dotted'>），
+        // 连同它前面那行 <p class=sub><b>Quote:</b></p> 标题一起匹配，剔除时不留光杆标题
         let patterns = ["<pre[^>]*>.*?</pre>", "<fieldset[^>]*>.*?</fieldset>",
                         "<(?:div|td)[^>]*class=[\"'][^\"']*(?:code|tech|media)[^\"']*\"'[^>]*>.*?</(?:div|td)>",
-                        "<textarea[^>]*>.*?</textarea>"]
+                        "<textarea[^>]*>.*?</textarea>",
+                        "(?:<p[^>]*class=[\"']?sub[\"']?[^>]*>.*?</p>\\s*)?<table[^>]*>\\s*<tr>\\s*<td[^>]*border:[^>]*dotted[^>]*>.*?</td>\\s*</tr>\\s*</table>"]
         for (i, p) in patterns.enumerated() {
             for block in HTMLUtil.allMatches(html, p, options: [.dotMatchesLineSeparators, .caseInsensitive]) {
                 var t = blockPlainText(block)
@@ -850,11 +857,28 @@ class NexusPHPAdapter: SiteAdapter {
         return nil
     }
 
+    /// 去掉引用表的标题段（TTG 的 <p class=sub><b>Quote:</b></p>）。
+    /// 只删内容为空或就是 "Quote:/引用:/代码:" 的段落——别的站点的 <p class=sub> 常装真实内容
+    static func dropQuoteLabels(_ html: String) -> String {
+        HTMLUtil.replaceMatches(html, "<p[^>]*class=[\"']?sub[\"']?[^>]*>.*?</p>",
+                                options: [.caseInsensitive, .dotMatchesLineSeparators]) { m in
+            guard let r = Range(m.range, in: html) else { return "" }
+            let text = HTMLUtil.stripTags(String(html[r]))
+                .replacingOccurrences(of: "\u{00a0}", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty
+                || text.range(of: #"^(?:Quote|引用|代码)\s*:?"#,
+                              options: [.regularExpression, .caseInsensitive]) != nil { return "" }
+            return String(html[r])
+        }
+    }
+
     /// 块内 HTML -> 纯文本：<br> 与随后的换行算一个换行（否则源页 "<br />\n" 会变成空行翻倍），
-    /// 引用框的 <legend>（"引用"/"代码"）不是内容，直接丢掉
+    /// 引用框的 <legend>（"引用"/"代码"）与 TTG 的 "Quote:" 标题段不是内容，直接丢掉
     static func blockPlainText(_ block: String) -> String {
-        var t = block.replacingOccurrences(of: "(?s)<legend[^>]*>.*?</legend>", with: "",
-                                           options: [.regularExpression, .caseInsensitive])
+        var t = Self.dropQuoteLabels(block)
+        t = t.replacingOccurrences(of: "(?s)<legend[^>]*>.*?</legend>", with: "",
+                                   options: [.regularExpression, .caseInsensitive])
         t = HTMLUtil.replaceMatches(t, "<br\\s*/?>[ \\t]*(?:\\r?\\n)?", options: [.caseInsensitive]) { _ in "\n" }
         t = t.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
         return HTMLUtil.decodeEntities(t)
@@ -1047,8 +1071,18 @@ class NexusPHPAdapter: SiteAdapter {
                     ? info.extraQuoteHTML : info.extraQuoteBBCode) + text
         }
         if info.isOfficialSource { return "[quote]\n\(line)\n[/quote]\n" + text }
-        guard override?.descrSourcePrefix == true else { return text }
-        return line + "\n" + text
+        var out = text
+        if override?.descrSourcePrefix == true { out = line + "\n" + out }
+        // 源页没解析出简介（版式特殊/页面异常）时兜一句：目标站几乎都把简介设成必填，
+        // 空着会让整批目标站一起回「你必须填写简介！」
+        if out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out = Self.fallbackDescr(info) }
+        return out
+    }
+
+    /// 简介兜底文本
+    static func fallbackDescr(_ info: ReleaseInfo) -> String {
+        let who = info.sourceName.isEmpty ? info.siteID : info.sourceName
+        return "转载自\(who)，感谢发布者。\n源站链接：\(info.detailURL)"
     }
 
     /// 转种来源里的源站名（解析时已按源站 overrides.sourceLabel 归一，如 LuckPT）

@@ -68,6 +68,24 @@ final class SourceQuoteTests: XCTestCase {
         XCTAssertEqual(old.extraQuoteBBCode, "")
     }
 
+    /// 源页没解析出简介（版式特殊/页面异常）：不能提交空简介，
+    /// 否则整批目标站一起回「你必须填写简介！」
+    func testEmptyDescrFallsBackToReseedNote() throws {
+        var info = ReleaseInfo(siteID: "ttg", detailURL: "https://totheglory.im/details.php?id=836735",
+                               name: "Food Inc 2009", descr: "", sourceName: "TTG")
+        info.kind = .movie
+        let s = SiteRegistry.prioritySites.first { $0.id == "cspt" }!
+        let a = NexusPHPAdapter(site: s, client: HTTPClient(cookies: CookieStore(), userAgent: "t"))
+        let descr = try a.buildUploadFields(info, page: try fixture("cspt-upload.html"))
+            .first { $0.name == "descr" }?.value
+        XCTAssertEqual(descr, "转载自TTG，感谢发布者。\n源站链接：https://totheglory.im/details.php?id=836735")
+        // 手填引用优先于兜底文本
+        info.extraQuote = "转载自TTG，感谢发布者"
+        let d2 = try a.buildUploadFields(info, page: try fixture("cspt-upload.html"))
+            .first { $0.name == "descr" }?.value
+        XCTAssertEqual(d2, "[quote]\n转载自TTG，感谢发布者\n[/quote]\n")
+    }
+
     func testQuoteMarkupHelpers() {
         let plain = ReleaseInfo(siteID: "x", detailURL: "https://x/", name: "n", extraQuote: "  第一行\n第二行  ")
         XCTAssertEqual(plain.extraQuoteBBCode, "[quote]\n第一行\n第二行\n[/quote]\n")

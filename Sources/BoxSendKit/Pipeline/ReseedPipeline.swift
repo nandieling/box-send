@@ -102,9 +102,8 @@ public final class ReseedPipeline {
         if let id = sourceSiteID, let s = config.site(id) {
             site = s
         } else {
-            let host = (try? URL(string: detailURL)?.host()) ?? ""
-            guard let s = config.sourceSites.first(where: { host.hasSuffix($0.url.host() ?? $0.url) || $0.url.contains(host) }) else {
-                throw BoxSendError.badInput("未找到源站配置: \(detailURL)（--site 指定或在 sourceSites 中配置）")
+            guard let s = config.site(forURL: detailURL) else {
+                throw BoxSendError.badInput("未找到源站配置: \(detailURL)（--site 指定，或先在「站点分组」添加该站）")
             }
             site = s
         }

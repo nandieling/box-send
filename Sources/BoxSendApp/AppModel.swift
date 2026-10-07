@@ -31,6 +31,16 @@ final class AppModel: ObservableObject {
     /// 源站简介自带引用的站点不用勾，故为可选项
     @Published var sourceQuoteEnabled = false
     @Published var sourceQuoteText = ""
+    /// 强制指定转种源站（nil = 按链接域名自动识别）：站点分组里添加过的站点都能当源站
+    @Published var sourceSiteID: String? = nil
+
+    /// 源站菜单纯文案：自动识别时顺带显示识别到的站点，方便确认链接归属
+    var sourceSiteLabel: String {
+        if let id = sourceSiteID, let s = config.site(id) { return s.name }
+        let u = detailURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let s = config.site(forURL: u) { return "自动（\(s.name)）" }
+        return "自动识别"
+    }
 
     @Published var running = false
     @Published var runningStep = ""
@@ -1192,6 +1202,7 @@ final class AppModel: ObservableObject {
         let st = state
         let doR = doReseed, doP = doPush
         let quote = sourceQuoteEnabled ? sourceQuoteText : ""
+        let pickedSource = sourceSiteID
         reseedEvents = [:]
         pushEvents = [:]
         sourcePushEvent = nil
@@ -1221,7 +1232,7 @@ final class AppModel: ObservableObject {
             }
             let reportText: String
             do {
-                let report = try pipeline.run(detailURL: url, sourceSiteID: nil, opts: o)
+                let report = try pipeline.run(detailURL: url, sourceSiteID: pickedSource, opts: o)
                 reportText = report.description
             } catch {
                 reportText = "失败: \(error.localizedDescription)"

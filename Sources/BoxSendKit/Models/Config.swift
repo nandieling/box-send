@@ -496,6 +496,34 @@ public struct AppConfig: Codable {
         sourceSites.first { $0.id == id }
     }
 
+    /// 按详情页链接定位源站配置：任何已添加 / 已收录站点都能作源站。
+    /// 忽略 www. 前缀与子域差异（站点常迁移域名或开镜像），同域名多条时优先已添加并启用的站
+    public func site(forURL url: String) -> SiteConfig? {
+        guard let h = url.host()?.lowercased() else { return nil }
+        func bare(_ s: String) -> String {
+            let t = s.lowercased()
+            return t.hasPrefix("www.") ? String(t.dropFirst(4)) : t
+        }
+        let target = bare(h)
+        var hits: [(score: Int, managed: Int, enabled: Int, site: SiteConfig)] = []
+        for s in sourceSites {
+            guard let sh = s.url.host()?.lowercased() else { continue }
+            let b = bare(sh)
+            let score: Int
+            if b == target { score = 3 }
+            else if target.hasSuffix("." + b) || b.hasSuffix("." + target) { score = 2 }
+            else if s.url.lowercased().contains(target) { score = 1 }
+            else { continue }
+            hits.append((score, s.managed ? 1 : 0, s.enabled ? 1 : 0, s))
+        }
+        return hits.max { a, b in
+            if a.score != b.score { return a.score < b.score }
+            if a.managed != b.managed { return a.managed < b.managed }
+            if a.enabled != b.enabled { return a.enabled < b.enabled }
+            return a.site.id > b.site.id        // 打平时按 id 稳定取，保证可复现
+        }?.site
+    }
+
     /// 站点所属分组（第一个包含该站的分组）
     public func groupOf(siteID: String) -> GroupConfig? {
         groups.first { $0.sites.contains(siteID) }

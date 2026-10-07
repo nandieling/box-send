@@ -144,6 +144,7 @@ bash scripts/make-app.sh   # 重新打包（配置/cookie/状态都在 Applicati
 open dist/BoxSend.app
 ```
 
+- 「种子链接」旁的「源站」菜单：源站默认按链接域名自动识别（菜单文案会显示识别到的站点），站点分组里添加过的站点都能点名作源站；域名迁移 / 多入口（`www.`、子域、镜像）都能反查。识别不到才报错。
 - 「批量转种」页种子链接下方有可选的「源站引用」：勾选后填入的文本会加在每个目标站发种简介的最上面，按各站简介格式自动选择 `[quote]` / `<blockquote>` / Markdown 引用包裹（cmct 这类「附加信息」型站点直接用原文，不套引用块）。源站简介自带转载说明的不用勾——勾了会以手填文本为准，不再自动加「转载自<源站>，感谢发布者」。配置项为 `sourceQuoteEnabled` / `sourceQuoteText`，CLI 用 `--source-quote` 传同一段文本。
 
 ## 使用（GUI）
@@ -268,6 +269,7 @@ GUI 窗口标题、`box-send version`、`scripts/make-app.sh` 写进 Info.plist 
 - YZYY（Discuz 插件 dz_seed）是两步发种：发布表单投递种子与 ptgen 结果 → 发帖页（先过「发帖须知」）→ 提交 postform。Discuz 发帖页带图片验证码（`misc.php?mod=seccode` 返回 PNG），软件会把种子、豆瓣信息、分类信息都填好，最后一张验证码需人工点「发布」。
 - 推下载器只看「有没有站点转种成功」：有任一成功就推，失败的站不影响其它站；全部目标站失败才不推，日志写明「push 跳过：N 个目标站全部转种失败（站点列表）」。目标站回「已存在」按成功算，并回查站内链接以推送该站自己的 .torrent。
 - HD-Space（xbtit）结果页与详情页的种子 id 就是 info_hash 的 40 位 hex，且 & 转义成 `&amp;`：响应里没给跳转链接时软件用本地种子的 info_hash 直接拼详情页，「可能已存在」时同样能定位到站内那条种子并推送。
+- 源页解析不出简介时不会提交空简介：会兜一句「转载自<源站>，感谢发布者。+ 源站链接」（TTG 的「简述」在 `<div id='kt_d'>`、MediaInfo 在 `Quote:` 虚线引用表里，已单独适配；空简介会让整批目标站一起回「你必须填写简介！」）。
 - 上传失败时同目录还会留 `fields-<站id>-<时间戳>.txt`，是本次 POST 的全部字段，站点报「请填写必填项目」时对着它看缺哪一项。
 - HHanClub 为候选区上传（offers.php），一般用户无发种权限，故仅作源站。
 - de5 隧道只开放了 qBittorrent WebAPI 的部分端点：`auth/login`、`torrents/info`、`torrents/add` 可用；`addtrackers`/`properties`/`remove` 返回 404（隧道未映射）。后果：同一 info hash 的多站种子无法合并 tracker、已推送种子无法从本软件移除/改属性（需在 qB WebUI 里操作）。

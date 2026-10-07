@@ -222,6 +222,7 @@ struct RunView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Text("种子链接").font(.headline)
+                sourceSiteMenu
                 Spacer()
                 if let e = model.sourcePushEvent { eventChip(e) }
             }
@@ -251,6 +252,27 @@ struct RunView: View {
             }
         }
         .runCard()
+    }
+
+    /// 源站菜单：默认按链接域名自动识别；站点分组里添加过的站点都能指定为源站
+    private var sourceSiteMenu: some View {
+        Menu {
+            Button("自动识别（按链接域名）") { model.sourceSiteID = nil }
+            Divider()
+            ForEach(model.managedSites, id: \.id) { s in
+                Button(s.name) { model.sourceSiteID = s.id }
+            }
+        } label: {
+            Text("源站：\(model.sourceSiteLabel)")
+                .font(.callout)
+                .foregroundStyle(model.sourceSiteID == nil ? Color.secondary : Color.primary)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(Color.blockSurface(model.theme.dark))
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("默认按链接域名识别源站；已添加的站点都可以指定为源站（例如站点换了域名、或同一站点有多个入口）")
     }
 
     // MARK: 转种目标（分组卡片，组级选择 + 逐站微调）
@@ -1553,6 +1575,7 @@ struct TutorialSheet: View {
                     ])
                     section("3. 批量转种", image: "run", steps: [
                         "「批量转种」页粘贴种子详情页链接，勾选「转种到目标站」与「推送到下载器」。",
+                        "源站默认按链接域名识别（「种子链接」旁的「源站」菜单会显示识别结果）；站点分组里添加过的站点都能点名作源站。",
                         "勾选转种分组（「全选」= 全部分组）后点「开始运行」。",
                         "按分组顺序执行：获取种子 → 依次上传到组内已开启站点（限速取分组上传限速）→ 转种成功的种子自动推送到下载器。",
                         "源站简介没有转载说明时，勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介的最上面；源站自带引用的不用勾。",
