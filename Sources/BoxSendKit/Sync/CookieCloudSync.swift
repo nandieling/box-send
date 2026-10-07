@@ -78,6 +78,25 @@ public final class CookieCloudSync {
         return nil
     }
 
+    /// 拉取并解密，返回明文 JSON（排查用）
+    public func fetchPlain() throws -> Data {
+        var base = config.host.trimmingCharacters(in: .whitespaces)
+        while base.hasSuffix("/") { base.removeLast() }
+        let key = config.key.trimmingCharacters(in: .whitespaces)
+        let urlStr = base + "/get/" + key
+        let resp = try client.get(urlStr)
+        guard (200..<300).contains(resp.status) else {
+            throw BoxSendError.http(status: resp.status, url: urlStr,
+                                    body: String(data: resp.data.prefix(300), encoding: .utf8) ?? "")
+        }
+        guard let obj = (try? JSONSerialization.jsonObject(with: resp.data)) as? [String: Any],
+              let enc = obj["encrypted"] as? String, !enc.isEmpty else {
+            throw BoxSendError.badInput("CookieCloud 响应缺少 encrypted 字段（KEY 可能不正确）")
+        }
+        let cryptoType = (obj["crypto_type"] as? String) ?? "legacy"
+        return try Self.decrypt(encrypted: enc, cryptoType: cryptoType, key: key, password: config.password)
+    }
+
     /// 拉取并解密（不做导入）；返回 {归一化 host: "k=v; k=v"}，供互补同步在后台线程调用
     @discardableResult
     public func fetch() throws -> [String: String] {
@@ -109,15 +128,7 @@ public final class CookieCloudSync {
         guard !data.isEmpty else {
             throw BoxSendError.badInput("CookieCloud 返回 0 条 cookie（请检查 KEY 与扩展里的备份域名）")
         }
-        var out: [String: String] = [:]
-        for (host, cookies) in data {
-            let raw = cookies.compactMap { c -> String? in
-                guard let n = c["name"] as? String, let v = c["value"] as? String else { return nil }
-                return n + "=" + v
-            }.joined(separator: "; ")
-            if !raw.isEmpty { out[Self.normalize(host)] = raw }
-        }
-        return out
+        return CookieRawMerge.rawStrings(map: data)
     }
 
     @discardableResult

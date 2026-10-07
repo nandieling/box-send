@@ -395,6 +395,8 @@ struct SitesView: View {
     @State private var showConfirm2 = false
     @State private var draggingSite: String?
     @State private var siteSortNum: [String: String] = [:]
+    @State private var renameIndex: Int? = nil
+    @State private var renameName = ""
 
     /// 自适应列宽：常规窗口一行 4 张，全屏窗口自动放更多
     private let cardColumns = [GridItem(.adaptive(minimum: 172, maximum: 400), spacing: 10)]
@@ -435,13 +437,22 @@ struct SitesView: View {
                         }
                         .font(.caption)
                         .disabled(model.cookieSyncBusy)
-                        .help("同时同步 PT-depiler Gist 与 CookieCloud 的 cookie 备份（互为补充：本地已检测有效的保留，同步后自动重检并用另一来源补充仍失效的站点）")
-                        Button(model.anyChecking ? "检测中…" : "检测 Cookie") {
+                        .help("同时同步 PT-depiler Gist 与 CookieCloud 的 cookie 备份（互为补充：本地 cookie 只有被检测为失效后才用备份值替换，已检测有效或未检测的保留；同步后自动重检并用另一来源补充仍失效的站点）")
+                        Button(model.anyChecking ? "检测中…" : "检测cookie或api key") {
                             model.checkAllManagedCookies()
                         }
                         .font(.caption)
                         .disabled(model.anyChecking)
-                        .help("批量检测所有分组已添加站点的 cookie 有效性")
+                        .help("批量检测所有分组已添加站点的 cookie / API Key 有效性")
+                        if model.anyChecking {
+                            Button {
+                                model.stopChecking()
+                            } label: {
+                                Label("停止检测", systemImage: "stop.circle")
+                            }
+                            .font(.caption)
+                            .help("停止检测剩余站点；进行中的批次仍会完成")
+                        }
                         Spacer()
                     }
                 }
@@ -452,6 +463,15 @@ struct SitesView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
                             Text("分组：\(gname)").font(.headline)
+                            Button {
+                                renameIndex = gi
+                                renameName = gname
+                            } label: {
+                                Label("重命名", systemImage: "pencil")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("重命名该分组（组内站点与排序不受影响；重名自动加数字后缀）")
                             Button {
                                 addSheetReq = AddSitesRequest(group: gi)
                             } label: {
@@ -471,7 +491,7 @@ struct SitesView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .tint(.red)
-                            .help("删除分组（组内站点移到无分组），需两次确认")
+                            .help("删除分组（组内站点移回批量添加站点列表），需两次确认")
                             Spacer()
                         }
                         groupToolbar(gi)
@@ -533,6 +553,19 @@ struct SitesView: View {
         } message: {
             Text(confirmReq?.secondMessage ?? "")
         }
+        .alert("重命名分组", isPresented: Binding(
+            get: { renameIndex != nil },
+            set: { if !$0 { renameIndex = nil } }
+        )) {
+            TextField("分组名", text: $renameName)
+            Button("保存") {
+                if let i = renameIndex { model.renameGroup(at: i, name: renameName) }
+                renameIndex = nil
+            }
+            Button("取消", role: .cancel) { renameIndex = nil }
+        } message: {
+            Text("重命名立即生效，不影响组内站点；名称重复时自动追加数字后缀。")
+        }
         .onAppear { model.autoCheckSites() }
     }
 
@@ -547,12 +580,12 @@ struct SitesView: View {
                 .font(.caption)
                 .disabled(members.isEmpty)
                 .help(allOn ? "停用该分组全部站点" : "开启该分组全部站点")
-            Button("手动添加cookie") {
+            Button("手动添加cookie或api key") {
                 manualCookiePick = SitePick(sites: enabledMembers)
             }
             .font(.caption)
             .disabled(enabledMembers.isEmpty)
-            .help("为选中（加深色）的站点手动填写 cookie")
+            .help("为选中（加深色）的站点手动填写 cookie 或 API Key")
             Button("移除站点") {
                 let gname = gi >= 0 && gi < model.config.groups.count ? model.config.groups[gi].name : "无分组"
                 confirmReq = ConfirmRequest(kind: .removeSites, index: gi,
@@ -638,14 +671,29 @@ struct SitesView: View {
     private func cookieStatusView(for s: SiteConfig) -> some View {
         if !s.enabled {
             Text("未开启").font(.caption).foregroundStyle(.tertiary)
+        } else if model.siteUsesAPIKey(s) {
+            if model.siteChecking.contains(s.id) {
+                Text("检测中…").font(.caption).foregroundStyle(.secondary)
+            } else if model.siteAPIKey(s).isEmpty {
+                Text("未配置 API Key").font(.caption).foregroundStyle(.secondary)
+                    .help("该站不走 cookie 同步；在分组工具栏「手动添加cookie或api key」中填写")
+            } else if let r = model.siteCheckResults[s.id] {
+                Text(r.ok ? "API 已连接" : "API Key 失效")
+                    .font(.caption)
+                    .foregroundStyle(r.ok ? Color.green : Color.red)
+                    .help(r.message)
+            } else {
+                Text("API Key 已配置（未检测）").font(.caption).foregroundStyle(.secondary)
+                    .help("点顶部「检测cookie或api key」验证")
+            }
         } else if model.siteChecking.contains(s.id) {
             Text("检测中…").font(.caption).foregroundStyle(.secondary)
         } else if !model.hasCookie(for: s) {
             Text("无 cookie").font(.caption).foregroundStyle(.secondary)
         } else if let r = model.siteCheckResults[s.id] {
-            Text(r.ok ? "已登录" : "cookie 失效")
+            Text(r.ok ? "已登录" : (r.unconfirmed ? "站点未响应" : "cookie 失效"))
                 .font(.caption)
-                .foregroundStyle(r.ok ? Color.green : Color.red)
+                .foregroundStyle(r.ok ? Color.green : (r.unconfirmed ? Color.secondary : Color.red))
                 .help(r.message)
         } else {
             Text("未检测").font(.caption).foregroundStyle(.secondary)
@@ -667,6 +715,7 @@ struct SitesView: View {
         for (k, v) in siteSortNum { if let n = Int(v), n > 0 { nums[k] = n } }
         guard !nums.isEmpty else { return }
         model.sortGroupSites(gi, by: nums)
+        siteSortNum.removeAll()
     }
 }
 
@@ -831,13 +880,13 @@ struct AddSitesSheet: View {
                         .onTapGesture {
                             if checked.contains(id) { checked.remove(id) } else { checked.insert(id) }
                         }
-                        TextField("", text: numBinding(id), prompt: Text("序"))
+                        TextField("", text: numBinding(id), prompt: Text("\(position(of: id))"))
                             .textFieldStyle(.roundedBorder)
                             .multilineTextAlignment(.center)
                             .font(.caption)
                             .frame(width: 38)
                             .onSubmit { applySortNumbers() }
-                            .help("输入数字 = 排到该序号位置（如 2 = 第 2 位），回车生效")
+                            .help("数字 = 当前排序位置；输入新数字回车即排到该位置（如 2 = 第 2 位）")
                         Image(systemName: "line.3.horizontal")
                             .foregroundStyle(.secondary)
                             .frame(width: 12, height: 16)
@@ -873,6 +922,11 @@ struct AddSitesSheet: View {
     private func numBinding(_ id: String) -> Binding<String> {
         Binding(get: { sortNum[id] ?? "" },
                 set: { sortNum[id] = $0.filter { $0.isNumber } })
+    }
+
+    /// 站点在当前完整顺序中的位置（1 起），序号框常显该数字
+    private func position(of id: String) -> Int {
+        (order.firstIndex(of: id) ?? 0) + 1
     }
 
     private func applySortNumbers() {
@@ -912,6 +966,7 @@ struct AddSitesSheet: View {
         var un = order.filter { nums[$0] == nil }.makeIterator()
         for i in 0..<count where final[i] == nil { final[i] = un.next() }
         withAnimation { order = final.compactMap { $0 } }
+        sortNum.removeAll()
     }
 }
 
@@ -952,10 +1007,15 @@ struct ManualCookieSheet: View {
         sites.first(where: { $0.id == siteID }) ?? sites.first
     }
 
+    private var currentUsesAPIKey: Bool {
+        current.map { model.siteUsesAPIKey($0) } ?? false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let c = current {
-                Text("添加 \(c.name)（\(model.siteHost(c))）的 cookie")
+                Text(currentUsesAPIKey ? "添加 \(c.name)（\(model.siteHost(c))）的 API Key"
+                                       : "添加 \(c.name)（\(model.siteHost(c))）的 cookie")
                     .font(.headline)
             }
             if sites.count > 1 {
@@ -968,18 +1028,24 @@ struct ManualCookieSheet: View {
                 .labelsHidden()
                 .frame(width: 220)
             }
-            TextField("name1=value1; name2=value2（浏览器 Cookie 头原文）", text: $text, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(3...6)
+            inputEditor(currentUsesAPIKey
+                        ? "站点 API Key（站点页「个人主页 → 设置 → API」获取，整段粘贴）"
+                        : "name1=value1; name2=value2 …（浏览器 Cookie 头原文，整段粘贴）")
             HStack(alignment: .firstTextBaseline) {
-                Text("保存即覆盖该站原有 cookie，并自动开启该站")
+                Text(currentUsesAPIKey
+                     ? "保存即覆盖该站原有 API Key，并自动开启该站"
+                     : "保存即覆盖该站原有 cookie，并自动开启该站")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("保存") {
                     if let c = current {
-                        model.addSiteCookie(siteID: c.id, raw: text)
+                        if currentUsesAPIKey {
+                            model.saveSiteAPIKey(siteID: c.id, raw: text)
+                        } else {
+                            model.addSiteCookie(siteID: c.id, raw: text)
+                        }
                     }
                     dismiss()
                 }
@@ -988,12 +1054,45 @@ struct ManualCookieSheet: View {
             }
         }
         .padding()
-        .frame(width: 480)
-        .onAppear { siteID = sites.first?.id ?? "" }
+        .frame(width: 520)
+        .onAppear {
+            siteID = sites.first?.id ?? ""
+            text = initialText(for: siteID)
+        }
+        .onChange(of: siteID) { id in
+            text = initialText(for: id)
+        }
         .boxsendAppearance()
     }
-}
 
+    /// 多行输入：一条 cookie 头常有上千字符，单行输入框看不到也改不了
+    private func inputEditor(_ placeholder: String) -> some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .textBackgroundColor))
+            RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.3))
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 12)
+                    .padding(.leading, 12)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $text)
+                .font(.system(size: 12, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 3)
+        }
+        .frame(height: 176)
+    }
+
+    /// 预填已有 cookie / API Key，便于覆盖前核对
+    private func initialText(for id: String) -> String {
+        guard let c = sites.first(where: { $0.id == id }) else { return "" }
+        return model.siteUsesAPIKey(c) ? model.siteAPIKey(c) : model.existingCookieHeader(for: c)
+    }
+}
 /// 手动添加 cookie 的站点集合（点击选中卡片后点「手动添加」弹出）
 struct SitePick: Identifiable {
     let id = UUID()
@@ -1012,7 +1111,7 @@ struct ConfirmRequest {
     var firstMessage: String {
         switch kind {
         case .removeGroup:
-            return "将移除分组「\(name)」，组内 \(count) 个站点会移到「无分组」区块。"
+            return "将移除分组「\(name)」，组内 \(count) 个站点会移回「批量添加站点」列表（按名称默认序插入，不打乱已有手动排序）。"
         case .removeSites:
             return "将移除分组「\(name)」中当前选中（加深色）的 \(count) 个站点（保留 cookie 与限速设置）。"
         }
@@ -1435,8 +1534,8 @@ struct TutorialSheet: View {
                     section("1. 添加站点与分组", image: "sites", steps: [
                         "「站点分组」页顶部输入分组名并设置上传限速（默认 10 MB/s），点「添加分组」。",
                         "点分组名旁的「添加站点」批量添加：搜索站点、点击卡片选中（加深色 = 已选），拖拽或输入序号排序（序号重复会弹窗提示），点「添加」。",
-                        "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加cookie」为选中站点填写 cookie。",
-                        "「检测 Cookie」批量检查 cookie 有效性；「移除站点」「移除分组」均需两次确认。",
+                        "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加cookie或api key」为选中站点填写 cookie 或 API Key（馒头等 API 站的 key 不显示在卡片上，只在该弹窗里填写）。",
+                        "「检测cookie或api key」批量检查 cookie / API Key 有效性，检测中右侧出现「停止检测」，点击可提前停止；「移除站点」「移除分组」均需两次确认。",
                     ])
                     section("2. 配置与备份 Cookie", image: "cookies", steps: [
                         "PT-depiler Gist 同步：填写 GitHub Token 与 Gist ID，可开启自动同步 / 自动扫描并设置间隔秒数。",

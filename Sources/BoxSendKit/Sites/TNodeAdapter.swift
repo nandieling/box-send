@@ -254,10 +254,9 @@ final class TNodeAdapter: SiteAdapter {
     }
 
     func fetchDetail(detailURL: String) throws -> ReleaseInfo {
-        guard let m = HTMLUtil.firstMatch(detailURL, "/torrent/info/(\\d+)") else {
+        guard let id = Self.torrentID(fromDetail: detailURL) else {
             throw BoxSendError.badInput("无法解析 TNode 详情链接: \(detailURL)")
         }
-        let id = m
         let resp = try client.get(site.url + "api/torrent/info?id=\(id)",
                                   referer: detailURL, extraHeaders: try headers())
         if resp.status == 400 || resp.status == 401 || resp.status == 403 {
@@ -268,6 +267,11 @@ final class TNodeAdapter: SiteAdapter {
                                     body: String(data: resp.data.prefix(200), encoding: .utf8) ?? "")
         }
         return try parseDetail(resp.data, detailURL: detailURL)
+    }
+
+    /// 详情链接里的种子 id（SPA 路由 /torrent/info/<id>）
+    static func torrentID(fromDetail detailURL: String) -> String? {
+        HTMLUtil.group(detailURL, "/torrent/info/(\\d+)", group: 1)
     }
 
     /// 纯解析（供测试）
@@ -311,8 +315,35 @@ final class TNodeAdapter: SiteAdapter {
     // MARK: - 查重
 
     func searchExists(_ info: ReleaseInfo) throws -> String? {
+        // 朱雀检索按中文名命中，用发布名查通常为空，再用中文段查一次
+        for kw in Self.searchKeywords(info) {
+            if let hit = try searchExists(info, keyword: kw) { return hit }
+        }
+        return nil
+    }
+
+    /// 检索词：发布名 + 副标题/简介里的中文段（取最长的几段）
+    static func searchKeywords(_ info: ReleaseInfo) -> [String] {
+        var out: [String] = []
+        func add(_ s: String) {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.count >= 3, !out.contains(t) { out.append(t) }
+        }
+        add(info.name)
+        let cjk = CharacterSet(charactersIn: "\u{4e00}"..."\u{9fff}")
+        func runs(_ text: String, maxLen: Int) -> [String] {
+            text.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.rangeOfCharacter(from: cjk) != nil && $0.count <= maxLen }
+        }
+        // 副标题就是中文片名；简介里只取短词段（长段落检索不命中）
+        for r in runs(info.subtitle, maxLen: 20) { add(r) }
+        for r in Array(runs(HTMLUtil.stripTags(info.descr), maxLen: 12).prefix(3)) { add(r) }
+        return out
+    }
+
+    private func searchExists(_ info: ReleaseInfo, keyword: String) throws -> String? {
         let resp = try client.postJSON(site.url + "api/torrent/search",
-                                       object: ["keyword": info.name, "page": 0, "size": 20],
+                                       object: ["keyword": keyword, "page": 0, "size": 20],
                                        referer: site.url, extraHeaders: try headers())
         guard resp.status == 200 else {
             if resp.status == 400 || resp.status == 401 || resp.status == 403 {
@@ -323,12 +354,17 @@ final class TNodeAdapter: SiteAdapter {
         guard let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
               let data = obj["data"] as? [String: Any],
               let tmdbs = data["tmdbs"] as? [[String: Any]] else { return nil }
-        let target = info.name.lowercased()
+        let target = NexusPHPAdapter.normalizeSearchName(info.name)
+        guard target.count >= 8 else { return nil }
         for tm in tmdbs {
             guard let torrents = tm["torrents"] as? [[String: Any]] else { continue }
             for t in torrents {
-                if let title = t["title"] as? String, title.lowercased() == target,
-                   let id = t["id"] as? Int {
+                guard let title = t["title"] as? String, let id = t["id"] as? Int else { continue }
+                // 归一化后相等或互相包含（对方标题常多带季号/年份等零碎）
+                let n = NexusPHPAdapter.normalizeSearchName(title)
+                let shorter = min(n.count, target.count), longer = max(n.count, target.count)
+                if n == target || (shorter >= 8 && shorter * 10 >= longer * 7
+                                    && (target.contains(n) || n.contains(target))) {
                     return site.url + "torrent/info/\(id)"
                 }
             }
@@ -402,6 +438,11 @@ final class TNodeAdapter: SiteAdapter {
         return nil
     }
 
+    /// 站点自行判定「该种子已上传」（HTTP 400 TORRENT_ALREADY_UPLOAD）：算已存在，不算失败
+    static func isAlreadyUploaded(status: Int, body: String) -> Bool {
+        status == 400 && body.contains("TORRENT_ALREADY_UPLOAD")
+    }
+
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
         let createAction = site.url + "torrent/upload"
         let fields = try buildUploadFields(info)
@@ -413,6 +454,12 @@ final class TNodeAdapter: SiteAdapter {
             extraHeaders: (try? headers()) ?? [:]
         )
         let body = String(data: resp.data, encoding: .utf8) ?? ""
+        // 站点自己判定「该种子已上传」（HTTP 400 TORRENT_ALREADY_UPLOAD）：
+        // 算已存在，回填已有种子链接以便照常推送本站 .torrent
+        if Self.isAlreadyUploaded(status: resp.status, body: body) {
+            return UploadOutcome(success: true, message: "站点已存在该种子（查重兜底命中）",
+                                 detailURL: nil, alreadyExists: true)
+        }
         if let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
            (obj["status"] as? Int) == 200,
            let data = obj["data"] as? [String: Any],

@@ -3,6 +3,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# 版本号唯一来源：Sources/BoxSendKit/Util/Version.swift
+VERSION=$(sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/BoxSendKit/Util/Version.swift | head -1)
+: "${VERSION:?读不到版本号（Sources/BoxSendKit/Util/Version.swift）}"
+
 swift build -c release
 APP=dist/BoxSend.app
 rm -rf "$APP"
@@ -40,9 +44,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 	<key>CFBundleIdentifier</key>
 	<string>com.nan.boxsend</string>
 	<key>CFBundleVersion</key>
-	<string>0.2</string>
+	<string>__VERSION__</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2</string>
+	<string>__VERSION__</string>
 	<key>CFBundleExecutable</key>
 	<string>BoxSendApp</string>
 	<key>CFBundleIconFile</key>
@@ -61,6 +65,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+sed -i '' "s/__VERSION__/${VERSION}/" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 echo "构建完成: $APP"
 echo "运行: open $APP"

@@ -18,6 +18,7 @@ extension SiteOverride {
         qualitySelects: ["medium_sel[4]": "medium", "codec_sel[4]": "codec", "audiocodec_sel[4]": "audiocodec", "standard_sel[4]": "standard"],
         qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 10, "uhdbd8k": 10, "uhd8k": 10, "uhd": 7, "webdl": 11, "bluray": 1, "encode": 7, "hdtv": 5, "dvd": 6, "track": 9], "codec": ["hevc": 6, "avc": 1, "vc1": 3, "mpeg2": 4, "av1": 2, "xvid": 12], "audiocodec": ["dtsma": 16, "dtsc": 15, "truehd atmos": 11, "truehd": 14, "eac3 atmos": 12, "eac3": 12, "ac3": 8, "dts": 3, "flac": 1, "ape": 2, "aac": 6, "mp3": 4, "ogg": 5, "pcm": 19, "lpcm": 13, "wav": 18, "m4a": 17], "standard": ["8k": 7, "2160p": 6, "1080p": 1, "1080i": 1, "720p": 3, "sd": 4]],
         subtitleField: "small_descr",
+        sourceLabel: "LuckPT",
         tagField: "tags[4][]",
         tagMap: ["chinese_sub": "23", "hdr10": "20", "hdr10plus": "19", "dovi": "21", "forbid": "8"],
         teamField: "team_sel[4]",
@@ -96,7 +97,10 @@ extension SiteOverride {
         titleMode: "torrentNameDotted",
         imdbField: "url",
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        posterField: "url_poster",        // 海报 = 源简介首图
+        descrStyle: "reseedSource",       // descr 字段是"附加信息"：写转种来源，不写简介
         categoryField: "type",
+        screenshotField: "url_vimages",   // 必填：截图 URL 文本域（每行一个，取源简介图片，不含海报）
         searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 501, "series": 502, "documentary": 503, "music": 508, "anime": 509, "other": 509],
         extraUploadFields: ["uplver": "yes"],
@@ -131,9 +135,9 @@ extension SiteOverride {
         doubanField: "douban_id",
         categoryField: "type",
         fileField: "file",
-        searchURL: "search.php?search={name}",  // 2026-09-29 实测可用（查重）
+        searchURL: "browse.php?search_field={name}",   // 2026-10-05 实测：search.php 丢参，表单 action=browse.php 且输入框名为 search_field
         categoryMap: ["movie/uhd-bd": 109, "movie/8k-bd": 109, "movie/2160p": 108, "movie/8k": 108, "movie/remux": 54, "movie/bluray": 54, "movie/1440p": 53, "movie/1080p": 53, "movie/1080i": 53, "movie/720p": 52, "movie/sd": 51, "movie/dvd": 51, "documentary/uhd-bd": 67, "documentary/8k-bd": 67, "documentary/2160p": 67, "documentary/8k": 67, "documentary/remux": 67, "documentary/bluray": 67, "documentary/1440p": 63, "documentary/1080p": 63, "documentary/1080i": 63, "documentary/720p": 62, "documentary/sd": 62, "documentary/dvd": 62, "series/uhd-bd": 70, "series/8k-bd": 70, "series/2160p": 70, "series/8k": 70, "series/remux": 70, "series/bluray": 70, "series/1440p": 70, "series/1080p": 70, "series/1080i": 70, "series/720p": 69, "series/sd": 69, "series/dvd": 69, "anime/uhd-bd": 111, "anime/8k-bd": 111, "anime/2160p": 58, "anime/8k": 58, "anime/remux": 58, "anime/bluray": 58, "anime/1440p": 58, "anime/1080p": 58, "anime/1080i": 58, "anime/720p": 58, "anime/sd": 58, "anime/dvd": 58, "music": 83, "movie": 53, "documentary": 63, "series": 70, "anime": 58, "other": 32],
-        extraUploadFields: ["anonymity": "-1"],
+        extraUploadFields: ["anonymity": "no"],  // -1=请选择 会被服务端拒绝（"请选择是否匿名发布"）
         subtitleField: "subtitle"
     )
 
@@ -148,9 +152,45 @@ extension SiteOverride {
         searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
         categoryMap: ["movie": 401, "series": 404, "anime": 403, "documentary": 402, "music": 406, "other": 412],
         subtitleField: "small_descr",
+        // 标签是拼音命名的独立复选框（auto_feed 同款映射）：禁转/官方/国语/粤语/中字/英字/应求/DIY原盘
+        tagCheckboxes: ["chinese_sub": "zhongzi", "forbid": "jinzhuan", "official": "guanfang",
+                        "mandarin": "guoyu", "cantonese": "yueyu", "english_sub": "ensub",
+                        "demand": "yingqiu", "diy": "diy"],
         regionField: "team_sel",
         regionPatterns: ["中国大陆": 1, "内地": 1, "中国": 1, "香港": 2, "台湾": 3, "美国": 4, "加拿大": 4, "英国": 4, "法国": 4, "德国": 4, "意大利": 4, "西班牙": 4, "瑞典": 4, "韩国": 5, "日本": 6, "印度": 7],
         regionOtherValue: 8
+    )
+
+    /// 织梦（zmpt）：简介需注明转种来源；音频无 PCM/LPCM 选项（自动落 Other）
+    static let zmpt = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr",
+        descrSourcePrefix: true
+    )
+
+    /// 城市（HDCity，自研框架）：上传分两步——种子文件 POST 到独立上传域名，
+    /// 站点回跳元信息表单页后再提交分类/质量/标签；标签是"选项值即文案"的下拉。
+    /// 成功跳转是 /t-<id>，按 successIDPattern 组装详情链接。
+    static let hdcity = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "upload.php",
+        titleField: "name",
+        titleStrip: " - An Advanced City For Entertainment - HDCiTY",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        posterField: "posterimg",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr",
+        tagSelectFields: ["tag1ing", "tag2ing"],
+        uploadTwoStep: true,
+        successIDPattern: "/t-(\\d+)"
     )
 
     /// hhanclub：候选区上传（offers.php），M2；目前无 overrides
@@ -159,6 +199,18 @@ extension SiteOverride {
     /// 通用中文 NexusPHP 默认值：POST takeupload.php、标题 name、IMDB 走 url 字段。
     /// 分类走 NexusPHPAdapter 动态解析（上传页 <select> 关键词匹配），质量下拉保持服务器默认值；
     /// 个别站字段不同（如 PTFans 的 pt_gen/小描述位置、CHDBits 的 torrentfile）请用配置层 overrides 覆盖。
+    /// 肉丝（rousi.pro）：PeerGo 引擎，走 API Key（`Authorization: Bearer`），
+    /// 表单字段沿用中文 NexusPHP 命名习惯，但发种必须走 API（HTML 上传页是 SPA，POST 表单会 405）
+    static var rousi: SiteOverride {
+        var o = SiteOverride.nexusCN
+        o.usesAPIKey = true
+        o.apiBase = "https://rousi.pro"
+        o.apiKeyStyle = "peergo"
+        // 查重端点（PeerGoAdapter 用它拼关键词检索；也是流水线「允许预查重」的开关）
+        o.searchURL = "api/v1/torrents?keyword={name}"
+        return o
+    }
+
     static let nexusCN = SiteOverride(
         uploadPath: "upload.php",
         uploadActionPath: "takeupload.php",
@@ -168,6 +220,27 @@ extension SiteOverride {
         categoryField: "type",
         extraUploadFields: ["uplver": "yes"],
         subtitleField: "small_descr"
+    )
+
+    /// hddolby（杜比）：.nexusCN 基础上增加必填截图 URL 文本域（每行一个截图 URL）
+    static let hddolby = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        tmdbField: "tmdb_url",   // 必填：源站简介 TMDB 链接
+        categoryField: "type",
+        screenshotField: "screenshots",
+        extraUploadFields: ["uplver": "yes"]
+    )
+
+    /// mteam（馒头 M-Team）：不走 cookie 同步，用 API Key 连接（api.m-team.cc，Unit3D API）
+    static let mteam = SiteOverride(
+        // 查重走 API（/api/torrent/search），这里只作为「启用自动查重」的开关
+        searchURL: "https://kp.m-team.cc/torrents/search?keyword={name}",
+        apiBase: "https://api.m-team.cc",
+        usesAPIKey: true
     )
 
     /// yemapt（YemaPT）：umi.js SPA + REST API；查重走 findImdbTorrentList（imdb 必填才生效）
@@ -294,6 +367,11 @@ extension SiteOverride {
     )
 
     /// 杏坛（学术站）：type 下拉由 ajax.php 异步生成；分类 = 学科
+    /// Oldtoons（Unit3D v9，动画站）：.torrent 下载链接为 /torrents/download/<id>（非 download.php 型）
+    static let oldtoons = SiteOverride(
+        torrentLinkPattern: "torrents/download/\\d+"
+    )
+
     static let xingtan = SiteOverride(
         uploadPath: "upload.php",
         uploadActionPath: "takeupload.php",
@@ -440,6 +518,7 @@ extension SiteOverride {
     /// hdspace（HD-Space，xbtit 皮肤）：分类 15=Blu-Ray 18/19=Movie 720/1080 40=Remux 41=4K UHD 24/25/47=Doc 720/1080/2160 27/28/48=Anime 720/1080/2160 30=HQ Audio 36=Trailers 38=Other（2026-09-29 实测上传页）
     static let hdspace = SiteOverride(
         uploadPath: "index.php?page=upload",
+        searchURL: "index.php?page=torrents&search={name}&options=contains",
         categoryMap: [
             "movie/remux": 40, "movie/uhd-bd": 41, "movie/8k-bd": 41, "movie/8k": 41, "movie/2160p": 41,
             "movie/bluray": 15, "movie/1440p": 19, "movie/1080p": 19, "movie/1080i": 19, "movie/720p": 18,

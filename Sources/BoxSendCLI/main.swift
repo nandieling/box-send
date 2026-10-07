@@ -35,7 +35,15 @@ if let loaded = AppConfig.load(path: configPath) {
     exit(1)
 }
 
-let dataDir = (config.dataDir as NSString).expandingTildeInPath
+// dataDir 为相对路径（模板里的 ".boxsend"）时：配置文件与数据同目录（App 把 boxsend.json 写在数据目录里）
+// 就用配置文件所在目录，否则按当前目录解析。不这样处理时从仓库里跑 CLI 会指到另一个空目录，
+// 读不到 App 的 cookies.json（表现为「本地无 cookie」「站点返回登录页」这类假故障）。
+var dataDir = (config.dataDir as NSString).expandingTildeInPath
+if !dataDir.hasPrefix("/") {
+    let sibling = (configPath as NSString).deletingLastPathComponent
+    dataDir = FileManager.default.fileExists(atPath: sibling + "/cookies.json")
+        ? sibling : (dataDir as NSString).standardizingPath
+}
 try? FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
 let state = StateStore(dataDir: dataDir)
 let cookies = CookieStore()
@@ -57,12 +65,16 @@ func makeDownloader() -> Downloader {
 
 do {
     switch command {
+    case "version", "--version", "-v":
+        print("box-send \(BoxSendVersion.version)")
+
     case "help", "-h", "--help":
         print(
             """
             box-send - PT 批量转种 + 推送下载器（按源站点限速）
 
             命令:
+              version               显示版本号
               sites                 列出配置的站点
               info --detail <url>   解析源站详情页（只解析，不上传）
               run --detail <url> [--site <id>] [--targets a,b] [--skip-reseed] [--skip-push]
@@ -81,6 +93,8 @@ do {
               check-cookies [--site <id>]   检测各站 cookie 是否仍然登录（仅已开启的站；--site 可指定单站）
               add-cookie --site <id> --cookie "k1=v1; k2=v2"
                                     手动添加/覆盖单个站点的 cookie（浏览器 Cookie 头原文）
+              add-apikey --site <id> --api-key <key>
+                                    为 API 站点（如馒头 mteam）配置 API Key 并验证
               remove-cookie --site <id>     删除单个站点的本地 cookie
               template              生成模板配置 Config/boxsend.json
               notes                 查看最近运行日志
@@ -130,6 +144,18 @@ do {
                 let shown = v.count > 120 ? String(v.prefix(120)) + "…(\(v.count))" : v
                 print("  \(k) = \(shown.replacingOccurrences(of: "\\n", with: "\\n    "))")
             }
+        }
+
+    case "fetch":
+        // 调试用：带该站 cookie 直接抓取页面，便于核对表单字段
+        let siteID = required("--site")
+        guard let s3 = config.site(siteID) else { die("未知站点 \(siteID)") }
+        let raw = try client.fetchHTML(required("--url"), referer: s3.url)
+        if let out = opt("--out") {
+            try raw.write(toFile: out, atomically: true, encoding: .utf8)
+            print("已写入 \(out)（\(raw.count) 字符）")
+        } else {
+            print(raw)
         }
 
     case "run", "push":
@@ -230,18 +256,26 @@ do {
 
     case "check-cookies":
         let only = opt("--site")
-        let checkClient = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+        // 每站一个连接池并把请求超时压到上限的一半：单站最多两跳（首页 + userdetails），总时长仍受控
+        func checkClientFor(_ site: SiteConfig) -> HTTPClient {
+            let c = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+            c.setRequestTimeout(max(2, CookieCheck.timeout / 2))
+            return c
+        }
         let sites = config.sourceSites.filter { site in
             only == nil ? site.enabled : site.id == only
         }
         var any = false
         for site in sites {
-            guard cookies.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil else {
-                print("SKIP [\(site.id)] 本地无该站 cookie")
+            // API 站点（馒头）用 API Key 鉴权，本地没有 cookie 也要检测
+            let hasCred = cookies.cookieHeader(forHost: (URL(string: site.url)?.host ?? site.url)) != nil
+                || !((SiteRegistry.effectiveSite(site).apiKey) ?? "").isEmpty
+            guard hasCred else {
+                print("SKIP [\(site.id)] 本地无该站 cookie/API Key")
                 continue
             }
             any = true
-            let r = CookieCheck.check(site: site, client: checkClient)
+            let r = CookieCheck.check(site: site, client: checkClientFor(site))
             print("\(r.ok ? "OK  " : "FAIL") [\(site.id)] \(r.message)")
         }
         if !any { die("没有可检测的站点 cookie（--site 或同步 cookie 后重试）") }
@@ -268,6 +302,22 @@ do {
         let n = cookies.snapshot()[host]?.count ?? 0
         print("已保存 \(site.name)（\(host)）\(n) 条 cookie（覆盖该站旧值），已开启该站并加入转种目标，写入 \(localCookieFile.path)")
 
+    case "add-apikey":
+        let siteID = required("--site")
+        let key = required("--api-key")
+        guard let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) else { die("配置里没有站点 id: \(siteID)（用 `box-send sites` 查看）") }
+        config.sourceSites[i].apiKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !config.sourceSites[i].enabled { config.sourceSites[i].enabled = true }
+        if !config.targetSites.contains(siteID) { config.targetSites.append(siteID) }
+        if let data = try? JSONEncoder().encode(config) {
+            try? data.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+        }
+        print("已保存 \(config.sourceSites[i].name) 的 API Key（\(key.count) 位），已开启该站并加入转种目标")
+        // 立即验证一次
+        let client2 = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+        let r = CookieCheck.check(site: config.sourceSites[i], client: client2)
+        print(r.ok ? "API Key 验证通过：\(r.message)" : "API Key 验证失败：\(r.message)")
+
     case "remove-cookie":
         let siteID = required("--site")
         guard let site = config.site(siteID) else { die("配置里没有站点 id: \(siteID)") }
@@ -279,6 +329,37 @@ do {
             print("已删除 \(site.name)（\(host)）的 cookie")
         } else {
             print("\(site.name)（\(host)）本地没有 cookie")
+        }
+
+    case "cookiecloud-probe":
+        // 排查「同步说成功、站点却说未登录」：把 CookieCloud 里与该站相关的 host 条目原样列出
+        guard let cc = config.cookieCloud else { die("未配置 cookieCloud") }
+        let filter = (opt("--host") ?? "").lowercased()
+        let sync = CookieCloudSync(config: cc, client: client)
+        let plain = try sync.fetchPlain()
+        let data = try CookieCloudSync.parseCookieData(plain)
+        for host in data.keys.sorted() where filter.isEmpty || host.lowercased().contains(filter) {
+            if has("--json") {
+                for c in data[host] ?? [] {
+                    let d = (try? JSONSerialization.data(withJSONObject: c)) ?? Data()
+                    print("[\(host)] " + String(data: d, encoding: .utf8)!)
+                }
+                continue
+            }
+            print("[\(host)]")
+            for c in data[host] ?? [] {
+                let name = (c["name"] as? String) ?? "?"
+                let val = ((c["value"] as? String) ?? "").prefix(16)
+                let exp = c["expirationDate"] as? Double
+                let ct = c["creationTime"] as? Double
+                func t(_ d: Double?) -> String {
+                    guard let d, d > 0 else { return "-" }
+                    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"
+                    return f.string(from: Date(timeIntervalSince1970: d))
+                }
+                print(String(format: "    %-20@ = %@  created=%@ expires=%@",
+                             name as NSString, String(val), t(ct) as NSString, t(exp) as NSString))
+            }
         }
 
     case "notes":

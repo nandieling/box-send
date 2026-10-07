@@ -333,7 +333,9 @@ final class YemaPTAdapter: SiteAdapter {
     }
 
     func fetchDetail(detailURL: String) throws -> ReleaseInfo {
-        guard let m = HTMLUtil.firstMatch(detailURL, "torrent/detail/(\\d+)"), let id = Int(m) else {
+        guard let m = HTMLUtil.firstMatch(detailURL,
+                                          #"(?:torrent/detail/|detail%2F|detail\?id=|id=)(\d+)"#),
+              let id = Int(m) else {
             throw BoxSendError.badInput("无法解析 YemaPT 详情链接: \(detailURL)")
         }
         let resp = try client.get(site.url + "api/torrent/fetchTorrentDetail?id=\(id)", referer: detailURL)
@@ -419,6 +421,25 @@ final class YemaPTAdapter: SiteAdapter {
             return Self.detailLink(id: hit.id, base: site.url)
         }
         return nil
+    }
+
+    /// 站点提示"已存在"（不同站文案不一）
+    static func isDuplicateMessage(_ msg: String) -> Bool {
+        let m = msg.lowercased()
+        return ["已存在", "已经存在", "已经上传", "上传过了", "重复", "same torrent", "already exist", "duplicate"]
+            .contains(where: { m.contains($0) })
+    }
+
+    /// 站点返回的种子 id：兼容 data 为整数/字符串，以及 data.id / data.torrentId
+    static func torrentID(from node: Any?) -> Int? {
+        if let i = node as? Int { return i }
+        if let i = node as? Int64 { return Int(i) }
+        if let s = node as? String, let i = Int(s) { return i }
+        guard let d = node as? [String: Any] else { return nil }
+        for k in ["id", "torrentId", "torrentID", "tid"] {
+            if let v = torrentID(from: d[k]) { return v }
+        }
+        return torrentID(from: d["data"])
     }
 
     static func detailLink(id: Int, base: String) -> String {
@@ -544,7 +565,8 @@ final class YemaPTAdapter: SiteAdapter {
         // piecesHash 精确查重兜底
         if let id = try? existsByPiecesHash(torrentData) {
             return UploadOutcome(success: true, message: "站点已存在该种子（piecesHash 查重命中）",
-                                 detailURL: Self.detailLink(id: id, base: site.url))
+                                 detailURL: Self.detailLink(id: id, base: site.url),
+                                 alreadyExists: true)
         }
         let fields = try buildUploadFields(info)
         let resp = try client.postMultipart(
@@ -556,9 +578,16 @@ final class YemaPTAdapter: SiteAdapter {
         let body = String(data: resp.data, encoding: .utf8) ?? ""
         if let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
            obj["success"] as? Bool == true {
-            let id = (obj["data"] as? Int) ?? (obj["data"] as? [String: Any])?["id"] as? Int
+            let msg = (obj["message"] as? String) ?? (obj["msg"] as? String) ?? ""
+            let id = Self.torrentID(from: obj["data"]) ?? Self.torrentID(from: obj)
+            // 站点接受请求但提示同名/同 hash 种子已存在：按"已存在"处理，并尽量带上已有种子链接
+            if Self.isDuplicateMessage(msg) {
+                return UploadOutcome(success: true, message: "站点提示已存在（\(msg)）",
+                                     detailURL: id.map { Self.detailLink(id: $0, base: site.url) },
+                                     alreadyExists: true)
+            }
             if let id {
-                return UploadOutcome(success: true, message: "发布成功",
+                return UploadOutcome(success: true, message: msg.isEmpty ? "发布成功" : "发布成功（\(msg)）",
                                      detailURL: Self.detailLink(id: id, base: site.url))
             }
             return UploadOutcome(success: true, message: "发布成功（未返回种子 id）", detailURL: nil)

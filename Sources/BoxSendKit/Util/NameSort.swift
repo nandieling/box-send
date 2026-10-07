@@ -31,6 +31,29 @@ public enum NameSort {
         names.sorted { isBefore($0, $1) }
     }
 
+    /// 把移回「批量添加站点」列表的站点插入既有手动排序：
+    /// 已有元素的相对顺序（用户手动排序）保持不变；已在 order 中的站点保留原位
+    /// （卡片上原有的手动位置），其余返回站点先按名称默认序排序、再逐个插到其名称序位置
+    /// （order 为空时结果即纯名称默认序，不追加到末尾）
+    public static func reinsert(_ returnedIDs: [String], into order: [String], name: (String) -> String) -> [String] {
+        let orderSet = Set(order)
+        var out = order    // 已在排序中的站点保持原有位置（卡片上的手动位置）
+        var seen = Set<String>()
+        let toInsert = returnedIDs
+            .filter { seen.insert($0).inserted && !orderSet.contains($0) }
+            .sorted { isBefore(name($0), name($1)) }
+        for id in toInsert {
+            let n = name(id)
+            // 插到第一个「名称序排在其后」的元素之前；都不排在其后则追加到末尾
+            if let pos = out.firstIndex(where: { isBefore(n, name($0)) }) {
+                out.insert(id, at: pos)
+            } else {
+                out.append(id)
+            }
+        }
+        return out
+    }
+
     /// 名称首字母：拉丁取首字母（小写）；中文用各首字母最小拼音字二分出拼音首字母
     static func initialLetter(_ s: String) -> Character {
         if let f = s.first, f.isASCII, f.isLetter { return Character(f.lowercased()) }
@@ -54,5 +77,27 @@ public enum NameSort {
             a as CFString, b as CFString,
             CFRange(location: 0, length: a.utf16.count), [], zhLocale
         ).rawValue < 0
+    }
+}
+
+extension Array {
+    /// 按站点分组的排列先后排序：组号小的先，组内按卡片顺序；未分组的排最后并保持原顺序。
+    /// 批量 cookie/API Key 检测用它保证「先检上面的分组」，与界面看到的顺序一致。
+    public func sortedBySiteGroup(groups: [GroupConfig], id: (Element) -> String) -> [Element] {
+        let ranked = enumerated().map { (offset, element) -> (rank: (Int, Int), offset: Int, element: Element) in
+            let sid = id(element)
+            var r: (Int, Int) = (groups.count, 0)
+            for (gi, g) in groups.enumerated() {
+                if let k = g.sites.firstIndex(of: sid) {
+                    r = (gi, k)
+                    break
+                }
+            }
+            return (r, offset, element)
+        }
+        return ranked.sorted { a, b in
+            if a.rank != b.rank { return a.rank < b.rank }
+            return a.offset < b.offset
+        }.map(\.element)
     }
 }

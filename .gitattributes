@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# 二进制资源：禁止换行符归一化（fixture 与样本按字节校验）
+*.torrent binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.icns binary

@@ -111,7 +111,7 @@ final class BluAdapter: SiteAdapter {
             break
         }
         if torrentURL == nil,
-           let m = HTMLUtil.firstMatch(html, "href=[\"']([^\"']*torrents?/download/\\d+[^\"']*)[\"']", options: .caseInsensitive) {
+           let m = HTMLUtil.group(html, "href=[\"']([^\"']*torrents?/download/\\d+[^\"']*)[\"']", options: .caseInsensitive) {
             torrentURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: base)
         }
 

@@ -85,6 +85,8 @@ public final class ReseedPipeline {
     }
 
     public func run(detailURL: String, sourceSiteID: String?, opts: Options) throws -> Report {
+        // 多进程（App/CLI）共用 state.json：运行前重新加载磁盘快照，避免旧内存状态覆盖另一进程的转种记录
+        state.reload()
         // 1. 定位源站
         let site: SiteConfig
         if let id = sourceSiteID, let s = config.site(id) {
@@ -101,16 +103,17 @@ public final class ReseedPipeline {
 
         // 2. 解析详情
         var release = try adapter.fetchDetail(detailURL: detailURL)
+        // 源站详情没直接给出条目号时，从简介正文里找 Bangumi 链接（馒头动画发种要用）
+        if release.bangumi.isEmpty, let id = Bangumi.subjectID(inHTML: release.descr) {
+            release.bangumi = Bangumi.link(subjectID: id)
+        }
         var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [], sizeSkipped: false, sizeGuardWarning: nil)
 
-        // 3. 下载 .torrent，并用 bencode info.name 校正发布名（权威来源）
+        // 3. 下载 .torrent，用 bencode 校正大小；发布名保持源站详情页主标题
+        //（.torrent 的 info.name 常带站方前缀/点分文件名，不宜作为目标站主标题）
         let (torrentData, filename) = try adapter.downloadTorrentFile(release)
         report.torrentBytes = torrentData.count
         report.torrentData = torrentData
-        if let tn = Bencode.infoName(torrentData), !tn.isEmpty, tn != release.name {
-            state.note("name corrected by .torrent info.name: \(release.name) -> \(tn)")
-            release.name = tn
-        }
         release.size = Bencode.totalLength(torrentData) ?? release.size
         report.release = release
         state.note("release: \(release.summary) torrent \(filename)")
@@ -166,13 +169,31 @@ public final class ReseedPipeline {
                         let outcome = try tAdapter.upload(release, torrentData: torrentData, filename: filename)
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
-                            state.note("reseed OK \(tid) <- \(release.summary)")
-                            opts.onSiteEvent?(tid, "转种成功", true)
-                            if let u = outcome.detailURL {
-                                state.markTargetURL(site: tid, key: release.dedupKey, url: u)
-                                targetPushes.append((tid, u))
+                            if outcome.alreadyExists {
+                                // 站点提示已存在（同 hash 种子已发布）：不算新上传，UI 显示「已存在」
+                                var existing = outcome.detailURL
+                                // 各适配器自己决定怎么查（NexusPHP 没配 searchURL 会返回 nil）
+                                if existing == nil {
+                                    existing = try? tAdapter.searchExists(release)
+                                }
+                                if let u = existing {
+                                    state.markTargetURL(site: tid, key: release.dedupKey, url: u)
+                                    targetPushes.append((tid, u))
+                                    state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
+                                    opts.onSiteEvent?(tid, "已存在（跳过，推送已有种子）", true)
+                                } else {
+                                    state.note("reseed EXIST \(tid): 已存在（跳过上传），未找到已有种子链接，跳过目标站推送")
+                                    opts.onSiteEvent?(tid, "已存在（未推送：站内没检索到该种子）", true)
+                                }
                             } else {
-                                state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
+                                state.note("reseed OK \(tid) <- \(release.summary)")
+                                opts.onSiteEvent?(tid, "转种成功", true)
+                                if let u = outcome.detailURL {
+                                    state.markTargetURL(site: tid, key: release.dedupKey, url: u)
+                                    targetPushes.append((tid, u))
+                                } else {
+                                    state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
+                                }
                             }
                         } else {
                             state.note("reseed FAIL \(tid) <- \(release.summary): \(outcome.message)")
@@ -197,9 +218,17 @@ public final class ReseedPipeline {
         // 5. 推下载器（站点限速，以「站点分组」页为准）
         let upLimit = config.effectiveUpLimit(siteID: release.siteID)
         report.upLimit = upLimit
-        let reseedOk = report.outcomes.allSatisfy { $0.ok } || report.outcomes.isEmpty
-        // 推送策略：转种成功才推送（全部成功才推；纯推送不转种时 outcomes 为空，照常推）
+        let failedSites = report.outcomes.filter { !$0.ok }.map { $0.site }
+        // 推送策略：有任一目标站转种成功就推下载器（纯推送不转种时 outcomes 为空，照常推）。
+        // 之前要求「全部站点成功」才推，一处失败会让已成功的站点也拿不到下载器任务。
+        let reseedOk = report.outcomes.isEmpty || failedSites.count < report.outcomes.count
         let shouldPush = !opts.skipPush && reseedOk
+        if !opts.skipPush && !failedSites.isEmpty {
+            let list = failedSites.joined(separator: "、")
+            state.note(shouldPush
+                ? "push：\(failedSites.count) 个目标站转种失败（\(list)），不影响已成功的站点推送"
+                : "push 跳过：\(failedSites.count) 个目标站全部转种失败（\(list)）")
+        }
         if shouldPush {
             if state.isPushed(key: release.dedupKey) {
                 report.pushed = true

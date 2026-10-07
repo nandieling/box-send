@@ -27,7 +27,7 @@ final class GazelleAdapter: SiteAdapter {
     func fetchTorrentList() throws -> [ReleaseInfo] {
         let listURL = site.url + "index.php?page=torrents"
         let html = try client.fetchHTML(listURL, referer: site.url)
-        let pattern = override?.detailLinkPattern ?? "(?:torrent-details&id=[0-9a-f]{32}|download\\.php\\?id=[0-9a-f]{32})"
+        let pattern = override?.detailLinkPattern ?? Self.detailHrefPattern
         var seen = Set<String>()
         var out: [ReleaseInfo] = []
         for a in HTMLUtil.anchorText(html, hrefPattern: pattern) {
@@ -63,7 +63,7 @@ final class GazelleAdapter: SiteAdapter {
             if !t.isEmpty { name = t }
         }
         // 兜底: 名称锚点（xbtit torrent-name / 详情链接文本）
-        if name == nil, let a = HTMLUtil.anchorText(html, hrefPattern: "torrent-details&id=[0-9a-f]{32}|download\\.php\\?id=[0-9a-f]{32}").first, !a.text.isEmpty {
+        if name == nil, let a = HTMLUtil.anchorText(html, hrefPattern: Self.detailHrefPattern).first, !a.text.isEmpty {
             name = a.text
         }
 
@@ -87,7 +87,7 @@ final class GazelleAdapter: SiteAdapter {
             }
         }
 
-        let imdb = HTMLUtil.firstMatch(html, "imdb\\.com/title/(tt\\d{5,13})")
+        let imdb = HTMLUtil.group(html, "imdb\\.com/title/(tt\\d{5,13})")
         let douban = HTMLUtil.group(html, "douban\\.com/subject/(\\d+)")
 
         var size: Int64? = nil
@@ -103,7 +103,7 @@ final class GazelleAdapter: SiteAdapter {
         // .torrent 直链: download.php?id=<hash>&f=NAME.torrent（HDSpace）/ index.php?page=download&hash=
         var torrentURL: String? = nil
         var torrentName = ""
-        if let m = HTMLUtil.firstMatch(html, "href=[\"']([^\"']*download\\.php\\?id=[0-9a-f]{32}[^\"']*)[\"']", options: .caseInsensitive) {
+        if let m = HTMLUtil.group(html, "href=[\"']([^\"']*download\\.php\\?id=[0-9a-f]{32}[^\"']*)[\"']", options: .caseInsensitive) {
             let url = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: base)
             torrentURL = url
             if let f = HTMLUtil.group(url, "[&?]f=([^&\"']+)") {
@@ -112,7 +112,7 @@ final class GazelleAdapter: SiteAdapter {
                 torrentName = t
             }
         }
-        if torrentURL == nil, let m = HTMLUtil.firstMatch(html, "href=[\"']([^\"']*page=download&hash=[0-9a-f]{32}[^\"']*)[\"']", options: .caseInsensitive) {
+        if torrentURL == nil, let m = HTMLUtil.group(html, "href=[\"']([^\"']*page=download&hash=[0-9a-f]{24,64}[^\"']*)[\"']", options: .caseInsensitive) {
             torrentURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: base)
         }
 
@@ -216,20 +216,30 @@ final class GazelleAdapter: SiteAdapter {
         return (resp.data, info.torrentName)
     }
 
-    /// 经典 Gazelle 搜索端点未逐站实测；配置 searchURL 后按名称匹配
+    /// xbtit 结果行：详情链接是 <a href="index.php?page=torrent-details&amp;id=<sha1>">名称</a>
+    /// （& 转义成 &amp;，id 是 40 位 sha1，不是 32 位）
+    static let detailHrefPattern = "torrent-details&(?:amp;)?id=[0-9a-f]{24,64}|download\\.php\\?id=[0-9a-f]{24,64}|/torrent/\\d+"
+
+    /// 查重：配置 searchURL 后按名称匹配（候选词逐级放宽，同 NexusPHP）
     func searchExists(_ info: ReleaseInfo) throws -> String? {
         guard let tmpl = override?.searchURL, !tmpl.isEmpty else { return nil }
-        var q = tmpl
-        q = q.replacingOccurrences(of: "{imdb}", with: info.imdb ?? "")
-        q = q.replacingOccurrences(of: "{name}", with: info.name.urlEncoded)
-        let url = (q.hasPrefix("http") ? q : site.url + q)
-        let html = try client.fetchHTML(url, referer: site.url)
-        let noResultMarkers = ["No torrents found", "没有种子", "no results", "No torrents", "No results"]
-        if noResultMarkers.contains(where: { html.contains($0) }) { return nil }
-        let target = info.name.uppercased()
-        for a in HTMLUtil.anchorText(html, hrefPattern: "torrent-details&id=[0-9a-f]{32}|/torrent/\\d+") {
-            if a.text.uppercased().contains(target.prefix(30)) {
-                return HTMLUtil.resolveURL(a.href, against: URL(string: url)!)
+        let names: [String] = [info.name]
+            + (info.name.count > 32 ? [String(info.name.prefix(32))] : [])
+            + (info.subtitle.count >= 6 && info.subtitle != info.name ? [info.subtitle] : [])
+        var seen = Set<String>()
+        for name in names where !seen.contains(name) {
+            seen.insert(name)
+            var q = tmpl
+            q = q.replacingOccurrences(of: "{imdb}", with: info.imdb ?? "")
+            q = q.replacingOccurrences(of: "{name}", with: name.urlEncoded)
+            let url = (q.hasPrefix("http") ? q : site.url + q)
+            let html = try client.fetchHTML(url, referer: site.url)
+            let noResultMarkers = ["No torrents found", "没有种子", "no results", "No torrents", "No results"]
+            if noResultMarkers.contains(where: { html.lowercased().contains($0.lowercased()) }) { continue }
+            if let hit = NexusPHPAdapter.searchNameInResults(html: html, releaseName: name,
+                                                            base: URL(string: url)!,
+                                                            hrefPattern: Self.detailHrefPattern) {
+                return hit.href
             }
         }
         return nil
@@ -296,6 +306,14 @@ final class GazelleAdapter: SiteAdapter {
         return nil
     }
 
+    /// xbtit（HD-Space 等）用 info_hash 的 40 位 hex 当种子 id：
+    /// 响应里不给详情链接时也能自己拼出详情页，「已存在」时同理（同一 info hash 才算重复）
+    func infoHashDetailURL(_ torrentData: Data) -> String? {
+        guard (override?.detailLinkPattern ?? "torrent-details").contains("torrent-details"),
+              let hash = Bencode.infoHash(torrentData) else { return nil }
+        return site.url + "index.php?page=torrent-details&id=" + hash
+    }
+
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
         let uploadURL = site.url + uploadAction
         let page = try client.fetchHTML(uploadURL, referer: site.url)
@@ -310,25 +328,31 @@ final class GazelleAdapter: SiteAdapter {
 
         let finalURL = resp.finalURL.lowercased()
         let body = String(data: resp.data, encoding: .utf8) ?? ""
+        let hashURL = infoHashDetailURL(torrentData)
+        // 响应正文里的详情链接（有些皮肤用 meta refresh / JS 跳转）
+        let bodyLink: String? = HTMLUtil.group(
+            body, "href=[\"']([^\"']*torrent-details&(?:amp;)?id=[0-9a-f]{24,64}[^\"']*)[\"']")
+            .map { HTMLUtil.resolveURL(HTMLUtil.decodeEntities($0), against: URL(string: uploadURL)!) }
         // 成功: 跳转到 torrent-details
-        if let m = HTMLUtil.firstMatch(finalURL, "(?:torrent-details&id=[0-9a-f]{32}|/torrent/\\d+|/torrents/\\d+)") {
+        if let m = HTMLUtil.firstMatch(finalURL, "(?:torrent-details&(?:amp;)?id=[0-9a-f]{24,64}|/torrent/\\d+|/torrents/\\d+)") {
             let u = URL(string: uploadURL)!
             return UploadOutcome(success: true, message: "发布成功",
                                  detailURL: HTMLUtil.resolveURL(m, against: u))
         }
         if resp.status == 200, body.contains("Your torrent was added") || body.contains("发布成功") {
-            return UploadOutcome(success: true, message: "发布成功", detailURL: nil)
+            return UploadOutcome(success: true, message: "发布成功", detailURL: bodyLink ?? hashURL)
         }
         var errMsg = "HTTP \(resp.status) 未识别的返回"
         if let e = HTMLUtil.group(body, "<span[^>]*class=\"[^\"]*error[^\"]*\"[^>]*>([\\s\\S]*?)</span>", group: 1) {
             let t = HTMLUtil.stripTags(e).trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty { errMsg = t }
         }
-        if let m = HTMLUtil.firstMatch(body, "(?:already exists|已存在)[^<]{0,60}") { errMsg = m }
+        if let m = HTMLUtil.firstMatch(body, "(?:already exist(?:s|ed)?|已存在)[^<]{0,60}") { errMsg = m }
         if let p = dumpDebugHTML(body) { errMsg += "（页面已存 \(p)）" }
         let msg = HTMLUtil.stripTags(errMsg)
-        if msg.contains("已存在") || msg.lowercased().contains("already exists") {
-            return UploadOutcome(success: true, message: "站点已存在该种子（查重兜底命中）", detailURL: nil)
+        if msg.contains("已存在") || msg.lowercased().contains("already exist") {
+            return UploadOutcome(success: true, message: "站点已存在该种子（查重兜底命中）",
+                                 detailURL: bodyLink ?? hashURL, alreadyExists: true)
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
     }

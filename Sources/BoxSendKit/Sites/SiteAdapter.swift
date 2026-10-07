@@ -30,9 +30,12 @@ public struct UploadOutcome {
     public var success: Bool
     public var message: String
     public var detailURL: String?
-    public init(success: Bool, message: String, detailURL: String?) {
+    /// 站点提示该种子已存在（查重兜底命中）：算成功，但 UI 应显示「已存在」而非「转种成功」
+    public var alreadyExists: Bool
+    public init(success: Bool, message: String, detailURL: String?, alreadyExists: Bool = false) {
         self.success = success
         self.message = message
         self.detailURL = detailURL
+        self.alreadyExists = alreadyExists
     }
 }

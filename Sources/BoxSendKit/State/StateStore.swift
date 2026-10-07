@@ -6,6 +6,17 @@ import Foundation
 /// - targetURLs: 目标站 -> dedupKey -> 转种后的新种子详情页（用于推送/重试目标站 torrent）
 /// - lastGistSync: 上次 gist 同步时间
 public final class StateStore {
+    /// 单站 cookie 检测结果（持久化：同步导入时判断本地 cookie 是否「已检测为失效」，
+    /// 防止备份中的旧值覆盖本地有效 cookie、重启后判断丢失）
+    public struct CookieCheckRec: Codable {
+        public var ok: Bool
+        public var message: String
+        public var time: Double
+        public init(ok: Bool, message: String, time: Double) {
+            self.ok = ok; self.message = message; self.time = time
+        }
+    }
+
     struct Snapshot: Codable {
         var uploaded: [String: [String: Double]] = [:]
         var pushed: [String: String] = [:]
@@ -14,6 +25,7 @@ public final class StateStore {
         var notes: [String] = []
         var rssSeen: [String: [String: Double]] = [:]      // 源站 -> rss guid -> 时间戳（已处理的新种）
         var importedZips: [String: Double] = [:]     // 已导入的 PTD_backup zip 文件名 -> 时间戳
+        var cookieChecks: [String: CookieCheckRec] = [:]   // siteID -> 最近一次 cookie 检测结果
 
         init() {}
 
@@ -27,6 +39,7 @@ public final class StateStore {
             notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
             rssSeen = try c.decodeIfPresent([String: [String: Double]].self, forKey: .rssSeen) ?? [:]
             importedZips = try c.decodeIfPresent([String: Double].self, forKey: .importedZips) ?? [:]
+            cookieChecks = try c.decodeIfPresent([String: CookieCheckRec].self, forKey: .cookieChecks) ?? [:]
         }
     }
 
@@ -45,6 +58,16 @@ public final class StateStore {
             snapshot = s
         } else {
             snapshot = Snapshot()
+        }
+    }
+
+    /// 从磁盘重新加载（多进程共用 state.json：CLI 与 App 各自持有内存快照，
+    /// 运行流水线前 reload 可避免旧快照覆盖另一进程写入的记录）
+    public func reload() {
+        lock.lock(); defer { lock.unlock() }
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+           let s2 = try? JSONDecoder().decode(Snapshot.self, from: data) {
+            snapshot = s2
         }
     }
 
@@ -113,6 +136,27 @@ public final class StateStore {
         snapshot.lastGistSync = t
         saveLocked()
     }
+    public func cookieCheck(_ siteID: String) -> CookieCheckRec? {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.cookieChecks[siteID]
+    }
+    public func setCookieCheck(siteID: String, ok: Bool, message: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.cookieChecks[siteID] = CookieCheckRec(ok: ok, message: message, time: Date().timeIntervalSince1970)
+        saveLocked()
+    }
+    public func clearCookieCheck(_ siteID: String) {
+        lock.lock(); defer { lock.unlock() }
+        if snapshot.cookieChecks.removeValue(forKey: siteID) != nil { saveLocked() }
+    }
+    public func clearAllCookieChecks() {
+        lock.lock(); defer { lock.unlock() }
+        if !snapshot.cookieChecks.isEmpty {
+            snapshot.cookieChecks = [:]
+            saveLocked()
+        }
+    }
+
     public func note(_ s: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.notes.append("\(ISO8601Time.stamp()): \(s)")

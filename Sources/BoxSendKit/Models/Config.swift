@@ -12,6 +12,7 @@ public enum SiteFramework: String, Codable {
     case tnode = "TNode"
     case haidan = "Haidan"
     case yemapt = "YemaPT"
+    case discuz = "Discuz"
     case xbtit = "XBTIT"
     case custom = "custom"
 }
@@ -27,9 +28,11 @@ public struct SiteConfig: Codable {
     public var managed: Bool
     /// 详情/列表/搜索入口覆盖（M1 主要靠 NexusPHP 默认值 + 这里微调）
     public var overrides: SiteOverride?
+    /// API Key 连接的站点（如 M-Team 馒头）：不走 cookie 同步，用 API Key 登录/下载/上传
+    public var apiKey: String?
 
     public init(id: String, name: String, url: String, framework: SiteFramework,
-                enabled: Bool, managed: Bool = false, overrides: SiteOverride? = nil) {
+                enabled: Bool, managed: Bool = false, overrides: SiteOverride? = nil, apiKey: String? = nil) {
         self.id = id
         self.name = name
         self.url = url
@@ -37,6 +40,7 @@ public struct SiteConfig: Codable {
         self.enabled = enabled
         self.managed = managed
         self.overrides = overrides
+        self.apiKey = apiKey
     }
 
     public init(from decoder: Decoder) throws {
@@ -50,22 +54,26 @@ public struct SiteConfig: Codable {
         // 旧配置无 managed 字段：已启用的站视为已添加（9 个优先站默认进列表）
         managed = try c.decodeIfPresent(Bool.self, forKey: .managed) ?? enabledVal
         overrides = try c.decodeIfPresent(SiteOverride.self, forKey: .overrides)
+        apiKey = try c.decodeIfPresent(String.self, forKey: .apiKey)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, url, framework, enabled, managed, overrides
+        case id, name, url, framework, enabled, managed, overrides, apiKey
     }
 }
 
 /// 每站覆盖配置：把框架通用行为收敛到站点差异。
 public struct SiteOverride: Codable {
     var detailLinkPattern: String?      // 正则，匹配详情链接
+    var torrentLinkPattern: String?     // 正则，匹配 .torrent 下载链接（非 download.php 型站点，如 Unit3D /torrents/download/123）
     var uploadPath: String?             // 上传页地址，如 "upload.php"
     /// 真正的 POST 动作地址（中文 NexusPHP 家族是 "takeupload.php"）；缺省 = uploadPath
     var uploadActionPath: String?
     var titleField: String?             // 默认 "title"；中文站家族为 "name"
     /// 标题来源：reseed（默认，解析出的发布名）| torrentName（.torrent 文件名）| torrentNameDotted（文件名且空格换 .）
     var titleMode: String?
+    /// 解析详情标题后剥离的站名后缀（城市 "<title>" 带品牌后缀）
+    var titleStrip: String?
     var descrField: String?             // 默认 "descr"
     var imdbField: String?              // 默认 "imdbid"；中文站家族为 "url"，TTG 为 "imdb_c"
     /// imdb 字段值模板，{imdb} = tt 号；默认 "{imdb}"。url 型站点用 "http://www.imdb.com/title/{imdb}/"
@@ -73,8 +81,16 @@ public struct SiteOverride: Codable {
     var doubanField: String?            // 如 "url_douban" / "douban_id" / "douban"
     /// 豆瓣字段值模板，{douban} = 豆瓣号；默认 "{douban}"
     var doubanValueTemplate: String?
+    /// TMDB 链接字段（个别站必填，如 hddolby "tmdb_url"）；值 = 源站简介解析出的 TMDB 规范链接
+    var tmdbField: String?
+    /// 海报图 URL 字段（源简介首图/海报 div 提取），如 cmct "url_poster"
+    var posterField: String?
+    /// 简介字段内容风格："reseedSource" = 转种来源文本（cmct 的 descr 实为"附加信息"）
+    var descrStyle: String?
     var categoryField: String?          // 默认 "category"；中文站家族为 "type"
     var fileField: String?              // 默认 "file"；CHDBits 为 "torrentfile"
+    /// 截图字段（NexusPHP 个别站要求截图 URL 文本域，每行一个）
+    var screenshotField: String?
     var searchURL: String?              // 查重用，{imdb}/{name} 占位；nil = 关闭自动查重
     /// 分类映射：movie/series/anime/documentary/music/other，或 质量型站点用 "<kind>/<profile>"
     /// profile 取值：8k-bd/8k/uhd-bd/2160p/remux/bluray/1440p/1080p/1080i/720p/dvd/sd
@@ -107,15 +123,30 @@ public struct SiteOverride: Codable {
     var subtitleField: String?
     /// 简介格式：bbcode（中文站默认）| html
     var descrFormat: String?
+    /// 简介开头加"转载自<源站>，感谢发布者。"（织梦等站要求注明转种来源）
+    var descrSourcePrefix: Bool?
+    /// 转种来源里写的源站名（默认用站点显示名；如 LuckPT 显示名为"幸运"时改写品牌名）
+    var sourceLabel: String?
     /// 标签复选框字段名（如 "option_sel[]"）；值 = 规范标签 -> 站点 ID（各站值类型不同：数字或字母 token）
     var tagField: String?
     var tagMap: [String: String]?
     /// 独立复选框标签（个别站的标签是若干独立 checkbox，命中时提交 字段名=yes）：规范标签 -> 字段名
     var tagCheckboxes: [String: String]?
+    /// 标签型下拉（选项值就是文案，如城市 HDCity 的 tag1ing/tag2ing）：按规范标签文案依次填值
+    var tagSelectFields: [String]?
+    /// 两步上传（城市 HDCity：第一步只提交种子文件+站点 token，站点回跳到元信息表单页，第二步提交元信息）
+    var uploadTwoStep: Bool?
+    /// 发布成功后从跳转 URL 取新种子 id 的正则（捕获组 = 数字 id，如城市 "/t-(\\d+)"）；
+    /// 详情链接按 site.url + "details.php?id=" + id 组装
+    var successIDPattern: String?
     /// 规范标签: chinese_sub / hdr10 / hdr10plus / dovi / dtsx / atmos / forbid / limited
     /// 制作组下拉字段（如 "team_sel"）；未知组 -> teamOtherValue
     var teamField: String?
     var teamOtherValue: Int?
+    /// API Key 鉴权风格："mteam"（默认，x-api-key 头）| "peergo"（Bearer 头，肉丝）
+    var apiKeyStyle: String?
+    /// 制作组下拉自动选「其他/其它/Other/个人原创」（转种没有本站团队，默认开启；false 关闭）
+    var teamOtherFallback: Bool?
     /// 制作组名（出现在种子名 - 后）-> 站点 team ID
     var teamPatterns: [String: Int]?
     /// 地区字段（个别站的"制作组"下拉实为产地地区，如 Pterclub）；按源简介"产地"匹配
@@ -125,6 +156,10 @@ public struct SiteOverride: Codable {
     var regionOtherValue: Int?
     /// RSS 地址模板（NexusPHP 默认 "passkey.php?rss={passkey}"）
     var rssPath: String?
+    /// API 站点：API 根地址（如 M-Team "https://api.m-team.cc"）；非 nil 时走 Unit3DAdapter
+    public var apiBase: String?
+    /// API 站点：是否用 API Key 连接（不走 cookie 同步）
+    public var usesAPIKey: Bool?
 }
 
 extension SiteOverride {
@@ -132,17 +167,23 @@ extension SiteOverride {
     func merged(over base: SiteOverride) -> SiteOverride {
         var out = base
         if let v = detailLinkPattern { out.detailLinkPattern = v }
+        if let v = torrentLinkPattern { out.torrentLinkPattern = v }
         if let v = uploadPath { out.uploadPath = v }
         if let v = uploadActionPath { out.uploadActionPath = v }
         if let v = titleField { out.titleField = v }
         if let v = titleMode { out.titleMode = v }
+        if let v = titleStrip { out.titleStrip = v }
         if let v = descrField { out.descrField = v }
         if let v = imdbField { out.imdbField = v }
         if let v = imdbValueTemplate { out.imdbValueTemplate = v }
         if let v = doubanField { out.doubanField = v }
         if let v = doubanValueTemplate { out.doubanValueTemplate = v }
+        if let v = tmdbField { out.tmdbField = v }
+        if let v = posterField { out.posterField = v }
+        if let v = descrStyle { out.descrStyle = v }
         if let v = categoryField { out.categoryField = v }
         if let v = fileField { out.fileField = v }
+        if let v = screenshotField { out.screenshotField = v }
         if let v = searchURL { out.searchURL = v }
         if let v = extraUploadFields { out.extraUploadFields = v }
         if let v = forbidReseedMarkers { out.forbidReseedMarkers = v }
@@ -152,6 +193,8 @@ extension SiteOverride {
         if let v = tagField { out.tagField = v }
         if let v = teamField { out.teamField = v }
         if let v = teamOtherValue { out.teamOtherValue = v }
+        if let v = teamOtherFallback { out.teamOtherFallback = v }
+        if let v = apiKeyStyle { out.apiKeyStyle = v }
         if let v = categoryMap { out.categoryMap = base.categoryMap?.merging(v) { _, new in new } }
         if let v = categoryStringMap { out.categoryStringMap = base.categoryStringMap?.merging(v) { _, new in new } }
         if let v = ajaxCategoryPath { out.ajaxCategoryPath = v }
@@ -173,11 +216,18 @@ extension SiteOverride {
         }
         if let v = tagMap { out.tagMap = base.tagMap?.merging(v) { _, new in new } }
         if let v = tagCheckboxes { out.tagCheckboxes = base.tagCheckboxes?.merging(v) { _, new in new } }
+        if let v = tagSelectFields { out.tagSelectFields = v }
+        if let v = uploadTwoStep { out.uploadTwoStep = v }
+        if let v = successIDPattern { out.successIDPattern = v }
+        if let v = descrSourcePrefix { out.descrSourcePrefix = v }
+        if let v = sourceLabel { out.sourceLabel = v }
         if let v = teamPatterns { out.teamPatterns = base.teamPatterns?.merging(v) { _, new in new } }
         if let v = regionField { out.regionField = v }
         if let v = regionOtherValue { out.regionOtherValue = v }
         if let v = regionPatterns { out.regionPatterns = base.regionPatterns?.merging(v) { _, new in new } }
         if let v = rssPath { out.rssPath = v }
+        if let v = apiBase { out.apiBase = v }
+        if usesAPIKey ?? false { out.usesAPIKey = true }
         return out
     }
 }

@@ -6,7 +6,12 @@ public enum SiteRegistry {
     public static func adapter(for site: SiteConfig, client: HTTPClient, debugDir: String? = nil) -> SiteAdapter {
         switch site.framework {
         case .nexusPHP:
-            return NexusPHPAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
+            let es = effectiveSite(site)
+            // 肉丝这类 PeerGo 引擎站：上传页是 SPA，发种只能走 JSON API
+            if es.overrides?.apiKeyStyle == "peergo" {
+                return PeerGoAdapter(site: es, client: client, debugDir: debugDir)
+            }
+            return NexusPHPAdapter(site: es, client: client, debugDir: debugDir)
         case .blu:
             return BluAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .gazelle, .gazelleJSONAPI, .xbtit:
@@ -17,22 +22,29 @@ public enum SiteRegistry {
             return HaidanAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .yemapt:
             return YemaPTAdapter(site: site, client: client, debugDir: debugDir)
+        case .discuz:
+            return DiscuzAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .unit3D, .luminance, .avistaz, .custom:
+            let es = effectiveSite(site)
+            if let ov = es.overrides, ov.apiBase != nil {
+                // API Key 站点（M-Team 等）：走 Unit3D API 适配器
+                return Unit3DAdapter(site: es, client: client, debugDir: debugDir)
+            }
             // 长尾站（M3）：暂无专属适配器，回退 NexusPHP 通用逻辑（源站解析尽力而为）
-            return NexusPHPAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
+            return NexusPHPAdapter(site: es, client: client, debugDir: debugDir)
         default:
             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器")
         }
     }
 
     /// 配置层 overrides 与内置表合并（内置为底，配置优先；旧配置缺的新字段自动用内置值）
+    /// 配置里整段 overrides 缺失时也应用内置值（如馒头未带 overrides 仍需 API Key 标识）
     public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {
-        guard let cfgOv = site.overrides,
-              let builtin = prioritySites.first(where: { $0.id == site.id })?.overrides else {
+        guard let builtin = prioritySites.first(where: { $0.id == site.id })?.overrides else {
             return site
         }
         var s = site
-        s.overrides = cfgOv.merged(over: builtin)
+        s.overrides = (site.overrides ?? SiteOverride()).merged(over: builtin)
         return s
     }
 
@@ -78,7 +90,7 @@ public enum SiteRegistry {
         SiteConfig(id: "ggpt", name: "GGPT", url: "https://www.gamegamept.com/", framework: .nexusPHP, enabled: false, overrides: .ggpt),
         SiteConfig(id: "hdarea", name: "高清视界", url: "https://hdarea.club/", framework: .nexusPHP, enabled: false, overrides: .hdarea),
         SiteConfig(id: "hdbao", name: "海德堡", url: "https://hdbao.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "hddolby", name: "杜比", url: "https://www.hddolby.com/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "hddolby", name: "杜比", url: "https://www.hddolby.com/", framework: .nexusPHP, enabled: false, overrides: .hddolby),
         SiteConfig(id: "hdfans", name: "红豆饭", url: "http://hdfans.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "qilin", name: "麒麟", url: "https://www.hdkyl.in/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdtime", name: "时光", url: "https://hdtime.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
@@ -128,8 +140,8 @@ public enum SiteRegistry {
         SiteConfig(id: "ubits", name: "优堡", url: "https://ubits.club/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "ultrahd", name: "UltraHD", url: "https://ultrahd.net/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "wtsakura", name: "冬樱", url: "https://wintersakura.net/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "xingtan", name: "杏林", url: "https://xingtan.one/", framework: .nexusPHP, enabled: false, overrides: .xingtan),
-        SiteConfig(id: "zmpt", name: "织梦", url: "https://zmpt.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "xingtan", name: "杏坛", url: "https://xingtan.one/", framework: .nexusPHP, enabled: false, overrides: .xingtan),
+        SiteConfig(id: "zmpt", name: "织梦", url: "https://zmpt.cc/", framework: .nexusPHP, enabled: false, overrides: .zmpt),
         SiteConfig(id: "u2", name: "幼儿圈", url: "http://u2.dmhy.org/", framework: .nexusPHP, enabled: false, overrides: .u2),
         // --- TNode（REST API + SPA） ---
         SiteConfig(id: "zhuque", name: "朱雀", url: "https://zhuque.in/", framework: .tnode, enabled: false, overrides: nil),
@@ -152,7 +164,8 @@ public enum SiteRegistry {
         SiteConfig(id: "tu88", name: "TU88", url: "https://pt.tu88.men/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "vclib", name: "VC-Lib", url: "https://pt.vclib.online/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "ptlao", name: "忘年桥", url: "https://ptlao.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "rousi", name: "肉丝", url: "https://rousi.pro/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "rousi", name: "肉丝", url: "https://rousi.pro/", framework: .nexusPHP, enabled: false, overrides: .rousi),
+        SiteConfig(id: "yzyy", name: "YZYY", url: "https://www.yzyy.org/", framework: .discuz, enabled: false, overrides: SiteOverride(uploadPath: "plugin.php?id=dz_seed:publish")),
         SiteConfig(id: "siqi", name: "思齐", url: "https://si-qi.xyz/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "sunny", name: "阳光", url: "https://sunnypt.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "momentpt", name: "瞬间", url: "https://www.momentpt.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
@@ -161,10 +174,12 @@ public enum SiteRegistry {
         SiteConfig(id: "tokyo", name: "Tokyo", url: "https://www.tokyo-manga.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "xdy", name: "修道院", url: "https://xdypt.vip/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "xingwan", name: "星湾", url: "https://xingwan.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "hdcity", name: "城市", url: "https://hdcity.city/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "hdcity", name: "城市", url: "https://hdcity.city/", framework: .nexusPHP, enabled: false, overrides: .hdcity),
+        SiteConfig(id: "fenghuang", name: "凤凰", url: "https://pt.521.best/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "generationfree", name: "Generation-Free", url: "https://generation-free.org/", framework: .nexusPHP, enabled: false, overrides: nil),
         // --- Unit3D 家族（暂走 NexusPHP 通用逻辑，M3 待专属适配器） ---
-        SiteConfig(id: "mteam", name: "馒头", url: "https://kp.m-team.cc/", framework: .unit3D, enabled: false, overrides: nil),
+        SiteConfig(id: "mteam", name: "馒头", url: "https://kp.m-team.cc/", framework: .unit3D, enabled: false, overrides: .mteam),
+        SiteConfig(id: "oldtoons", name: "Oldtoons", url: "https://oldtoons.world/", framework: .unit3D, enabled: false, overrides: .oldtoons),
         SiteConfig(id: "milkie", name: "奶昔", url: "https://milkie.cc/", framework: .unit3D, enabled: false, overrides: nil),
         SiteConfig(id: "ptneko", name: "超科学PT喵", url: "https://ptneko.com/", framework: .unit3D, enabled: false, overrides: nil),
         SiteConfig(id: "anthelion", name: "Anthelion", url: "https://anthelion.me/", framework: .unit3D, enabled: false, overrides: nil),

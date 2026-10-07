@@ -1,0 +1,762 @@
+
+
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="generator" content="NexusPHP">
+    <title>SSD :: 发布 - Powered by NexusPHP</title>
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link rel="search" type="application/opensearchdescription+xml" title="SSD Torrents" href="opensearch.php">
+    <link rel="stylesheet" href="static/bootstrap-icons-1.10.3/bootstrap-icons.css">
+    <link rel="stylesheet" href="styles/sprites.css?26100101" type="text/css">
+    <link rel="stylesheet" href="pic/forum_pic/chs/forumsprites.css?26100101" type="text/css">
+    <link rel="stylesheet" href="styles/base.css?26100101" type="text/css">
+    <link rel="stylesheet" href="styles/common.css?26100101" type="text/css">
+    <link rel="stylesheet" href="styles/curtain_imageresizer.css?26100101" type="text/css">
+    <link rel="stylesheet" href="styles/corner.css?26100101" type="text/css">
+    
+    <link rel="stylesheet" href="styles/attachments.css?26100101" type="text/css">
+<style>
+    ul.torrent-tag-row {
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        padding: 0;
+    }
+    ul.torrent-tag-row li {
+        display: inline-block;
+        margin: 0;
+    }
+    p.upnote {
+        margin: 4px 0 0 0;
+        color: #999;
+        /*font-style: italic;*/
+    }
+</style>
+
+    <style>
+            </style>
+
+    <link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php">
+    <script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+    <script type="text/javascript" src="js/lodash-4.17.15.min.js"></script>
+    <script type="text/javascript" src="js/common.js?26100101"></script>
+    <script type="text/javascript" src="js/curtain_imageresizer.js?26100101"></script>
+    <script type="text/javascript" src="js/domLib.js?26100101"></script>
+    <script type="text/javascript" src="js/fadomatic.js?26100101"></script>
+    <script type="text/javascript" src="js/corner.js?26100101"></script>
+    </head>
+<body>
+
+    
+<script type="text/javascript">
+    function bannerLoadFailedHandle() {
+        const header = document.getElementsByClassName('banner-header')[0];
+        header.className = [header.className, 'hide'].join(' ');
+    }
+</script>
+
+<div
+            class="banner-header"
+    >
+    <a class="banner"
+                    href="https://springsunday.net/forums.php?action=viewtopic&topicid=22714&page=p456615#pid456615" rel="noopener"
+            >
+                    <img
+                class="banner-image"
+                                    src="https://static.hdcmct.org/cmct-images/2026/08/12/JtYOBd.png"
+                                alt="banner image"
+                title="美图 # 69"
+                onerror="javascript:bannerLoadFailedHandle()"
+            />
+            </a>
+</div>
+
+<div class="banner-header">
+    <div class="head-old">
+                    <div class="logo_img">
+                <img src="pic/logo/logo.png" alt="SSD" title="SSD - 柳暗花明又一“春”" />
+            </div>
+        
+        <a class="header-donate-pic" href="donate.php">
+                    </a>
+
+        <div class="header-other">
+                                                </div>
+    </div>
+</div>
+
+    <main class="mainouter">
+        <div id="nav_block" class="text">
+            <div id="menu_block" class="main embedded">
+                <div id="nav"><ul id="mainmenu" class="menu"><li><a href="index.php">首&nbsp;&nbsp;页</a></li><li><a href="forums.php">论&nbsp;&nbsp;坛</a></li><li><a href="torrents.php?cat501=1">电&nbsp;&nbsp;影</a></li><li><a href="torrents.php?cat502=1">剧&nbsp;&nbsp;集</a></li><li class="pmenu"><a href="torrents.php">综&nbsp;&nbsp;合&nbsp;&nbsp;<i class="bi bi-caret-down-fill"></i></a><ul class="submenu">
+        <li><a href="torrents.php?cat503=1">纪录</a></li>
+        <li><a href="torrents.php?cat505=1">综艺</a></li>
+        <li><a href="torrents.php?cat506=1">体育</a></li>
+        <li><a href="torrents.php?cat507=1&cat508=1">音乐</a></li>
+        <li><a href="torrents.php?cat510=1">有声</a></li>
+        <li><a href="torrents.php?team1=1&medium1=1">Blu-ray</a></li>
+        <li><a href="torrents.php?team1=1&medium2=1">MiniBD</a></li>
+        <li><a href="torrents.php?team2=1">Oldboys</a></li>
+        </ul></li><li><a href="rescue.php">保&nbsp;&nbsp;种</a></li><li><a href="requests.php">悬&nbsp;&nbsp;赏</a></li><li><a href="offers.php">候&nbsp;&nbsp;选</a></li><li class="selected"><a href="upload.php">发&nbsp;&nbsp;布</a></li><li><a href="subtitles.php">字&nbsp;&nbsp;幕</a></li><li><a href="topten.php">排&nbsp;行&nbsp;榜</a></li><li class="pmenu"><a href="javascript:;">帮&nbsp;&nbsp;助&nbsp;&nbsp;<i class="bi bi-caret-down-fill"></i></a><ul class="submenu"><li><a href="chat.php">AI 问答</a></li><li><a href="rules.php">规&nbsp;&nbsp;则</a></li><li><a href="faq.php">常见问题</a></li><li><a href="contactstaff.php">管&nbsp;理&nbsp;组</a></li><li><a href="https://wiki.hdcmct.org/zh/Rule/%E4%B8%8A%E4%BC%A0%E8%A7%84%E5%88%99" target="_blank">Wiki</a></li></ul></li></ul></div>            </div>
+
+            <div id="info_block" style="padding: 4px 10px; line-height: 1.8;">
+                <div style="display: inline-block; width: 66%; width: calc(70% - 20px); text-align: left;">
+                    <span>
+                        欢迎回来,
+                        <span class="nowrap"><a  href="userdetails.php?id=102133"><b><span class="UserClass_Name Elite_Name">nandieling</span></b></a></span>                        [<a href="usercp.php">控制面板</a>]
+                                                                        [<a href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0">收藏</a>]
+                        [<a href="torrents.php?inclbookmarked=3&amp;allsec=1&amp;incldead=0">预订</a>]
+                        [<a href="mybonus.php" title="茉莉: 218,936.3">茉莉: 218.9K</a>]
+                        [<a href="badges.php">徽章</a>]
+                        [<a href="blackjack.php">21点</a>]
+                        [<a href="invite.php">邀请: 0</a>]
+                        [<a href="myfls.php">免流: 7</a>]
+                        [<a href="myrfs.php">返还</a>]
+
+                        <br />
+                        <font class="color_ratio">分享率: </font> 1.940                        <font class='color_uploaded'>上传量: </font> 2.187 TB                        <font class='color_downloaded'>下载量: </font> 1.127 TB                        <font class="color_bonus">做种积分:</font> <span title="954,533.1">954.5K</span>
+                        <font class='color_active'>当前活动: </font>
+                        <img class="arrowup" alt="Torrents seeding" title="当前做种" src="pic/trans.gif" />128                        <img class="arrowdown" alt="Torrents leeching" title="当前下载" src="pic/trans.gif" />0
+                                                    <font class="color_rank">流量排名:</font>&nbsp;15459                                                                                        <font class="color_downloaded">&darr;1</font>
+                                                    
+                                            </span>
+                </div>
+
+                <div class="bottom" style="display: inline-block; width: 30%; text-align: right;">
+                    <span>
+                                                当前时间: 12:20                        [<a href="logout.php?auth=2dfe0166ff28c5f485667b6cda64f30b38147141" onclick="return confirm('你确定要退出吗？')">退出</a>]
+                        <br />
+                                                <a href="messages.php?action=viewmailbox&amp;box=-2"><img class="inbox" src="pic/trans.gif" alt="inbox" title="系统短讯&nbsp;(无新短讯)" /></a> 41                        <a href="messages.php"><img class="inbox" src="pic/trans.gif" alt="inbox" title="收件箱&nbsp;(无新短讯)" /></a> 2                        <!--<a href="messages.php?action=viewmailbox&amp;box=-1"><img class="sentbox" alt="sentbox" title="发件箱" src="pic/trans.gif" /></a> 0-->
+                        <a href="friends.php"><img class="buddylist" alt="Buddylist" title="社交名单" src="pic/trans.gif" /></a>
+                        <a href="getrss.php"><img class="rss" alt="RSS" title="获取RSS" src="pic/trans.gif" /></a>
+                    </span>
+                </div>
+            </div>
+        </div> <!-- nav_block -->
+
+        <div id="outer" align="center" class="outer" style="padding: 20px;">
+                                        
+                            
+                
+                
+                
+                
+                
+                                                    
+                            
+            
+            
+            
+
+<div class="main">
+<form id="compose" enctype="multipart/form-data" action="/takeupload.php" method="post" name="upload">
+	<p align="center">红星号(<font color="red">*</font>)标记的区域必须填写</p>
+    <table cellspacing="0" cellpadding="5">
+        <tr>
+            <td class="colhead" colspan="2" align="center">
+                Tracker服务器的URL是: <b>https://on.springsunday.net/announce.php</b>
+                                            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">
+                种子文件<font color="red">*</font>
+            </td>
+            <td class="rowfollow">
+                <input type="file" class="file" id="torrent" name="file" onchange="getname()" required>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">
+                基本信息<font color="red">*</font>
+            </td>
+            <td class="rowfollow">
+                <select name="type" id="browsecat" >\n<option value="0">请选择</option><option value="501" >Movies(电影)</option>
+<option value="502" >TV Series(剧集)</option>
+<option value="503" >Docs(纪录)</option>
+<option value="505" >TV Shows(综艺)</option>
+<option value="506" >Sports(体育)</option>
+<option value="507" >MV(音乐视频)</option>
+<option value="508" >Music(音乐)</option>
+<option value="510" >Audio(有声)</option>
+<option value="509" >Other(其他类型)</option>
+</select>
+&nbsp;
+                                    <b>地区</b>&nbsp;<select style="max-width: 80px;" name="source_sel" >
+<option value="0">请选择</option>
+<option value="1">Mainland(大陆)</option>
+<option value="2">Hongkong(香港)</option>
+<option value="3">Taiwan(台湾)</option>
+<option value="4">West(欧美)</option>
+<option value="5">Japan(日本)</option>
+<option value="6">Korea(韩国)</option>
+<option value="7">India(印度)</option>
+<option value="8">Russia(俄国)</option>
+<option value="9">Thailand(泰国)</option>
+<option value="99">Other(其他地区)</option>
+</select>&nbsp;
+<b>格式</b>&nbsp;<select style="max-width: 80px;" name="medium_sel" >
+<option value="0">请选择</option>
+<option value="1">Blu-ray</option>
+<option value="4">Remux</option>
+<option value="2">MiniBD</option>
+<option value="6">BDRip</option>
+<option value="7">WEB-DL</option>
+<option value="8">WEBRip</option>
+<option value="5">HDTV</option>
+<option value="9">TVRip</option>
+<option value="3">DVD</option>
+<option value="10">DVDRip</option>
+<option value="11">CD</option>
+<option value="99">Other</option>
+</select>&nbsp;
+<b>分辨率</b>&nbsp;<select style="max-width: 80px;" name="standard_sel" >
+<option value="0">请选择</option>
+<option value="1">2160p</option>
+<option value="2">1080p</option>
+<option value="3">1080i</option>
+<option value="4">720p</option>
+<option value="5">SD</option>
+<option value="99">Other</option>
+</select>&nbsp;
+<b>视频编码</b>&nbsp;<select style="max-width: 80px;" name="codec_sel" >
+<option value="0">请选择</option>
+<option value="1">H.265/HEVC</option>
+<option value="2">H.264/AVC</option>
+<option value="3">VC-1</option>
+<option value="4">MPEG-2</option>
+<option value="5">AV1</option>
+<option value="99">Other</option>
+</select>&nbsp;
+<b>音频编码</b>&nbsp;<select style="max-width: 80px;" name="audiocodec_sel" >
+<option value="0">请选择</option>
+<option value="1">DTS-HD</option>
+<option value="2">TrueHD</option>
+<option value="6">LPCM</option>
+<option value="3">DTS</option>
+<option value="11">E-AC-3</option>
+<option value="4">AC-3</option>
+<option value="5">AAC</option>
+<option value="7">FLAC</option>
+<option value="8">APE</option>
+<option value="9">WAV</option>
+<option value="10">MP3</option>
+<option value="12">OPUS</option>
+<option value="13">AV3A</option>
+<option value="99">Other</option>
+</select>&nbsp;
+                            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap">标签</td>
+            <td class="rowfollow">
+                <ul class="torrent-tag-row">
+                                                                                                                                    <li class="nowrap"><label>
+                        <input type="checkbox" name="selfcraft" id="selfcraft" value="1"
+                        ><span title="自制">自制</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="animation" id="animation" value="1"
+                        ><span title="动画">动画</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="exclusive" id="exclusive" value="1"
+                        ><span title="禁转">禁转</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="pack" id="pack" value="1"
+                        ><span title="合集">合集</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="untouched" id="untouched" value="1"
+                        ><span title="原生原盘">原生</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="selfpurchase" id="selfpurchase" value="1"
+                        ><span title="自购资源">自购</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="mandarin" id="mandarin" value="1"
+                        ><span title="国语配音">国配</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="subtitlezh" id="subtitlezh" value="1"
+                        ><span title="中文字幕">中字</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="subtitlesp" id="subtitlesp" value="1"
+                        ><span title="特效字幕">特效</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="selfcompile" id="selfcompile" value="1"
+                        ><span title="原创编译">自译</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="dovi" id="dovi" value="1"
+                        ><span title="杜比视界">DoVi</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="hdr10" id="hdr10" value="1"
+                        ><span title="HDR10">HDR10</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="hdr10plus" id="hdr10plus" value="1"
+                        ><span title="HDR10+">HDR10+</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="hdrvivid" id="hdrvivid" value="1"
+                        ><span title="菁彩HDR">菁彩HDR</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="hlg" id="hlg" value="1"
+                        ><span title="HLG">HLG</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="cc" id="cc" value="1"
+                        ><span title="CC标准收藏">CC</span>                        </label></li>
+                                                                                <li class="nowrap"><label>
+                        <input type="checkbox" name="3d" id="3d" value="1"
+                        ><span title="3D资源">3D</span>                        </label></li>
+                                                                                                                                                                                            <li class="nowrap"><label>
+                        <input type="checkbox" name="request" id="request" value="1"
+                        ><span title="响应悬赏">应求</span>                        </label></li>
+                                                                                                                            </ul>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">标题<font color="red">*</font></td>
+            <td class="rowfollow">
+                <input
+                    type="text"
+                    style="width: calc(100% - 5px);"
+                    id="name"
+                    name="name"
+                    onblur="autofill(this.value)"
+                    required
+                />
+                <p class="upnote">标题必须全部英文，不要有空格，空格以半角的点(.)代替。</p>
+            </td>
+        </tr>
+
+                    <tr>
+                <td class="rowhead nowrap" align="right">副标题</td>
+                <td class="rowfollow">
+                    <input
+                        type="text"
+                        style="width: calc(100% - 5px);"
+                        id="small_descr"
+                        name="small_descr"
+                        value=""
+                    />
+                    <p class="upnote">副标题提供额外的搜索信息，至少应包括中文片名，详见发布规则。</p>
+                </td>
+            </tr>
+        
+        <tr>
+            <td class="rowhead nowrap" align="right">豆瓣/IMDb</td>
+            <td class="rowfollow">
+                <input
+                    type="text"
+                    style="width: calc(100% - 5px);"
+                    id="url"
+                    name="url"
+                    value=""
+                />
+                <p class="upnote">种子对应的豆瓣或IMDb的完整网址。优先使用豆瓣网址，若无豆瓣则使用IMDb网址，两者皆无则留空。</p>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">
+                海报            </td>
+            <td class="rowfollow">
+                <input
+                    type="text"
+                    style="width: calc(100% - 5px);"
+                    id="url_poster"
+                    name="url_poster"
+                />
+                                <p class="upnote">海报的图床地址。留空则使用豆瓣或IMDb的海报。</p>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">
+                截图<font color="red">*</font>
+            </td>
+            <td class="rowfollow">
+                <div class="screenshot-switcher" data-screenshot-switcher data-active="legacy">
+                    <div class="screenshot-switcher-tabs">
+                        <button type="button" class="screenshot-switcher-tab" data-screenshot-tab="legacy">使用外部图床地址</button>
+                        <button type="button" class="screenshot-switcher-tab" data-screenshot-tab="attachment">使用附件</button>
+                    </div>
+                    <div class="screenshot-switcher-panel" data-screenshot-panel="legacy">
+                        <textarea
+                            class="bbcode"
+                            cols="100"
+                            style="width: calc(100% - 5px);"
+                            name="url_vimages"
+                            id="url_vimages"
+                            rows="5"
+                        ></textarea>
+                                                <p class="upnote">截图的图床地址。至少需要3张PNG原始截图，一行对应一张截图，不要使用BBCode。<br>为规范发种并尽可能的使截图长期留存，本站限定图床白名单，详见发布规则。</p>
+                    </div>
+                    <div class="screenshot-switcher-panel" data-screenshot-panel="attachment" hidden>
+                        <div
+    class="attachment-picker"
+    data-attachment-picker
+    data-upload-url="/attachment_upload.php"
+    data-browse-url="/myattachments.php?select=1&amp;kind=image"
+    data-kind="image"
+    data-upload-enabled="yes"
+    data-input-name="screenshot_attachment_ids[]"
+>
+    <div class="attachment-picker-toolbar">
+        <label class="attachment-picker-file-label">
+            <input type="file" class="attachment-picker-file" accept="image/*" multiple />
+            <span class="attachment-picker-file-button">选择</span>
+            <span class="attachment-picker-file-text">No files selected</span>
+        </label>
+        <button type="button" class="btn attachment-picker-action-btn attachment-picker-upload-btn">上传图片</button>
+        <button type="button" class="btn attachment-picker-action-btn attachment-picker-browse-btn">我的图片</button>
+                <span class="upnote attachment-picker-status"></span>
+    </div>
+    <div class="attachment-picker-progress" hidden>
+        <div class="attachment-picker-progress-bar">
+            <span class="attachment-picker-progress-fill"></span>
+        </div>
+        <span class="attachment-picker-progress-text"></span>
+    </div>
+    <div class="attachment-picker-queue" hidden></div>
+    <div class="attachment-picker-list">
+            </div>
+</div>
+                        <p class="upnote">上传图片附件作为截图，或从已上传的图片中选择截图。</p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="rowhead nowrap" align="right">媒体信息<font color="red">*</font></td>
+            <td class="rowfollow">
+                <textarea
+                    class="bbcode"
+                    cols="100"
+                    style="width: calc(100% - 5px);"
+                    name="Media_BDInfo"
+                    id="Media_BDInfo"
+                    rows="5"
+                ></textarea>
+                <p class="upnote">完整的媒体信息，信息必须完整，无格式化。合集资源选取第一集的媒体信息。<br>普通资源使用MediaInfo工具生成媒体信息，蓝光原盘使用BDInfo工具生成媒体信息。详见发布规则。</p>
+            </td>
+        </tr>
+
+        
+        <tr>
+            <td class="rowhead nowrap" align="right">
+                
+    <a href="javascript: klappe_news('addinfo')" title="显示/隐藏">
+        <span class="nowrap">
+            <img class="minus" src="pic/trans.gif" alt="Show/Hide" id="picaddinfo" />
+            附加信息        </span>
+    </a>
+            </td>
+            <td class="rowfollow">
+                <div id="kaddinfo" style="display: block">
+                    <link rel="stylesheet" href="static/sceditor/themes/default.min.css" />
+<script src="static/sceditor/sceditor.min.js"></script>
+<script src="static/sceditor/formats/bbcode.js"></script>
+<script src="static/sceditor/locale.cn.js"></script>
+<script src="static/sceditor/icons/material.js"></script>
+<!--<script src="static/sceditor/icons/monocons.js"></script>-->
+
+<div class="bbcode-editor">
+    <textarea
+        placeholder=""
+        class="bbcode"
+        cols="100"
+        style="width: 100%; min-width: 650px;"
+        name="descr"
+        id="descr"
+        rows="20"
+        onkeydown="ctrlenter(event,'compose','qr')"
+    ></textarea>
+</div>
+<script>
+    // 添加自定义图标
+    sceditor.command.set('spoiler', {
+        exec: function() {
+            this.insertText('[spoiler]', '[/spoiler]');
+        },
+        tooltip: '折叠标签',
+        state: function() {
+            return 0;
+        },
+        txtExec: ['[spoiler]', '[/spoiler]'],
+        icon: 'spoiler',
+        hasIcon: true
+    });
+
+    sceditor.command.set('mediainfo', {
+        exec: function() {
+            this.insertText('[mediainfo]', '[/mediainfo]');
+        },
+        tooltip: 'Mediainfo 标签',
+        state: function() {
+            return 0;
+        },
+        txtExec: ['[mediainfo]', '[/mediainfo]'],
+        icon: 'mediainfo',
+        hasIcon: true
+    });
+
+    const demoComparison = `
+[comparison=GER,JPA,USA]
+    https://dummyimage.com/1920x1080/000/fff.png&text=GER1
+    https://dummyimage.com/1920x1080/000/fff.png&text=JPA1
+    https://dummyimage.com/1920x1080/000/fff.png&text=USA1
+    https://dummyimage.com/1920x1080/000/fff.png&text=GER2
+    https://dummyimage.com/1920x1080/000/fff.png&text=JPA2
+    https://dummyimage.com/1920x1080/000/fff.png&text=USA2
+[/comparison]
+    `.trim();
+
+    sceditor.command.set('comparison', {
+        exec: function() {
+            this.insertText(demoComparison);
+        },
+        tooltip: '对比图',
+        state: function() {
+            return 0;
+        },
+        txtExec: [demoComparison],
+        icon: 'comparison',
+        hasIcon: true
+    });
+
+    sceditor.create(document.getElementById('descr'), {
+        locale: 'cn',
+        icons: 'material',
+        format: 'bbcode',
+        parserOptions: {
+            breakAfterBlock: false
+        },
+        style: 'static/sceditor/themes/content/default.min.css',
+        toolbar: 'bold,italic,underline,strike,font,size,color,removeformat,left,center,right,bulletlist,orderedlist,indent,outdent,horizontalrule,image,link,unlink,quote,code,table,spoiler,mediainfo,comparison,youtube,emoticon,maximize,source',
+        toolbarExclude: 'subscript,superscript,cut,copy,paste,pastetext,email,date,time,ltr,rtl,print',
+        width: '100%',
+        startInSourceMode: true,
+        emoticonsEnabled: true,
+        emoticonsCompat: true,
+        emoticons: {
+            dropdown: {"[em1]":"pic\/smilies\/1.gif","[em2]":"pic\/smilies\/2.gif","[em3]":"pic\/smilies\/3.gif","[em4]":"pic\/smilies\/4.gif","[em5]":"pic\/smilies\/5.gif","[em6]":"pic\/smilies\/6.gif","[em7]":"pic\/smilies\/7.gif","[em8]":"pic\/smilies\/8.gif","[em9]":"pic\/smilies\/9.gif","[em10]":"pic\/smilies\/10.gif","[em11]":"pic\/smilies\/11.gif","[em13]":"pic\/smilies\/13.gif","[em15]":"pic\/smilies\/15.gif","[em16]":"pic\/smilies\/16.gif","[em17]":"pic\/smilies\/17.gif","[em18]":"pic\/smilies\/18.gif","[em19]":"pic\/smilies\/19.gif","[em20]":"pic\/smilies\/20.gif","[em21]":"pic\/smilies\/21.gif","[em23]":"pic\/smilies\/23.gif","[em24]":"pic\/smilies\/24.gif","[em25]":"pic\/smilies\/25.gif","[em26]":"pic\/smilies\/26.gif","[em27]":"pic\/smilies\/27.gif","[em28]":"pic\/smilies\/28.gif","[em29]":"pic\/smilies\/29.gif","[em30]":"pic\/smilies\/30.gif","[em31]":"pic\/smilies\/31.gif","[em32]":"pic\/smilies\/32.gif","[em33]":"pic\/smilies\/33.gif","[em34]":"pic\/smilies\/34.gif","[em35]":"pic\/smilies\/35.gif","[em36]":"pic\/smilies\/36.gif","[em39]":"pic\/smilies\/39.gif","[em40]":"pic\/smilies\/40.gif","[em41]":"pic\/smilies\/41.gif"},
+            more: {"[em12]":"pic\/smilies\/12.gif","[em14]":"pic\/smilies\/14.gif","[em22]":"pic\/smilies\/22.gif","[em37]":"pic\/smilies\/37.gif","[em38]":"pic\/smilies\/38.gif","[em42]":"pic\/smilies\/42.gif","[em43]":"pic\/smilies\/43.gif","[em44]":"pic\/smilies\/44.gif","[em45]":"pic\/smilies\/45.gif","[em46]":"pic\/smilies\/46.gif","[em47]":"pic\/smilies\/47.gif","[em48]":"pic\/smilies\/48.gif","[em49]":"pic\/smilies\/49.gif","[em50]":"pic\/smilies\/50.gif","[em51]":"pic\/smilies\/51.gif","[em52]":"pic\/smilies\/52.gif","[em53]":"pic\/smilies\/53.gif","[em54]":"pic\/smilies\/54.gif","[em55]":"pic\/smilies\/55.gif","[em56]":"pic\/smilies\/56.gif","[em57]":"pic\/smilies\/57.gif","[em58]":"pic\/smilies\/58.gif","[em59]":"pic\/smilies\/59.gif","[em60]":"pic\/smilies\/60.gif","[em61]":"pic\/smilies\/61.gif","[em62]":"pic\/smilies\/62.gif","[em63]":"pic\/smilies\/63.gif","[em64]":"pic\/smilies\/64.gif","[em65]":"pic\/smilies\/65.gif","[em66]":"pic\/smilies\/66.gif","[em67]":"pic\/smilies\/67.gif","[em68]":"pic\/smilies\/68.gif","[em69]":"pic\/smilies\/69.gif","[em70]":"pic\/smilies\/70.gif","[em71]":"pic\/smilies\/71.gif","[em72]":"pic\/smilies\/72.gif","[em73]":"pic\/smilies\/73.gif","[em74]":"pic\/smilies\/74.gif","[em75]":"pic\/smilies\/75.gif","[em76]":"pic\/smilies\/76.gif","[em77]":"pic\/smilies\/77.gif","[em78]":"pic\/smilies\/78.gif","[em79]":"pic\/smilies\/79.gif","[em80]":"pic\/smilies\/80.gif","[em81]":"pic\/smilies\/81.gif","[em82]":"pic\/smilies\/82.gif","[em83]":"pic\/smilies\/83.gif","[em84]":"pic\/smilies\/84.gif","[em85]":"pic\/smilies\/85.gif","[em86]":"pic\/smilies\/86.gif","[em87]":"pic\/smilies\/87.gif","[em88]":"pic\/smilies\/88.gif","[em89]":"pic\/smilies\/89.gif","[em90]":"pic\/smilies\/90.gif","[em91]":"pic\/smilies\/91.gif","[em92]":"pic\/smilies\/92.gif","[em93]":"pic\/smilies\/93.gif","[em94]":"pic\/smilies\/94.gif","[em95]":"pic\/smilies\/95.gif","[em96]":"pic\/smilies\/96.gif","[em97]":"pic\/smilies\/97.gif","[em98]":"pic\/smilies\/98.gif","[em99]":"pic\/smilies\/99.gif","[em100]":"pic\/smilies\/100.gif","[em101]":"pic\/smilies\/101.gif","[em102]":"pic\/smilies\/102.gif","[em103]":"pic\/smilies\/103.gif","[em104]":"pic\/smilies\/104.gif","[em105]":"pic\/smilies\/105.gif","[em106]":"pic\/smilies\/106.gif","[em107]":"pic\/smilies\/107.gif","[em108]":"pic\/smilies\/108.gif","[em109]":"pic\/smilies\/109.gif","[em110]":"pic\/smilies\/110.gif","[em111]":"pic\/smilies\/111.gif","[em112]":"pic\/smilies\/112.gif","[em113]":"pic\/smilies\/113.gif","[em114]":"pic\/smilies\/114.gif","[em115]":"pic\/smilies\/115.gif","[em116]":"pic\/smilies\/116.gif","[em117]":"pic\/smilies\/117.gif","[em118]":"pic\/smilies\/118.gif","[em119]":"pic\/smilies\/119.gif","[em120]":"pic\/smilies\/120.gif","[em121]":"pic\/smilies\/121.gif","[em122]":"pic\/smilies\/122.gif","[em123]":"pic\/smilies\/123.gif","[em124]":"pic\/smilies\/124.gif","[em125]":"pic\/smilies\/125.gif","[em126]":"pic\/smilies\/126.gif","[em127]":"pic\/smilies\/127.gif","[em128]":"pic\/smilies\/128.gif","[em129]":"pic\/smilies\/129.gif","[em130]":"pic\/smilies\/130.gif","[em131]":"pic\/smilies\/131.gif","[em132]":"pic\/smilies\/132.gif","[em133]":"pic\/smilies\/133.gif","[em134]":"pic\/smilies\/134.gif","[em135]":"pic\/smilies\/135.gif","[em136]":"pic\/smilies\/136.gif","[em137]":"pic\/smilies\/137.gif","[em138]":"pic\/smilies\/138.gif","[em139]":"pic\/smilies\/139.gif","[em140]":"pic\/smilies\/140.gif","[em141]":"pic\/smilies\/141.gif","[em142]":"pic\/smilies\/142.gif","[em143]":"pic\/smilies\/143.gif","[em144]":"pic\/smilies\/144.gif","[em145]":"pic\/smilies\/145.gif","[em146]":"pic\/smilies\/146.gif","[em147]":"pic\/smilies\/147.gif","[em148]":"pic\/smilies\/148.gif","[em149]":"pic\/smilies\/149.gif","[em150]":"pic\/smilies\/150.gif","[em151]":"pic\/smilies\/151.gif","[em152]":"pic\/smilies\/152.gif","[em153]":"pic\/smilies\/153.gif","[em154]":"pic\/smilies\/154.gif","[em155]":"pic\/smilies\/155.gif","[em156]":"pic\/smilies\/156.gif","[em157]":"pic\/smilies\/157.gif","[em158]":"pic\/smilies\/158.gif","[em159]":"pic\/smilies\/159.gif","[em160]":"pic\/smilies\/160.gif","[em161]":"pic\/smilies\/161.gif","[em162]":"pic\/smilies\/162.gif","[em163]":"pic\/smilies\/163.gif","[em164]":"pic\/smilies\/164.gif","[em165]":"pic\/smilies\/165.gif","[em166]":"pic\/smilies\/166.gif","[em167]":"pic\/smilies\/167.gif","[em168]":"pic\/smilies\/168.gif","[em169]":"pic\/smilies\/169.gif","[em170]":"pic\/smilies\/170.gif","[em171]":"pic\/smilies\/171.gif","[em172]":"pic\/smilies\/172.gif","[em173]":"pic\/smilies\/173.gif","[em174]":"pic\/smilies\/174.gif","[em175]":"pic\/smilies\/175.gif","[em176]":"pic\/smilies\/176.gif","[em177]":"pic\/smilies\/177.gif","[em178]":"pic\/smilies\/178.gif","[em179]":"pic\/smilies\/179.gif","[em180]":"pic\/smilies\/180.gif","[em181]":"pic\/smilies\/181.gif","[em182]":"pic\/smilies\/182.gif","[em183]":"pic\/smilies\/183.gif","[em184]":"pic\/smilies\/184.gif","[em185]":"pic\/smilies\/185.gif","[em186]":"pic\/smilies\/186.gif","[em187]":"pic\/smilies\/187.gif","[em188]":"pic\/smilies\/188.gif","[em189]":"pic\/smilies\/189.gif","[em190]":"pic\/smilies\/190.gif","[em191]":"pic\/smilies\/191.gif"}        }
+    });
+</script>
+                </div>
+                <p class="upnote">若种子无豆瓣或IMDb链接，请务必在附加信息里填入资源的介绍。种子的其他补充信息以及附言、致谢等信息也可在此处添加。</p>
+            </td>
+        </tr>
+
+        
+                    <tr>
+                <td class="rowhead nowrap" align="right">候选</td>
+                <td class="rowfollow">
+                                            <input
+                            type="checkbox"
+                            name="offer"
+                            value="yes"
+                                                    />
+                                        将这个种子作为候选发布，详见<a class="faqlink" href="offers.php">候选规则</a>                </td>
+            </tr>
+        
+                    <tr>
+                <td class="rowhead nowrap" align="right">匿名发布</td>
+                <td class="rowfollow">
+                    <input type="checkbox" name="uplver" value="yes"
+                                            />
+                    不要在发布者项目中显示我的用户名                </td>
+            </tr>
+        
+        <tr>
+            <td class="toolbox" align="center" colspan="2">
+                <div>
+                    <input id="qr_check" type="checkbox">
+                    <b>我已经阅读过<a href="rules.php#id3" class="faqlink">发布规则</a>和<a href="rules.php#id59" class="faqlink">资源规则</a>。本站推荐<a class="faqlink" href="forums.php?action=viewtopic&forumid=16&topicid=16773">春天种子检查脚本</a>，提高发种效率</a>。</b>
+                </div>
+                <div style="margin: 10px 0 5px 0;">
+                    <input id="qr" type="submit" class="btn" value="发布" disabled="disabled" />
+                </div>
+            </td>
+        </tr>
+    </table>
+</form>
+
+</div>
+
+
+
+
+
+</div> <!-- outer -->
+</main>
+
+<footer>
+                
+    <div style="padding-bottom: 20px; text-align: center;">
+        <p class="small">(c) <a href="https://springsunday.net" target="_self">SSD</a>
+                2010-2026 Powered by <a href="aboutnexus.php">NexusPHP</a></p>
+
+        <p class="small">[The page was created in <b>0.004359</b> sec
+         with <b>6</b> DB queries,
+         <b>32</b> reads and
+         <b>1</b> writes of Cache and
+         <b>774.17 KB</b> RAM]</p>
+    </div>
+
+    
+    <div style="display: none;" id="lightbox" class="lightbox"></div>
+    <div style="display: none;" id="curtain" class="curtain"></div>
+
+    
+    <div class="corner-buttons">
+    <div class="corner-button-wrap hidden">
+        <button
+            class="corner-button"
+            title="回到顶部"
+            aria-label="回到顶部"
+            data-type="back-top"
+        >
+            <svg
+                class="back-top-icon"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                width="24"
+                height="24"
+            >
+                <path d="M16 20a1 1 0 0 1-1 1H9 a1 1 0 0 1-1-1 v-7H5 c-1 0-1.4-.6-.6-1.4L11 4a1 1 0 0 1 1.4 0l7 7c1 1 .5 1.4-.6 1.4h-3v7z"></path>
+            </svg>
+        </button>
+    </div>
+</div>
+</footer>
+
+<script type="text/javascript" src="js/attachment-picker.js?26100101"></script>
+<script type="text/javascript" src="js/attachments.js?26100101"></script>
+<script type="text/javascript">
+    function getname() {
+        var name = document.getElementById("name");
+        if (name.value == '') {
+            var filename = document.getElementById("torrent").value;
+            var lowcase = filename.toLowerCase();
+            var start = lowcase.lastIndexOf("\\"); //for Google Chrome on windows
+            if (start == -1) {
+                start = lowcase.lastIndexOf("\/"); // for Google Chrome on linux
+                if (start == -1) {
+                    start == 0;
+                } else {
+                    start = start + 1;
+                }
+            }
+            else {
+                start = start + 1;
+            }
+            var end = lowcase.lastIndexOf("torrent");
+            var noext = filename.substring(start, end - 1);
+            noext = noext.replace(/ /g, ".");
+            noext = noext.replace(/^\[.+\]\.*/g, "");
+            noext = noext.replace(/[:;]+/g, ".");
+            noext = noext.replace(/\.+/g, ".");
+            noext = noext.replace(/\.(mp4|ts|mkv|iso)$/g, "");
+            name.value = noext;
+        }
+    }
+
+    $("#url").blur(function () {
+        var val = $(this).val();
+        if (val.indexOf('douban.com') === -1 && val.indexOf('imdb.com') === -1) {
+            $("#descr").css("border", "1px solid #FF0000");
+            $("#kaddinfo").css("display", "block");
+            $("#picaddinfo").attr("class", "minus");
+        } else {
+            $("#descr").css("border", "1px solid #E0E0E0");
+            $("#kaddinfo").css("display", "none");
+            $("#picaddinfo").attr("class", "plus");
+        }
+    });
+
+    $("#compose").submit(function (e) {
+        if ($("select[name='type']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择类型");
+        } else if ($("select[name='source_sel']").length && $("select[name='source_sel']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择地区");
+        } else if ($("select[name='medium_sel']").length && $("select[name='medium_sel']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择格式");
+        } else if ($("select[name='standard_sel']").length && $("select[name='standard_sel']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择分辨率");
+        } else if ($("select[name='codec_sel']").length && $("select[name='codec_sel']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择视频编码");
+        } else if ($("select[name='audiocodec_sel']").length && $("select[name='audiocodec_sel']").val() == "0") {
+            e.preventDefault();
+            alert("必须选择音频编码");
+        } else {
+            const mitxt = $("textarea#Media_BDInfo").val();
+            if (mitxt.indexOf("概要") === 0 || mitxt.indexOf("概览") === 0) {
+                e.preventDefault();
+                alert("媒体信息必须使用英文");
+            }
+        }
+    });
+
+            $("#compose").submit(function (e) {
+            const pics = $("#url_vimages").val().trim();
+            const pics_list = pics === '' ? [] : pics.split("\n");
+            const internalPicsCount = document.querySelectorAll('input[name="screenshot_attachment_ids[]"]').length;
+            if (pics === '' && internalPicsCount === 0) {
+                e.preventDefault();
+                alert("截图不能为空");
+            }
+                            const pichost_list = [
+                                            'cmct.xyz',
+                                            'static.hdcmct.org',
+                                            'gifyu.com',
+                                            'imgbox.com',
+                                            'pixhost.to',
+                                            'pixhost.cc',
+                                            'ptpimg.me',
+                                            'static.ssdforum.org',
+                                    ];
+                for (let pic of pics_list) {
+                    const domain = getDomain(pic);
+                    if (domain !== "" && !pichost_list.some(substring => domain.includes(substring))) {
+                        e.preventDefault();
+                        alert("截图必须使用指定的图床, 该图床不符合要求: " + domain);
+                        break;
+                    }
+                }
+                                        for (let pic of pics_list) {
+                    pic = pic.toLowerCase();
+                    if (pic.indexOf('[img') !== -1 || pic.indexOf('[/img]') !== -1) {
+                        e.preventDefault();
+                        alert("截图不能使用bbcode");
+                        break;
+                    }
+                }
+                    });
+    
+    $("input#qr_check").on("click", function () {
+        if (this.checked) {
+            $("input#qr").prop("disabled", false);
+        } else {
+            $("input#qr").prop("disabled", true);
+        }
+    });
+
+    $(function () {
+                    $("input#qr_check").prop("checked", true);
+            $("input#qr").prop("disabled", false);
+            });
+</script>
+<script type="text/javascript" src="js/upload.js?26100101"></script>
+
+
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"f99d68aeaa8d464c95c80d0106574d3f","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body>
+</html>

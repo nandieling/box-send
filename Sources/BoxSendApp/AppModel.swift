@@ -157,10 +157,46 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
+    /// 重命名分组（组内站点与排序不受影响）；重名时自动追加数字后缀
+    func renameGroup(at index: Int, name: String) {
+        guard config.groups.indices.contains(index) else { return }
+        let base = name.trimmingCharacters(in: .whitespaces)
+        guard !base.isEmpty else { return }
+        var finalName = base
+        var n = 2
+        while config.groups.enumerated().contains(where: { $0.offset != index && $0.element.name == finalName }) {
+            finalName = "\(base)\(n)"
+            n += 1
+        }
+        config.groups[index].name = finalName
+        saveConfig()
+    }
+
     func removeGroup(at index: Int) {
         guard config.groups.indices.contains(index) else { return }
+        let members = config.groups[index].sites
         config.groups.remove(at: index)
+        // 组内站点移回「批量添加站点」列表：按名称默认序插入排序，不产生「无分组」区块
+        var returned: [String] = []
+        for id in members where config.site(id)?.managed == true {
+            if let i = config.sourceSites.firstIndex(where: { $0.id == id }) {
+                config.sourceSites[i].managed = false
+            }
+            selectedTargets.remove(id)
+            returned.append(id)
+        }
+        reinsertUnmanagedOrder(returned)
         saveConfig()
+    }
+
+    /// 站点移回「批量添加站点」列表：按名称默认序插入手动排序（无手动排序 = 恢复名称默认序，
+    /// 有手动排序 = 其余站点排序不变、返回站点插到其名称序位置），不追加到末尾
+    private func reinsertUnmanagedOrder(_ returnedIDs: [String]) {
+        let unmanaged = Set(config.sourceSites.filter { !$0.managed }.map { $0.id })
+        let returned = returnedIDs.filter { unmanaged.contains($0) }
+        guard !returned.isEmpty else { return }
+        let valid = config.unmanagedSiteOrder.filter { unmanaged.contains($0) }
+        config.unmanagedSiteOrder = NameSort.reinsert(returned, into: valid, name: { config.site($0)?.name ?? $0 })
     }
 
     /// 拖拽排序分组：把名为 dragged 的分组移到 target 之前
@@ -315,6 +351,7 @@ final class AppModel: ObservableObject {
     func clearCookies() {
         cookies.clear()
         siteCheckResults = [:]
+        state.clearAllCookieChecks()
         persistCookies()
         refreshCookieStats()
         cookieMessage = "已清空本地 cookie"
@@ -351,9 +388,11 @@ final class AppModel: ObservableObject {
         persistCookies()
         refreshCookieStats()
         siteCheckResults[siteID] = nil   // cookie 已变，旧检测结果作废
+        state.clearCookieCheck(siteID)
         let n = cookies.snapshot()[host]?.count ?? 0
         state.note("cookies: 单站添加 \(site.id) -> \(n) 条")
         cookieMessage = "已保存 \(site.name)（\(host)）\(n) 条 cookie，已覆盖该站原有 cookie，并启用该站"
+        recheckSiteJustSaved(siteID)
     }
 
     func removeSiteCookies(siteID: String) {
@@ -369,6 +408,7 @@ final class AppModel: ObservableObject {
         persistCookies()
         refreshCookieStats()
         siteCheckResults[siteID] = nil
+        state.clearCookieCheck(siteID)
         state.note("cookies: 单站删除 \(site.id)")
         cookieMessage = "已删除 \(site.name)（\(host)）的 cookie"
     }
@@ -449,12 +489,13 @@ final class AppModel: ObservableObject {
         return members.count
     }
 
-    /// 从站点列表移除（保留 cookie 与启用状态，之后可再次添加）
+    /// 从站点列表移除（保留 cookie 与启用状态，之后可再次添加；站点移回批量添加列表，按名称默认序插入排序）
     func removeManagedSite(_ id: String) {
         guard let i = config.sourceSites.firstIndex(where: { $0.id == id }) else { return }
         config.sourceSites[i].managed = false
         for g in config.groups.indices { config.groups[g].sites.removeAll { $0 == id } }
         selectedTargets.remove(id)
+        reinsertUnmanagedOrder([id])
         saveConfig()
     }
 
@@ -497,16 +538,20 @@ final class AppModel: ObservableObject {
     func checkSitesCookies(_ sites: [SiteConfig], force: Bool = false, onDone: (() -> Void)? = nil) {
         let cookieJar = cookies
         let cfg = config
-        let pending = sites.filter { site in
+        // 检测顺序 = 界面上分组的排列顺序（组内按卡片顺序，未分组最后）
+        let ordered = sites.sortedBySiteGroup(groups: config.groups, id: { $0.id })
+        let pending = ordered.filter { site in
             site.enabled
                 && !siteChecking.contains(site.id)
                 && (force || siteCheckResults[site.id] == nil)
-                && cookieJar.cookieHeader(forHost: siteHost(site)) != nil
+                && hasCredential(for: site, jar: cookieJar)
         }
         guard !pending.isEmpty else { onDone?(); return }
-        siteChecking.formUnion(pending.map(\.id))
+        let gen = checkGeneration &+ 1
+        checkGeneration = gen
+        let ids = pending.map(\.id)
+        siteChecking.formUnion(ids)
         Task.detached {
-            let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
             var i = 0
             while i < pending.count {
                 let batch = Array(pending[i..<min(i + 4, pending.count)])
@@ -514,7 +559,9 @@ final class AppModel: ObservableObject {
                 await withTaskGroup(of: (String, Bool, String).self) { group in
                     for site in batch {
                         group.addTask {
-                            let r = CookieCheck.check(site: site, client: client)
+                            // 每站一个连接池 + 时长上限：卡死的站不拖累同批其它站
+                            let r = await CookieCheck.checked(site: site, cookies: cookieJar,
+                                                             userAgent: cfg.userAgent)
                             return (site.id, r.ok, r.message)
                         }
                     }
@@ -525,11 +572,21 @@ final class AppModel: ObservableObject {
                 i += 4
                 let r = results
                 let isLast = i >= pending.count
+                var stopped = false
                 await MainActor.run {
-                    for (id, res) in r { self.siteCheckResults[id] = res }
+                    stopped = self.checkGeneration != gen
+                    for (id, res) in r {
+                        self.siteCheckResults[id] = res
+                        self.state.setCookieCheck(siteID: id, ok: res.ok, message: res.message)
+                    }
                     self.siteChecking.subtract(r.keys)
-                    if isLast { onDone?() }
+                    if isLast || stopped {
+                        // 停止检测：清掉本轮全部待检站的「检测中」状态（已完成批次的结果保留），并照常回调 onDone
+                        self.siteChecking.subtract(ids)
+                        onDone?()
+                    }
                 }
+                if stopped { break }
             }
         }
     }
@@ -551,12 +608,85 @@ final class AppModel: ObservableObject {
 
     var anyChecking: Bool { !siteChecking.isEmpty }
 
+    /// 是否有可检测凭据：API Key 站（馒头等）看 key；cookie 站看 cookie
+    private func hasCredential(for site: SiteConfig, jar: CookieStore) -> Bool {
+        if siteUsesAPIKey(site) {
+            return !(site.apiKey ?? "").isEmpty
+        }
+        return jar.cookieHeader(forHost: siteHost(site)) != nil
+    }
+
+    /// 批量检测代号：每轮检测开始 +1；旧的批次循环比对它决定是否退出（「停止检测」）
+    private var checkGeneration = 0
+
+    /// 停止当前批量检测：进行中的批次仍会完成，其余站点回到「未检测」
+    func stopChecking() { checkGeneration &+= 1 }
+
     func groupChecking(_ gi: Int) -> Bool {
         groupMembers(gi).contains { siteChecking.contains($0.id) }
     }
 
     func hasCookie(for site: SiteConfig) -> Bool {
         cookies.cookieHeader(forHost: siteHost(site)) != nil
+    }
+
+    /// 该站已有 cookie 原文（「手动添加」弹窗预填用）
+    func existingCookieHeader(for site: SiteConfig) -> String {
+        cookies.cookieHeader(forHost: siteHost(site)) ?? ""
+    }
+
+    // MARK: API Key（M-Team 等 API 连接站点）
+
+    func siteUsesAPIKey(_ site: SiteConfig) -> Bool {
+        // 参考内置表合并后的 override（馒头等 API 站用户配置里未必带 overrides）
+        let es = SiteRegistry.effectiveSite(site)
+        return (es.overrides?.apiBase ?? "") != "" || (es.overrides?.usesAPIKey == true)
+    }
+
+    func siteAPIKey(_ site: SiteConfig) -> String {
+        site.apiKey ?? ""
+    }
+
+    func setSiteAPIKey(_ value: String, siteID: String) {
+        guard let i = config.sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
+        let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.sourceSites[i].apiKey = v.isEmpty ? nil : v
+        saveConfig()
+    }
+
+    /// 弹窗保存 API Key：覆盖旧值、启用该站、作废旧检测结果（与 addSiteCookie 行为对齐）
+    func saveSiteAPIKey(siteID: String, raw: String) {
+        guard let site = config.site(siteID) else {
+            cookieMessage = "未配置的站点 id: \(siteID)"
+            return
+        }
+        let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else {
+            cookieMessage = "先粘贴该站的 API Key"
+            return
+        }
+        var cfg = config
+        if let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) {
+            cfg.sourceSites[i].apiKey = v
+            cfg.sourceSites[i].enabled = true
+            cfg.sourceSites[i].managed = true
+        }
+        if !cfg.targetSites.contains(siteID) { cfg.targetSites.append(siteID) }
+        config = cfg
+        selectedTargets.insert(siteID)
+        saveConfig()
+        siteCheckResults[siteID] = nil
+        state.clearCookieCheck(siteID)
+        state.note("api: 单站 \(site.id) key 已更新")
+        cookieMessage = "已保存 \(site.name) 的 API Key，并启用该站"
+  
+        recheckSiteJustSaved(siteID)
+    }
+
+    /// 弹窗保存后立刻单站复检：卡片状态当场反映凭据真假，不用等全局检测排到它
+    private func recheckSiteJustSaved(_ siteID: String) {
+        guard let fresh = config.site(siteID) else { return }
+        checkSitesCookies([fresh], force: true)
     }
 
     /// 同步导入后只保留已启用站点的 cookie（PT-depiler 全量备份含用户未启用的站）；返回清理的站点数
@@ -607,9 +737,13 @@ final class AppModel: ObservableObject {
                 let raws: [String: String]
                 let timeText: String
                 var failedNotes: [String] = []
+                var alternates: [String: String] = [:]
+                var alternateLabel = "CookieCloud"
                 if source == .both {
                     let f = try Self.fetchBothSources(cfg: cfg)
                     raws = f.raws
+                    alternates = f.alternates
+                    alternateLabel = f.alternateLabel
                     timeText = f.timeText
                     failedNotes = f.failedNotes
                     if f.gistOK {
@@ -630,20 +764,32 @@ final class AppModel: ObservableObject {
                     }
                 }
                 await MainActor.run {
-                    let (imported, kept) = self.mergedImportCookies(raws)
+                    let (imported, kept, keptValid) = self.mergedImportCookies(raws)
                     let removed = self.trimCookiesToEnabled()
                     self.persistCookies()
                     self.refreshCookieStats()
-                    var msg = "\(label) 同步成功：导入 \(imported) 个站点"
-                    if kept > 0 { msg += "，保留本地有效 \(kept) 个" }
+                    var msg = "\(label) 同步成功：导入/更新 \(imported) 个站点"
+                    if keptValid > 0 { msg += "，本地有效无需变更 \(keptValid) 个" }
+                    if kept - keptValid > 0 { msg += "，其余无变化 \(kept - keptValid) 个" }
                     if !timeText.isEmpty { msg += "（\(timeText)）" }
                     if removed > 0 { msg += "；已清理 \(removed) 个未启用站点的 cookie" }
                     if !failedNotes.isEmpty { msg += "；部分来源未成功：\(failedNotes.joined(separator: "；"))" }
                     self.cookieMessage = msg
                     self.checkSitesCookies(self.managedSites, force: true) {
                         if source == .both {
-                            // 两个来源都已合并导入，无需再互补
-                            Task { @MainActor in self.cookieSyncBusy = false }
+                            // 两个来源都导入完了，但同名 cookie 只能留一份：
+                            // 检测仍失败的站点用另一来源那份重试，谁被站点认可就用谁
+                            self.rescueInvalidSites(alternates: alternates, label: alternateLabel, cfg: cfg) { ids in
+                                Task { @MainActor in
+                                    self.cookieSyncBusy = false
+                                    guard !ids.isEmpty else { return }
+                                    self.persistCookies()
+                                    self.refreshCookieStats()
+                                    let names = ids.compactMap { cfg.site($0)?.name }.joined(separator: "、")
+                                    self.cookieMessage = msg + "；\(ids.count) 个失效站点改用 \(alternateLabel) 的 cookie 后通过：\(names)"
+                                    self.checkSitesCookies(self.managedSites.filter { ids.contains($0.id) }, force: true)
+                                }
+                            }
                         } else {
                             let other: CookieSource = (source == .gist) ? .cookieCloud : .gist
                             Task { @MainActor in
@@ -661,9 +807,12 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// 同时拉取 Gist + CookieCloud（Gist 优先，CookieCloud 补齐 Gist 没有的条目）；单来源失败不中断
-    nonisolated private static func fetchBothSources(cfg: AppConfig) throws -> (raws: [String: String], timeText: String, failedNotes: [String], gistOK: Bool) {
+    /// 同时拉取 Gist + CookieCloud（Gist 优先，CookieCloud 补齐 Gist 没有的条目）；单来源失败不中断。
+    /// 被压住的另一份（同站点另一来源的值）留在 alternates 里：本地检测失败时拿它重试（见 rescueInvalidSites）。
+    nonisolated private static func fetchBothSources(cfg: AppConfig) throws -> (raws: [String: String], alternates: [String: String], alternateLabel: String, timeText: String, failedNotes: [String], gistOK: Bool) {
         var merged: [String: String] = [:]
+        var alternates: [String: String] = [:]
+        var alternateLabel = "CookieCloud"
         var timeText = ""
         var failedNotes: [String] = []
         var gistOK = false
@@ -677,14 +826,25 @@ final class AppModel: ObservableObject {
         }
         do {
             let c = try fetchSourceRaw(source: .cookieCloud, cfg: cfg)
-            for (k, v) in c.raws where merged[k] == nil { merged[k] = v }
+            for (k, v) in c.raws {
+                if merged[k] == nil { merged[k] = v }
+                else if merged[k] != v { alternates[k] = v }     // 同名不同值：留待实测裁决
+            }
         } catch {
             failedNotes.append("CookieCloud（\(error.localizedDescription)）")
+        }
+        if !gistOK, let g = try? fetchSourceRaw(source: .gist, cfg: cfg) {
+            // Gist 这次没拉到，但 CookieCloud 拉到了：Gist 独有的站点照常导入，
+            // 两边都有的站点先按 CookieCloud 装，冲突值留给实测裁决
+            for (k, v) in g.raws {
+                if merged[k] == nil { merged[k] = v } else { alternates[k] = v }
+            }
+            alternateLabel = "Gist"
         }
         guard !merged.isEmpty else {
             throw BoxSendError.badInput(failedNotes.joined(separator: "；"))
         }
-        return (merged, timeText, failedNotes, gistOK)
+        return (merged, alternates, alternateLabel, timeText, failedNotes, gistOK)
     }
 
     /// 后台拉取来源 → {host: "k=v; k=v"}（timeText 仅 Gist 有备份时间）
@@ -716,16 +876,7 @@ final class AppModel: ObservableObject {
             throw BoxSendError.badInput("Gist 备份解密内容不是 JSON（备份密码可能不正确）")
         }
         let map = (obj["cookies"] as? [String: Any]) ?? obj
-        var out: [String: String] = [:]
-        for (host, value) in map where !host.lowercased().hasPrefix("http") {
-            guard let arr = value as? [[String: Any]] else { continue }
-            let raw = arr.compactMap { c -> String? in
-                guard let n = c["name"] as? String, let v = c["value"] as? String else { return nil }
-                return n + "=" + v
-            }.joined(separator: "; ")
-            if !raw.isEmpty { out[normHost(host)] = raw }
-        }
-        return out
+        return CookieRawMerge.rawStrings(map: map.filter { !$0.key.lowercased().hasPrefix("http") })
     }
 
     nonisolated static func normHost(_ host: String) -> String {
@@ -742,22 +893,59 @@ final class AppModel: ObservableObject {
         return na == nb || na.hasSuffix("." + nb) || nb.hasSuffix("." + na)
     }
 
-    /// 互补合并导入：本地 cookie 已检测有效 → 保留（防止备份旧值覆盖成新的失效）；否则导入备份值。
-    /// 返回 (导入站点数, 保留本地站点数)
-    func mergedImportCookies(_ raws: [String: String]) -> (imported: Int, kept: Int) {
+    /// 互补合并导入（按单条 cookie 名称做并集，不再整站替换）：
+    /// - 本地无 cookie -> 导入备份全量
+    /// - 本地有 cookie -> 同名取备份新值（刷新 cf_clearance 一类会过期的令牌），
+    ///   仅本地存在的名称保留（防止不完整备份把本地有效 cookie 冲掉，如备份只有 cf_clearance）
+    /// 返回 (导入/更新站点数, 无变化保留站点数, 其中已检测有效的数)
+    func mergedImportCookies(_ raws: [String: String]) -> (imported: Int, kept: Int, keptValid: Int) {
         var imported = 0
         var kept = 0
+        var keptValid = 0
         for (host, raw) in raws {
             guard !raw.isEmpty else { continue }
             guard let site = managedSites.first(where: { Self.hostMatches(siteHost($0), host) }) else { continue }
-            if hasCookie(for: site) && siteCheckResults[site.id]?.ok == true {
+            // API 站点（馒头）照旧同步 cookie：取种/检测走 API Key，但发种（/api/torrent/createOredit）只有 web 会话可用
+            let changed = cookies.mergeRawString(host: siteHost(site), raw)
+            if changed {
+                imported += 1
+            } else {
                 kept += 1
-                continue
+                if siteCheckResults[site.id]?.ok == true || (state.cookieCheck(site.id)?.ok ?? false) {
+                    keptValid += 1
+                }
             }
-            cookies.importRawString(host: siteHost(site), raw)
-            imported += 1
         }
-        return (imported: imported, kept: kept)
+        return (imported: imported, kept: kept, keptValid: keptValid)
+    }
+
+    /// 检测仍失效的站点：用另一来源那份 cookie 在副本上重试检测，站点认它才写回本地。
+    /// Gist（PT-depiler 云端备份）与 CookieCloud（浏览器实时备份）谁新谁旧没有规律，
+    /// 固定优先级必然把过期那份留下（烧包实测：浏览器已换新 cookie，Gist 里还是旧的），
+    /// 所以让站点自己裁决。
+    func rescueInvalidSites(alternates: [String: String], label: String, cfg: AppConfig,
+                            onDone: @escaping ([String]) -> Void) {
+        let cases: [(site: SiteConfig, host: String, raw: String)] = managedSites.compactMap { site in
+            guard site.enabled, siteCheckResults[site.id]?.ok == false else { return nil }
+            guard let raw = alternates.first(where: { Self.hostMatches(siteHost(site), $0.key) })?.value else { return nil }
+            return (site, siteHost(site), raw)
+        }
+        guard !cases.isEmpty else { onDone([]); return }
+        let jar = cookies
+        Task.detached {
+            var rescued: [String] = []
+            for item in cases {
+                let trial = CookieStore()
+                if let data = jar.exportBackupJSON() { _ = try? trial.importBackupJSON(data) }
+                _ = trial.mergeRawString(host: item.host, item.raw)
+                let r = await CookieCheck.checked(site: item.site, cookies: trial, userAgent: cfg.userAgent)
+                if r.ok {
+                    _ = jar.mergeRawString(host: item.host, item.raw)
+                    rescued.append(item.site.id)
+                }
+            }
+            await MainActor.run { onDone(rescued) }
+        }
     }
 
     /// 主同步后仍失效的站点 → 拉「另一来源」补充（另一来源未配置 / 无对应条目时静默结束）
@@ -787,7 +975,7 @@ final class AppModel: ObservableObject {
                     return
                 }
                 await MainActor.run {
-                    let (filled, _) = self.mergedImportCookies(subset)
+                    let (filled, _, _) = self.mergedImportCookies(subset)
                     _ = self.trimCookiesToEnabled()
                     self.persistCookies()
                     self.refreshCookieStats()
@@ -902,6 +1090,8 @@ final class AppModel: ObservableObject {
     public struct SiteCookieCheckResult: Equatable {
         public var ok: Bool
         public var message: String
+        /// 站点超时 / 5xx / 连不上：不能判定 cookie 是否失效（检测文案统一带「未确认」）
+        public var unconfirmed: Bool { !ok && message.contains("未确认") }
     }
     /// 「站点分组」页逐站检测的结果（siteID -> 结果）
     @Published var siteCheckResults: [String: SiteCookieCheckResult] = [:]
@@ -913,11 +1103,12 @@ final class AppModel: ObservableObject {
         let cfg = config
         siteChecking.insert(siteID)
         Task.detached {
-            let client = HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent)
-            let r = CookieCheck.check(site: site, client: client)
+            // 单站检测同样有时长上限
+            let r = await CookieCheck.checked(site: site, cookies: cookieJar, userAgent: cfg.userAgent)
             await MainActor.run {
                 self.siteChecking.remove(siteID)
                 self.siteCheckResults[siteID] = SiteCookieCheckResult(ok: r.ok, message: r.message)
+                self.state.setCookieCheck(siteID: siteID, ok: r.ok, message: r.message)
             }
         }
     }
@@ -945,6 +1136,9 @@ final class AppModel: ObservableObject {
             await MainActor.run {
                 self.cookieCheckLines = lines
                 self.siteCheckResults.merge(results) { _, new in new }
+                for (id, res) in results {
+                    self.state.setCookieCheck(siteID: id, ok: res.ok, message: res.message)
+                }
                 self.cookieChecking = false
             }
         }

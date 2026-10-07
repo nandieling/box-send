@@ -315,6 +315,34 @@ final class ParseTests: XCTestCase {
         XCTAssertNil(Bencode.infoHash(Data("<html>not a torrent</html>".utf8)))
     }
 
+    // MARK: - LuckPT 新主题（列表页 vs ajax=1 详情页）
+
+    func testLuckPTNewThemeDetailDetection() throws {
+        let listview = fixtureStr("luckpt-56812-listview.html")
+        let ajaxPage = fixtureStr("luckpt-56812-ajax.html")
+        XCTAssertFalse(NexusPHPAdapter.looksLikeDetailPage(listview), "列表页不应被识别为详情页")
+        XCTAssertTrue(NexusPHPAdapter.looksLikeDetailPage(ajaxPage), "ajax=1 页面应被识别为详情页")
+        let url = "https://pt.luckpt.de/details.php?id=56812&hit=1"
+        XCTAssertEqual(NexusPHPAdapter.detailURLWithAjax(url), "https://pt.luckpt.de/details.php?id=56812&hit=1&ajax=1")
+        XCTAssertEqual(NexusPHPAdapter.detailURLWithAjax("https://pt.luckpt.de/torrents.php?id=56812"), "https://pt.luckpt.de/torrents.php?id=56812&ajax=1")
+        XCTAssertEqual(NexusPHPAdapter.detailURLWithAjax("https://pt.luckpt.de/torrents.php"), "https://pt.luckpt.de/torrents.php?ajax=1")
+        XCTAssertNil(NexusPHPAdapter.detailURLWithAjax("https://pt.luckpt.de/details.php?id=56812&ajax=1"))
+    }
+
+    func testParseDetailLuckPTAjaxPage() throws {
+        let html = fixtureStr("luckpt-56812-ajax.html")
+        let info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=56812&hit=1")
+        XCTAssertEqual(info.name, "Yuru Yuri S03 2015.1080p BluRay Remux AVC LPCM 2.0-LuckAni")
+        XCTAssertEqual(info.imdb, "tt5420420")
+        XCTAssertEqual(info.douban, "26339249")
+        XCTAssertEqual(info.subtitle, "摇曳百合 第三季 [内封中字]")
+        XCTAssertTrue(info.genre.contains("动画"), "genre 应含 动画, 实际: \(info.genre)")
+        XCTAssertTrue(info.mediainfo.contains("Unique ID"), "mediainfo 缺失")
+        XCTAssertTrue((info.torrentURL ?? "").hasSuffix("download.php?id=56812"), "torrentURL: \(info.torrentURL ?? "-")")
+        // 类别映射：动画 -> anime
+        XCTAssertEqual(info.kind, .anime)
+    }
+
     func testDetailRowValue() {
         let html = "<tr><td class=\"rowhead\">副标题</td><td class=\"rowfollow\">A | B&nbsp;C</td></tr>"
         XCTAssertEqual(NexusPHPAdapter.detailRowValue(html, label: "副标题"), "A | B C")
@@ -324,6 +352,125 @@ final class ParseTests: XCTestCase {
     func testRegionLineValue() {
         let text = "❁ 产　　地:　美国\n❁ 类　　别:　纪录片\n"
         XCTAssertEqual(NexusPHPAdapter.lineValue(text, prefix: "产", suffix: "地"), "美国")
+    }
+
+    // MARK: - 标题规范化（2026-10-05：cmct dot 名 / 其余站空格名）
+
+    func testAsciiReleaseName() {
+        XCTAssertEqual(NexusPHPAdapter.asciiReleaseName(
+            "[LuckPT].摇曳百合.第三季.Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni"),
+            "Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni")
+        XCTAssertEqual(NexusPHPAdapter.asciiReleaseName("[A][B].Movie.2020.1080p-WEB"), "Movie.2020.1080p-WEB")
+        XCTAssertEqual(NexusPHPAdapter.asciiReleaseName("Movie.2020.1080p-WEB"), "Movie.2020.1080p-WEB")
+        // 无 ASCII：原样
+        XCTAssertEqual(NexusPHPAdapter.asciiReleaseName("某电影.蓝光"), "某电影.蓝光")
+    }
+
+    func testPrettyReleaseName() {
+        XCTAssertEqual(NexusPHPAdapter.prettyReleaseName(
+            "Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni"),
+            "Yuru Yuri S03 2015.1080p BluRay Remux AVC LPCM 2.0-LuckAni")
+        // 已是空格名：保持不变（5.1 版本号点保留）
+        XCTAssertEqual(NexusPHPAdapter.prettyReleaseName(
+            "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu"),
+            "Food Inc 2009 1080p BluRay REMUX VC-1 DTS-HD MA 5.1-Ursuya@LuckDocu")
+        XCTAssertEqual(NexusPHPAdapter.prettyReleaseName("The.Movie.2020.2160p.UHD.BluRay.x265-GRP"),
+                       "The Movie 2020.2160p UHD BluRay x265-GRP")
+    }
+
+    // MARK: - cmct 上传字段（海报/截图分离 + 附加信息=转种来源）
+
+    func testCMCTUploadFields() throws {
+        let html = fixtureStr("luckpt-56812-ajax.html")
+        var info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=56812")
+        info.torrentName = "[LuckPT].摇曳百合.第三季.Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni.torrent"
+        let adapter = NexusPHPAdapter(site: site("cmct"), client: HTTPClient(cookies: CookieStore(), userAgent: "box-send-test"))
+        let page = fixtureStr("cmct-upload.html")
+        let fields = adapter.buildUploadFields(info, page: page).map { ($0.name, $0.value) }
+        var seenNames = Set<String>()
+        let dict = Dictionary(uniqueKeysWithValues: fields.filter { seenNames.insert($0.0).inserted }.map { ($0.0, $0.1) })
+
+        // 主标题：dot 风格且去 [LuckPT] 前缀/中文段
+        XCTAssertEqual(dict["name"], "Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni")
+        // 海报 = 首图
+        XCTAssertEqual(dict["url_poster"], "https://img3.pixhost.to/images/6151/778181861_douban-poster.jpg")
+        // 截图 = 3 张（不含海报）
+        XCTAssertEqual(dict["url_vimages"], """
+        https://img3.pixhost.to/images/6083/776555808_01.png
+        https://img3.pixhost.to/images/6083/776555875_02.png
+        https://img3.pixhost.to/images/6083/776555987_03.png
+        """)
+        // 附加信息 = 转种来源（源站名 + 引用框原文）
+        XCTAssertEqual(dict["descr"],
+            "转载自LuckPT，感谢发布者。原盘来自U2:[摇曳百合 第三季][Yuru Yuri San Hai!][ゆるゆり さん☆ハイ!][BDMV][Vol.1-Vol.6 Fin](#28882)<br />\n字幕来自华盟字幕社")
+        // MediaInfo 独立提交
+        XCTAssertTrue((dict["Media_BDInfo"] ?? "").contains("Unique ID"))
+    }
+
+    // MARK: - hddolby 上传字段（bbcode 简介 + 截图不含海报）
+
+    func testHDDolbyUploadFields() throws {
+        let html = fixtureStr("luckpt-56812-ajax.html")
+        var info = try makeLuckPTAdapter().parseDetail(html: html, detailURL: "https://pt.luckpt.de/details.php?id=56812")
+        info.torrentName = "[LuckPT].摇曳百合.第三季.Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni.torrent"
+        let adapter = NexusPHPAdapter(site: site("hddolby"), client: HTTPClient(cookies: CookieStore(), userAgent: "box-send-test"))
+        let page = fixtureStr("hddolby-upload.html")
+        let fields = adapter.buildUploadFields(info, page: page).map { ($0.name, $0.value) }
+        var seenNames = Set<String>()
+        let dict = Dictionary(uniqueKeysWithValues: fields.filter { seenNames.insert($0.0).inserted }.map { ($0.0, $0.1) })
+
+        // 主标题：空格风格
+        XCTAssertEqual(dict["name"], "Yuru Yuri S03 2015.1080p BluRay Remux AVC LPCM 2.0-LuckAni")
+        // TMDB 必填
+        XCTAssertEqual(dict["tmdb_url"], "https://www.themoviedb.org/tv/52891")
+        // 截图 = 3 张（不含海报）
+        XCTAssertEqual(dict["screenshots"], """
+        https://img3.pixhost.to/images/6083/776555808_01.png
+        https://img3.pixhost.to/images/6083/776555875_02.png
+        https://img3.pixhost.to/images/6083/776555987_03.png
+        """)
+        // MediaInfo 独立提交
+        XCTAssertTrue((dict["media_info"] ?? "").contains("Unique ID"))
+
+        let descr = dict["descr"] ?? ""
+        // bbcode 引用框：[quote] 独占一行，内容紧随
+        XCTAssertTrue(descr.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n[/quote]\n[quote]\n原盘来自U2:"), "开头:\n\(String(descr.prefix(120)))")
+        XCTAssertTrue(descr.contains("字幕来自华盟字幕社\n[/quote]"))
+        // 引用后紧跟海报 [img]（无空行），其后一个空行再进正文
+        XCTAssertTrue(descr.contains("[/quote]\n[img]https://img3.pixhost.to/images/6151/778181861_douban-poster.jpg[/img]\n\n◎译"))
+        // 链接 bbcode 化
+        XCTAssertTrue(descr.contains("[url=https://www.imdb.com/title/tt5420420]https://www.imdb.com/title/tt5420420[/url]"))
+        XCTAssertTrue(descr.contains("[url=https://movie.douban.com/subject/26339249/]https://movie.douban.com/subject/26339249/[/url]"))
+        // 截图不进简介；简介以剧情收尾
+        XCTAssertFalse(descr.contains("_01.png"))
+        XCTAssertFalse(descr.contains("<img"))
+        XCTAssertTrue(descr.hasSuffix("增添了一份欢乐。"), "结尾:\n\(String(descr.suffix(80)))")
+        // 剧情缩进保留
+        XCTAssertTrue(descr.contains("◎简　　介\n　　故事发生在"))
+        if let r3 = descr.range(of: "\n\n\n") {
+            let i = descr.distance(from: descr.startIndex, to: r3.lowerBound)
+            let lo = descr.index(descr.startIndex, offsetBy: max(0, i - 60))
+            let hi = descr.index(descr.startIndex, offsetBy: min(descr.count, i + 60))
+            XCTFail("多余空行 @\(i): \(descr[lo..<hi].replacingOccurrences(of: "\\n", with: "⏎"))")
+        }
+    }
+
+    // MARK: - BBCode 引用框/海报排版
+
+    func testBBCodeQuoteLayout() {
+        // 新版主题引用框：<br> 排版残留不应产生空行
+        let out1 = BBCode.fromHTML("<fieldset><legend> 引用 </legend><br /><br />\nA(#1)<br />\nB<br />\n</fieldset>")
+        XCTAssertEqual(out1, "[quote]\nA(#1)\nB\n[/quote]")
+        // 旧主题：引用框 + 颜色字号内联
+        let out2 = BBCode.fromHTML("<fieldset><legend> 引用 </legend><br /><span style=\"color: DarkRed\"><font size=\"4\"><br />1. 首发<br />2. 感谢</font></span></fieldset>")
+        XCTAssertTrue(out2.hasPrefix("[quote][color=darkred][size=4]\n1. 首发"), out2)
+        XCTAssertTrue(out2.hasSuffix("感谢[/size][/color][/quote]"), out2)
+        // 引用结束后紧跟海报图：不留空行
+        let out3 = BBCode.fromHTML("<fieldset><legend>x</legend>q</fieldset><br /><br />\n<img src=\"http://a/p.jpg\" /><br /><br />\nbody")
+        XCTAssertEqual(out3, "[quote]\nq\n[/quote]\n[img]http://a/p.jpg[/img]\n\nbody")
+        // 换行后的全角缩进保留
+        let out4 = BBCode.fromHTML("◎简　　介<br />\n　　故事发生在")
+        XCTAssertEqual(out4, "◎简　　介\n　　故事发生在")
     }
 }
 

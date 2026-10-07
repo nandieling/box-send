@@ -31,14 +31,16 @@ enum QualityMatcher {
             "encode": Rule(match: ["encode", "rip", "压制"], exclude: []),
             "other": Rule(match: ["other", "其它", "其他"], exclude: []),
         ],
+        // 站点常写裸数字（"1080"）或合并写法（"1080p/1080i/FHD"），裸数字兜底不可缺
         "standard": [
-            "8k": Rule(match: ["8k", "4320p"], exclude: []),
-            "2160p": Rule(match: ["2160p", "4k"], exclude: []),
-            "1440p": Rule(match: ["1440p", "2k"], exclude: []),
-            "1080p": Rule(match: ["1080p"], exclude: []),
-            "1080i": Rule(match: ["1080i"], exclude: []),
-            "720p": Rule(match: ["720p"], exclude: []),
-            "sd": Rule(match: ["sd", "480p"], exclude: []),
+            "8k": Rule(match: ["8k", "4320"], exclude: []),
+            "2160p": Rule(match: ["2160", "4k"], exclude: []),
+            "1440p": Rule(match: ["1440", "2k"], exclude: []),
+            "1080p": Rule(match: ["1080p", "1080"], exclude: []),
+            "1080i": Rule(match: ["1080i", "1080"], exclude: []),
+            "720p": Rule(match: ["720"], exclude: []),
+            "sd": Rule(match: ["sd", "480", "576"], exclude: []),
+            "other": Rule(match: ["other", "其它", "其他"], exclude: []),
         ],
         "codec": [
             "hevc": Rule(match: ["h265", "hevc", "x265"], exclude: []),
@@ -69,8 +71,19 @@ enum QualityMatcher {
             "opus": Rule(match: ["opus"], exclude: []),
             "alac": Rule(match: ["alac"], exclude: []),
             "wav": Rule(match: ["wav"], exclude: []),
+            "other": Rule(match: ["other", "其它", "其他"], exclude: []),
             "dsd": Rule(match: ["dsd"], exclude: []),
             "av3a": Rule(match: ["av3a"], exclude: []),
+        ],
+        // 处理（processing_sel）：各站语义不同（烧包=处理方式、麒麟=年份、蟹黄堡=地区），
+        // 匹配不到就留空，不用 first 兜底
+        "processing": [
+            "remux": Rule(match: ["remux"], exclude: []),
+            // 不收裸 "blu"：城市站的"3D Red-blue/红蓝"会被它误命中
+            "disc": Rule(match: ["原盘", "bluray", "蓝光", "bdrip"], exclude: []),
+            "encode": Rule(match: ["重编码", "压制", "encode", "rip"], exclude: []),
+            "web": Rule(match: ["源码", "webdl", "流媒体", "web"], exclude: []),
+            "other": Rule(match: ["other", "其它", "其他"], exclude: []),
         ],
     ]
 
@@ -93,10 +106,19 @@ enum QualityMatcher {
             "8k": ["8k", "2160p", "first"],
             "2160p": ["2160p", "8k", "1440p", "1080p", "first"],
             "1440p": ["1440p", "1080p", "720p", "first"],
-            "1080p": ["1080p", "1080i", "720p", "first"],
+            "1080p": ["1080p", "1080i", "720p", "other", "first"],
             "1080i": ["1080i", "1080p", "first"],
             "720p": ["720p", "sd", "first"],
             "sd": ["sd", "720p", "first"],
+        ],
+        "processing": [
+            "remux": ["remux", "disc", "other"],
+            "uhdbd": ["disc", "remux", "other"],
+            "bluray": ["disc", "remux", "other"],
+            "webdl": ["web", "encode", "other"],
+            "webrip": ["web", "encode", "other"],
+            "encode": ["encode", "other"],
+            "other": ["other"],
         ],
         "codec": [
             "hevc": ["hevc", "av1", "vvc", "avc", "first"],
@@ -121,12 +143,12 @@ enum QualityMatcher {
             "ape": ["ape", "flac", "first"],
             "aac": ["aac", "m4a", "mp3", "first"],
             "mp3": ["mp3", "aac", "first"],
-            "pcm": ["pcm", "wav", "first"],
+            "pcm": ["pcm", "other", "first"],
             "ogg": ["ogg", "first"],
             "m4a": ["m4a", "aac", "first"],
             "opus": ["opus", "ogg", "first"],
             "alac": ["alac", "flac", "aac", "first"],
-            "wav": ["wav", "pcm", "first"],
+            "wav": ["wav", "pcm", "other", "first"],
             "dsd": ["dsd", "flac", "first"],
             "av3a": ["av3a", "dts", "ac3", "first"],
         ],
@@ -150,22 +172,59 @@ enum QualityMatcher {
         return nil
     }
 
+    /// 选项打分上下文：让"UHD Remux vs Remux"、"电影-Remux vs 动漫-完结"这类
+    /// 多命中选项按发布实际特征选，而不是按选项先后顺序碰运气
+    struct Context {
+        var isUHD = false                 // 2160p/8K 发布：UHD/4K 选项优先，否则回避
+        var kindKeywords: [String] = []   // 分类关键词（动漫/电影…）：组合式选项（"动漫-完结"）优先
+        var completed = false             // 整季/完结："完结"加分、"连载"减分
+        init(isUHD: Bool = false, kindKeywords: [String] = [], completed: Bool = false) {
+            self.isUHD = isUHD
+            self.kindKeywords = kindKeywords.map { QualityMatcher.normalize($0) }
+            self.completed = completed
+        }
+    }
+
+    /// "其它/其他/Other" 只认纯兜底选项：城市站的"3D Alt/其他3D"这类带限定的选项不算
+    static func isOtherLabel(_ norm: String) -> Bool {
+        var t = norm
+        for w in ["others", "other", "其它", "其他"] {
+            t = t.replacingOccurrences(of: w, with: "")
+        }
+        return t.isEmpty
+    }
+
     /// 在选项列表中为 token 选值；无匹配返回 nil
-    static func match(token: String, attr: String, options: [(value: String, label: String)]) -> String? {
-        struct Opt { let value: String; let norm: String }
-        let opts = options.map { Opt(value: $0.value, norm: normalize($0.label)) }
+    static func match(token: String, attr: String, options: [(value: String, label: String)],
+                      ctx: Context = Context()) -> String? {
+        struct Opt { let value: String; let norm: String; let order: Int }
+        let opts = options.enumerated().map { Opt(value: $1.value, norm: normalize($1.label), order: $0) }
         guard !opts.isEmpty, let chain = chains[attr]?[token] ?? chains[attr]?["other"] else { return nil }
         for t in chain {
             if t == "first" {
                 return opts.first(where: { $0.value != "0" && !$0.norm.contains("请选") })?.value
             }
             guard let rule = rules[attr]?[t] else { continue }
-            if let hit = opts.first(where: { o in
-                rule.match.contains(where: { o.norm.contains($0) })
-                    && !rule.exclude.contains(where: { o.norm.contains($0) })
-            }) {
-                return hit.value
+            let otherOnly = (t == "other")
+            var best: (score: Int, order: Int, value: String)?
+            for o in opts where rule.match.contains(where: { o.norm.contains($0) })
+                && !rule.exclude.contains(where: { o.norm.contains($0) })
+                && (!otherOnly || isOtherLabel(o.norm)) {
+                var score = 10 - min(o.order, 9)            // 同分时保持原有顺序偏好
+                for pat in rule.match {
+                    if o.norm == pat { score += 8 }
+                    else if o.norm.hasPrefix(pat) { score += 5 }
+                    else if o.norm.contains(pat) { score += 2 }
+                }
+                if ["uhd", "4k", "2160"].contains(where: { o.norm.contains($0) }) {
+                    score += ctx.isUHD ? 7 : -7      // 4K 发布要盖过"Remux"这类更短的精确项
+                }
+                if ctx.kindKeywords.contains(where: { o.norm.contains($0) }) { score += 6 }
+                if o.norm.contains("完结") || o.norm.contains("完結") { score += ctx.completed ? 3 : -2 }
+                if o.norm.contains("连载") && ctx.completed { score -= 3 }
+                if best == nil || score > best!.score { best = (score, o.order, o.value) }
             }
+            if let best { return best.value }
         }
         return nil
     }

@@ -16,3 +16,8 @@ dist/
 
 # 图标构建中间产物（make-app.sh 从 1.webp 重新生成）
 build/
+
+# 编辑器 / 本地环境
+.vscode/
+.idea/
+.env

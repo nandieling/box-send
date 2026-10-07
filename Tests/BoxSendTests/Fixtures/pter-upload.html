@@ -1,0 +1,1196 @@
+<!doctype html>
+<html>
+<head>
+<meta name="referrer" content="same-origin"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta charset="utf-8">
+    <meta name="keywords" content="猫站" />
+        <meta name="generator" content="NexusPHP" />
+    <title>ＰＴ之友俱乐部 :: 发布 PTerClub</title>
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+<link rel="stylesheet" href="styles/mediumfont.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/sprites.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="pic/forum_pic/chs/forumsprites.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/ddlevelsmenu-base.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="/js/jquery-confirm/jquery-confirm.min.css?v3.3.4" />
+<link rel="stylesheet" href="styles/common.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/Classic/theme.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/Classic/DomTT.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/curtain_imageresizer.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/asidenav.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/tags.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/tImg.css?202410212335" type="text/css" />
+<link rel="stylesheet" href="styles/layui.css?202410212335" type="text/css" />
+<link rel='stylesheet' href='pic/category/chd/scenetorrents/catsprites.css?202410212335' type='text/css' />
+
+<style>
+	.jconfirm-content {
+		font-size: 14px;
+	}
+
+	@media screen and (max-width: 736px) {
+		.jconfirm-box  {
+			width: 100% !important;
+			margin: 20px !important;
+			max-width: 670px !important;
+		}
+	}
+
+    #sql_debug {
+        display: none;
+        z-index: 999;
+        position: fixed;
+        top: 40px;
+        right: 65px;
+        background: beige;
+        height: 85%;
+        overflow: scroll;
+        width: 80%;
+        max-width: 1800px;
+        /*margin: 2rem auto;*/
+        padding: 1rem;
+        text-align: left;
+        border: 1px solid #efefef;
+        border-radius: 0.5rem;
+        font-family: SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace !important;
+        font-size: 12px !important;
+    }
+
+    #sql_debug ol {
+        margin: 10px;
+        border: 1px solid #a8a8a8;
+        border-radius: 0.5rem;
+        padding-left: 30px;
+        line-height: 24px !important;
+        margin: 10px 10px 40px 10px;
+    }
+
+    #debug-btn {
+        position: fixed;
+        top: 340px;
+        right: 5px;
+        border-radius: 3px;
+        width: 40px;
+        /*background-color: #f44336;*/
+        display: inline-block;
+        padding: 40px 5px 30px 5px;
+        font-family: SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace !important;
+        font-size: 40px !important;
+    }
+
+    #faq-panel {
+        position: fixed;
+        bottom: 80px;
+        left: 5px;
+        height: 420px;
+        width: 240px;
+        overflow: hidden;
+        padding: 1rem;
+        text-align: left;
+        border-width: 1px;
+        border-style: solid;
+        border-radius: 0.5rem;
+        font-family: SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace !important;
+        font-size: 12px !important;
+        filter:alpha(Opacity=80);-moz-opacity:0.8;opacity: 0.8;
+    }
+
+    #faq-panel a {
+        width: 120px;
+        white-space: nowrap;
+        overflow: hidden;
+        display: inline-block;
+    }
+
+    #faq-btn {
+        position: fixed;
+        bottom: 80px;
+        left: 3px;
+        border-radius: 3px;
+        /*width: 70px;*/
+        display: inline-block;
+        padding: 40px 5px 0px 5px;
+        font-family: SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace !important;
+        font-size: 40px !important;
+        outline: none;
+    }
+
+    #faq-btn img {
+        max-width: 90px;
+    }
+
+
+</style>
+
+<link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php" />
+<script type="text/javascript" src="js/jquery-1.11.3.min.js"></script>
+<script type="text/javascript" src="js/polyfill.js?202410212335"></script>
+<script src="/js/jquery-confirm/jquery-confirm.min.js?v3.3.4"></script>
+<script type="text/javascript" src="curtain_imageresizer.js?202410212335"></script>
+<script type="text/javascript" src="ajaxbasic.js?202410212335"></script>
+<script type="text/javascript" src="common.js?202410212335"></script>
+<script type="text/javascript" src="domLib.js?202410212335"></script>
+<script type="text/javascript" src="domTT.js?202410212335"></script>
+<script type="text/javascript" src="domTT_drag.js?202410212335"></script>
+<script type="text/javascript" src="fadomatic.js?202410212335"></script>
+<script type="text/javascript" src="js/scrollcontrol.js"></script>
+<script type="text/javascript" src="js/ddlevelsmenu.js?202410212335"></script>
+<script type="text/javascript" src="/js/lozad.min.js?202410212335"></script>
+<script type="text/javascript" src="/js/comparisonviewer.js?202410212335"></script>
+
+<script>
+/**
+ * tr img preview
+ * @author: ttys3
+ * @date: 2029-03-11
+ */
+const trPreviewImgHeightLimit = 420;
+const getProxyImg = function(imgURL, height) {
+        // return `//images.weserv.nl/?url=${encodeURIComponent(imgURL)}&h=${height}`;
+    return imgURL;
+};
+
+// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Referrer-Policy
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/referrerPolicy
+const setImgReferrerPolicy = function(imgEle) {
+    if (imgEle.src.startsWith('https://imgproxy.pterclub.com/')) {
+            imgEle.referrerPolicy = "origin";
+    } else {
+        imgEle.referrerPolicy = "same-origin";
+    }
+}
+
+// @author: ttys3
+const ttys3TrPreviewInit = function () {
+    const observer = lozad('.lozad', {
+        rootMargin: '10px 0px', // syntax similar to that of CSS Margin
+        threshold: 0.1, // ratio of element convergence
+        load: function(el) {
+            // console.log('loading element: %s', el.dataset.src);
+            // el.src = getProxyImg(el.dataset.orig, 46*2);
+            setImgReferrerPolicy(el);
+            el.src = getProxyImg(el.dataset.orig, trPreviewImgHeightLimit*2);
+        }
+    });
+    observer.observe();
+};
+window.addEventListener("load", ttys3TrPreviewInit, false);
+
+// Discovered here: http://stackoverflow.com/a/32623832/867154
+// Many thanks to @RoboCat!
+const absolutePosition = function (el) {
+    let found, left = 0, top = 0, width = 0, height = 0, offsetBase = absolutePosition.offsetBase;
+
+    if (!offsetBase && document.body) {
+        offsetBase = absolutePosition.offsetBase = document.createElement('div');
+        offsetBase.style.cssText = 'position:absolute;left:0;top:0';
+        document.body.appendChild(offsetBase);
+    }
+
+    if (el && el.ownerDocument === document && 'getBoundingClientRect' in el && offsetBase) {
+        var boundingRect = el.getBoundingClientRect();
+        var baseRect 	 = offsetBase.getBoundingClientRect();
+        found 			 = true;
+        left 			 = boundingRect.left - baseRect.left;
+        top 			 = boundingRect.top - baseRect.top;
+        width 			 = boundingRect.right - boundingRect.left;
+        height 			 = boundingRect.bottom - boundingRect.top;
+    }
+
+    return {
+        found: found,
+        left: left,
+        top: top,
+        width: width,
+        height: height,
+        right: left + width,
+        bottom: top + height
+    };
+};
+
+// @author: ttys3
+const trPreview = function (el, show) {
+    el.style.cursor = 'default';
+    const targetId = `torrent-preview-${el.dataset.torrent}`;
+    let pr = document.querySelector(`#${targetId}`);
+    if (pr == null) {
+        const tmpl = `<div id="${targetId}" data-loaded="no" style="display: none; z-index: 9999; position: absolute; will-change: transform; left: 0; top: 0;"></div>`;
+        document.body.insertAdjacentHTML('beforeend', tmpl);
+        pr = document.querySelector(`#${targetId}`);
+    }
+
+    // load only if not loaded
+    if (pr.dataset.loaded !== 'yes') {
+        el.style.cursor = 'progress';
+
+        let proxyImg = getProxyImg(el.dataset.orig, trPreviewImgHeightLimit*2);
+        // fast fail according prev result (after lozad load)
+        if (el.src === el.dataset.orig) {
+            proxyImg = el.dataset.orig;
+        }
+        //<img class="tr-preview-img" src="{$proxyImg}" alt="tr-preview" />
+        const imgEle = new Image();
+        // onload comes for to avoid small img event not triggered
+        imgEle.onload = function() {
+            el.style.cursor = 'default';
+            // console.log("Image %s ready to append", proxyImg);
+            pr.innerHTML = '';
+            pr.insertAdjacentElement('afterbegin', imgEle);
+            pr.dataset.loaded = 'yes';
+        };
+        imgEle.onerror = function() {
+            el.style.cursor = 'default';
+            // prevent infinite loop
+            if (imgEle.src != el.dataset.orig) {
+                // console.log("Image %s preload failed, fallback to orig: %s", proxyImg, el.dataset.orig);
+                imgEle.src = el.dataset.orig;
+                pr.innerHTML = '';
+                pr.insertAdjacentElement('afterbegin', imgEle);
+                pr.dataset.loaded = 'yes';
+            }
+        };
+        imgEle.style = `max-height: ${trPreviewImgHeightLimit}px !important;`;
+        imgEle.src = proxyImg;
+        setImgReferrerPolicy(imgEle);
+        imgEle.alt = 'tr preview img';
+    }
+
+    if (show !== undefined && show === false) {
+        return;
+    }
+
+    const pos = absolutePosition(el);
+    // console.log('trPreview: %o, pos: %o', el.dataset.orig, pos);
+    let toY = parseInt(pos.top)+el.getBoundingClientRect().height/10*9;
+
+    // console.log('viewport_y: %o, pos.bottom: %o', window.scrollY + window.innerHeight, pos.bottom);
+
+    if (document.body.clientHeight - pos.bottom < trPreviewImgHeightLimit) {
+        // prevent bottom shake
+        toY = parseInt(pos.bottom) - trPreviewImgHeightLimit - el.getBoundingClientRect().height/10*9;
+    } else if (window.scrollY + window.innerHeight - pos.bottom < trPreviewImgHeightLimit) {
+        //bottom position of current viewport: window.scrollY + window.innerHeight
+        toY = parseInt(pos.bottom) - trPreviewImgHeightLimit - el.getBoundingClientRect().height/10*9;
+    }
+    pr.style.transform = `translate3d(${parseInt(pos.left)+el.getBoundingClientRect().width/10*9}px, ${toY}px, 0px)`;
+    pr.style.display = 'block';
+};
+
+// @author: ttys3
+const trPreviewOut = function (el) {
+    el.style.cursor = 'default';
+    const targetId = `torrent-preview-${el.dataset.torrent}`;
+    const pr = document.querySelector(`#${targetId}`);
+    if (pr) {
+        pr.style.display = 'none';
+    }
+};
+</script>
+    <style>
+    .show{display: block;}
+    .hide{display: none;}
+
+	#kdescr img, #kdescription img {
+		max-width: 890px !important;
+		object-fit: contain;
+	}
+</style>
+<script>
+  function hidebutton(e){
+    let hideEle = e.parentNode.nextSibling;
+    let show = hideEle.classList.contains('show');
+    if(show){
+      hideEle.classList.remove('show');
+      hideEle.classList.add('hide');
+    }else{
+      hideEle.classList.remove('hide');
+      hideEle.classList.add('show');
+    }
+  }
+
+  function divToggle(obj) {
+      const target = obj.dataset.target;
+      const targetDiv = document.querySelector(target);
+      if (targetDiv.style.display != 'none') {
+          targetDiv.style.display = 'none';
+      } else {
+          targetDiv.style.display = 'block';
+      }
+  }
+
+  function faqToggle(obj) {
+      const target = obj.dataset.target;
+      const targetDiv = document.querySelector(target);
+      const btn = document.querySelector('#faq-btn');
+      if (targetDiv.style.display != 'none') {
+          targetDiv.style.display = 'none';
+          btn.style.visibility = 'visible';
+      } else {
+          targetDiv.style.display = 'block';
+          btn.style.visibility = 'hidden';
+      }
+  }
+</script>
+<script type="text/javascript">
+  ddlevelsmenu.setup("ddtopmenubar", "topbar")
+</script>
+<script language="javascript" type="text/javascript" charset="utf-8">
+function logoutconfirm() {
+    if (confirm("<p>真的要退出吗？</p>")==true){    return true;
+  }else{
+    return false;
+  }
+}
+function requestconfirm() {
+    if (confirm("真的要求片吗？发布求片帖子将会扣除猫粮的啊！\n\n请确定！")==true){    return true;
+  }else{
+    return false;
+  }
+}
+</script>
+<!--  WYSIBB-->
+  <script type="text/javascript" src="ext/wysibb/jquery.wysibb.js?202410212335"></script>
+      <script src="ext/wysibb/lang/chs.js"></script>
+      <script>
+    jQuery(document).ready(function() {
+      var wbbOpt = {
+        buttons: "bold,underline,justifycenter,table,|,fontcolor,fontsize,fontfamily,|,img,video,link,|,code,hide,quote,|,hidemediainfo,hidebdinfo,comparison",
+        lang: "chs",
+        allButtons: {
+          code:{
+            transform:{
+              '<br /><div class="codetop">代码</div><div class="codemain">{SELTEXT}</div><br />':'[code]{SELTEXT}[/code]'
+            }
+          },
+          hide:{
+            transform:{
+              '<br /><div class="codetop">隐藏内容 (点击此处切换 显示/隐藏)</div><div class="codemain">{SELTEXT}</div><br />':'[hide]{SELTEXT}[/hide]',
+              '<br /><div class="codetop">{NAME}</div><div class="codemain">{SELTEXT}</div><br />':'[hide={NAME}]{SELTEXT}[/hide]'
+            }
+          },
+          quote:{
+            transform:{
+              '<fieldset><legend> 引用 </legend><br />{SELTEXT}</fieldset><br />':'[quote]{SELTEXT}[/quote]',
+              '<fieldset><legend> {NAME} </legend><br />{SELTEXT}</fieldset><br />':'[quote={NAME}]{SELTEXT}[/quote]'
+            }
+          },
+          comparison: {
+              title: 'Comparison',
+              buttonText: '[C]',
+              onlyClearText: true,
+              transform: {
+                  '<br/><div class="codetop">Comparison</div><div class="codemain">{SELTEXT}</div>':'[comparison=Source, Encode]{SELTEXT}[/comparison]'
+              }
+          },
+          fs_extremesmall: {
+              title: CURLANG.fs_extremesmall,
+              buttonText: "fs1",
+              excmd: 'fontSize',
+              exvalue: "1",
+              transform: {
+                  '<font size="1">{SELTEXT}</font>':'[size=1]{SELTEXT}[/size]'
+              }
+          },
+          fs_verysmall: {
+              title: CURLANG.fs_verysmall,
+              buttonText: "fs2",
+              excmd: 'fontSize',
+              exvalue: "2",
+              transform: {
+                  '<font size="2">{SELTEXT}</font>':'[size=2]{SELTEXT}[/size]'
+              }
+          },
+          fs_small: {
+              title: CURLANG.fs_small,
+              buttonText: "fs3",
+              excmd: 'fontSize',
+              exvalue: "3",
+              transform: {
+                  '<font size="3">{SELTEXT}</font>':'[size=3]{SELTEXT}[/size]'
+              }
+          },
+          fs_normal: {
+              title: CURLANG.fs_normal,
+              buttonText: "fs4",
+              excmd: 'fontSize',
+              exvalue: "4",
+              transform: {
+                  '<font size="4">{SELTEXT}</font>':'[size=4]{SELTEXT}[/size]'
+              }
+          },
+          fs_big: {
+              title: CURLANG.fs_big,
+              buttonText: "fs5",
+              excmd: 'fontSize',
+              exvalue: "5",
+              transform: {
+                  '<font size="5">{SELTEXT}</font>':'[size=5]{SELTEXT}[/size]'
+              }
+          },
+          fs_verybig: {
+              title: CURLANG.fs_verybig,
+              buttonText: "fs6",
+              excmd: 'fontSize',
+              exvalue: "6",
+              transform: {
+                  '<font size="6">{SELTEXT}</font>':'[size=6]{SELTEXT}[/size]'
+              }
+          },
+          fs_extremebig: {
+              title: CURLANG.fs_extremebig,
+              buttonText: "fs7",
+              excmd: 'fontSize',
+              exvalue: "7",
+              transform: {
+                  '<font size="7">{SELTEXT}</font>':'[size=7]{SELTEXT}[/size]'
+              }
+          },
+      }
+    };
+        let bbtextarea = jQuery("textarea[class=\"bbcode\"]");
+        if (bbtextarea.length > 0) {
+            let bbobj = bbtextarea.wysibb(wbbOpt).data('wbb');
+            bbobj.modeSwitch();
+            jQuery('.modesw').parent().addClass('on');
+        }
+    })
+  </script>
+    <link rel="stylesheet" href="ext/wysibb/theme/nexusphp/wbbtheme.css" />
+  <style type="text/css">.wysibb{width:750px;}</style>
+<!--  /WYSIBB-->
+<!-- \CC\ED\BC\D3 $script \B2\CE\CA\FD֧\B3\D6-->
+     <!-- //\CC\ED\BC\D3 $script \B2\CE\CA\FD֧\B3\D6-->
+</head>
+
+<body>
+<table class="head" cellspacing="0" cellpadding="0" align="center">
+    <tr>
+        <td class="clear">
+            <div>
+            <div style="float:left; margin: -0px 0px 0px 0px;"><img src="storage/uploadpicz/hz/PTer.Club_Logo_2026.png" style="border-radius: 6px;" alt="ＰＴ之友俱乐部" width="148" height="84" title="ＰＴ之友俱乐部 - 我们一起喵喵喵喵喵" /></div>
+
+                            <div style="float:right; margin: -0px 0px 0px 0px; display: inline-flex;">
+                    <a href="/sitefreepool.php">
+                        <div style="height: 84px; width: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                                                        <img class="animate-bounce" src="storage/uploadpicz/misc/freepool.png" height="56px" alt="global site free pool">
+                            <div style="margin-top: 4px; display: inline-flex; width: 100%; height: 4px; align-items: center;">
+                                <div style="flex: 1; height: 100%; border: 1px solid #999; border-radius: 3px; background: white; overflow: hidden;">
+                                    <div style="width: 68%; height: 100%; background: #22c55e; border-radius: 2px;"></div>
+                                </div>
+                                <span style="margin-left: 2px; font-size: 10px;">68%</span>
+                            </div>
+                                                                                </div>
+                    </a>
+                                </div>
+            
+                <div style="position:relative; text-align:center; margin: 4px 200px;"><a href="/details.php?id=617817"><img class="shadow rounded-sm" src="storage/uploadpicz/welfare/week202641welfare.jpg" width="450" height="84" /></a></div></div>            <!--<div align="center"><a href="/details.php?id=2257"><img src="pic/Banner.jpg" width="982" height="287" /></a></div>-->
+                </td>
+        <td class="clear nowrap" align="right" valign="middle">
+    <div class="aside-nav bounceInUp animated" id="aside-nav" style="top: 350px; right: -85px;">"<label for="" class="aside-menu" title="">常用</label><a href="torrents.php" title="种子页面" class="menu-item menu-first">种子</a><a href="upload.php" title="发布页面" class="menu-item menu-second">发布</a><a href="forums.php" title="论坛页面" class="menu-item menu-third">论坛</a><a href=\userdetails.php?id=14368 title="用户信息" class="menu-item menu-line menu-fourth">个人<br>中心</a>        </div>
+    </td>
+  </tr>
+</table>
+
+<table class="mainouter" width="982" cellspacing="0" cellpadding="5" align="center">
+    <tr><td id="nav_block" class="text" align="center">
+    <table class="main" width="940" border="0" cellspacing="0" cellpadding="0"><tr><td class="embedded" ><div id="ddtopmenubar"><ul class="menu"><li><a href="index.php">&nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li><a href="forums.php">&nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li><a href="torrents.php" rel="ddsubmenu1">&nbsp;种&nbsp;&nbsp;子&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="torrents.php" rel="ddsubmenu1">&nbsp;所有</a><li><a href="torrents.php?tag_internal=no">&nbsp;非官方</a><li><a href="torrents.php?cat=401">&nbsp;电影</a><ul><li><a>&nbsp;地区</a><ul><li><a href="torrents.php?cat401=1&team1=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国大陆</a></li><li><a href="torrents.php?cat401=1&team2=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国香港</a></li><li><a href="torrents.php?cat401=1&team3=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国台湾</a></li><li><a href="torrents.php?cat401=1&team4=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;英&nbsp;&nbsp;美</a></li><li><a href="torrents.php?cat401=1&team5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;韩&nbsp;&nbsp;国</a></li><li><a href="torrents.php?cat401=1&team6=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;本</a></li><li><a href="torrents.php?cat401=1&team7=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;印&nbsp;&nbsp;度</a></li><li><a href="torrents.php?cat401=1&team8=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;其&nbsp;&nbsp;它</a></li></ul></li><li><a href="torrents.php?cat401=1&source1=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;4K</a></li><li><a href="torrents.php?cat401=1&source2=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;Blu-ray</a></li><li><a href="torrents.php?cat401=1&source3=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;Remux</a></li><li><a href="torrents.php?cat401=1&source7=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;DVD</a></li><li><a href="torrents.php?cat401=1&source5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;WEB-DL</a></li><li><a href="torrents.php?source6=1&incldead=1&spstate=0&inclbookmarked=0&search=1080p&search_area=0&search_mode=0">&nbsp;1080p</a><ul><li><a href="torrents.php?cat401=1&incldead=1&spstate=0&inclbookmarked=0&search=1080p+x265&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;x265</a></li><li><a href="torrents.php?cat401=1&incldead=1&spstate=0&inclbookmarked=0&search=1080p+x264&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;x264</a></li></ul></li><li><a href="torrents.php?source6=1&incldead=1&spstate=0&inclbookmarked=0&search=720p&search_area=0&search_mode=0">&nbsp;720p</a></li><li><a href="torrents.php?cat401=1&incldead=1&spstate=0&inclbookmarked=0&search=x265&search_area=0&search_mode=0">&nbsp;x265</a></li><li><a href="torrents.php?cat401=1&incldead=1&spstate=0&inclbookmarked=0&search=x264&search_area=0&search_mode=0">&nbsp;x264</a></li></ul></li><li><a href="torrents.php?cat=404">&nbsp;电视剧</a><ul><li><a href="torrents.php?cat404=1&team1=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国大陆</a></li><li><a href="torrents.php?cat404=1&team2=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国香港</a></li><li><a href="torrents.php?cat404=1&team3=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;中国台湾</a></li><li><a href="torrents.php?cat404=1&team4=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;英&nbsp;&nbsp;美</a></li><li><a href="torrents.php?cat404=1&team5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;韩&nbsp;&nbsp;国</a></li><li><a href="torrents.php?cat404=1&team6=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;本</a></li><li><a href="torrents.php?cat404=1&team7=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;其&nbsp;&nbsp;它</a></li></ul></li><li><a href="torrents.php?cat=406">&nbsp;音乐&nbsp;</a><ul><li><a href="torrents.php?tag_mandarin=yes&cat406=1&incldead=0">&nbsp;&nbsp;&nbsp;国&nbsp;&nbsp;语</a><li><a href="torrents.php?tag_cantonese=yes&cat406=1&incldead=0">&nbsp;&nbsp;&nbsp;粤&nbsp;&nbsp;语</a><li><a href="torrents.php?cat406=1&team4=1&incldead=0">&nbsp;&nbsp;&nbsp;欧&nbsp;&nbsp;美</a><li><a href="torrents.php?cat406=1&team5=1&incldead=0">&nbsp;&nbsp;&nbsp;韩&nbsp;&nbsp;语</a><li><a href="torrents.php?cat406=1&team6=1&incldead=0">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;语</a><li><a href="torrents.php?cat406=1&team7=1&team8=1&incldead=0&search_mode=1">&nbsp;&nbsp;&nbsp;其&nbsp;&nbsp;它</a></ul></li><li><a href="torrents.php?cat=418">&nbsp;演出</a><ul><li><a href="torrents.php?cat418=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=2">&nbsp;演唱会</a><ul><li><a href="torrents.php?tag_mandarin=yes&cat418=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;国&nbsp;&nbsp;语</a><li><a href="torrents.php?tag_cantonese=yes&cat418=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;粤&nbsp;&nbsp;语</a><li><a href="torrents.php?cat418=1&team4=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;欧&nbsp;&nbsp;美</a><li><a href="torrents.php?cat418=1&team5=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;韩&nbsp;&nbsp;语</a><li><a href="torrents.php?cat418=1&team6=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;语</a><li><a href="torrents.php?tag_exclusive=&tag_internal=&tag_mandarin=&tag_cantonese=&tag_doityourself=&tag_master=&cat418=1&team7=1&team8=1&incldead=1&spstate=0&inclbookmarked=0&search=%E6%BC%94%E5%94%B1%E4%BC%9A&search_area=0&search_mode=1">&nbsp;&nbsp;&nbsp;其&nbsp;&nbsp;它</a></ul></li></ul></li><li><a href="torrents.php?incldead=1&spstate=0&inclbookmarked=0&search=搞笑视频&search_area=0&search_mode=0">&nbsp;搞笑</a></li><li><a href="torrents.php?cat=403">&nbsp;动画</a></li><li><a href="torrents.php?cat=405">&nbsp;综艺</a></li><li><a href="torrents.php?incldead=1&spstate=0&inclbookmarked=0&search=LikeArt&search_area=0&search_mode=0">&nbsp;艺术</a></li><li><a href="torrents.php?cat=402">&nbsp;纪录片</a></li><li><a href="torrents.php?cat=407">&nbsp;体育</a></li><li><a href="torrents.php?cat=408">&nbsp;电子书</a></li></ul><li><a href="music.php?tag_exclusive=&tag_internal=&tag_mandarin=&tag_cantonese=&tag_doityourself=&tag_master=&cat413=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0" rel="ddsubmenu1">&nbsp;Ｍ&nbsp;&nbsp;Ｖ&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="music.php?tag_exclusive=&tag_internal=&tag_mandarin=&tag_cantonese=&tag_doityourself=&tag_master=&cat413=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0" rel="ddsubmenu1">&nbsp;&nbsp;&nbsp;所&nbsp;&nbsp;有</a></li><li><a href="music.php?cat413=1&team1=1&team2=1&team3=1&incldead=0&search_mode=1">&nbsp;&nbsp;&nbsp;华&nbsp;&nbsp;语</a></li><li><a href="music.php?tag_mandarin=yes&cat413=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;国&nbsp;&nbsp;语</a></li><li><a href="music.php?tag_cantonese=yes&cat413=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;粤&nbsp;&nbsp;语</a></li><li><a href="music.php?cat413=1&team4=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;欧&nbsp;&nbsp;美</a></li><li><a href="music.php?cat413=1&team5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;韩&nbsp;&nbsp;语</a></li><li><a href="music.php?cat413=1&team6=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;语</a></li><li><a href="music.php?tag_exclusive=&tag_internal=&tag_mandarin=&tag_cantonese=&tag_doityourself=&tag_master=&cat413=1&team7=1&team8=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=1">&nbsp;&nbsp;&nbsp;其&nbsp;&nbsp;它</a></li></ul><li><a href="torrents.php?cat=409" rel="ddsubmenu1">&nbsp;游&nbsp;&nbsp;戏&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="torrents.php?cat=409" rel="ddsubmenu1">&nbsp;&nbsp;&nbsp;所&nbsp;&nbsp;有</a></li><li><a>&nbsp;&nbsp;&nbsp;设&nbsp;&nbsp;备&nbsp;</a><ul><li><a>&nbsp;Microsoft</a><ul><li><a href="torrents.php?source16=1">&nbsp;Windows</a></li><li><a href="torrents.php?source17=1">&nbsp;DOS</a></li><li><a href="torrents.php?source18=1">&nbsp;Xbox</a></li><li><a href="torrents.php?source19=1">&nbsp;Xbox360</a></li></ul></li><li><a>&nbsp;Nintendo</a><ul><li><a href="torrents.php?source20=1">&nbsp;Switch</a></li><li><a href="torrents.php?source21=1">&nbsp;FC/NES</a></li><li><a href="torrents.php?source22=1">&nbsp;GB/GBC</a></li><li><a href="torrents.php?source23=1">&nbsp;SFC/SNES</a></li><li><a href="torrents.php?source24=1">&nbsp;GBA</a></li><li><a href="torrents.php?source25=1">&nbsp;N64</a></li><li><a href="torrents.php?source26=1">&nbsp;Virtual&nbsp;Boy</a></li><li><a href="torrents.php?source27=1">&nbsp;GameCube</a></li><li><a href="torrents.php?source28=1">&nbsp;DS</a></li><li><a href="torrents.php?source29=1">&nbsp;3DS</a></li><li><a href="torrents.php?source30=1">&nbsp;Wii/WiiU</a></li></ul></li><li><a>&nbsp;Sony</a><ul><li><a href="torrents.php?source31=1">&nbsp;PS4</a></li><li><a href="torrents.php?source32=1">&nbsp;PS/PSone</a></li><li><a href="torrents.php?source33=1">&nbsp;PS2</a></li><li><a href="torrents.php?source34=1">&nbsp;PSP</a></li><li><a href="torrents.php?source35=1">&nbsp;PS3</a></li><li><a href="torrents.php?source56=1">&nbsp;PS5</a></li><li><a href="torrents.php?source36=1">&nbsp;PS Vita</a></li></ul></li><li><a>&nbsp;Apple</a><ul><li><a href="torrents.php?source37=1">&nbsp;MAC</a></li><li><a href="torrents.php?source38=1">&nbsp;iOS</a></li></ul></li><li><a>&nbsp;Arcade</a><ul><li><a href="torrents.php?source39=1">&nbsp;FinalBurn</a></li><li><a href="torrents.php?source40=1">&nbsp;Kawaks</a></li><li><a href="torrents.php?source41=1">&nbsp;MAME</a></li><li><a href="torrents.php?source42=1">&nbsp;Nebula</a></li><li><a href="torrents.php?source43=1">&nbsp;RetroArch</a></li></ul></li><li><a>&nbsp;Bandi</a><ul><li><a href="torrents.php?source44=1">&nbsp;WanderSwan</a></li></ul></li><li><a>&nbsp;Google</a><ul><li><a href="torrents.php?source45=1">&nbsp;Android</a></li></ul></li><li><a>&nbsp;Linux</a><ul><li><a href="torrents.php?source46=1">&nbsp;Linux</a></li></ul></li><li><a>&nbsp;NEC</a><ul><li><a href="torrents.php?source47=1">&nbsp;PC-E</a></li></ul></li><li><a>&nbsp;Sega</a><ul><li><a href="torrents.php?source48=1">&nbsp;Master System</a></li><li><a href="torrents.php?source49=1">&nbsp;Mega Drive</a></li><li><a href="torrents.php?source50=1">&nbsp;Game Gear</a></li><li><a href="torrents.php?source51=1">&nbsp;Saturn</a></li><li><a href="torrents.php?source52=1">&nbsp;DreamCast</a></li></ul></li><li><a>&nbsp;SNC</a><ul><li><a href="torrents.php?source53=1">&nbsp;NeoGeo</a></li><li><a href="torrents.php?source54=1">&nbsp;NGP/NGPC</a></li></ul></li><li><a>&nbsp;Other</a><ul><li><a href="torrents.php?source57=1">&nbsp;Oculus Quest 2</a></li><li><a href="torrents.php?source55=1">&nbsp;Other</a></li></ul></li></ul></li><li><a href="https://wiki.pterclub.net/wiki/%E6%B8%B8%E6%88%8F%E5%8C%BA%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97">&nbsp;&nbsp;&nbsp;指&nbsp;&nbsp;南&nbsp;</a></li><li><a href="https://wiki.pterclub.net/wiki/%E6%B8%B8%E6%88%8F%E5%8C%BA%E6%89%8B%E6%8A%8A%E6%89%8B%E5%8F%91%E7%A7%8D%E6%95%99%E7%A8%8B">&nbsp;发种教程&nbsp;</a></li><li><a href="searchgameinfo.php">&nbsp;查询游戏&nbsp;</a></li><li><a href="uploadgameinfo.php">&nbsp;添加游戏&nbsp;</a></li><li><a href="torrents.php?tag_sce=yes">&nbsp;&nbsp;Scene</a></li><li><a href="torrents.php?tag_vs=yes">&nbsp;可 信 源</a></li><li><a href="torrents.php?tag_gg=yes">GalGame</a></li></ul><li><a href="officialgroup.php?tag_internal=yes&t&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0" rel="ddsubmenu1">&nbsp;官&nbsp;&nbsp;方&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="officialgroup.php?tag_internal=yes&t&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0" rel="ddsubmenu1">&nbsp;&nbsp;&nbsp;所&nbsp;&nbsp;有</a><li><a href="officialgroup.php?tag_internal=yes&source6=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;压&nbsp;&nbsp;制</a></li><li><a href="officialgroup.php?tag_internal=yes&source5=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;网&nbsp;&nbsp;络</a></li><li><a href="officialgroup.php?tag_internal=yes&tag_doityourself=yes&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;D&nbsp;I&nbsp;Y</a></li><li><a href="officialgroup.php?tag_internal=yes&search=Remux">&nbsp;&nbsp;Remux</a></li><li><a href="officialgroup.php?tag_internal=yes&source4=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;录&nbsp;&nbsp;制</a></li><li><a href="officialgroup.php?tag_internal=yes&cat409=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;游&nbsp;&nbsp;戏</a></li><li><a href="officialgroup.php?tag_internal=yes&cat413=1&incldead=1&spstate=0&inclbookmarked=0&search=&search_area=0&search_mode=0">&nbsp;&nbsp;&nbsp;Ｍ&nbsp;&nbsp;Ｖ</a></li><li><a href="welfare.php">&nbsp;每周福利</a></li></ul><li><a href="viewrequests.php">&nbsp;求&nbsp;&nbsp;种&nbsp;</a></li><li><a href="reseed.php?tag_internal=yes">&nbsp;保&nbsp;&nbsp;种&nbsp;</a></li><li><a href="offers.php">&nbsp;候&nbsp;&nbsp;选&nbsp;</a></li><li class="selected"><a href="upload.php" rel="ddsubmenu1">&nbsp;发&nbsp;&nbsp;布&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="upload.php" rel="ddsubmenu1">&nbsp;&nbsp;&nbsp;所&nbsp;&nbsp;有</a><li><a href="subtitles.php">&nbsp;&nbsp;&nbsp;字&nbsp;&nbsp;幕</a></li><li><a href="postpreview.php" target="_blank">&nbsp;&nbsp;&nbsp;预&nbsp;&nbsp;览</a></li></ul><li><a href="blackjack.php" rel="ddsubmenu1">&nbsp;娱&nbsp;&nbsp;乐&nbsp;</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="blackjack.php">&nbsp;２&nbsp;１&nbsp;点&nbsp;</a></li><li><a href="wof.php" target="_blank">&nbsp;大&nbsp;转&nbsp;盘</a></li><li><a href="slot/index.html?slot-202406292233" target="_blank">&nbsp;摇&nbsp;摇&nbsp;乐</a></li><li><a href="lottery.php">&nbsp;刮&nbsp;刮&nbsp;乐</a></li><li><a href="medal.php">&nbsp;徽章换领</a></li><li><a href="showmedal.php">&nbsp;徽章陈列</a></li><li><a href="medalbillboard.php">&nbsp;徽章排行</a></li></ul><li><a href="usercp.php">&nbsp;控制面板&nbsp;</a></li><li><a href="topten.php" rel="ddsubmenu1">排&nbsp;行&nbsp;榜</a></li><ul id="ddsubmenu1" class="ddsubmenustyle"><li><a href="topten.php" rel="ddsubmenu1">&nbsp;&nbsp;&nbsp;所&nbsp;&nbsp;有</a><li><a href="log.php">&nbsp;&nbsp;&nbsp;日&nbsp;&nbsp;志</a></li></ul><li><a href='javascript:void(0)' rel='ddsubmenu1'>帮&nbsp;助</a></li><ul id="ddsubmenu1" class="ddsubmenustyle" style='text-align: center;'><li><a href='https://wiki.pterclub.net/wiki/%E9%A6%96%E9%A1%B5#.E8.A7.84.E5.88.99' target='_blank'>规则</a></li><li><a href='https://wiki.pterclub.net/wiki/%E9%A6%96%E9%A1%B5#.E5.B8.B8.E8.A7.81.E9.97.AE.E9.A2.98' target='_blank'>常见问题</a></li><li><a href='https://wiki.pterclub.net' target='_blank'>Wiki</a></li><li><a href='contactstaff.php'>管理组</a></li></ul></ul></div></td></tr></table>
+
+<table id="info_block" cellpadding="4" cellspacing="0" border="0" width="100%"><tr>
+  <td><table width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
+    <td class="bottom" align="left">
+		<span class="medium">欢迎回来, <span class="nowrap"><a  href="userdetails.php?id=14368" class='VIP_Name'><b>nandie</b></a> <span title="2FA" ><a href="https://wiki.pterclub.net/wiki/2FA" target="_blank">🔐</a></span></span>			[<a href="#" data-url="logout.php" id="logout-confirm">退出</a>]
+									[<a href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0">收藏</a>]
+			[<a href="viewclaims.php">已认领种子</a>]
+			<!-- [<a href="myrss.php">RSS 下载筐</a>] -->
+            <a title="点击查看每小时收益预测" href="mybonus.php#bonus-sum">
+                <span class="color_bonus">猫粮 </span>
+            </a>
+			[<a href="mybonus.php">使用</a> | <a href="sitefreepool.php">站免池</a>]: 262,627.1<span id="attendance-wrap"> <a href="#" data-url="attendance-ajax.php" id="do-attendance" class="faqlink">签到得猫粮</a> </span> <font class="color_invite">邀请 </font>
+		[<a href="invite.php?id=14368">发送</a>]:
+		1/0<br />
+
+		<font class="color_ratio">分享率：</font> 22.787		<font class='color_uploaded'>上传量：</font>
+		230.190 TB<font class='color_downloaded'>
+			下载量：</font> 10.102 TB		<span class="color_bonus">做种积分：</span> 4,128,734.7		<font class='color_active'>当前活动：</font>
+		<a href="getusertorrentlist.php?userid=14368&type=seeding">
+			<img class="arrowup" alt="Torrents seeding" title="当前做种" src="pic/trans.gif" />
+			507</a>
+		<a href="getusertorrentlist.php?userid=14368&type=leeching">
+			<img class="arrowdown" alt="Torrents leeching" title="当前下载" src="pic/trans.gif" />
+            0</a>
+    </td>
+
+  <td class="bottom" align="right">
+<div id="lang-selector">
+
+        
+          <img src="/pic/flag/china.gif" height="10" width="16" alt="简体中文" title="简体中文" />&nbsp;
+        
+        <a href="?sitelanguage=28">  <img src="/pic/flag/hong_kong.gif" height="10" width="16" alt="轉為繁體中文" title="轉為繁體中文"/>&nbsp;
+        </a>
+        <a href="?sitelanguage=6">  <img src="/pic/flag/uk.gif" height="10" width="16" alt="Switch to English" title="Switch to English" />&nbsp;
+        </a>
+    <span class="medium">
+		    </span>
+</div>
+	  <span class="medium">
+        <a href="messages.php"><img class="inbox" src="pic/trans.gif" alt="inbox" title="收件箱&nbsp;(无新短讯)" /></a> 19 (0 新)  <a href="messages.php?action=viewmailbox&amp;box=-1"><img class="sentbox" alt="sentbox" title="发件箱" src="pic/trans.gif" /></a> 0 <a href="friends.php"><img class="buddylist" alt="Buddylist" title="社交名单" src="pic/trans.gif" /></a> <a href="getrss.php"><img class="rss" alt="RSS" title="获取RSS" src="pic/trans.gif" /></a> <a href="contactstaff.php"><img alt="ContactStaff" title="给管理组发短讯" src="storage/uploadpicz/misc/contactstaff.png" /></a>
+    </span></td>
+    </tr></table></td>
+</tr></table>
+
+</td></tr>
+
+<tr><td id="outer" align="center" class="outer">
+        <div style='display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;'></div><div align="center"><a href="forums.php?action=viewtopic&forumid=1&topicid=61" target=_blank><b><font color="#8000ff" size="4">【2026进行中】人才招募</font></a></b></div><br>    <form id="compose" enctype="multipart/form-data" action="takeupload.php" method="post" name="upload">
+            <p align="center"><a href='forums.php?action=viewtopic&topicid=375' target='_blank'><b><font color='#ff0000' size='4'>🔗 本站禁止发布国家版权局重点作品版权保护预警名单里的影视作品，谢谢！</font></b><a></p><p align="center">红星号(<font color="red">*</font>)标记的区域必须填写 [<a href='https://wiki.pterclub.net/wiki/%E4%B8%8A%E4%BC%A0%E8%A7%84%E5%88%99%EF%BC%88%E5%90%AB%E6%A0%87%E9%A2%98%E5%91%BD%E5%90%8D%E5%8F%8A%E5%86%85%E5%AE%B9%E7%BC%96%E8%BE%91%E6%8C%87%E5%8D%97%EF%BC%89' target='_blank'><font color="red">查看规则</font></a>] <a font class="small" href="forums.php?action=viewtopic&forumid=2&topicid=5197" target="_blank"><b><u>PT Gen 电影资讯</u></b></a></p>            <table border="1" cellspacing="0" cellpadding="5" width="940">
+                <tr>
+                    <td class='colhead' colspan='2' align='center'>
+                    Tracker服务器的URL是: &nbsp;&nbsp;&nbsp;&nbsp;<b>https://tracker.pterclub.net/announce</b>
+                        <br>图片可以上传到猫站图床 (注册图床后不再有500k档案大小限制！) &nbsp;&nbsp;&nbsp;&nbsp;
+                        <a target="_blank" href="https://s3.pterclub.net/connect/goauth"><strong>PTerClub Image Hosting Service</strong></a>
+                            | <a target="_blank" href="https://wiki.pterclub.net/wiki/PTerClub%E5%9B%BE%E5%BA%8A"><strong>图床使用帮助</strong></a>
+                                            </td>
+                </tr>
+                <tr><td class="rowhead nowrap" valign="top" align="right">引用发布</td><td class="rowfollow" valign="top" align="left">https://pterclub.net/details.php?id= <input type="text" style="width: 80px;" name="referid" value=""/> <input type="submit" name="uploadrefer" value="引用" />&nbsp;&nbsp;(引用的时候请特别注意BDInfo/Mediainfo的准确性和删除不适合的内容。)
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">种子文件<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><input type="file" class="file" id="torrent" name="file" accept=".torrent" />
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">标题</td><td class="rowfollow" valign="top" align="left"><input type="text" style="width: 650px;" id="name" name="name" /><br /><font class="medium">(若不填将使用种子文件名。<b>要求规范填写</b>，如<i>Once A Thief 1991 1080p Bluray x264 DTS-HD MA 5.1 2Audio-PTer</i>)
+</font></td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">副标题</td><td class="rowfollow" valign="top" align="left"><input type="text" style="width: 650px;" name="small_descr" /><br /><font class="medium">(将在种子页面种子标题下显示。如<i>纵横四海 | 导演：吴宇森 主演：周润发 张国荣 钟楚红 [国粤双语] [简繁英+章节]</i>)</font></td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">IMDb链接</td><td class="rowfollow" valign="top" align="left"><input type="text" style="width: 650px;" name="url" value="" /><br /><font class="medium">(来自<strong><a href="http://www.imdb.com">IMDb</a></strong>的链接。如电影<b>Once A Thief</b>的链接是<b>http://www.imdb.com/title/tt0101020/</b>)</font></td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">豆瓣链接</td><td class="rowfollow" valign="top" align="left"><input type="text" style="width: 650px;" name="douban" value="" /><br /><font class="medium">(来自<strong><a href="https://movie.douban.com">douban</a></strong>的链接。如电影<b>Once A Thief</b>的链接是<b>https://movie.douban.com/subject/1295409/</b>)</font></td></tr>
+<tr><td class="rowhead" style='padding: 3px' valign="top">简介<font color="red">*</font></td><td class="rowfollow">
+<script type="text/javascript">
+//<![CDATA[
+var b_open = 0;
+var i_open = 0;
+var u_open = 0;
+var s_open = 0;
+var color_open = 0;
+var list_open = 0;
+var center_open = 0;
+var hide_open = 0;
+var quote_open = 0;
+var code_open = 0;
+var html_open = 0;
+
+var myAgent = navigator.userAgent.toLowerCase();
+var myVersion = parseInt(navigator.appVersion);
+
+var is_ie = ((myAgent.indexOf("msie") != -1) && (myAgent.indexOf("opera") == -1));
+var is_nav = ((myAgent.indexOf('mozilla')!=-1) && (myAgent.indexOf('spoofer')==-1)
+&& (myAgent.indexOf('compatible') == -1) && (myAgent.indexOf('opera')==-1)
+&& (myAgent.indexOf('webtv') ==-1) && (myAgent.indexOf('hotjava')==-1));
+
+var is_win = ((myAgent.indexOf("win")!=-1) || (myAgent.indexOf("16bit")!=-1));
+var is_mac = (myAgent.indexOf("mac")!=-1);
+var bbtags = new Array();
+function cstat() {
+    var c = stacksize(bbtags);
+    if ( (c < 1) || (c == null) ) {c = 0;}
+    if ( ! bbtags[0] ) {c = 0;}
+    document.upload.tagcount.value = "Close["+c+"]";
+}
+function stacksize(thearray) {
+    for (i = 0; i < thearray.length; i++ ) {
+        if ( (thearray[i] == "") || (thearray[i] == null) || (thearray == 'undefined') ) {return i;}
+    }
+    return thearray.length;
+}
+function pushstack(thearray, newval) {
+    arraysize = stacksize(thearray);
+    thearray[arraysize] = newval;
+}
+function popstackd(thearray) {
+    arraysize = stacksize(thearray);
+    theval = thearray[arraysize - 1];
+    return theval;
+}
+function popstack(thearray) {
+    arraysize = stacksize(thearray);
+    theval = thearray[arraysize - 1];
+    delete thearray[arraysize - 1];
+    return theval;
+}
+function closeall() {
+    if (bbtags[0]) {
+        while (bbtags[0]) {
+            tagRemove = popstack(bbtags)
+            if ( (tagRemove != 'color') ) {
+                doInsert("[/"+tagRemove+"]", "", false);
+                eval("document.upload." + tagRemove + ".value = ' " + tagRemove + " '");
+                eval(tagRemove + "_open = 0");
+            } else {
+                doInsert("[/"+tagRemove+"]", "", false);
+            }
+            cstat();
+            return;
+        }
+    }
+    document.upload.tagcount.value = "Cloase[0]";
+    bbtags = new Array();
+    document.upload.descr.focus();
+}
+function add_code(NewCode) {
+    document.upload.descr.value += NewCode;
+    document.upload.descr.focus();
+}
+function alterfont(theval, thetag) {
+    if (theval == 0) return;
+    if(doInsert("[" + thetag + "=" + theval + "]", "[/" + thetag + "]", true)) pushstack(bbtags, thetag);
+    document.upload.color.selectedIndex = 0;
+    cstat();
+}
+
+function tag_url(PromptURL, PromptTitle, PromptError) {
+    var FoundErrors = '';
+    var enterURL = prompt(PromptURL, "http://");
+    var enterTITLE = prompt(PromptTitle, "");
+    if (!enterURL || enterURL=="") {FoundErrors += " " + PromptURL + ",";}
+    if (!enterTITLE) {FoundErrors += " " + PromptTitle;}
+    if (FoundErrors) {alert(PromptError+FoundErrors);return;}
+    doInsert("[url="+enterURL+"]"+enterTITLE+"[/url]", "", false);
+}
+
+function tag_video(PromptURL, PromptTitle, PromptError) {
+    var FoundErrors = '';
+    var enterURL = prompt(PromptURL, "https://");
+    if (!enterURL || enterURL=="") {FoundErrors += " " + PromptURL;}
+    if (FoundErrors) {alert(PromptError+FoundErrors);return;}
+    doInsert("[video]"+enterURL+"[/video]", "", false);
+}
+
+function tag_list(PromptEnterItem, PromptError) {
+    var FoundErrors = '';
+    var enterTITLE = prompt(PromptEnterItem, "");
+    if (!enterTITLE) {FoundErrors += " " + PromptEnterItem;}
+    if (FoundErrors) {alert(PromptError+FoundErrors);return;}
+    doInsert("[*]"+enterTITLE+"", "", false);
+}
+
+function tag_image(PromptImageURL, PromptError) {
+    var FoundErrors = '';
+    var enterURL = prompt(PromptImageURL, "http://");
+    if (!enterURL || enterURL=="http://") {
+        alert(PromptError+PromptImageURL);
+        return;
+    }
+    doInsert("[img]"+enterURL+"[/img]", "", false);
+}
+
+function tag_extimage(content) {
+    doInsert(content, "", false);
+}
+
+function tag_email(PromptEmail, PromptError) {
+    var emailAddress = prompt(PromptEmail, "");
+    if (!emailAddress) {
+        alert(PromptError+PromptEmail);
+        return;
+    }
+    doInsert("[email]"+emailAddress+"[/email]", "", false);
+}
+
+function doInsert(ibTag, ibClsTag, isSingle)
+{
+    var isClose = false;
+    var obj_ta = document.upload.descr;
+    if ( (myVersion >= 4) && is_ie && is_win)
+    {
+        if(obj_ta.isTextEdit)
+        {
+            obj_ta.focus();
+            var sel = document.selection;
+            var rng = sel.createRange();
+            rng.colapse;
+            if((sel.type == "Text" || sel.type == "None") && rng != null)
+            {
+                if(ibClsTag != "" && rng.text.length > 0)
+                ibTag += rng.text + ibClsTag;
+                else if(isSingle) isClose = true;
+                rng.text = ibTag;
+            }
+        }
+        else
+        {
+            if(isSingle) isClose = true;
+            obj_ta.value += ibTag;
+        }
+    }
+    else if (obj_ta.selectionStart || obj_ta.selectionStart == '0')
+    {
+        var startPos = obj_ta.selectionStart;
+        var endPos = obj_ta.selectionEnd;
+        obj_ta.value = obj_ta.value.substring(0, startPos) + ibTag + obj_ta.value.substring(endPos, obj_ta.value.length);
+        obj_ta.selectionEnd = startPos + ibTag.length;
+        if(isSingle) isClose = true;
+    }
+    else
+    {
+        if(isSingle) isClose = true;
+        obj_ta.value += ibTag;
+    }
+    obj_ta.focus();
+    // obj_ta.value = obj_ta.value.replace(/ /, " ");
+    return isClose;
+}
+
+function winop()
+{
+    windop = window.open("moresmilies.php?form=upload&text=descr","mywin","height=500,width=500,resizable=no,scrollbars=yes");
+}
+
+function simpletag(thetag)
+{
+    var tagOpen = eval(thetag + "_open");
+    if (tagOpen == 0) {
+        if(doInsert("[" + thetag + "]", "[/" + thetag + "]", true))
+        {
+            eval(thetag + "_open = 1");
+            eval("document.upload." + thetag + ".value += '*'");
+            pushstack(bbtags, thetag);
+            cstat();
+        }
+    }
+    else {
+        lastindex = 0;
+        for (i = 0; i < bbtags.length; i++ ) {
+            if ( bbtags[i] == thetag ) {
+                lastindex = i;
+            }
+        }
+
+        while (bbtags[lastindex]) {
+            tagRemove = popstack(bbtags);
+            doInsert("[/" + tagRemove + "]", "", false)
+            if ((tagRemove != 'COLOR') ){
+                eval("document.upload." + tagRemove + ".value = '" + tagRemove.toUpperCase() + "'");
+                eval(tagRemove + "_open = 0");
+            }
+        }
+        cstat();
+    }
+}
+//]]>
+</script>
+
+<table width="100%" cellspacing="0" cellpadding="5" border="0">
+<tr><td align="left" colspan="2">
+<table cellspacing="1" cellpadding="2" border="0">
+<tr>
+<td class="embedded"><input style="font-weight: bold;font-size:11px; margin-right:3px" type="button" name="b" value="B" onClick="javascript: simpletag('b')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-style: italic;font-size:11px;margin-right:3px" type="button" name="i" value="I" onClick="javascript: simpletag('i')" /></td>
+<td class="embedded"><input class="codebuttons" style="text-decoration: underline;font-size:11px;margin-right:3px" type="button" name="u" value="U" onClick="javascript: simpletag('u')" /></td>
+<td class="embedded"><input class="codebuttons" style="text-decoration:line-through;font-size:11px;margin-right:3px" type="button" name="s" value="S" onClick="javascript: simpletag('s')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="center" value="Ctr" onClick="javascript: simpletag('center')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="hide" value="Hide" onClick="javascript: simpletag('hide')" /></td>
+    <td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name='url' value='Url' onclick="javascript:tag_url('你必须输入一个URL','你必须输入一个标题','错误!')" /></td><td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name='video' value='Video' onclick="javascript:tag_video('你必须输入一个URL','你必须输入一个标题','错误!')" /></td><td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="IMG" value="Img" onclick="javascript: tag_image('你必须输入一个完整的图像URL','错误!')" /></td><td class="embedded"><input type="button" style="font-size:11px;margin-right:3px" name="list" value="List" onclick="tag_list('输入一个列表的项目. 在列表的末尾, 按取消或将下一个留空','错误!')" /></td><td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="quote" value="Quote" onClick="javascript: simpletag('quote')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="code" value="Code" onClick="javascript: simpletag('code')" /></td>
+<td class="embedded"><input style="font-size:11px;margin-right:3px" type="button" onclick='javascript:closeall();' name='tagcount' value="closeTags" /></td>
+<td class="embedded"><select class="med codebuttons" style="margin-right:3px" name='color' onChange="alterfont(this.options[this.selectedIndex].value, 'color')">
+<option value='0'>--- 颜色 ---</option>
+<option style="background-color: black" value="Black">Black</option>
+<option style="background-color: sienna" value="Sienna">Sienna</option>
+<option style="background-color: darkolivegreen" value="DarkOliveGreen">Dark Olive Green</option>
+<option style="background-color: darkgreen" value="DarkGreen">Dark Green</option>
+<option style="background-color: darkslateblue" value="DarkSlateBlue">Dark Slate Blue</option>
+<option style="background-color: navy" value="Navy">Navy</option>
+<option style="background-color: indigo" value="Indigo">Indigo</option>
+<option style="background-color: darkslategray" value="DarkSlateGray">Dark Slate Gray</option>
+<option style="background-color: darkred" value="DarkRed">Dark Red</option>
+<option style="background-color: darkorange" value="DarkOrange">Dark Orange</option>
+<option style="background-color: olive" value="Olive">Olive</option>
+<option style="background-color: green" value="Green">Green</option>
+<option style="background-color: teal" value="Teal">Teal</option>
+<option style="background-color: blue" value="Blue">Blue</option>
+<option style="background-color: slategray" value="SlateGray">Slate Gray</option>
+<option style="background-color: dimgray" value="DimGray">Dim Gray</option>
+<option style="background-color: red" value="Red">Red</option>
+<option style="background-color: sandybrown" value="SandyBrown">Sandy Brown</option>
+<option style="background-color: yellowgreen" value="YellowGreen">Yellow Green</option>
+<option style="background-color: seagreen" value="SeaGreen">Sea Green</option>
+<option style="background-color: mediumturquoise" value="MediumTurquoise">Medium Turquoise</option>
+<option style="background-color: royalblue" value="RoyalBlue">Royal Blue</option>
+<option style="background-color: purple" value="Purple">Purple</option>
+<option style="background-color: gray" value="Gray">Gray</option>
+<option style="background-color: magenta" value="Magenta">Magenta</option>
+<option style="background-color: orange" value="Orange">Orange</option>
+<option style="background-color: yellow" value="Yellow">Yellow</option>
+<option style="background-color: lime" value="Lime">Lime</option>
+<option style="background-color: cyan" value="Cyan">Cyan</option>
+<option style="background-color: deepskyblue" value="DeepSkyBlue">Deep Sky Blue</option>
+<option style="background-color: darkorchid" value="DarkOrchid">Dark Orchid</option>
+<option style="background-color: silver" value="Silver">Silver</option>
+<option style="background-color: pink" value="Pink">Pink</option>
+<option style="background-color: wheat" value="Wheat">Wheat</option>
+<option style="background-color: lemonchiffon" value="LemonChiffon">Lemon Chiffon</option>
+<option style="background-color: palegreen" value="PaleGreen">Pale Green</option>
+<option style="background-color: paleturquoise" value="PaleTurquoise">Pale Turquoise</option>
+<option style="background-color: lightblue" value="LightBlue">Light Blue</option>
+<option style="background-color: plum" value="Plum">Plum</option>
+<option style="background-color: white" value="White">White</option>
+</select></td>
+<td class="embedded">
+<select class="med codebuttons" name='font' onChange="alterfont(this.options[this.selectedIndex].value, 'font')">
+<option value="0">--- 字体 ---</option>
+<option value="Arial">Arial</option>
+<option value="Arial Black">Arial Black</option>
+<option value="Arial Narrow">Arial Narrow</option>
+<option value="Book Antiqua">Book Antiqua</option>
+<option value="Century Gothic">Century Gothic</option>
+<option value="Comic Sans MS">Comic Sans MS</option>
+<option value="Courier New">Courier New</option>
+<option value="Fixedsys">Fixedsys</option>
+<option value="Garamond">Garamond</option>
+<option value="Georgia">Georgia</option>
+<option value="Impact">Impact</option>
+<option value="Lucida Console">Lucida Console</option>
+<option value="Lucida Sans Unicode">Lucida Sans Unicode</option>
+<option value="Microsoft Sans Serif">Microsoft Sans Serif</option>
+<option value="Palatino Linotype">Palatino Linotype</option>
+<option value="System">System</option>
+<option value="Tahoma">Tahoma</option>
+<option value="Times New Roman">Times New Roman</option>
+<option value="Trebuchet MS">Trebuchet MS</option>
+<option value="Verdana">Verdana</option>
+</select>
+</td>
+<td class="embedded">
+<select class="med codebuttons" name='size' onChange="alterfont(this.options[this.selectedIndex].value, 'size')">
+<option value="0">--- 字号 ---</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="7">7</option>
+</select></td></tr>
+</table>
+</td>
+</tr>
+    <tr><td align="left"><textarea class="bbcode" cols="100" style="width: 650px;"
+name="descr" id="descr" rows="20" onkeydown="ctrlenter(event,'compose','qr')"></textarea></td>
+<td align="center" width="99%">
+<table cellspacing="1" cellpadding="3">
+<tr>
+    <td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em1]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/1.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/1.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em2]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/2.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/2.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em3]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/3.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/3.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em5]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/5.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/5.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em6]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/6.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/6.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em7]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/7.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/7.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em8]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/8.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/8.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em9]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/9.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/9.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em10]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/10.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/10.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em11]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/11.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/11.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em13]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/13.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/13.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em16]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/16.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/16.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em17]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/17.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/17.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em19]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/19.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/19.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em20]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/20.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/20.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em21]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/21.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/21.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em24]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/24.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/24.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em25]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/25.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/25.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em26]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/26.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/26.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em27]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/27.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/27.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em28]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/28.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/28.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em29]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/29.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/29.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em30]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/30.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/30.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em31]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/31.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/31.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em32]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/32.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/32.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em33]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/33.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/33.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em34]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/34.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/34.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em35]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/35.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/35.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em36]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/36.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/36.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em39]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/39.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/39.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em40]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/40.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/40.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em41]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/41.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/41.gif" alt="" /></a></td></tr></table>
+<br />
+<a href="javascript:winop();">更多表情</a>
+</td></tr></table>
+
+        <script async src="https://s3.pterclub.net/sdk/pup.js?2020511"
+            data-url="https://s3.pterclub.net/upload"
+            data-palette="yellow" data-auto-insert="bbcode-embed-full" data-vendor="nexusphp"
+            data-target="#body" data-observe="div.modeSwitch">
+    </script>
+
+    </td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">类型<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><select name="type" id="browsecat" >
+<option value="0">请选择</option>
+<option value="401">电影 (Movie)</option>
+<option value="404">电视剧 (TV Series)</option>
+<option value="403">动画 (Animation)</option>
+<option value="405">综艺 (TV Show)</option>
+<option value="413">音乐短片 (MV)</option>
+<option value="406">音乐 (Music)</option>
+<option value="418">舞台演出(Stage Performance)</option>
+<option value="402">纪录片 (Documentary)</option>
+<option value="407">体育 (Sport)</option>
+<option value="408">电子书 (Ebook)</option>
+<option value="410">软件 (Software)</option>
+<option value="411">学习 (Study)</option>
+<option value="412">其它 (Other)</option>
+</select>&nbsp;&nbsp;(如需发布游戏，请到游戏菜单发布。)
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">质量<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><b>类型:</b>&nbsp;<select name="source_sel">
+<option value="0">请选择</option>
+<option value="1">UHD Discs</option>
+<option value="2">BD Discs</option>
+<option value="3">Remux</option>
+<option value="4">HDTV</option>
+<option value="5">WEB-DL</option>
+<option value="6">Encode</option>
+<option value="7">DVD Discs</option>
+<option value="8">FLAC</option>
+<option value="9">WAV</option>
+<option value="10">ISO</option>
+<option value="11">PDF</option>
+<option value="12">PUB</option>
+<option value="13">AZW</option>
+<option value="14">MOBI</option>
+<option value="15">Other</option>
+</select>&nbsp;&nbsp;&nbsp;
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">地区<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><b></b>&nbsp;<select name="team_sel">
+<option value="0">请选择</option>
+<option value="1">大陆 (Mainland,CHN)</option>
+<option value="2">香港 (HKG,CHN)</option>
+<option value="3">台湾 (TWN,CHN)</option>
+<option value="4">欧美 (Western)</option>
+<option value="5">韩国 (KOR)</option>
+<option value="6">日本 (JPN)</option>
+<option value="7">印度 (IND)</option>
+<option value="8">其它 (Other)</option>
+</select>&nbsp;&nbsp;&nbsp;
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">标签</td><td class="rowfollow" valign="top" align="left"><input id="jinzhuan" style='float:left;' type="checkbox" name="jinzhuan" value="yes" /><label for="jinzhuan"><a class="chs_tag chs_tag-jz" style="margin-left:2px; height:10px;" >禁转</a></label>
+																				<input id="guanfang" style='float:left; margin-left:13px' type="checkbox" name="guanfang" value="yes" /><label for="guanfang"><a class="chs_tag chs_tag-gf" style="margin-left: 2px; height:10px;" >官方</a></label>
+																				<input id="guoyu" style='float:left; margin-left:13px' type="checkbox" name="guoyu" value="yes" /><label for="guoyu"><a class="chs_tag chs_tag-gy" style="margin-left: 2px; height:10px;" >国语</a></label>
+																				<input id="yueyu" style='float:left; margin-left:13px' type="checkbox" name="yueyu" value="yes" /><label for="yueyu"><a class="chs_tag chs_tag-yy" style="margin-left: 2px; height:10px;" >粤语</a></label>
+																				<input id="zhongzi" style='float:left; margin-left:13px' type="checkbox" name="zhongzi" value="yes" /><label for="zhongzi"><a class="chs_tag chs_tag-sub" style="margin-left: 2px; height:10px;" >中字</a></label>
+																				<input id="ensub" style='float:left; margin-left:13px' type="checkbox" name="ensub" value="yes" /><label for="ensub"><a class="chs_tag chs_tag-ensub" style="margin-left: 2px; height:10px;" >英字</a></label>
+																				<input id="yingqiu" style='float:left; margin-left:13px' type="checkbox" name="yingqiu" value="yes" /><label for="yingqiu"><a class="chs_tag chs_tag-yq" style="margin-left: 2px; height:10px;" >应求</a></label>
+																				<input id="diy" style='float:left; margin-left:13px' type="checkbox" name="diy" value="yes" /><label for="diy"><a class="chs_tag chs_tag-diy" style="margin-left: 2px; height:10px;" >DIY原盘</a></label>
+																				<input id="pr" style='float:left; margin-left:13px' type="checkbox" name="pr" value="yes" /><label for="pr"><a class="chs_tag chs_tag-pr" style="margin-left: 2px; height:10px;" >原创</a></label>
+																				<input id="bim" style='float:left; margin-left:13px' type="checkbox" name="bim" value="yes" /><label for="bim"><a class="chs_tag chs_tag-bim" style="margin-left: 2px; height:10px;" >自购</a></label>
+																				<input id="mp" style='float:left; margin-left:13px' type="checkbox" name="mp" value="yes" /><label for="mp"><a class="chs_tag chs_tag-mp" style="margin-left: 2px; height:10px;" >MV母盘</a></label>
+																				</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">匿名发布</td><td class="rowfollow" valign="top" align="left"><input type=checkbox name=uplver value=yes />不要在发布者项目中显示我的用户名</td></tr>
+                <tr>
+                    <input type="hidden" name="offer" value="" />
+                    <input type="hidden" name="has_allowed_offer" value="0" />
+                <td class="toolbox" align="center" colspan="2"><b><a href="https://wiki.pterclub.net/wiki/%E4%B8%8A%E4%BC%A0%E8%A7%84%E5%88%99%EF%BC%88%E5%90%AB%E6%A0%87%E9%A2%98%E5%91%BD%E5%90%8D%E5%8F%8A%E5%86%85%E5%AE%B9%E7%BC%96%E8%BE%91%E6%8C%87%E5%8D%97%EF%BC%89" target="_blank" style="color: red; margin-right: 15px;">我已经阅读过规则(点击查看)</a></b> <input id="qr" type="submit" class="btn" value="发布" /></td></tr>
+        </table>
+    </form>
+
+<script type='module'>
+import bencode from './js/bencode.esm.js'
+
+jQuery('#torrent').on('change', (e) => {
+    getname()
+    checkName(e.target.files[0], '/takeupload.php', bencode, "同名种子已存在，请点击以下链接仔细检查是否重复！")
+})
+</script>
+
+<p align="center"><a href="tags.php" target="_blank">标签</a> | <a href="smilies.php" target="_blank">表情</a></p>
+</td></tr></table><div id="footer"><div style="margin-top: 10px; padding-bottom: 30px;" align="center"> (c)  <a href="/" target="_self">ＰＴ之友俱乐部</a> 2018-2026 Powered by <a href="aboutnxp.php">NexusPHP</a><br />[page created in <b> 6.840 </b> ms with <b>11</b> db queries, <b>20</b> reads and <b>6</b> writes of redis and <b>1.12 MB</b> ram]</div>
+<div style="display: none;" id="lightbox" class="lightbox"></div><div style="display: none;" id="curtain" class="curtain"></div><a id="faq-btn" href="javascript:void(0);" data-target="#faq-panel" onmouseover="faqToggle(this);"><img src="/pic/timemachine.png" alt="FAQ"></a><div id="faq-panel" style="display: none; background-color:#fdeac0;" data-target="#faq-panel" onmouseleave="faqToggle(this);"><p align="center"><h1><font color=red><center>F.A.Q.</center></font></h1></p>
+    <h3><font color=blue>新人必看</font></h3>
+    <a href="https://wiki.pterclub.net/" target="_blank">● 猫站规则</a><a href="https://wiki.pterclub.net/wiki/%E9%A6%96%E9%A1%B5#.E5.B8.B8.E8.A7.81.E9.97.AE.E9.A2.98" target="_blank">● 常见问题</a><br>
+    <a href="forums.php?action=viewtopic&topicid=375&page=p2128" target="_blank">● 禁发资源</a><a href="forums.php?action=viewtopic&forumid=2&topicid=675" target="_blank">● 新人报到</a><br>
+    <a href="forums.php?action=viewtopic&forumid=2&topicid=3" target="_blank">● 新手入门</a><a href="forums.php?action=viewtopic&forumid=1&topicid=53" target="_blank">● 命名规范</a><br>
+    <a href="forums.php?action=viewtopic&forumid=2&topicid=1348" target="_blank">● 转发教程</a><a title="盒子/多IP备案" href="forums.php?action=viewtopic&forumid=2&topicid=32" target="_blank">● 盒子/多IP备案</a><br>
+    <br>
+    <h3><font color=blue>特别奖励</font></h3>
+    <a href="forums.php?action=viewtopic&forumid=2&topicid=253" target="_blank">● 分享海报</a><a href="forums.php?action=viewtopic&forumid=21&topicid=1795" target="_blank">● MV发种奖励</a><br>
+    <a href="forums.php?action=viewtopic&forumid=21&topicid=2566" target="_blank">● 电影接力</a><a title="华语MV发种奖励" href="forums.php?action=viewtopic&forumid=21&topicid=1797" target="_blank">● 华语MV发种奖励</a><br>
+    <a href="forums.php?action=viewtopic&forumid=21&topicid=2742" target="_blank">● 猫粮放送</a><a href="forums.php?action=viewtopic&topicid=9189" target="_blank">● 四月影视专题</a><br>
+    <br>
+    <h3><font color=blue>特色功能</font></h3>
+    <a href="medal.php" target="_blank">● 特色徽章</a><a href="wof.php" target="_blank">● 大 转 盘</a><br>
+    <a href="usercp.php?action=tracker" target="_blank">● 显示隐藏</a><a href="lottery.php" target="_blank">● 刮 刮 乐</a><br>
+    <a href="tags.php" target="_blank">● 猫站BBCode</a><br></div></div>
+    <script>
+        (function($) {
+            $(function(){
+                //logout
+                $('#logout-confirm').click(function (e) {
+                    e.preventDefault();
+                    let logoutUrl = $(this).data("url");
+                    $.alert({
+                        title: '确认退出登录',
+                        boxWidth: '25%',
+                        useBootstrap: false,
+                        // icon: 'fa fa-question',
+                        theme: 'white',
+                        closeIcon: true,
+                        animation: 'scale',
+                        type: 'orange',
+                        buttons: {
+                            confirm: {
+                                text: '确定',
+                                btnClass: 'btn-orange',
+                                action: function (confirm) {
+                                    $.ajax({
+                                        url: logoutUrl,
+                                        dataType: 'json',
+                                        method: 'post'
+                                    }).done(function (response) {
+                                        location.href = response.url;
+                                    }).fail(function(){
+                                        alert('logout error');
+                                    });
+                                }
+                            },
+                            close: {
+                                text: '取消'
+                            }
+                        },
+                        content: "<p>真的要退出吗？</p>"
+                    });
+                });
+                //attendance
+                $('#do-attendance').click(function (e) {
+                    e.preventDefault();
+                    let url = $(this).data("url");
+                    $.alert({
+                        title: '签到',
+                        boxWidth: '25%',
+                        useBootstrap: false,
+                        // icon: 'fa fa-question',
+                        theme: 'white',
+                        closeIcon: true,
+                        animation: 'scale',
+                        type: 'orange',
+                        buttons: {
+                            close: {
+                                text: '关闭'
+                            }
+                        },
+                        content: function () {
+                            let self = this;
+                            self.setContent('...');
+                            return $.ajax({
+                                url: url,
+                                dataType: 'json',
+                                method: 'get'
+                            }).done(function (response) {
+                                if (response.status == '1') {
+                                    self.setTitle('签到成功');
+                                    self.setContent(response.message);
+                                    $('#attendance-wrap').html(response.data);
+                                } else {
+                                    self.setTitle(response.data);
+                                    self.setContent(response.message);
+                                }
+                            }).fail(function(){
+                                self.setContent('请求失败');
+                            });
+                        }
+                    });
+                });
+                //remove claim
+                $('body').delegate('.remove-confirm', 'click', function (e) {
+                    e.preventDefault();
+                    let removeUrl = $(this).data("url");
+                    $.alert({
+                        title: '取消认领',
+                        boxWidth: '25%',
+                        useBootstrap: false,
+                        // icon: 'fa fa-question',
+                        theme: 'white',
+                        closeIcon: true,
+                        animation: 'scale',
+                        type: 'orange',
+                        buttons: {
+                            confirm: {
+                                text: '确定',
+                                btnClass: 'btn-orange',
+                                action: function (confirm) {
+
+                                    // 套娃
+                                    $.alert({
+                                        title: '取消认领',
+                                        boxWidth: '25%',
+                                        useBootstrap: false,
+                                        // icon: 'fa fa-question',
+                                        theme: 'white',
+                                        closeIcon: true,
+                                        animation: 'scale',
+                                        type: 'orange',
+                                        buttons: {
+                                            close: {
+                                                text: '确定',
+                                            }
+                                        },
+                                        content: function() {
+                                            let self = this;
+                                            self.setContent('...');
+                                            return $.ajax({
+                                                url: removeUrl,
+                                                dataType: 'json',
+                                                method: 'get'
+                                            }).done(function (response) {
+                                                self.setTitle(response.title);
+                                                self.setContent(response.message);
+                                                setTimeout(function () {
+                                                    window.location.reload();
+                                                }, 1000);
+                                            }).fail(function () {
+                                                self.setContent('请求失败');
+                                            });
+                                        }
+                                    }); // end 套娃
+
+                                }
+                            },
+                            close: {
+                                text: '取消'
+                            }
+                        },
+                        content: "真的要取消认领这个种子吗？<br>取消认领将不会扣除猫粮，请确认！"
+                    });
+                });
+                //confirm claim
+                $('body').delegate('.claim-confirm', 'click', function (e) {
+                    e.preventDefault();
+                    let removeUrl = $(this).data("url");
+                    $.alert({
+                        title: '确认认领',
+                        boxWidth: '25%',
+                        useBootstrap: false,
+                        // icon: 'fa fa-question',
+                        theme: 'white',
+                        closeIcon: true,
+                        animation: 'scale',
+                        type: 'orange',
+                        buttons: {
+                            confirm: {
+                                text: '确定',
+                                btnClass: 'btn-orange',
+                                action: function (confirm) {
+
+                                    // 套娃
+                                    $.alert({
+                                        title: '确认认领',
+                                        boxWidth: '25%',
+                                        useBootstrap: false,
+                                        // icon: 'fa fa-question',
+                                        theme: 'white',
+                                        closeIcon: true,
+                                        animation: 'scale',
+                                        type: 'orange',
+                                        buttons: {
+                                            close: {
+                                                text: '确定',
+                                            }
+                                        },
+                                        content: function() {
+                                            let self = this;
+                                            self.setContent('...');
+                                            return $.ajax({
+                                                url: removeUrl,
+                                                dataType: 'json',
+                                                method: 'get'
+                                            }).done(function (response) {
+                                                self.setTitle(response.title);
+                                                self.setContent(response.message);
+                                                if (!response.not_reload) {
+                                                setTimeout(function () {
+                                                    window.location.reload();
+                                                }, 1000);
+                                                }
+                                            }).fail(function () {
+                                                self.setContent('请求失败');
+                                            });
+                                        }
+                                    }); // end 套娃
+
+                                }
+                            },
+                            close: {
+                                text: '取消'
+                            }
+                        },
+                        content: "确定要认领这个种子吗？"
+                    });
+                });
+            });
+        })(jQuery)
+    </script>
+
+    
+</body></html>

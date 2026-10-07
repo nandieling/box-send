@@ -8,6 +8,8 @@ public final class HTTPClient {
     let cookies: CookieStore
     var userAgent: String
     var timeout: TimeInterval = 90
+    /// 整个请求（含重试/跳转）的总时长上限；检测类短任务会压到与 timeout 相同
+    var resourceTimeout: TimeInterval = 180
     /// 上传类站点返回 302/303 后是否跟随（跟随到发布成功页时用于二次校验）
     var followRedirects = true
     /// 调试时保留最后一段响应体
@@ -17,13 +19,28 @@ public final class HTTPClient {
     /// 自动把 Set-Cookie 存入 CookieStore（qBittorrent SID 等场景需要）
     var storeSetCookies = true
 
-    lazy var session: URLSession = {
+    private var sessionRef: URLSession?
+    /// 连接池按当前 timeout 惰性创建；setRequestTimeout 会重建它
+    var session: URLSession {
+        if let s = sessionRef { return s }
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = timeout
+        cfg.timeoutIntervalForResource = resourceTimeout
         cfg.httpAdditionalHeaders = ["Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"]
         cfg.httpShouldUsePipelining = false
-        return URLSession(configuration: cfg)
-    }()
+        let made = URLSession(configuration: cfg)
+        sessionRef = made
+        return made
+    }
+
+    /// 缩短请求超时（cookie / API Key 检测等短任务用），已建连接池则重建
+    public func setRequestTimeout(_ seconds: TimeInterval) {
+        timeout = max(1, seconds)
+        resourceTimeout = timeout
+        sessionRef?.invalidateAndCancel()
+        sessionRef = nil
+    }
+
     /// 供外部手动构造请求时复用（如 Transmission RPC）
     var session0: URLSession { session }
 
@@ -78,6 +95,14 @@ public final class HTTPClient {
     public func postMultipart(_ url: String, fields: [MultipartField],
                        files: [(name: String, filename: String, data: Data, mime: String)],
                        referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> Response {
+        try perform(multipartRequest(url: url, fields: fields, files: files,
+                                     referer: referer, extraHeaders: extraHeaders))
+    }
+
+    /// 构造 multipart 请求（要自行控制跳转时配合 performWithoutRedirect 用）
+    func multipartRequest(url: String, fields: [MultipartField],
+                          files: [(name: String, filename: String, data: Data, mime: String)],
+                          referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> URLRequest {
         let boundary = "----BoxSend" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         var body = Data()
         func addHeader(name: String, filename: String? = nil, mime: String? = nil) {
@@ -106,7 +131,61 @@ public final class HTTPClient {
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
-        return try perform(req)
+        return req
+    }
+
+    /// 只发一次请求、绝不跟随 302（城市 HDCity 第一步：种子 POST 到独立上传域名，
+    /// 跳转目标属于站点自己的域，必须换成本站链接后重新带 cookie 请求）
+    func performWithoutRedirect(_ req: URLRequest) throws -> Response {
+        if let override = performOverride { return try override(req) }
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = timeout
+        cfg.httpAdditionalHeaders = ["Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8"]
+        let stopper = NoRedirectDelegate()
+        let session = URLSession(configuration: cfg, delegate: stopper, delegateQueue: nil)
+        let task = session.dataTask(with: req)
+        task.resume()
+        _ = stopper.sem.wait(timeout: .now() + timeout + 30)
+        session.invalidateAndCancel()
+        guard let http = stopper.response else {
+            throw BoxSendError.badInput("无响应: \(req.url?.absoluteString ?? "")")
+        }
+        var headers = [String: String]()
+        for (k, v) in http.allHeaderFields {
+            if let ks = k as? String { headers[ks.lowercased()] = "\(v)" }
+        }
+        if storeSetCookies, let setCookie = headers["set-cookie"], let host = (http.url ?? req.url)?.host {
+            for part in Self.splitSetCookieHeader(setCookie) {
+                cookies.importSetCookie(part, host: host)
+            }
+        }
+        lastResponseBody = String(data: stopper.data.prefix(4000), encoding: .utf8) ?? ""
+        return Response(status: http.statusCode, data: stopper.data, headers: headers,
+                        finalURL: (http.url ?? req.url!).absoluteString)
+    }
+
+    /// 拦下 302：把重定向响应本身交回调用方
+    private final class NoRedirectDelegate: NSObject, URLSessionDataDelegate {
+        let sem = DispatchSemaphore(value: 0)
+        var response: HTTPURLResponse?
+        var data = Data()
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                        completionHandler: @escaping (URLRequest?) -> Void) {
+            self.response = response
+            completionHandler(nil)
+        }
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+            if self.response == nil { self.response = response as? HTTPURLResponse }
+            completionHandler(.allow)
+        }
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+            self.data.append(data)
+        }
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            sem.signal()
+        }
     }
 
     // MARK: - 内部
@@ -140,8 +219,48 @@ public final class HTTPClient {
         return try perform(req)
     }
 
+    /// 瞬时网络错误（连接中断 / TLS 握手失败 / DNS 抖动等）自动重试：
+    /// 部分站 CDN 不稳定（如 ttg/okpt/luckpt），单次失败不应判为 cookie 失效或上传失败
+    static let transientURLErrors: Set<Int> = [
+        NSURLErrorNetworkConnectionLost,    // -1005
+        NSURLErrorCannotConnectToHost,      // -1004
+        NSURLErrorSecureConnectionFailed,   // -1200
+        NSURLErrorCannotFindHost,           // -1003
+        NSURLErrorTimedOut,                 // -1001
+        NSURLErrorResourceUnavailable,      // -1011
+    ]
+
     private func perform(_ req: URLRequest) throws -> Response {
         if let override = performOverride { return try override(req) }
+        var attempt = 0
+        while true {
+            attempt += 1
+            do {
+                return try performOnce(req)
+            } catch let e as NSError where Self.transientURLErrors.contains(e.code) {
+                guard attempt < 3 else { throw e }
+                Thread.sleep(forTimeInterval: attempt == 1 ? 1.5 : 3)
+            }
+        }
+    }
+
+    /// URLSession 会把多个 Set-Cookie 头合并成一个逗号分隔串；逗号同样出现在 Expires 日期里，
+    /// 所以只在"逗号后紧跟 name="处切分（日期里逗号后是 "09 Jun 2026…"，不会误切）
+    static func splitSetCookieHeader(_ merged: String) -> [String] {
+        guard merged.contains(", ") else { return [merged] }
+        let re = try! NSRegularExpression(pattern: ",\\s*(?=[A-Za-z0-9_.\\-]+=)")
+        let ns = merged as NSString
+        var out: [String] = []
+        var start = 0
+        for m in re.matches(in: merged, options: [], range: NSRange(location: 0, length: ns.length)) {
+            out.append(ns.substring(with: NSRange(location: start, length: m.range.location - start)))
+            start = m.range.location + 1
+        }
+        out.append(ns.substring(from: start))
+        return out.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    private func performOnce(_ req: URLRequest) throws -> Response {
         let sem = DispatchSemaphore(value: 0)
         var result: Result<Response, Error> = .failure(BoxSendError.badInput("no response"))
         let task = session.dataTask(with: req) { data, response, error in
@@ -162,7 +281,11 @@ public final class HTTPClient {
                                  headers: headers, finalURL: (http.url ?? req.url!).absoluteString)
             self.lastResponseBody = String(data: (data ?? Data()).prefix(4000), encoding: .utf8) ?? ""
             if self.storeSetCookies, let setCookie = headers["set-cookie"], let finalHost = http.url?.host {
-                self.cookies.importSetCookie(setCookie, host: finalHost)
+                // 一次下发多个 cookie（NexusPHP 会轮换 c_secure_*）时必须逐条入库，
+                // 否则整串被当成一条 cookie 存下，下次请求就是失效凭证
+                for part in Self.splitSetCookieHeader(setCookie) {
+                    self.cookies.importSetCookie(part, host: finalHost)
+                }
             }
             result = .success(resp)
         }

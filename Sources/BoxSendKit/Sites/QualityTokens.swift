@@ -83,6 +83,49 @@ enum QualityTokens {
 
     /// 发布名中的年份（第一个 19xx/20xx 四位数字）
     /// 规范标签判定（源名 + 简介 + mediainfo 文本证据）——各适配器共享
+    /// 标签文案 -> 规范标签（源站"标签"行文案、目标站复选框文案共用一张表）
+    /// 顺序 = 匹配优先级：atmos 先于 dovi（"杜比全景声"）、hdr10plus 先于 hdr10（"HDR10"是"HDR10+"子串）
+    static let tagTextMap: [(tag: String, keywords: [String])] = [
+        ("atmos", ["atmos", "全景声"]),
+        ("dovi", ["dovi", "杜比视界", "杜比视频", "dolby vision"]),
+        ("hdr10plus", ["hdr10+", "hdrm"]),
+        ("hdr10", ["hdr10", "hdr"]),
+        ("dtsx", ["dtsx", "dts:x"]),
+        ("chinese_sub", ["中字", "中文字幕", "中文", "简中", "繁中", "zz"]),
+        ("english_sub", ["英字", "英文字幕", "english sub"]),
+        ("demand", ["应求", "应求种"]),
+        ("mandarin", ["国语"]),
+        ("cantonese", ["粤语", "粤配"]),
+        ("forbid", ["禁转", "禁止转载", "jz"]),
+        ("limited", ["限转", "xz"]),
+        ("diy", ["diy", "自压"]),
+        ("first", ["首发"]),
+        ("disc", ["原盘"]),
+        ("completed", ["完结", "完結", "全集", "complete", "finished"]),
+        ("anime", ["动画", "动漫", "anime"]),
+        ("remux", ["remux"]),
+        // 题材标签：取源站「类别」行（财神等站按题材标签审核，缺题材标签会被打回）
+        ("comedy", ["喜剧", "comedy"]),
+        ("action", ["动作", "action"]),
+        ("romance", ["爱情", "情色", "romance"]),
+        ("drama", ["剧情", "drama"]),
+        ("scifi", ["科幻", "sci-fi", "scifi"]),
+        ("horror", ["恐怖", "horror"]),
+        ("thriller", ["惊悚", "悬疑", "thriller", "mystery"]),
+        ("documentary", ["纪录", "纪录片", "documentary"]),
+        ("war", ["战争", "war"]),
+        ("family", ["家庭", "family"]),
+        ("crime", ["犯罪", "crime"]),
+        ("history", ["历史", "古装", "history"]),
+        ("sport", ["运动", "体育", "sport"]),
+        ("fantasy", ["奇幻", "魔幻", "玄幻", "fantasy"]),
+        ("adventure", ["冒险", "adventure"]),
+        ("music_film", ["歌舞", "音乐", "music"]),
+        ("children", ["儿童", "child"]),
+        ("animation", ["动画", "动漫", "animation"]),
+    ]
+
+    /// 规范标签 -> 站点标签值/字段名 的映射见各站 overrides（tagMap / tagCheckboxes）
     static func canonicalTags(_ info: ReleaseInfo) -> [String] {
         var tags: [String] = []
         let n = info.name.uppercased()
@@ -92,7 +135,7 @@ enum QualityTokens {
         if n.contains("HDR10+") { tags.append("hdr10plus") }
         else if n.contains("HDR10") { tags.append("hdr10") }
         if n.contains("DOVI") || n.contains("DOLBY VISION") { tags.append("dovi") }
-        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || info.name.contains("中字") {
+        if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || evidence.contains("中字") || info.name.contains("中字") {
             tags.append("chinese_sub")
         }
         if n.contains("DIY") && (n.hasPrefix("DIY") || n.contains(" DIY") || n.contains("DIY ") || n.contains("DIY-")) {
@@ -103,7 +146,60 @@ enum QualityTokens {
         }
         if info.isForbidReseed { tags.append("forbid") }
         if evidence.contains("限转") { tags.append("limited") }
+        if medium(from: info.name, kind: info.kind) == "remux" { tags.append("remux") }
+        if info.kind == .anime { tags.append("anime") }
+        if isCompletedRelease(info) { tags.append("completed") }
+        // 源站"标签"行是打标最权威的依据（官方/英字/应求等无法从发布名推断）
+        for raw in info.sourceTags {
+            let s = raw.lowercased()
+            for (tag, keywords) in tagTextMap where !tags.contains(tag) {
+                if keywords.contains(where: { s.contains($0) }) { tags.append(tag) }
+            }
+        }
+        for tag in genreTags(info.genre) where !tags.contains(tag) { tags.append(tag) }
         return tags
+    }
+
+    /// 源站「类别」行（如 "喜剧 / 动画"）解析成题材标签。
+    /// 只看类别行，不从简介正文取，避免简介里的演职员/简介文案误命中标签。
+    static func genreTags(_ genre: String) -> [String] {
+        let lower = genre.lowercased()
+        guard !lower.isEmpty else { return [] }
+        let parts = lower.components(separatedBy: CharacterSet(charactersIn: "/、,;|,，； "))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var out: [String] = []
+        for part in parts {
+            // 每个题材词只取第一个命中的规范标签（"动画" 归 anime，不再重复产出 animation）
+            if let hit = tagTextMap.first(where: { e in e.keywords.contains { part == $0 || part.contains($0) } }) {
+                if !out.contains(hit.tag) { out.append(hit.tag) }
+            }
+        }
+        return out
+    }
+
+    /// 完结/整季判定：源站「标签」行或文案有完结标记，或是整季包（S03 且无单集标记）。
+    /// 目标站有"完结"标签时应当勾选（猫/麒麟/青蛙/咖啡/蟹黄堡等均有该标签）。
+    static func isCompletedRelease(_ info: ReleaseInfo) -> Bool {
+        let raw = HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.name
+        let cleaned = raw.replacingOccurrences(of: "未完结", with: "")
+            .replacingOccurrences(of: "未完結", with: "")
+        // 源站明确标注连载中时，一票否决（整季包启发式也不能翻案）
+        if info.sourceTags.contains(where: {
+            ["未完结", "未完結", "连载", "連載", "更新中", "正在更新"].contains($0)
+        }) { return false }
+        if info.sourceTags.contains(where: {
+            ($0.contains("完结") || $0.contains("完結")) && !$0.contains("未")
+        }) { return true }
+        for kw in ["完结", "完結", "全集", "complete", "finished"] where cleaned.lowercased().contains(kw) {
+            return true
+        }
+        if cleaned.range(of: "全\\s*\\d+\\s*[集话話]", options: .regularExpression) != nil { return true }
+        guard [.anime, .series, .tvshow].contains(info.kind ?? .other) else { return false }
+        let n = info.name.uppercased()
+        let season = n.range(of: #"S\d{1,2}(?![\dE])"#, options: .regularExpression) != nil
+        let singleEpisode = n.range(of: #"(E\d{1,3}|第\s*\d+\s*[集话])"#, options: .regularExpression) != nil
+        return season && !singleEpisode
     }
 
     static func year(from name: String) -> Int? {

@@ -33,6 +33,17 @@ enum HTMLUtil {
         return out
     }
 
+    /// 按正则提取指定捕获组的每次出现（按文档顺序）
+    static func allGroups(_ text: String, _ pattern: String, group: Int = 1,
+                          options: NSRegularExpression.Options = [.caseInsensitive]) -> [String] {
+        guard let re = try? NSRegularExpression(pattern: pattern, options: options) else { return [] }
+        let ns = NSRange(text.startIndex..., in: text)
+        return re.matches(in: text, options: [], range: ns).compactMap { m in
+            guard m.numberOfRanges > group, let r = Range(m.range(at: group), in: text) else { return nil }
+            return String(text[r])
+        }
+    }
+
     /// 提取标签内文本（去子标签，保留属性）
     static func tagContent(_ html: String, tag: String, attrs: String? = nil) -> String? {
         let pat = "<\(tag)(?:\\s[^>]*?)?>(.*?)</\\(tag)>"
@@ -186,19 +197,36 @@ enum HTMLUtil {
                   let value = group(tag, "value=['\"]([^\"']*)['\"]") else { continue }
             let tail = String(html[r.upperBound...]).prefix(while: { $0 != "<" })
             var label = String(tail).trimmingCharacters(in: .whitespacesAndNewlines)
+            let after = String(html[r.upperBound...].prefix(400))
             if label.isEmpty {
                 // 标签在紧随的 <label>…</label> 里（如 HAIDAN 的 tag_list[]）
-                let after = String(html[r.upperBound...].prefix(200))
                 if let lm = after.range(of: "<label", options: .caseInsensitive),
                    after.distance(from: after.startIndex, to: lm.lowerBound) <= 3,
-                   let em = after.range(of: "</label>", options: .caseInsensitive) {
-                    label = stripTags(String(after[lm.upperBound..<em.lowerBound]))
+                   let openEnd = after[lm.lowerBound...].firstIndex(of: ">"),
+                   let em = after.range(of: "</label>", options: .caseInsensitive,
+                                        range: after.index(after: openEnd)..<after.endIndex) {
+                    // 从 <label …> 的 > 之后开始（label 常带 for 属性，且文案可能再套 <a>）
+                    label = stripTags(String(after[after.index(after: openEnd)..<em.lowerBound]))
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                 }
+            }
+            if label.isEmpty,
+               let em = after.range(of: "</label>", options: .caseInsensitive),
+               hasOpenLabelBefore(html, r.lowerBound) {
+                // <label><input …><img>文案</label>（麒麟等：文案前有图标，label 在 input 之前）
+                label = stripTags(String(after[..<em.lowerBound]))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
             }
             out.append((name, value, label))
         }
         return out
+    }
+
+    /// input 前是否有尚未闭合的 <label>（label 包裹 input 的写法）
+    static func hasOpenLabelBefore(_ html: String, _ at: String.Index) -> Bool {
+        let back = html[html.startIndex..<at]
+        guard let lm = back.range(of: "<label", options: [.backwards, .caseInsensitive]) else { return false }
+        return back[lm.upperBound...].range(of: "</label>", options: .caseInsensitive) == nil
     }
 
     /// 页面 textarea 字段名列表（判断是否有 technical_info/media_info 等专用字段）
@@ -225,7 +253,10 @@ enum HTMLUtil {
     static func anchorText(_ html: String, hrefPattern: String) -> [(href: String, text: String)] {
         var out: [(String, String)] = []
         // 逐段处理更稳：找出所有 <a ...>...</a>
-        guard let re = try? NSRegularExpression(pattern: "<a\\s[^>]*?href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>",
+        // 属性值里可能含 ">"（如 xbtit 的 onmouseover="overlib('<img … border=0>')"），
+        // 用「引号段或普通字符」消费开标签，避免在值中的 ">" 处提前截断
+        let open = #"(?i)<a\s(?:[^>"']|"[^"]*"|'[^']*')*?href=["']([^"']+)["'](?:[^>"']|"[^"]*"|'[^']*')*>"#
+        guard let re = try? NSRegularExpression(pattern: open + "(.*?)</a>",
                                                 options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return [] }
         // hrefPattern 按正则匹配（detailLinkPattern/search 端点均为正则）；无法编译时退回子串
         let hrefRe = try? NSRegularExpression(pattern: hrefPattern, options: [.caseInsensitive])

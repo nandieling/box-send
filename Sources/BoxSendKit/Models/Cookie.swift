@@ -130,6 +130,40 @@ public final class CookieStore {
         return count
     }
 
+    /// 按 cookie 名称做并集合并（互补同步用）：
+    /// 同名取新值（刷新 cf_clearance 一类会过期的令牌），仅本地存在的名称保留
+    /// （防止不完整备份把本地有效 cookie 整体冲掉）。返回是否有变化。
+    @discardableResult
+    public func mergeRawString(host: String, _ raw: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let h = normalized(host)
+        // 优先精确 host，其次父子域匹配（本地存 ".pandapt.net"、备份给 "pandapt.net" 一类差异）
+        let existing = byHost.first { normalized($0.key) == h }
+            ?? byHost.first { k in let nk = normalized(k.key); return h == nk || h.hasSuffix("." + nk) || nk.hasSuffix("." + h) }
+        var merged = existing?.value ?? []
+        var changed = false
+        for part in raw.split(separator: ";") {
+            let kv = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard kv.count == 2, !kv[0].isEmpty else { continue }
+            if let i = merged.firstIndex(where: { $0.name == kv[0] }) {
+                if merged[i].value != kv[1] {
+                    var c = merged[i]
+                    c.value = kv[1]
+                    merged[i] = c
+                    changed = true
+                }
+            } else {
+                merged.append(Cookie(name: kv[0], value: kv[1], domain: h, path: "/"))
+                changed = true
+            }
+        }
+        if changed {
+            if let existing { byHost[existing.key] = merged }
+            else { byHost[h] = merged }
+        }
+        return changed
+    }
+
     /// 从 "k1=v1; k2=v2" 形式的裸 cookie 字符串导入。
     public func importRawString(host: String, _ raw: String) {
         var cookies: [Cookie] = []
@@ -187,6 +221,7 @@ public enum BoxSendError: LocalizedError {
     case badInput(String)
     case http(status: Int, url: String, body: String)
     case cookieExpired(String)
+    case apiKeyInvalid(String)
     case notImplemented(String)
 
     public var errorDescription: String? {
@@ -194,6 +229,7 @@ public enum BoxSendError: LocalizedError {
         case .badInput(let m): return "输入错误: \(m)"
         case .http(let s, let u, let b): return "HTTP \(s) \(u): \(String(b.prefix(300)))"
         case .cookieExpired(let h): return "站点 \(h) 的 cookie 可能已失效，请在 PT-depiler 中重新登录并触发备份"
+        case .apiKeyInvalid(let h): return "站点 \(h) 的 API Key 无效或已过期，请在站点页检查 API Key"
         case .notImplemented(let m): return "尚未实现: \(m)"
         }
     }

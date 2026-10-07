@@ -23,6 +23,21 @@ enum BBCode {
         struct Frame { let kind: String; let value: String }
         var stack: [Frame] = []
         var quoteDepth = 0
+        var preDepth = 0
+        // 源页排版换行的清理：标签边界已产生换行时，文本段首尾含 \n 的空白串会叠加出空行（浏览器里只是空格）
+        let leadWS = try! NSRegularExpression(pattern: "^[ \t\u{3000}\u{00A0}]*\\n+[ \t]*")
+        let tailWS = try! NSRegularExpression(pattern: "[ \\t\u{3000}\u{00A0}\\n]*\\n[ \\t\u{3000}\u{00A0}]*$")
+        func emitText(_ raw: String) -> String {
+            guard preDepth == 0 else { return raw }   // <pre> 内的换行有意义，原样保留
+            var seg = raw
+            if let m = leadWS.firstMatch(in: seg, options: [], range: NSRange(seg.startIndex..., in: seg)) {
+                seg = String(seg[Range(m.range, in: seg)!.upperBound...])
+            }
+            if let m = tailWS.firstMatch(in: seg, options: [], range: NSRange(seg.startIndex..., in: seg)) {
+                seg = String(seg[..<Range(m.range, in: seg)!.lowerBound])
+            }
+            return seg
+        }
         var skip: (tag: String, depth: Int)? = nil
         var out = ""
 
@@ -70,7 +85,7 @@ enum BBCode {
             guard let range = Range(m.range, in: s) else { continue }
             // 文本段（skip 模式下不输出）
             if cursor < range.lowerBound, skip == nil {
-                out += HTMLUtil.decodeEntities(String(s[cursor..<range.lowerBound]))
+                out += emitText(HTMLUtil.decodeEntities(String(s[cursor..<range.lowerBound])))
             }
             cursor = range.upperBound
             let raw = String(s[range])
@@ -157,13 +172,20 @@ enum BBCode {
                     else if stack.last?.kind == "color" { pop("color", "[/color]") }
                 }
             case "div", "p", "table", "tbody", "tr", "ul", "ol", "li", "hr", "pre", "blockquote":
-                if !closing { out += "\n" } else if tagName != "pre" { out += "\n" }
+                if !closing {
+                    if tagName == "pre" { preDepth += 1 }
+                    out += "\n"
+                } else if tagName != "pre" {
+                    out += "\n"
+                } else {
+                    preDepth = max(0, preDepth - 1)
+                }
             default:
                 break // b/i/em/u/sup/td/th/center/summary/details 等：仅去标签
             }
         }
         if cursor < s.endIndex, skip == nil {
-            out += HTMLUtil.decodeEntities(String(s[cursor...]))
+            out += emitText(HTMLUtil.decodeEntities(String(s[cursor...])))
         }
         // 收尾未关闭的帧
         while let f = stack.popLast() { out += closeCode(f.kind) }
@@ -171,9 +193,16 @@ enum BBCode {
         // 规范化空白
         out = out.replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
         out = out.replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
-        // 开标签连续：[quote]/[color]/[size] 后的空行去除（源页 <br> 产物）
-        out = out.replacingOccurrences(of: "(\\[(?:quote|color=\\w+|size=\\d+)\\])\n\n",
-                                       with: "$1", options: .regularExpression)
+        // 开标签连续：[quote] 后紧跟其他开标签时内联合并（[quote][color=darkred][size=4]）；
+        // 跟正文时保留单换行（[quote]\n正文）
+        out = out.replacingOccurrences(of: "(\\[quote\\])\\n(\\[(?:color=\\w+|size=\\d+|quote))",
+                                       with: "$1$2", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(\\[quote\\])\\n{2,}(\\[(?:color=\\w+|size=\\d+|quote))",
+                                       with: "$1$2", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(\\[quote\\])\\n{2,}", with: "$1\n", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(\\[(?:color=\\w+|size=\\d+)\\])\\n{2,}", with: "$1", options: .regularExpression)
+        // [/quote] 与紧随的图片（海报/截图）之间不留空行
+        out = out.replacingOccurrences(of: "(\\[/quote\\])\\n{2,}(\\[img\\])", with: "$1\n$2", options: .regularExpression)
         // 闭标签序列合并：[/size]\n[/color]\n[/quote] -> 连续
         var prev = ""
         while prev != out {

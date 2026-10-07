@@ -8,6 +8,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var descr: String           // 简介 HTML（原始，上传时按目标站格式转换）
     public var imdb: String?           // tt123456
     public var douban: String?
+    public var tmdb: String?           // TMDB 规范链接 https://www.themoviedb.org/(movie|tv)/id
     public var size: Int64?            // bytes
     public var kind: ReleaseKind?
     public var torrentName: String     // .torrent 文件名
@@ -17,18 +18,32 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var genre: String           // 源站类别（如 纪录片）
     public var mediainfo: String       // 源页 MediaInfo/BDInfo 原文
     public var region: String          // 源简介"产地"（个别目标站"制作组"下拉实为地区）
+    public var sourceName: String      // 源站显示名（如 LuckPT；目标站"附加信息=转种来源"用）
+    public var bangumi: String         // Bangumi 番组计划条目链接（馒头动画分类发种必填）
+    public var sourceTags: [String]    // 源站详情页"标签"行原文（如 ["官方","中字","完结"]）
+
+    /// 源站把该种子标成官种/官方发布。目标站的种子不是官种（不该打官方标签），
+    /// 但要在简介注明来源，见 NexusPHPAdapter.sourcePrefix。
+    public var isOfficialSource: Bool {
+        sourceTags.contains { t in
+            let n = t.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return n.contains("官种") || n == "官方" || n.contains("官方发布") || n == "official"
+        }
+    }
 
     init(siteID: String, detailURL: String, name: String, descr: String = "",
-         imdb: String? = nil, douban: String? = nil, size: Int64? = nil,
+         imdb: String? = nil, douban: String? = nil, tmdb: String? = nil, size: Int64? = nil,
          kind: ReleaseKind? = nil, torrentName: String = "", torrentURL: String = "",
          isForbidReseed: Bool = false, subtitle: String = "", genre: String = "",
-         mediainfo: String = "", region: String = "") {
+         mediainfo: String = "", region: String = "", sourceName: String = "",
+         bangumi: String = "", sourceTags: [String] = []) {
         self.siteID = siteID
         self.detailURL = detailURL
         self.name = name
         self.descr = descr
         self.imdb = imdb
         self.douban = douban
+        self.tmdb = tmdb
         self.size = size
         self.kind = kind
         self.torrentName = torrentName
@@ -38,11 +53,15 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         self.genre = genre
         self.mediainfo = mediainfo
         self.region = region
+        self.sourceName = sourceName
+        self.bangumi = bangumi
+        self.sourceTags = sourceTags
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteID, detailURL, name, descr, imdb, douban, size, kind
         case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo, region
+        case sourceName, bangumi, sourceTags
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -61,10 +80,23 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         genre = try c.decodeIfPresent(String.self, forKey: .genre) ?? ""
         mediainfo = try c.decodeIfPresent(String.self, forKey: .mediainfo) ?? ""
         region = try c.decodeIfPresent(String.self, forKey: .region) ?? ""
+        sourceName = try c.decodeIfPresent(String.self, forKey: .sourceName) ?? ""
+        bangumi = try c.decodeIfPresent(String.self, forKey: .bangumi) ?? ""
+        sourceTags = try c.decodeIfPresent([String].self, forKey: .sourceTags) ?? []
     }
 
     /// 稳定去重键：同一源站同一详情页视为同一种子
-    public var dedupKey: String { "\(siteID)#\(detailURL)" }
+    public var dedupKey: String { "\(siteID)#\(Self.normalizeKeyURL(detailURL))" }
+
+    /// 详情页 URL 归一化：去掉 `hit=1` 一类访问统计参数，
+    /// 避免同一页面因 URL 带/不带参数产生两个不同的去重键
+    static func normalizeKeyURL(_ s: String) -> String {
+        guard var c = URLComponents(string: s), var items = c.queryItems else { return s }
+        let filtered = items.filter { $0.name != "hit" }
+        guard filtered.count != items.count else { return s }
+        c.queryItems = filtered.isEmpty ? nil : filtered
+        return c.string ?? s
+    }
     public var summary: String { "\(siteID): \(name) (imdb: \(imdb ?? "-"))" }
     public var description: String { summary }
 }
@@ -82,12 +114,14 @@ public enum ReleaseKind: String, Codable {
             return .series
         }
         if !genre.isEmpty {
-            if genre.contains("纪录片") { return .documentary }
-            if genre.contains("综艺") { return .tvshow }
-            if genre.contains("体育") { return .sports }
-            if genre.contains("动漫") || genre.contains("动画") { return .anime }
-            if genre.contains("音乐") || genre.contains("无损") { return .music }
-            if genre.contains("剧集") { return .series }
+            let g = genre.lowercased()
+            if genre.contains("纪录片") || g.contains("documentary") { return .documentary }
+            if genre.contains("综艺") || g.contains("tv show") || g.contains("varied") { return .tvshow }
+            if genre.contains("体育") || g.contains("sports") { return .sports }
+            if genre.contains("动漫") || genre.contains("动画") || g.contains("anime") || g.contains("animation") { return .anime }
+            if genre.contains("音乐") || genre.contains("无损") || g.contains("music") { return .music }
+            if genre.contains("剧集") || g.contains("series") || g.contains("tv") { return .series }
+            if g.contains("movie") || genre.contains("电影") { return .movie }
         }
         if name.contains("OST") || name.contains("FLAC") || name.contains("APE") || name.contains("AMV") { return .music }
         if name.contains("Anime") || name.contains("动漫") { return .anime }
