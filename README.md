@@ -151,7 +151,6 @@ open dist/BoxSend.app
 - **Cookie**（页面输入框均为**功能名称在上一行、输入框在下一行**，内容居左）：**PT-depiler Gist 同步**（手动/自动，最上：gistID / GitHub token（黑点密码框，右侧眼睛按钮切换显示）/ PT-depiler 备份密码 / 轮询分钟 + 自动定时同步 + 立即同步（勾选项与按钮紧挨轮询输入框右侧、靠左排列，不再贴行尾；仅拉取本来源，站点分组页顶部「同步 Cookie」同时同步两个来源））→ **CookieCloud 同步**（[easychen/CookieCloud](https://github.com/easychen/CookieCloud) 端对端加密云备份：服务器地址（自架 `http://vps:8088` 或第三方）+ **KEY（扩展生成的 UUID）** + **端对端加密密码**（两者均为黑点密码框，右侧眼睛按钮切换显示） + 轮询分钟 + 自动定时同步 + 立即同步；`GET {host}/get/{key}` 只拉密文，本地解密——密钥 = `MD5(KEY + "-" + 密码)` 前 16 位 hex，兼容 legacy（CryptoJS AES-256-CBC）与 aes-128-cbc-fixed（固定零 IV）两种格式，按 cookie host（主/子域）匹配已添加站点，自动清理未启用站点；**与 Gist 同步互为补充**：本地 cookie 已检测有效的站点**保留本地值**（同步不会用备份旧值覆盖成新的失效），同步后自动重检，**仍失效的站点自动拉另一来源补充**；两个来源对同一站点给出不同值时不再固定「Gist 优先」——先按 Gist 装，检测仍失败的站点用 CookieCloud 那份在副本上重试，站点认哪份就用哪份（实测烧包：浏览器已换新 cookie，Gist 里还是一个月前的旧值，固定优先级会让它永远同步不到新值）。CookieCloud 里 `.example.com` 与 `example.com` 两个分组键会合并到同一站点（同名取过期更晚的那份），否则 cf_clearance 一类会整组被覆盖丢掉）→ PT-depiler 本地备份 zip 导入（备份密码 + 导入 + 清空本地 Cookie；zip 导入 / Gist 同步 / 目录监控导入后只保留**已开启站点**的 cookie，PT-depiler 全量备份含未使用的站，自动清理并在结果里提示数量）→ **备份目录监控**（填监控目录或点「**选择目录…**」按钮选择文件夹/备份密码/轮询间隔，目录出现新 PTD_backup*.zip 自动导入）。单站 Cookie 维护在「站点分组」页工具栏「手动添加cookie」，原「单站 Cookie（手动添加）」「已同步的 Cookie 详情」区块已移除。
 - **Cookie 有效性检测**：「站点分组」页卡片显示各站 cookie 有效性（进入页面自动检测已添加的站，未开启的站不检测）；所有分组上方全局「检测 Cookie」按钮对**所有分组已添加的站点**强制批量检测。失效卡片显示「cookie 失效」红色标记，点击选中卡片后点工具栏「手动添加cookie」（弹窗保存），或用顶部「同步 Cookie」（同时同步 Gist + CookieCloud，互为补充）恢复。按框架分级判定：YemaPT 走 `fetchUploadOptions` API、TNode 走 `api/torrent/option`（401/403 或 success=false 判失效）、NexusPHP 家族首页标记探测 + `userdetails.php` 二次确认、其余首页探测。超时 / 5xx / 连不上（Cloudflare 522 一类源站抖动，实测龙会长这样）先重试一次，仍不行记「站点未响应」灰色标记（灰色 = 未确认，不当作 cookie 失效）；只有站点明确回到登录页或出现未登录文案才判「cookie 失效」。 收到的 `Set-Cookie` 会逐条入库：URLSession 把多条响应头合并成逗号连接的一串，直接整串保存会把 `Expires=…2026, 06 Oct` 里的逗号当成分隔符，只剩半条 cookie（下次请求被站点当成新会话）。
 - **下载器**（页面输入框均为**功能描述在上一行、输入框在下一行**）：qBittorrent/Transmission 参数（密码为黑点框，右侧眼睛按钮切换显示；「添加后跳过校验（skipChecking）」仅在此页设置）+ 连接检测 + **大小检测**：填「VPS 剩余空间(GB)」与「安全边际(GB)」（默认 5），策略选「提醒」或「跳过」；种子大小超过剩余空间（含边际）时，提醒模式只提示、跳过模式直接不转种不推送。剩余空间请手动维护（qB 的 WebAPI 没有磁盘剩余接口）。
-- **RSS**：自动转种。给各源站填 RSS passkey（留空不参与）、设轮询间隔（分钟）、开「启用 RSS 自动转种」或点「立即轮询一次」；新种自动走完整流水线（查重 → 大小检测 → 转种 → 按站限速推送）。每个 RSS 条目按 guid/link 去重（每站记录 500 条），处理过的不会重复转种。
 - **日志**：最近 500 条运行日志（转种/推送/cookie 变更），**日志时间戳为北京时间**（Asia/Shanghai，`yyyy-MM-dd HH:mm:ss`）。
 - **设置**：**使用教程**——「查看使用教程」按钮打开图文教程弹窗（添加站点与分组 / 配置与备份 Cookie / 批量转种 / 推送到 VPS 下载器 / 外观设置，各配一张真实界面截图，图片打包于 app bundle `Resources/tutorial/`）。**主题**：6 个内置**渐变主题**（深空蓝 / 极光紫 / 翡翠绿 / 落日橙 / 玫瑰粉 / 云端白·浅色），点击卡片即时切换；主题渐变、强调色与明暗模式**覆盖所有窗口与区块**（主窗口 + 全部弹窗），风格统一；**主题色、壁纸与透明度同样覆盖各功能区块**（区块背景为半透明表面，让渐变/壁纸透出，明暗两套不透明度保证文字可读性）。背景图片：选择 / 更换 PNG·JPG·HEIC（存入 dataDir），铺满窗口（cover 裁切），**不改变窗口与各弹窗的大小比例**，「移除背景图片」还原；「背景图片透明度」滑条 0–100%（默认 45%）。
 
@@ -171,14 +170,13 @@ box-send run --detail <url> [--site <id>] [--targets a,b] [--skip-reseed] [--ski
 box-send push --detail <url>   只推下载器
 box-send import-zip --file <PTD_backup_*.zip> [--password <备份密码>]   导入 PT-depiler 本地备份
 box-send gist-sync [--loop]    从 Gist 同步 cookie（--loop 常驻轮询）
-box-send rss-sync             轮询一次 RSS：自动转种 + 推下载器（需配置 rss）
 box-send import-watch         扫描备份目录，自动导入新 PTD_backup*.zip（需配置 zipWatch）
 box-send check-cookies [--site <id>]   检测各站 cookie 登录态（仅已开启站；--site 可查单站，YemaPT/TNode 走 API 判定）
 box-send add-cookie --site <id> --cookie "k1=v1; k2=v2"   手动添加/覆盖单站 cookie（自动开启该站并加入转种目标）
 box-send remove-cookie --site <id>     删除单站 cookie
 box-send test-downloader       测试下载器连接
 box-send serve [--port 8088] [--token xxx]   Web 控制台（可选，局域网访问用）
-box-send cookies / notes / template / list --site <id>
+box-send cookies / notes / template / list --site <id> / version
 # 全局: --config <path>（CLI 默认 Config/boxsend.json；与 GUI 的配置互不影响）
 ```
 
@@ -208,7 +206,6 @@ GUI 与 CLI 的 JSON 结构一致（GUI 用 `~/Library/Application Support/BoxSe
   - `sizeGuardMode`: `warn`（默认，提醒）| `skip`（超过剩余空间直接跳过该种子）
   - `sizeGuardMarginGB`: 安全边际（GB，默认 5），可用空间 = vpsFreeGB - 边际
 - `gistSync`: `gistID` / `token` / `encryptionKey` / `pollMinutes`（GUI「自动定时同步」间隔）
-- `rss`: `enabled` / `pollMinutes`（轮询间隔，分钟，最小 1）/ `passkeys`（源站 id → RSS passkey，留空的站不参与；地址默认 `passkey.php?rss={passkey}`，可用 overrides.rssPath 覆盖）
 - `zipWatch`: `enabled` / `dir`（PT-depiler 本地备份目录，默认 ~/Downloads）/ `pollMinutes` / `password`（备份密码，未加密备份可空）
 - `appearance`: `themeID`（主题 id，见 GUI「设置」页 6 个渐变主题，默认 deepBlue）/ `bgImage`（背景图片文件名，存 dataDir，空 = 无）/ `bgOpacity`（背景图片透明度 0–1，默认 0.45）
 - `userAgent` / `webToken`（serve 用）/ `dataDir`（CLI 用，默认 `~/.boxsend`）
@@ -249,14 +246,14 @@ GUI 窗口标题、`box-send version`、`scripts/make-app.sh` 写进 Info.plist 
 
 ## 测试
 
-`swift test`（221 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、RSS 解析/feed URL/状态去重、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入、新版 NexusPHP 动态质量/标签/technical_info 填充（多 data-mode 下拉、ajax 子分类、年份兜底选编码）、TNode（ZHUQUE）真实 API 响应解析与字段映射（选项分组/详情/截图提取/分类媒介编码分辨率标签/TMDB）、HAIDAN 自定义详情布局解析与经典上传字段映射（tag_list 标签/豆瓣 durl）、YemaPT 真实 API 响应解析（详情/选项/IMDb 查重列表）与上传字段映射（分类树/媒介/分辨率/编码/音轨/地区/标签/季集/匿名）、Markdown 与 HTML 简介互转、piecesHash（bencoded pieces 值 SHA-1）、savept 长尾 144 站注册表（框架映射/无重复 id/域名迁移/中文站名）、站点名称默认排序（数字开头在前 + 拼音字母序：zh-Hans-CN 语区拼音序、拉丁名按首字母混排、中文数字汉字不进数字组、内置名录 144 站全量排序预览）、内置表站名同步入用户配置、旧配置无 managed 字段时按 enabled 推断（已添加/未添加站点模型）、未加入分组站点手动排序持久化（旧配置缺省空 + 新字段往返）、cookie 单站导入覆盖与删除、CookieCloud 端对端加密协议（MD5 密钥向量、openssl legacy AES-256-CBC 与 AES-128-CBC 固定零 IV 双格式解密、错误密码、cookie_data 解析、host 主/子域匹配、拉取导入与空结果报错）、GistSync 拉取解密（performOverride 注入 gist API 响应 + openssl 加密 cookies.txt 全链路、manifest 备份时间、pull 导入 store 与状态）、猫（pterclub）标签勾选（源站「标签」行解析、拼音命名复选框按文案精确识别、真实上传页字段校验）、LuckPT 56812 转种 10 站真实上传页字段回归（熊猫/PTtime/烧包/优堡/麒麟/咖啡/青蛙/织梦/葡萄汁/蟹黄堡的地区、分辨率、处理、媒介、音频落 Other、豆瓣 pt_gen、完结与动画标签、转载来源前缀、野马已存在判定）、本轮实测修正（官方标签不外打目标站、源站「类别」行转题材标签、财神补喜剧标签、城市两步上传的表单地址/第二步字段/标题剥离品牌后缀、Other 兜底只认纯「其他」、TNode 详情取 id 与 TORRENT_ALREADY_UPLOAD 判定、非 bencode 下载响应里的站点提示提取、HD-Space 搜索结果页查重（& 转义 + 40 位 sha1 id + 属性值里的 ">"）、xbtit 用 info_hash 拼详情页、PeerGo 查重关键词提取、备份来源 cookie 合并（`.example.com` 与 `example.com` 同站合并、同名取过期更晚）。
+`swift test`（217 个用例：NIST AES-256 向量、`openssl enc -aes-256-cbc -a -md md5` 的 Gist 备份解密向量、gist 密钥推导、cookie jar、限速配置、质量标记解析、站点 overrides 解码、真实详情页解析（标题/副标题/类型/MediaInfo/IMDb/豆瓣）、bencode `info.name` 与 info-hash（SHA-1 向量）、HTML→BBCode 简介转换（含 CRLF 空行归一化）、HDSky 上传表单全字段校验、大小检测边界与旧配置兼容、备份目录监控导入与重试、Blu 家族详情解析（blutopia/monika 真实页面）与上传字段映射（分类/媒介/分辨率/季集/IMDb）、Gazelle 详情解析（HDSpace 真实页面）与 xbtit BBCode 还原、影站字符串分类+源介质组合下拉、通用站动态分类解析、内置站点表自动并入、新版 NexusPHP 动态质量/标签/technical_info 填充（多 data-mode 下拉、ajax 子分类、年份兜底选编码）、TNode（ZHUQUE）真实 API 响应解析与字段映射（选项分组/详情/截图提取/分类媒介编码分辨率标签/TMDB）、HAIDAN 自定义详情布局解析与经典上传字段映射（tag_list 标签/豆瓣 durl）、YemaPT 真实 API 响应解析（详情/选项/IMDb 查重列表）与上传字段映射（分类树/媒介/分辨率/编码/音轨/地区/标签/季集/匿名）、Markdown 与 HTML 简介互转、piecesHash（bencoded pieces 值 SHA-1）、savept 长尾 144 站注册表（框架映射/无重复 id/域名迁移/中文站名）、站点名称默认排序（数字开头在前 + 拼音字母序：zh-Hans-CN 语区拼音序、拉丁名按首字母混排、中文数字汉字不进数字组、内置名录 144 站全量排序预览）、内置表站名同步入用户配置、旧配置无 managed 字段时按 enabled 推断（已添加/未添加站点模型）、未加入分组站点手动排序持久化（旧配置缺省空 + 新字段往返）、cookie 单站导入覆盖与删除、CookieCloud 端对端加密协议（MD5 密钥向量、openssl legacy AES-256-CBC 与 AES-128-CBC 固定零 IV 双格式解密、错误密码、cookie_data 解析、host 主/子域匹配、拉取导入与空结果报错）、GistSync 拉取解密（performOverride 注入 gist API 响应 + openssl 加密 cookies.txt 全链路、manifest 备份时间、pull 导入 store 与状态）、猫（pterclub）标签勾选（源站「标签」行解析、拼音命名复选框按文案精确识别、真实上传页字段校验）、LuckPT 56812 转种 10 站真实上传页字段回归（熊猫/PTtime/烧包/优堡/麒麟/咖啡/青蛙/织梦/葡萄汁/蟹黄堡的地区、分辨率、处理、媒介、音频落 Other、豆瓣 pt_gen、完结与动画标签、转载来源前缀、野马已存在判定）、本轮实测修正（官方标签不外打目标站、源站「类别」行转题材标签、财神补喜剧标签、城市两步上传的表单地址/第二步字段/标题剥离品牌后缀、Other 兜底只认纯「其他」、TNode 详情取 id 与 TORRENT_ALREADY_UPLOAD 判定、非 bencode 下载响应里的站点提示提取、HD-Space 搜索结果页查重（& 转义 + 40 位 sha1 id + 属性值里的 ">"）、xbtit 用 info_hash 拼详情页、PeerGo 查重关键词提取、备份来源 cookie 合并（`.example.com` 与 `example.com` 同站合并、同名取过期更晚）。
 
 活站实测（可选，需要真实 cookie）：`BOXSEND_LIVE=1 swift test --filter LiveAdapterTests`，用 `BOXSEND_LIVE_SITES` 指定解析站点、`BOXSEND_LIVE_PREVIEW_SITES` 只预览上传字段不真发种、`BOXSEND_LIVE_PUSH_SITE/URL` 验证推送下载器；默认不跑，CI 上无需凭据。
 
 ## 里程碑
 
-- M1：Mac GUI 主体（运行/站点限速/Cookie/下载器/RSS/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽上限）+ 状态幂等 + CLI
-- M2（已完成部分加粗）：**RSS 自动转种（新种自动查重/大小检测/转种/推送）**、**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**、**站点覆盖扩展（Blu 家族 blutopia/monika + 经典 Gazelle/xbtit HDSpace/OpenCD/IPTorrents + BYR/影 特殊 NexusPHP + ~70 通用中文 NexusPHP 站，动态分类解析免逐站配置）**、**YemaPT（umi.js SPA + REST API）适配器**（选项/详情/下载/双重查重/发种，真实 API 响应 fixture 测试）；剩余：Unit3D（REST API）适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）
+- M1：Mac GUI 主体（运行/站点限速/Cookie/下载器/日志）+ 核心库（HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台）+ 9 优先站内置实测 overrides（8 站可转种）+ 质量标记自动填充 + PT-depiler 本地备份 zip 导入（加密/未加密）+ 按站点限速 + 目标站分组（带宽上限）+ 状态幂等 + CLI
+- M2（已完成部分加粗）：**PT-depiler 备份目录监控自动导入**、**cookie 健康检测**、**种子大小检测（对比 VPS 剩余空间，提醒/跳过）**、**目标站搜索查重（8 站端点实测）**、**站点覆盖扩展（Blu 家族 blutopia/monika + 经典 Gazelle/xbtit HDSpace/OpenCD/IPTorrents + BYR/影 特殊 NexusPHP + ~70 通用中文 NexusPHP 站，动态分类解析免逐站配置）**、**YemaPT（umi.js SPA + REST API）适配器**（选项/详情/下载/双重查重/发种，真实 API 响应 fixture 测试）；剩余：Unit3D（REST API）适配器、OWSS/WebDAV 同步、简介模板精调、状态存 SQLite（历史查询）
 - M3：长尾站点（OurBits/GPW/MTeam/PTP/HDB/BTN/CinemaZ 新版表单、TNode 截图图床校验）、截图搬运图床、动态限速、统计面板
 
 ## 已知限制
@@ -273,4 +270,4 @@ GUI 窗口标题、`box-send version`、`scripts/make-app.sh` 写进 Info.plist 
 - HHanClub 为候选区上传（offers.php），一般用户无发种权限，故仅作源站。
 - de5 隧道只开放了 qBittorrent WebAPI 的部分端点：`auth/login`、`torrents/info`、`torrents/add` 可用；`addtrackers`/`properties`/`remove` 返回 404（隧道未映射）。后果：同一 info hash 的多站种子无法合并 tracker、已推送种子无法从本软件移除/改属性（需在 qB WebUI 里操作）。
 - 大小检测的「VPS 剩余空间」是手动维护值（qB WebAPI 无磁盘剩余接口），空间变化大时记得更新配置；建议配「安全边际」留余量。
-- RSS 依赖各站 passkey 与 `passkey.php?rss=` 端点（NexusPHP 家族通用）；个别站若关闭 RSS 需在 overrides.rssPath 覆盖或换用备份目录监控 + 手动/其它触发。
+- 1.0 移除了 RSS 自动转种（RSS 页、`RssPoller`、配置 `rss` 段、CLI `rss-sync`、状态 `rssSeen`）：自动入库走 PT-depiler 备份目录监控 + 「批量转种」手动触发；旧配置里残留的 `rss` / `overrides.rssPath` 字段会被忽略，`state.json` 里的 `rssSeen` 同样忽略。

@@ -35,11 +35,6 @@ final class AppModel: ObservableObject {
     @Published var pushEvents: [String: TargetEvent] = [:]
     @Published var sourcePushEvent: TargetEvent? = nil
 
-    // MARK: RSS 自动转种
-    @Published var rssAuto = false
-    @Published var rssRunning = false
-    @Published var rssMessage: String? = nil
-
     // MARK: 备份目录监控
     @Published var zipAuto = false
     @Published var zipRunning = false
@@ -57,7 +52,6 @@ final class AppModel: ObservableObject {
     private var cookies = CookieStore()
     private let state: StateStore
     private var gistTimer: Timer?
-    private var rssTimer: Timer?
     private var zipTimer: Timer?
     /// 当前背景图片（nil = 纯渐变主题）
     private(set) var backgroundNSImage: NSImage?
@@ -98,10 +92,6 @@ final class AppModel: ObservableObject {
         refreshCookieStats()
         if config.gistSync != nil {
             lastGistSyncText = state.lastGistSync.map { Self.dateText($0) } ?? "从未同步"
-        }
-        if config.rss?.enabled == true {
-            rssAuto = true
-            startRssTimer()
         }
         if config.zipWatch?.enabled == true {
             zipAuto = true
@@ -1017,69 +1007,6 @@ final class AppModel: ObservableObject {
             let mins = max(5, config.cookieCloud?.pollMinutes ?? 30)
             cookieCloudTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.cookieCloudNow() }
-            }
-        }
-    }
-
-    // MARK: RSS
-
-    func rssPasskey(_ siteID: String) -> String {
-        config.rss?.passkeys[siteID] ?? ""
-    }
-    func setRssPasskey(_ siteID: String, _ v: String) {
-        if config.rss == nil { config.rss = RssConfig() }
-        config.rss?.passkeys[siteID] = v
-        saveConfig()
-    }
-    func setRssPollMinutes(_ mins: Int) {
-        if config.rss == nil { config.rss = RssConfig() }
-        config.rss?.pollMinutes = max(1, mins)
-        saveConfig()
-        if rssAuto { startRssTimer() }   // 间隔变了，重启定时器
-    }
-    func setRssAuto(_ on: Bool) {
-        rssAuto = on
-        if config.rss == nil { config.rss = RssConfig() }
-        config.rss?.enabled = on
-        saveConfig()
-        rssTimer?.invalidate()
-        rssTimer = nil
-        if on { startRssTimer() }
-    }
-    private func startRssTimer() {
-        let mins = max(1, config.rss?.pollMinutes ?? 10)
-        rssTimer = Timer.scheduledTimer(withTimeInterval: Double(mins) * 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.rssPollNow() }
-        }
-    }
-    func rssPollNow() {
-        guard !rssRunning else { return }
-        guard config.rss?.enabled == true else {
-            rssMessage = "先在 RSS 页启用并填写源站 passkey"
-            return
-        }
-        rssRunning = true
-        rssMessage = "RSS 轮询中…"
-        saveConfig()
-        let cfg = config
-        let cookieJar = cookies
-        let st = state
-        Task.detached {
-            let d = DownloaderFactory.make(cfg, client: HTTPClient(cookies: cookieJar, userAgent: cfg.userAgent))
-            let poller = RssPoller(config: cfg, cookies: cookieJar, state: st, downloader: d)
-            let results = poller.pollOnce()
-            await MainActor.run {
-                self.cookies.mergeFrom(cookieJar)
-                self.refreshCookieStats()
-                self.persistCookies()
-                self.rssRunning = false
-                if results.isEmpty {
-                    self.rssMessage = "RSS 轮询完成：无新种子"
-                } else {
-                    let ok = results.filter { $0.ok }.count
-                    self.rssMessage = "RSS 轮询完成：\(results.count) 个新种，成功 \(ok) 个"
-                }
-                self.notes = st.recentNotes
             }
         }
     }

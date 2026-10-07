@@ -154,8 +154,6 @@ public struct SiteOverride: Codable {
     /// 产地文本（如 "美国"/"日本"）-> 站点地区 ID；无匹配 -> regionOtherValue
     var regionPatterns: [String: Int]?
     var regionOtherValue: Int?
-    /// RSS 地址模板（NexusPHP 默认 "passkey.php?rss={passkey}"）
-    var rssPath: String?
     /// API 站点：API 根地址（如 M-Team "https://api.m-team.cc"）；非 nil 时走 Unit3DAdapter
     public var apiBase: String?
     /// API 站点：是否用 API Key 连接（不走 cookie 同步）
@@ -225,7 +223,6 @@ extension SiteOverride {
         if let v = regionField { out.regionField = v }
         if let v = regionOtherValue { out.regionOtherValue = v }
         if let v = regionPatterns { out.regionPatterns = base.regionPatterns?.merging(v) { _, new in new } }
-        if let v = rssPath { out.rssPath = v }
         if let v = apiBase { out.apiBase = v }
         if usesAPIKey ?? false { out.usesAPIKey = true }
         return out
@@ -324,19 +321,6 @@ extension Double {
         let f = pow(10.0, Double(n))
         return (self * f).rounded() / f
     }
-}
-
-/// RSS 自动转种（源站 passkey RSS -> 新种子自动走转种流水线）
-public struct RssConfig: Codable {
-    public var enabled: Bool
-    public var pollMinutes: Int          // 轮询间隔（分钟）
-    public var passkeys: [String: String] // 源站 id -> RSS passkey（空 = 该站不参与）
-    public init(enabled: Bool = false, pollMinutes: Int = 10, passkeys: [String: String] = [:]) {
-        self.enabled = enabled
-        self.pollMinutes = pollMinutes
-        self.passkeys = passkeys
-    }
-    public static let empty = RssConfig()
 }
 
 /// PT-depiler 本地备份目录监控（发现新 zip 自动导入 cookie）
@@ -453,13 +437,12 @@ public struct AppConfig: Codable {
     public var userAgent: String
     public var webToken: String?        // web 控制台访问令牌，nil/空 = 不启用
     public var groups: [GroupConfig]    // 目标站分组（upLimitMB = 新增站点默认上传限速）
-    public var rss: RssConfig?          // RSS 自动转种
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
     public var appearance: AppearanceConfig // 主题 / 背景图片 / 透明度
     public var unmanagedSiteOrder: [String] // 未加入分组的站点手动排序（批量添加站点弹窗，跨会话保留）
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, rss, zipWatch, appearance, unmanagedSiteOrder
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -474,7 +457,6 @@ public struct AppConfig: Codable {
         userAgent = try c.decode(String.self, forKey: .userAgent)
         webToken = try c.decodeIfPresent(String.self, forKey: .webToken)
         groups = try c.decodeIfPresent([GroupConfig].self, forKey: .groups) ?? []
-        rss = try c.decodeIfPresent(RssConfig.self, forKey: .rss)
         zipWatch = try c.decodeIfPresent(ZipWatchConfig.self, forKey: .zipWatch)
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? AppearanceConfig()
         unmanagedSiteOrder = try c.decodeIfPresent([String].self, forKey: .unmanagedSiteOrder) ?? []
@@ -483,7 +465,7 @@ public struct AppConfig: Codable {
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
                 downloader: DownloaderConfig, gistSync: GistSyncConfig?, cookieCloud: CookieCloudConfig? = nil,
                 userAgent: String,
-                webToken: String?, groups: [GroupConfig] = [], rss: RssConfig? = nil,
+                webToken: String?, groups: [GroupConfig] = [],
                 zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
                 unmanagedSiteOrder: [String] = []) {
         self.dataDir = dataDir
@@ -495,7 +477,6 @@ public struct AppConfig: Codable {
         self.userAgent = userAgent
         self.webToken = webToken
         self.groups = groups
-        self.rss = rss
         self.zipWatch = zipWatch
         self.appearance = appearance
         self.unmanagedSiteOrder = unmanagedSiteOrder
@@ -572,7 +553,6 @@ public struct AppConfig: Codable {
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             webToken: nil,
             groups: [],
-            rss: RssConfig(enabled: false, pollMinutes: 10, passkeys: [:]),
             zipWatch: ZipWatchConfig(enabled: false, dir: "~/Downloads", pollMinutes: 5, password: "")
         )
     }

@@ -124,12 +124,9 @@ struct ContentView: View {
             LogsView()
                 .tabItem { Label("日志", systemImage: "list.bullet") }
                 .tag(4)
-            RSSView()
-                .tabItem { Label("RSS", systemImage: "antenna.radiowaves.left.and.right") }
-                .tag(5)
             SettingsView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
-                .tag(6)
+                .tag(5)
         }
         .padding(.top, 12)   // 全屏时顶部留白
         .safeAreaInset(edge: .bottom) { statusBar }
@@ -1606,50 +1603,3 @@ struct TutorialSheet: View {
     }
 }
 
-// MARK: - RSS 自动转种
-
-struct RSSView: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle("启用 RSS 自动转种（定时拉取新种并自动转种 + 推送）", isOn: Binding(
-                    get: { model.rssAuto },
-                    set: { model.setRssAuto($0) }
-                ))
-                HStack {
-                    IntLimitField(initial: model.config.rss?.pollMinutes ?? 10) { model.setRssPollMinutes($0 ?? 10) }
-                        .frame(width: 60)
-                    Text("（轮询间隔，分钟）").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("立即轮询一次") { model.rssPollNow() }
-                        .disabled(model.rssRunning)
-                }
-                if model.rssRunning {
-                    Text("轮询进行中…").font(.caption).foregroundStyle(.secondary)
-                }
-                if let m = model.rssMessage {
-                    Text(m).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                Text("RSS 新种自动走完整转种流水线（查重、大小检测、按站限速推送）。")
-                    .font(.caption).foregroundStyle(.secondary)
-            } header: {
-                Text("RSS 自动转种")
-            }
-            Section("源站 passkey（留空的站点不参与轮询）") {
-                ForEach(model.config.sourceSites, id: \.id) { s in
-                    HStack {
-                        Text(s.id).frame(width: 100, alignment: .leading)
-                        TextField("passkey", text: Binding(
-                            get: { model.rssPasskey(s.id) },
-                            set: { model.setRssPasskey(s.id, $0) }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                    }
-                }
-            }
-        }
-        .formStyle(.grouped)
-    }
-}

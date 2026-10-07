@@ -23,7 +23,6 @@ public final class StateStore {
         var targetURLs: [String: [String: String]] = [:]   // 目标站 -> dedupKey -> 新种子详情页
         var lastGistSync: Double?
         var notes: [String] = []
-        var rssSeen: [String: [String: Double]] = [:]      // 源站 -> rss guid -> 时间戳（已处理的新种）
         var importedZips: [String: Double] = [:]     // 已导入的 PTD_backup zip 文件名 -> 时间戳
         var cookieChecks: [String: CookieCheckRec] = [:]   // siteID -> 最近一次 cookie 检测结果
 
@@ -37,7 +36,6 @@ public final class StateStore {
             targetURLs = try c.decodeIfPresent([String: [String: String]].self, forKey: .targetURLs) ?? [:]
             lastGistSync = try c.decodeIfPresent(Double.self, forKey: .lastGistSync)
             notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
-            rssSeen = try c.decodeIfPresent([String: [String: Double]].self, forKey: .rssSeen) ?? [:]
             importedZips = try c.decodeIfPresent([String: Double].self, forKey: .importedZips) ?? [:]
             cookieChecks = try c.decodeIfPresent([String: CookieCheckRec].self, forKey: .cookieChecks) ?? [:]
         }
@@ -96,21 +94,6 @@ public final class StateStore {
     public func markTargetURL(site: String, key: String, url: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.targetURLs[site, default: [:]][key] = url
-        saveLocked()
-    }
-    public func isRssSeen(site: String, guid: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return snapshot.rssSeen[site]?[guid] != nil
-    }
-    public func markRssSeen(site: String, guid: String) {
-        lock.lock(); defer { lock.unlock() }
-        var map = snapshot.rssSeen[site] ?? [:]
-        // 每站最多保留 500 条，防 state.json 无限增长
-        if map.count >= 500 {
-            map = Dictionary(uniqueKeysWithValues: map.sorted { $0.value > $1.value }.prefix(300).map { ($0.key, $0.value) })
-        }
-        map[guid] = Date().timeIntervalSince1970
-        snapshot.rssSeen[site] = map
         saveLocked()
     }
     public func isZipImported(name: String) -> Bool {

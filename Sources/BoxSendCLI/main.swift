@@ -81,7 +81,6 @@ do {
                                     转种 + 推下载器
               push --detail <url>   只推下载器（不转种）
               list --site <id>      拉取源站种子列表
-              rss-sync              轮询一次 RSS：自动转种 + 推下载器（需在配置里启用 rss）
               gist-sync [--loop]     从 PT-depiler Gist 备份同步 cookie（--loop 常驻轮询）
               import-zip --file <PTD_backup_*.zip> [--password <备份密码>]
                                     导入 PT-depiler「本地备份」zip
@@ -175,18 +174,6 @@ do {
         let a = SiteRegistry.adapter(for: s, client: client)
         for r in try a.fetchTorrentList() {
             print("\(r.name)  ->  \(r.detailURL)")
-        }
-
-    case "rss-sync":
-        guard let rss = config.rss, rss.enabled else { die("配置中未启用 rss（填写 rss.enabled=true 与各源站 passkey）") }
-        let poller = RssPoller(config: config, cookies: cookies, state: state, downloader: makeDownloader())
-        let results = poller.pollOnce()
-        if results.isEmpty {
-            print("无新种子")
-        }
-        for r in results {
-            print("\(r.ok ? "OK  " : "FAIL") [\(r.siteID)] \(r.title.prefix(80))")
-            print("       \(r.message)")
         }
 
     case "gist-sync":
