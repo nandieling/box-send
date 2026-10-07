@@ -114,7 +114,7 @@ final class TNodeAdapter: SiteAdapter {
     }
 
     private func videoCodingOptionID(_ info: ReleaseInfo) throws -> Int? {
-        switch QualityTokens.codec(from: info.name) {
+        switch QualityTokens.codec(from: info.name, mediainfo: info.mediainfo) {
         case "avc":
             return try optionID(.videoCoding, names: ["H264", "Other"])
         case "hevc":

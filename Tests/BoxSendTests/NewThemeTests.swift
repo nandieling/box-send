@@ -159,3 +159,46 @@ final class DiscuzPostResultTests: XCTestCase {
         XCTAssertEqual(SeccodeOCR.normalize("k6k-k"), "k6kk", "连字符按噪声剔除，认错会自动换图重试")
     }
 }
+
+/// 视频编码下拉：按 MediaInfo 的视频轨判定，且不选压制器选项
+final class CodecTokenTests: XCTestCase {
+    private let avcInfo = """
+    General
+    Complete name            : /mnt/Remux/Movie.2013.1080p.BluRay.Remux.mkv
+    Format                                   : BDMV
+    Video
+    ID                                       : 4113
+    Format                                   : AVC
+    Format/Info                              : Advanced Video Codec
+    Format profile                           : High@L4.1
+    Codec ID                                 : 0x24
+    Audio
+    ID                                       : 4352
+    Format                                   : PCM
+    Format settings, Nyquist file            : no
+    """
+
+    func testCodecFallsBackToMediaInfo() {
+        XCTAssertEqual(QualityTokens.codec(from: "Movie 2013 1080p BluRay Remux-x", mediainfo: avcInfo), "avc",
+                       "发布名没有编码时按 MediaInfo 视频轨判定")
+        let hevc = "Video\nFormat                                   : HEVC\nCodec ID                                 : V_MPEGH/ISO/HEVC"
+        XCTAssertEqual(QualityTokens.codec(from: "Movie 2013 2160p WEB-DL-x", mediainfo: hevc), "hevc")
+        XCTAssertNil(QualityTokens.codec(from: "Movie 2013 1080p WEB-DL-x",
+                                        mediainfo: "Audio\nFormat                                   : AAC LC\n"),
+                     "音频轨的行不能被当成视频编码")
+        XCTAssertEqual(QualityTokens.codec(from: "Movie 2013 x265 1080p-x", mediainfo: avcInfo), "hevc",
+                       "发布名写明了编码就以名字为准")
+    }
+
+    /// 天空的编码下拉里 10=x264、13=x265 是压制器，1=H.264/AVC、12=HEVC 才是格式
+    func testEncoderOptionYieldsToFormatOption() {
+        let opts: [(value: String, label: String)] = [
+            ("0", "请选择"), ("1", "H.264/AVC"), ("13", "x265"), ("10", "x264"),
+            ("12", "HEVC"), ("2", "VC-1"), ("11", "Other"),
+        ]
+        XCTAssertEqual(NexusPHPAdapter.codecFormatOption(opts, token: "avc", value: "10"), "1")
+        XCTAssertEqual(NexusPHPAdapter.codecFormatOption(opts, token: "hevc", value: "13"), "12")
+        XCTAssertNil(NexusPHPAdapter.codecFormatOption(opts, token: "avc", value: "1"), "已指向格式选项的配置不动")
+        XCTAssertNil(NexusPHPAdapter.codecFormatOption(opts, token: "vc1", value: "2"), "没有压制器对应关系就不动")
+    }
+}

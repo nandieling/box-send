@@ -679,6 +679,24 @@ class NexusPHPAdapter: SiteAdapter {
         }
     }
 
+    /// 编码下拉里的 x264/x265 是压制器、不是视频格式：Remux 和转载都带不出编码器信息，
+    /// 站点若同时提供「H.264/AVC」「HEVC」这类格式选项就用它（天空的 10=x264 曾因此选错）。
+    static func codecFormatOption(_ options: [(value: String, label: String)],
+                                  token: String, value: String) -> String? {
+        let alias: [String: String] = ["avc": "x264", "hevc": "x265"]
+        let formatKeys: [String: [String]] = ["avc": ["h264", "avc"], "hevc": ["h265", "hevc"]]
+        guard let enc = alias[token], let keys = formatKeys[token] else { return nil }
+        func norm(_ s: String) -> String { QualityMatcher.normalize(s) }
+        // 只纠正"当前值确实写着压制器"的表，已经指向格式选项的配置不动
+        guard let current = options.first(where: { $0.value == value }), norm(current.label).contains(enc) else {
+            return nil
+        }
+        return options.first { o in
+            let l = norm(o.label)
+            return l != norm(current.label) && !l.contains(enc) && keys.contains(where: { l.contains($0) })
+        }?.value
+    }
+
     /// 源介质下拉（tr_source 型：值依赖 medium+standard 组合，如 BD Remux 1080 vs UHD Remux 2160）
     private func applySourceSelect(_ info: ReleaseInfo, _ set: (String, String) -> Void) {
         guard let field = override?.sourceSelectField, let map = override?.sourceMap else { return }
@@ -715,7 +733,7 @@ class NexusPHPAdapter: SiteAdapter {
     private func applyQualitySelects(_ info: ReleaseInfo, page: String, mode: String?, _ set: (String, String) -> Void) {
         let tokens: [String: String?] = [
             "medium": QualityTokens.medium(from: info.name, kind: info.kind),
-            "codec": QualityTokens.codec(from: info.name),
+            "codec": QualityTokens.codec(from: info.name, mediainfo: info.mediainfo),
             "audiocodec": QualityTokens.audio(from: info.name),
             "standard": QualityTokens.standard(from: info.name),
         ]
@@ -723,8 +741,19 @@ class NexusPHPAdapter: SiteAdapter {
         if let selects = override?.qualitySelects {
             for (field, attr) in selects {
                 guard let token = tokens[attr].flatMap({ $0 }) else { continue }
-                if let v = override?.qualityValueMaps?[attr]?[token] { set(field, String(v)); continue }
-                if let v = override?.qualityStringMaps?[attr]?[token] { set(field, v); continue }
+                var mapped: String?
+                if let v = override?.qualityValueMaps?[attr]?[token] { mapped = String(v) }
+                else if let v = override?.qualityStringMaps?[attr]?[token] { mapped = v }
+                guard let mapped else { continue }
+                // 编码值表可能指向压制器（x264/x265）：站点另有格式选项时改用格式选项，
+                // 值表是历史快照时也不会再选错
+                if attr == "codec",
+                   let opts = HTMLUtil.selectGroups(page, name: field).first?.options,
+                   let better = Self.codecFormatOption(opts, token: token, value: mapped) {
+                    set(field, better)
+                } else {
+                    set(field, mapped)
+                }
             }
         }
         // 动态填充：标准字段名（新版 NexusPHP 为 xxx_sel[mode] 数组式，旧版为裸 xxx_sel）

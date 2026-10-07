@@ -39,7 +39,8 @@ extension SiteOverride {
         categoryMap: ["movie": 401, "series": 402, "tvshow": 403, "anime": 405, "documentary": 404, "music": 408, "sports": 407, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
-        qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 13, "uhdbd8k": 13, "uhd8k": 13, "uhd": 7, "webdl": 11, "bluray": 1, "encode": 7, "hdtv": 5, "dvd": 6, "track": 9], "codec": ["hevc": 13, "avc": 10, "vc1": 2, "mpeg2": 4, "av1": 16, "xvid": 3], "audiocodec": ["dtsma": 10, "dtsbr": 14, "dtsc": 16, "truehd atmos": 17, "truehd": 11, "eac3 atmos": 21, "eac3": 20, "ac3": 12, "dts": 3, "flac": 1, "ape": 2, "aac": 6, "mp3": 4, "ogg": 5, "pcm": 19, "lpcm": 13, "wav": 15, "alac": 23, "m4a": 23, "opus": 22], "standard": ["8k": 6, "2160p": 5, "1080p": 1, "1080i": 2, "720p": 3, "sd": 4]],
+        // 编码选格式选项（1=H.264/AVC、12=HEVC）：10=x264、13=x265 是压制器，转种带不出编码器信息，不该选
+        qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 13, "uhdbd8k": 13, "uhd8k": 13, "uhd": 7, "webdl": 11, "bluray": 1, "encode": 7, "hdtv": 5, "dvd": 6, "track": 9], "codec": ["hevc": 12, "avc": 1, "vc1": 2, "mpeg2": 4, "av1": 16, "xvid": 3], "audiocodec": ["dtsma": 10, "dtsbr": 14, "dtsc": 16, "truehd atmos": 17, "truehd": 11, "eac3 atmos": 21, "eac3": 20, "ac3": 12, "dts": 3, "flac": 1, "ape": 2, "aac": 6, "mp3": 4, "ogg": 5, "pcm": 19, "lpcm": 13, "wav": 15, "alac": 23, "m4a": 23, "opus": 22], "standard": ["8k": 6, "2160p": 5, "1080p": 1, "1080i": 2, "720p": 3, "sd": 4]],
         subtitleField: "small_descr",
         descrFormat: "bbcode",
         tagField: "option_sel[]",

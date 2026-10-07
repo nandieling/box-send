@@ -140,7 +140,7 @@ final class YemaPTAdapter: SiteAdapter {
 
     private func codecValue(_ info: ReleaseInfo) throws -> String? {
         let opts = try fetchOptions().codecOptions ?? []
-        switch QualityTokens.codec(from: info.name) {
+        switch QualityTokens.codec(from: info.name, mediainfo: info.mediainfo) {
         case "avc": return optValue(opts, names: ["H.264/AVC", "H264", "H.264"])
         case "hevc": return optValue(opts, names: ["H.265/HEVC", "H265", "H.265"])
         case "vc1": return optValue(opts, names: ["VC-1"])

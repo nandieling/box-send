@@ -47,7 +47,14 @@ enum QualityTokens {
         return nil
     }
 
-    static func codec(from name: String) -> String? {
+    /// 视频编码 token：先看发布名；Remux 的名字常不写编码（或只写 REMUX），
+    /// 这时用 MediaInfo 视频轨的 Format/Codec ID（用户要求按 mediainfo 判定）。
+    static func codec(from name: String, mediainfo: String = "") -> String? {
+        if let c = codec(fromName: name) { return c }
+        return codec(fromMediaInfo: mediainfo)
+    }
+
+    static func codec(fromName name: String) -> String? {
         let n = name.lowercased()
         if n.contains("x265") || n.contains("hevc") || n.contains("h265") || n.contains("h.265") { return "hevc" }
         if n.contains("x264") || n.contains("avc") || n.contains("h264") || n.contains("h.264") { return "avc" }
@@ -55,6 +62,36 @@ enum QualityTokens {
         if n.contains("vc-1") || n.contains("vc1") { return "vc1" }
         if n.contains("av1") { return "av1" }
         if n.contains("mpeg-2") || n.contains("mpeg2") { return "mpeg2" }
+        return nil
+    }
+
+    /// MediaInfo 里能认出的视频编码（顺序 = 判定优先级，HEVC 先于 AVC，
+    /// 免得 "MPEG-H/ISO/HEVC" 被后面含 avc 的行抢走）
+    static let mediaInfoCodecs: [(token: String, keys: [String])] = [
+        ("hevc", ["hevc", "h.265", "h265"]),
+        ("avc", ["avc", "h.264", "h264"]),
+        ("vc1", ["vc-1", "vc1"]),
+        ("mpeg2", ["mpeg-2", "mpeg2"]),
+        ("av1", ["av1"]),
+        ("vp9", ["vp9", "vp8"]),
+        ("prores", ["prores"]),
+        ("xvid", ["xvid"]),
+    ]
+
+    /// 只读 MediaInfo 的 Format / Codec ID 行（Format profile、Format settings 这类
+    /// 带后缀的行不算，它们会把容器/音频信息当成视频编码）
+    static func codec(fromMediaInfo text: String) -> String? {
+        guard !text.isEmpty else { return nil }
+        let re = try! NSRegularExpression(
+            pattern: #"^\s*(?:format|codec\s*id)\s*[:：]\s*(.+)$"#,
+            options: [.caseInsensitive, .anchorsMatchLines])
+        for m in re.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
+            guard let r = Range(m.range(at: 1), in: text) else { continue }
+            let v = text[r].lowercased().replacingOccurrences(of: " ", with: "")
+            for (token, keys) in mediaInfoCodecs where keys.contains(where: { v.contains($0) }) {
+                return token
+            }
+        }
         return nil
     }
 

@@ -210,7 +210,7 @@ enum DiscuzThreadPost {
             } else if label.contains("分辨率") || label.contains("清晰度") {
                 value = pick(QualityTokens.standard(from: info.name).map { [$0] } ?? []) ?? other()
             } else if label.contains("视频编码") || label.contains("编码格式") {
-                value = pick(QualityTokens.codec(from: info.name).map { [$0] } ?? []) ?? other()
+                value = pick(QualityTokens.codec(from: info.name, mediainfo: info.mediainfo).map { [$0] } ?? []) ?? other()
             } else if label.contains("音频编码") || label.contains("音轨") {
                 value = pick(QualityTokens.audio(from: info.name).map { [$0] } ?? []) ?? other()
             } else if label.contains("字幕") {
