@@ -291,7 +291,9 @@ final class DiscuzAdapter: SiteAdapter {
     }
 
     private func save(_ kind: String, _ text: String) {
-        guard let dir = debugDir else { return }
+        guard let root = debugDir else { return }
+        let dir = (root as NSString).appendingPathComponent("debug")
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let f = URL(fileURLWithPath: dir).appendingPathComponent("\(kind)-\(site.id)-\(Int(Date().timeIntervalSince1970)).html")
         try? text.data(using: .utf8)?.write(to: f)
     }

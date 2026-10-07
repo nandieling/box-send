@@ -99,7 +99,8 @@ enum QualityTokens {
         ("forbid", ["禁转", "禁止转载", "jz"]),
         ("limited", ["限转", "xz"]),
         ("diy", ["diy", "自压"]),
-        ("first", ["首发"]),
+        // 表里刻意没有 official / first：官种、首发都是源站自己的概念，
+        // 转出去的种子既不是本站官种、也不是本站首发，一律不跟随源站。
         ("disc", ["原盘"]),
         ("completed", ["完结", "完結", "全集", "complete", "finished"]),
         ("anime", ["动画", "动漫", "anime"]),
@@ -149,13 +150,10 @@ enum QualityTokens {
         if medium(from: info.name, kind: info.kind) == "remux" { tags.append("remux") }
         if info.kind == .anime { tags.append("anime") }
         if isCompletedRelease(info) { tags.append("completed") }
-        // 源站"标签"行是打标最权威的依据（官方/英字/应求等无法从发布名推断）。
-        // 表里刻意没有 official：官种是源站概念，转出去的种子不是官种。
-        // "首发"同理——目标站这条不是首发，只有源站自己发官种时才跟随。
+        // 源站「标签」行是打标最权威的依据（英字/应求/题材等无法从发布名推断）。
         for raw in info.sourceTags {
             let s = raw.lowercased()
             for (tag, keywords) in tagTextMap where !tags.contains(tag) {
-                if tag == "first" && !info.isOfficialSource { continue }
                 if keywords.contains(where: { s.contains($0) }) { tags.append(tag) }
             }
         }

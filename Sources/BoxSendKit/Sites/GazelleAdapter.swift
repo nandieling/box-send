@@ -339,7 +339,10 @@ final class GazelleAdapter: SiteAdapter {
             return UploadOutcome(success: true, message: "发布成功",
                                  detailURL: HTMLUtil.resolveURL(m, against: u))
         }
-        if resp.status == 200, body.contains("Your torrent was added") || body.contains("发布成功") {
+        // HD-Space（xbtit 皮肤）的成功页文案是 "Upload successful! The torrent has been added."
+        let okMarkers = ["Your torrent was added", "Torrent was added", "Upload successful",
+                         "torrent has been added", "上传成功", "发布成功"]
+        if resp.status == 200, okMarkers.contains(where: { body.contains($0) }) {
             return UploadOutcome(success: true, message: "发布成功", detailURL: bodyLink ?? hashURL)
         }
         var errMsg = "HTTP \(resp.status) 未识别的返回"

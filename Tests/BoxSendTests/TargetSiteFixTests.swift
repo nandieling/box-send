@@ -44,15 +44,17 @@ final class TargetSiteFixTests: XCTestCase {
         XCTAssertTrue(tags.contains("9") && tags.contains("3"), "中字/完结照旧")
     }
 
-    /// 首发同官方一样是源站概念：目标站这条不是首发，只有源站发官种时才跟随
-    func testFirstReleaseTagOnlyFollowsOfficialSource() throws {
+    /// 首发同官方一样是源站自己的概念：转出去的都是转载，目标站一律不勾首发
+    func testFirstReleaseTagNeverPropagates() throws {
         var info = try sourceRelease()
         info.sourceTags = ["首发", "中字", "完结"]
         let plain = QualityTokens.canonicalTags(info)
-        XCTAssertFalse(plain.contains("first"), "源站没标官种：首发不该跟随")
+        XCTAssertFalse(plain.contains("first"), "源站的首发不该带到目标站")
         XCTAssertTrue(plain.contains("chinese_sub") && plain.contains("completed"), "其余标签照旧")
         info.sourceTags = ["官种", "首发", "中字"]
-        XCTAssertTrue(QualityTokens.canonicalTags(info).contains("first"), "源站发官种：首发可以跟随")
+        XCTAssertFalse(QualityTokens.canonicalTags(info).contains("first"), "源站发官种也不带首发")
+        let f = try fields("hdvideo")
+        XCTAssertFalse(values(f, "tags[4][]").contains("29"), "HDVideo 的首发复选框不该勾")
     }
 
     // MARK: 3 财神：按源站类别勾题材标签（缺题材标签审核不通过）

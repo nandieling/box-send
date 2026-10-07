@@ -289,7 +289,7 @@ extension SiteOverride {
         extraUploadFields: ["uplver": "yes"],
         subtitleField: "small_descr",
         tagField: "span[]",
-        tagMap: ["chinese_sub": "6", "forbid": "1", "first": "2", "diy": "4"]
+        tagMap: ["chinese_sub": "6", "forbid": "1", "diy": "4"]   // 首发（值 2）不跟随源站，见 QualityTokens.tagTextMap
     )
 
     /// 动漫花园 U2：多 Tab 表单（动漫/漫画/音乐），标题取 .torrent 文件名；type 值实测

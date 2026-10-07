@@ -618,6 +618,11 @@ class NexusPHPAdapter: SiteAdapter {
         if kind != "other", let hit = matchKeywords(Self.kindKeywords.first { $0.0 == "other" }!.1) {
             return hit
         }
+        // 站点既没有本分类也没有「其他」（IT之家、凤凰没有纪录片版块）：按就近体裁退让，
+        // 别让 type 停在占位 0（服务端报「你必须选择类型！」「Invalid category」）
+        for alt in Self.kindSubstitutes[kind] ?? [] {
+            if let hit = matchKeywords(Self.kindKeywords.first { $0.0 == alt }?.1 ?? []) { return hit }
+        }
         // ajax 动态分类（页面无 type 下拉时）
         if groups.isEmpty, let modes = override?.ajaxCategoryModes {
             guard let topMode = modes[kind] ?? modes["other"] else { return nil }
@@ -694,6 +699,17 @@ class NexusPHPAdapter: SiteAdapter {
         ("tvshow", ["综艺", "tv show", "show"]),
         ("movie", ["电影", "movie", "film"]),
         ("other", ["其他", "其它", "other", "misc"]),
+    ]
+
+    /// 站点没有该分类、也没有「其他」时的退让顺序（纪录片最常见：多数中小站没有独立纪录片版块）
+    static let kindSubstitutes: [String: [String]] = [
+        "documentary": ["movie", "series", "tvshow", "music"],
+        "movie": ["series", "tvshow"],
+        "series": ["tvshow", "movie"],
+        "tvshow": ["series", "movie"],
+        "anime": ["movie", "series", "tvshow"],
+        "music": ["movie", "tvshow"],
+        "other": ["movie", "series"],
     ]
 
     private func applyQualitySelects(_ info: ReleaseInfo, page: String, mode: String?, _ set: (String, String) -> Void) {
@@ -827,7 +843,63 @@ class NexusPHPAdapter: SiteAdapter {
            HTMLUtil.firstMatch(n, #"s\d{1,2}\s*-\s*s\d{1,2}"#) != nil {
             out.append(("collages", "1"))      // 多季合集
         }
+        // 连载类分类（电视剧/综艺/动画/纪录片）的站把季/集当必填（海胆：缺了就拒），
+        // 站点约定 0 = 不区分季 / 全季，推不出具体值时补 0 而不是不提交。
+        if ["documentary", "series", "tvshow", "anime"].contains(info.kind?.rawValue ?? "") {
+            if has("season"), !out.contains(where: { $0.0 == "season" }) { out.append(("season", "0")) }
+            if has("episode"), !out.contains(where: { $0.0 == "episode" }) { out.append(("episode", "0")) }
+        }
         return out
+    }
+
+    /// 必填「风格/题材」复选框组（HDVideo 的 style_sel[4][]）：选项文案就是题材词，
+    /// 用源站「类别」行匹配；一个都不命中时退到组内中性选项（剧情 -> 其他），
+    /// 否则整单会被「请至少选择一个风格」打回。
+    static func styleGroupValues(_ info: ReleaseInfo, page: String) -> [(name: String, value: String)] {
+        var groups: [String: [(value: String, label: String)]] = [:]
+        var order: [String] = []
+        for b in HTMLUtil.checkboxes(page) where b.name.hasSuffix("[]") && !b.label.isEmpty {
+            if groups[b.name] == nil { order.append(b.name) }
+            groups[b.name, default: []].append((b.value, b.label))
+        }
+        for name in order {
+            guard let opts = groups[name], opts.count >= 3, styleRowLabel(page, group: name) else { continue }
+            var picked: [(name: String, value: String)] = []
+            for tag in QualityTokens.genreTags(info.genre) + QualityTokens.canonicalTags(info) {
+                guard let keys = QualityTokens.tagTextMap.first(where: { $0.tag == tag })?.keywords else { continue }
+                if let hit = opts.first(where: { o in
+                    !picked.contains(where: { $0.value == o.value })
+                        && keys.contains { QualityTokens.normLabel(o.label) == QualityTokens.normLabel($0) }
+                }) {
+                    picked.append((name, hit.value))
+                }
+                if picked.count >= 3 { break }
+            }
+            if picked.isEmpty {
+                for kw in ["剧情", "其他", "其它"] {
+                    if let hit = opts.first(where: { QualityTokens.normLabel($0.label) == QualityTokens.normLabel(kw) }) {
+                        picked.append((name, hit.value))
+                        break
+                    }
+                }
+            }
+            if !picked.isEmpty { return picked }
+        }
+        return []
+    }
+
+    /// 复选框组所在行的标题是否为「风格/题材」（只看组内首个控件前紧邻的文案，避免命中页面其它说明）
+    static func styleRowLabel(_ page: String, group: String) -> Bool {
+        guard let at = page.range(of: "name=\"\(group)\"") ?? page.range(of: "name='\(group)'") else {
+            return false
+        }
+        var head = String(page[page.startIndex..<at.lowerBound].suffix(400))
+        // 切到最后一个小括号前：组名所在的半截 <input … 不是行标签的一部分
+        if let lt = head.lastIndex(of: "<") { head = String(head[..<lt]) }
+        let text = HTMLUtil.stripTags(HTMLUtil.decodeEntities(head))
+            .replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+        let tail = String(text.suffix(12))
+        return tail.contains("风格") || tail.contains("题材")
     }
 
     /// 源页 MediaInfo/BDInfo 块：依次尝试 <pre>、引用框 fieldset、code/tech 容器、textarea。
@@ -1313,6 +1385,11 @@ class NexusPHPAdapter: SiteAdapter {
         // 质量下拉（medium/codec/audiocodec/standard）+ 源介质组合下拉
         applyQualitySelects(info, page: page, mode: catMode, setField)
         for (k, v) in Self.seasonEpisodeValues(info, page: page) { setField(k, v) }
+        // 必填「风格」复选框组（HDVideo：请至少选择一个风格）
+        for (k, v) in Self.styleGroupValues(info, page: page)
+        where !fields.contains(where: { $0.name == k && $0.value == v }) {
+            fields.append(.init(k, v))
+        }
         applySourceSelect(info, setField)
         // 额外固定字段
         for (k, v) in (override?.extraUploadFields ?? [:]) {
