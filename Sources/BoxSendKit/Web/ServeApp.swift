@@ -186,6 +186,7 @@ public final class ServeApp {
         o.skipReseed = obj["skipReseed"] as? Bool ?? false
         o.skipPush = obj["skipPush"] as? Bool ?? false
         if let t = obj["targets"] as? [String], !t.isEmpty { o.targets = t }
+        o.sourceQuote = obj["sourceQuote"] as? String ?? (cfg.sourceQuoteEnabled ? cfg.sourceQuoteText : "")
         let pipeline = ReseedPipeline(config: cfg, cookies: cookies, state: state,
                                       downloader: DownloaderFactory.make(cfg, client: client))
         do {

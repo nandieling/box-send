@@ -27,6 +27,11 @@ final class AppModel: ObservableObject {
     @Published var selectedTargets: Set<String> = []
     @Published var doReseed = true
     @Published var doPush = true
+    /// 「批量转种」页的源站引用（可选）：勾选后把文本加在每个目标站简介最上面并引用包裹。
+    /// 源站简介自带引用的站点不用勾，故为可选项
+    @Published var sourceQuoteEnabled = false
+    @Published var sourceQuoteText = ""
+
     @Published var running = false
     @Published var runningStep = ""
     @Published var lastReport: String = ""
@@ -92,6 +97,8 @@ final class AppModel: ObservableObject {
         }
         notes = state.recentNotes
         selectedTargets = Set(config.targetSites)
+        sourceQuoteEnabled = config.sourceQuoteEnabled
+        sourceQuoteText = config.sourceQuoteText
         reloadBackgroundImage()
         refreshCookieStats()
         if config.gistSync != nil {
@@ -303,6 +310,8 @@ final class AppModel: ObservableObject {
                 targets.append(s.id)
             }
             c.targetSites = targets
+            c.sourceQuoteEnabled = sourceQuoteEnabled
+            c.sourceQuoteText = sourceQuoteText
             // 勾选为目标即自动启用（内置表新站默认 enabled=false，避免还要手动开开关）
             c.sourceSites = c.sourceSites.map { site in
                 var site = site
@@ -1182,6 +1191,7 @@ final class AppModel: ObservableObject {
         let cookieJar = cookies
         let st = state
         let doR = doReseed, doP = doPush
+        let quote = sourceQuoteEnabled ? sourceQuoteText : ""
         reseedEvents = [:]
         pushEvents = [:]
         sourcePushEvent = nil
@@ -1192,6 +1202,7 @@ final class AppModel: ObservableObject {
             var o = ReseedPipeline.Options()
             o.skipReseed = !doR
             o.skipPush = !doP
+            o.sourceQuote = quote
             o.targets = targets.isEmpty ? nil : targets
             o.onSiteEvent = { [weak self] siteID, text, ok in
                 Task { @MainActor in

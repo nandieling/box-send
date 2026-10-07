@@ -21,6 +21,35 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var sourceName: String      // 源站显示名（如 LuckPT；目标站"附加信息=转种来源"用）
     public var bangumi: String         // Bangumi 番组计划条目链接（馒头动画分类发种必填）
     public var sourceTags: [String]    // 源站详情页"标签"行原文（如 ["官方","中字","完结"]）
+    /// 「批量转种」页勾选「源站引用」时用户填写的文本：加在发种简介最上面，按目标站格式用引用包裹。
+    /// 源站简介自带引用的可以不填，所以做成可选项（空串 = 不加）。
+    public var extraQuote: String
+
+    /// 去掉首尾空白后的源站引用文本
+    public var extraQuoteText: String { extraQuote.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// BBCode 引用块（NexusPHP / Gazelle / Blu / PeerGo / Discuz 家族），含尾部换行
+    public var extraQuoteBBCode: String {
+        extraQuoteText.isEmpty ? "" : "[quote]\n" + extraQuoteText + "\n[/quote]\n"
+    }
+
+    /// HTML 引用块（Unit3D 等 HTML 简介站点）
+    public var extraQuoteHTML: String {
+        guard !extraQuoteText.isEmpty else { return "" }
+        let t = extraQuoteText
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br />")
+        return "<blockquote>" + t + "</blockquote><br />\n"
+    }
+
+    /// Markdown 引用块（YemaPT 简介用）
+    public var extraQuoteMarkdown: String {
+        guard !extraQuoteText.isEmpty else { return "" }
+        let lines = extraQuoteText.components(separatedBy: "\n").map { "> \($0)" }
+        return lines.joined(separator: "\n") + "\n\n"
+    }
 
     /// 源站把该种子标成官种/官方发布。目标站的种子不是官种（不该打官方标签），
     /// 但要在简介注明来源，见 NexusPHPAdapter.sourcePrefix。
@@ -36,7 +65,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
          kind: ReleaseKind? = nil, torrentName: String = "", torrentURL: String = "",
          isForbidReseed: Bool = false, subtitle: String = "", genre: String = "",
          mediainfo: String = "", region: String = "", sourceName: String = "",
-         bangumi: String = "", sourceTags: [String] = []) {
+         bangumi: String = "", sourceTags: [String] = [], extraQuote: String = "") {
         self.siteID = siteID
         self.detailURL = detailURL
         self.name = name
@@ -56,10 +85,11 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         self.sourceName = sourceName
         self.bangumi = bangumi
         self.sourceTags = sourceTags
+        self.extraQuote = extraQuote
     }
 
     private enum CodingKeys: String, CodingKey {
-        case siteID, detailURL, name, descr, imdb, douban, size, kind
+        case siteID, detailURL, name, descr, imdb, douban, size, kind, extraQuote
         case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo, region
         case sourceName, bangumi, sourceTags
     }
@@ -83,6 +113,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         sourceName = try c.decodeIfPresent(String.self, forKey: .sourceName) ?? ""
         bangumi = try c.decodeIfPresent(String.self, forKey: .bangumi) ?? ""
         sourceTags = try c.decodeIfPresent([String].self, forKey: .sourceTags) ?? []
+        extraQuote = try c.decodeIfPresent(String.self, forKey: .extraQuote) ?? ""
     }
 
     /// 稳定去重键：同一源站同一详情页视为同一种子

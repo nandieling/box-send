@@ -440,9 +440,12 @@ public struct AppConfig: Codable {
     public var zipWatch: ZipWatchConfig? // PT-depiler 备份目录监控
     public var appearance: AppearanceConfig // 主题 / 背景图片 / 透明度
     public var unmanagedSiteOrder: [String] // 未加入分组的站点手动排序（批量添加站点弹窗，跨会话保留）
+    /// 「批量转种」页的源站引用（可选）：勾选且文本非空时，加在各目标站简介最上面并用引用包裹
+    public var sourceQuoteEnabled: Bool
+    public var sourceQuoteText: String
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -460,6 +463,8 @@ public struct AppConfig: Codable {
         zipWatch = try c.decodeIfPresent(ZipWatchConfig.self, forKey: .zipWatch)
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? AppearanceConfig()
         unmanagedSiteOrder = try c.decodeIfPresent([String].self, forKey: .unmanagedSiteOrder) ?? []
+        sourceQuoteEnabled = try c.decodeIfPresent(Bool.self, forKey: .sourceQuoteEnabled) ?? false
+        sourceQuoteText = try c.decodeIfPresent(String.self, forKey: .sourceQuoteText) ?? ""
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
@@ -467,7 +472,8 @@ public struct AppConfig: Codable {
                 userAgent: String,
                 webToken: String?, groups: [GroupConfig] = [],
                 zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
-                unmanagedSiteOrder: [String] = []) {
+                unmanagedSiteOrder: [String] = [],
+                sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "") {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -480,6 +486,8 @@ public struct AppConfig: Codable {
         self.zipWatch = zipWatch
         self.appearance = appearance
         self.unmanagedSiteOrder = unmanagedSiteOrder
+        self.sourceQuoteEnabled = sourceQuoteEnabled
+        self.sourceQuoteText = sourceQuoteText
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()

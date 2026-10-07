@@ -272,7 +272,7 @@ final class GazelleAdapter: SiteAdapter {
         if let category = resolveCategory(info) { setField("category", String(category)) }
         var bb = BBCode.fromHTML(info.descr, base: URL(string: site.url))
         bb = BBCode.insertMediainfo(bb, mediainfo: info.mediainfo)
-        setField("info", bb)
+        setField("info", info.extraQuoteBBCode + bb)
         setField("anonymous", "false")
         setField("t3d", "0")
         setField("req", "0")

@@ -227,6 +227,17 @@ struct RunView: View {
             }
             TextField("粘贴种子详情页链接（如 https://…/details.php?id=…）", text: $model.detailURL)
                 .textFieldStyle(.roundedBorder)
+            HStack(spacing: 10) {
+                Toggle("源站引用", isOn: $model.sourceQuoteEnabled)
+                    .fixedSize()
+                    .help("源站简介自带引用时不用勾选；勾选后右侧文本会加在每个目标站发种简介的最上面，并用 [quote][/quote] 引用包起来")
+                TextField("加在简介最上面的引用文本（如：转载自LuckPT，感谢发布者）", text: $model.sourceQuoteText, prompt: Text("源站引用文本"))
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!model.sourceQuoteEnabled)
+                    .frame(maxWidth: 560)
+            }
+            .onChange(of: model.sourceQuoteEnabled) { _ in model.saveConfig() }
+            .onChange(of: model.sourceQuoteText) { _ in model.saveConfig() }
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
@@ -1544,6 +1555,7 @@ struct TutorialSheet: View {
                         "「批量转种」页粘贴种子详情页链接，勾选「转种到目标站」与「推送到下载器」。",
                         "勾选转种分组（「全选」= 全部分组）后点「开始运行」。",
                         "按分组顺序执行：获取种子 → 依次上传到组内已开启站点（限速取分组上传限速）→ 转种成功的种子自动推送到下载器。",
+                        "源站简介没有转载说明时，勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介的最上面；源站自带引用的不用勾。",
                         "点「运行记录」展开查看每个站点的转种 / 推送结果。",
                     ])
                     section("4. 推送到 VPS 下载器", image: "downloader", steps: [

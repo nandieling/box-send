@@ -358,8 +358,8 @@ class Unit3DAdapter: SiteAdapter {
     /// 简介：站方为 Markdown/HTML 混排编辑器，沿用源站 HTML（图片绝对化、去源站链接）
     func uploadDescr(_ info: ReleaseInfo) -> String {
         let html = Self.buildDescr(info.descr, sourceHost: info.detailURL)
-        if !html.isEmpty { return html }
-        return "转载自\(info.sourceName.isEmpty ? info.siteID : info.sourceName)，感谢发布者。"
+        if !html.isEmpty { return info.extraQuoteHTML + html }
+        return info.extraQuoteHTML + "转载自\(info.sourceName.isEmpty ? info.siteID : info.sourceName)，感谢发布者。"
     }
 
     static func apiMessage(_ resp: HTTPClient.Response) -> String? {

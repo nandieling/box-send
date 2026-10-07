@@ -1004,8 +1004,10 @@ class NexusPHPAdapter: SiteAdapter {
         return s
     }
 
-    /// cmct 等站"附加信息"：转种来源（源站引用框内容 + 致谢前缀）
+    /// cmct 等站"附加信息"：转种来源（源站引用框内容 + 致谢前缀）。
+    /// 用户在「批量转种」页填了源站引用时直接用它（这类站该区块本就是手填转载说明）
     func reseedSourceText(_ info: ReleaseInfo) -> String {
+        if !info.extraQuoteText.isEmpty { return info.extraQuoteText }
         var t = "转载自\(sourceLabel(info))，感谢发布者。"
         if let q = Self.quoteHTML(from: info.descr) { t += q }
         return t
@@ -1039,6 +1041,11 @@ class NexusPHPAdapter: SiteAdapter {
     /// （不并入源简介自带引用块，那里可能是 MediaInfo 或剧集信息）
     private func withSourcePrefix(_ text: String, _ info: ReleaseInfo) -> String {
         let line = "转载自\(sourceLabel(info))，感谢发布者。"
+        // 用户在「批量转种」页填了源站引用：以它为准，不再叠加自动官种引用（否则两个引用块）
+        if !info.extraQuoteText.isEmpty {
+            return ((override?.descrFormat ?? "bbcode") == "html"
+                    ? info.extraQuoteHTML : info.extraQuoteBBCode) + text
+        }
         if info.isOfficialSource { return "[quote]\n\(line)\n[/quote]\n" + text }
         guard override?.descrSourcePrefix == true else { return text }
         return line + "\n" + text

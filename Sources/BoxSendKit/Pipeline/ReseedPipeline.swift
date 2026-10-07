@@ -37,6 +37,8 @@ public final class ReseedPipeline {
         public var skipReseed = false
         public var skipPush = false
         public var targets: [String]?    // nil = 用 config.targetSites
+        /// 「批量转种」页的源站引用（可选）：非空时加在各目标站简介最上面并用引用包裹
+        public var sourceQuote: String = ""
         /// 逐站实时事件（GUI 卡片状态用）：siteID / 状态文案 / ok（nil = 进行中）
         public var onSiteEvent: ((String, String, Bool?) -> Void)?
         /// 目标站自己的 .torrent 推送事件（转种成功后逐站推送）
@@ -115,6 +117,8 @@ public final class ReseedPipeline {
         if release.bangumi.isEmpty, let id = Bangumi.subjectID(inHTML: release.descr) {
             release.bangumi = Bangumi.link(subjectID: id)
         }
+        // 「批量转种」页勾选的源站引用：由各适配器按目标站简介格式包裹后置顶
+        release.extraQuote = opts.sourceQuote.trimmingCharacters(in: .whitespacesAndNewlines)
         var report = Report(release: release, torrentBytes: 0, torrentData: Data(), outcomes: [], pushed: false, pushID: nil, upLimit: 0, pushes: [], sizeSkipped: false, sizeGuardWarning: nil)
 
         // 3. 下载 .torrent，用 bencode 校正大小；发布名保持源站详情页主标题

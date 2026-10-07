@@ -523,7 +523,7 @@ final class YemaPTAdapter: SiteAdapter {
         if info.kind == .series, let s = Self.season(from: info.name) {
             setField("season", String(s))
         }
-        setField("longDesc", Self.htmlToMarkdown(info.descr))
+        setField("longDesc", info.extraQuoteMarkdown + Self.htmlToMarkdown(info.descr))
         setField("mediaInfo", info.mediainfo)
         let pics = Self.imageURLs(fromHTML: info.descr, base: URL(string: info.detailURL))
         setFields("screenshotList", pics)

@@ -409,7 +409,8 @@ final class TNodeAdapter: SiteAdapter {
                  Self.imageURLs(fromHTML: info.descr, base: URL(string: info.detailURL))
                      .joined(separator: "\n"))
         setField("mediainfo", info.mediainfo)
-        var note = "转载自: \(info.detailURL)"
+        var note = (info.extraQuoteText.isEmpty ? "" : info.extraQuoteText + "\n")
+            + "转载自: \(info.detailURL)"
         if let imdb = info.imdb { note += "\nIMDb: https://www.imdb.com/title/\(imdb)/" }
         setField("note", note)
         return fields

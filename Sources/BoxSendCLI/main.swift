@@ -126,7 +126,10 @@ do {
         let detail = required("--detail")
         let pid = opt("--site")
         let p = ReseedPipeline(config: config, cookies: cookies, state: state, downloader: makeDownloader())
-        let report = try p.run(detailURL: detail, sourceSiteID: pid, opts: .init(skipReseed: true, skipPush: true))
+        var io0 = ReseedPipeline.Options(skipReseed: true, skipPush: true)
+        if let q = opt("--source-quote") { io0.sourceQuote = q }
+        else if config.sourceQuoteEnabled { io0.sourceQuote = config.sourceQuoteText }
+        let report = try p.run(detailURL: detail, sourceSiteID: pid, opts: io0)
         print(report.release.summary)
         print("  imdb: \(report.release.imdb ?? "-")  douban: \(report.release.douban ?? "-")  size: \(report.release.size.map { String(format: "%.2f GiB", Double($0) / 1073741824) } ?? "-")")
         print("  kind: \(report.release.kind?.rawValue ?? "-")  genre: \(report.release.genre.isEmpty ? "-" : report.release.genre)  region: \(report.release.region.isEmpty ? "-" : report.release.region)  subtitle: \(report.release.subtitle.isEmpty ? "-" : report.release.subtitle)  forbid: \(report.release.isForbidReseed)")
@@ -163,6 +166,8 @@ do {
         if command == "push" { o.skipReseed = true }
         if has("--skip-reseed") { o.skipReseed = true }
         if has("--skip-push") { o.skipPush = true }
+        if let q = opt("--source-quote") { o.sourceQuote = q }
+        else if config.sourceQuoteEnabled { o.sourceQuote = config.sourceQuoteText }
         if let t = opt("--targets") { o.targets = t.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
         let p = ReseedPipeline(config: config, cookies: cookies, state: state, downloader: makeDownloader())
         let report = try p.run(detailURL: detail, sourceSiteID: opt("--site"), opts: o)

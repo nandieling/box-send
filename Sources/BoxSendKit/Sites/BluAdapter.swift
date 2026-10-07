@@ -262,7 +262,7 @@ final class BluAdapter: SiteAdapter {
         // 简介（BBCode）/ MediaInfo
         var bb = BBCode.fromHTML(info.descr, base: URL(string: site.url))
         bb = BBCode.insertMediainfo(bb, mediainfo: info.mediainfo)
-        setField("description", bb)
+        setField("description", info.extraQuoteBBCode + bb)
         if !info.mediainfo.isEmpty { setField("mediainfo", info.mediainfo) }
         // 固定项
         setField("anon", "0")
