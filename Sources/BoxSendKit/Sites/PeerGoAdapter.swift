@@ -378,22 +378,74 @@ final class PeerGoAdapter: SiteAdapter {
         }
     }
 
-    /// 截图：源简介里的图片（不含海报），站点要求至少一张
+    /// 截图：源简介里的图片（不含海报），站点要求至少一张。
+    /// 简介里常混着表情图/勋章这类站点装饰（相对地址还会按目标站域名解析成 404），先按 URL 粗筛；
+    /// 图床单张可能要十几秒，串行下载会把整轮转种拖到几分钟，所以并发拉取、单张限时。
     private func screenshotFiles(_ info: ReleaseInfo) throws
         -> [(data: Data, ext: String, mime: String)] {
-        var urls = NexusPHPAdapter.screenshotURLs(from: info.descr, base: site.url)
+        let all = NexusPHPAdapter.screenshotURLs(from: info.descr, base: site.url)
+        var urls = all.filter { Self.isScreenshotCandidate($0) }
+        if urls.isEmpty { urls = all }
         if urls.isEmpty, let p = NexusPHPAdapter.posterURL(from: info.descr, base: site.url) { urls = [p] }
-        var out: [(Data, String, String)] = []
-        for u in urls.prefix(4) {
-            guard let resp = try? client.get(u, referer: site.url), resp.status < 400, resp.data.count > 1024 else { continue }
-            let lower = u.lowercased()
-            let ext = lower.contains(".png") ? "png" : (lower.contains(".webp") ? "webp" : "jpg")
-            out.append((resp.data, ext, "image/" + (ext == "jpg" ? "jpeg" : ext)))
-        }
+        // Referer 用源站：图床按来源防盗链时，带目标站 referer 会被拒
+        let (out, errors) = Self.downloadShots(Array(urls.prefix(6)), client: client,
+                                              referer: info.detailURL, limit: 3)
         guard !out.isEmpty else {
-            throw BoxSendError.badInput("\(site.name) 发种需要至少一张截图（源简介里没有可用图片）")
+            let why = errors.isEmpty
+                ? "源简介里没有可用图片，共 \(urls.count) 个图片地址全部不像截图"
+                : "图片下载失败：" + errors.prefix(3).joined(separator: "；")
+            throw BoxSendError.badInput("\(site.name) 发种需要至少一张截图（\(why)）")
         }
         return out
+    }
+
+    /// 明显是站点装饰（表情、勋章、图标、占位透明图）或站内相对地址的图不参与截图
+    static func isScreenshotCandidate(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        guard lower.hasPrefix("http") else { return false }
+        for bad in ["smilie", "smiley", "trans.gif", "avatar", "medal", "badge",
+                    "icon", "logo", "banner", "button", "spacer", "/pic/"]
+        where lower.contains(bad) { return false }
+        return true
+    }
+
+    /// 并发下载截图：按原顺序返回成功的，失败的留下原因供报错用
+    static func downloadShots(_ urls: [String], client: HTTPClient, referer: String,
+                              limit: Int) -> (out: [(data: Data, ext: String, mime: String)], errors: [String]) {
+        guard !urls.isEmpty else { return ([], []) }
+        var slots = [Data?](repeating: nil, count: urls.count)
+        var errs = [String?](repeating: nil, count: urls.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: urls.count) { i in
+            let host = URL(string: urls[i])?.host ?? urls[i]
+            let result = Result { try client.get(urls[i], referer: referer, timeout: 30) }
+            lock.lock()
+            defer { lock.unlock() }
+            switch result {
+            case .failure(let e):
+                errs[i] = "\(host)：\((e as NSError).localizedDescription)"
+            case .success(let resp):
+                if resp.status >= 400 {
+                    errs[i] = "\(host)：HTTP \(resp.status)"
+                } else if resp.data.count < 4096 {
+                    errs[i] = "\(host)：图片只有 \(resp.data.count) 字节"
+                } else {
+                    slots[i] = resp.data
+                }
+            }
+        }
+        var out: [(data: Data, ext: String, mime: String)] = []
+        for (i, raw) in slots.enumerated() {
+            guard let raw, out.count < limit else { continue }
+            if let jpg = ShotImage.jpeg(raw) {
+                out.append((jpg, "jpg", "image/jpeg"))
+                continue
+            }
+            let lower = urls[i].lowercased()
+            let ext = lower.contains(".png") ? "png" : (lower.contains(".webp") ? "webp" : "jpg")
+            out.append((raw, ext, "image/" + (ext == "jpg" ? "jpeg" : ext)))
+        }
+        return (out, errs.compactMap { $0 })
     }
 
     private func description(_ info: ReleaseInfo) -> String {

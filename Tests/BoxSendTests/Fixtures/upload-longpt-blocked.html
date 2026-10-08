@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="chs" data-nx-theme="auto" data-nx-scheme="deep-blue" data-nx-default="auto" class="nx-auto">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="NexusPHP" />
+<title>LongPT - Powered by NexusPHP</title>
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+<link rel="search" type="application/opensearchdescription+xml" title="LongPT Torrents" href="opensearch.php" />
+<link rel="stylesheet" href="styles/Kawaii/tokens.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/Kawaii/base.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/Kawaii/components.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/_shared/schemes.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/_shared/datetimepicker.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/mediumfont.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/sprites.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="pic/forum_pic/chs/forumsprites.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/Kawaii/theme.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/Kawaii/DomTT.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/curtain_imageresizer.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/nexus.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="css/font-awesome/5.15.4/css/all.min.css?20261003003540" type="text/css" />
+<link rel="stylesheet" href="styles/multilevel_menu.css?20261003003540" type="text/css" />
+<link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php" />
+<script type="text/javascript" src="js/curtain_imageresizer.js?20261003003540"></script>
+<script type="text/javascript" src="js/ajaxbasic.js?20261003003540"></script>
+<script type="text/javascript" src="js/common.js?20261003003540"></script>
+<script type="text/javascript" src="js/domLib.js?20261003003540"></script>
+<script type="text/javascript" src="js/domTT.js?20261003003540"></script>
+<script type="text/javascript" src="js/domTT_drag.js?20261003003540"></script>
+<script type="text/javascript" src="js/fadomatic.js?20261003003540"></script>
+<script type="text/javascript" src="js/jquery-1.12.4.min.js?20261003003540"></script>
+<script type="text/javascript">
+    jQuery.noConflict();
+    window.nexusLayerOptions = {
+        // 2026-10-01 用户反馈「确认框怎么不是中文」—— 全站统一中文文案。
+        // 弹窗正文本身来自 data-nx-confirm 属性（服务端多语言下发，本来就是中文），
+        // 这里补齐标题与按钮。
+        confirm: {btnAlign: 'c', title: '请确认', btn: ['确定', '取消']},
+        // ⚠️ 原为 btn: ['OK','Cancel'] —— 照抄了 confirm 的写法，但 layer.alert
+        //    只接一个「确定」回调，第二个按钮点了没有任何反应（历史笔误）。
+        //    改成单按钮。要换文案时改这里即可，全站 alert 一起生效。
+        alert: {btnAlign: 'c', title: '提示', btn: ['确定']}
+    }
+</script>
+<script type="text/javascript" src="vendor/layer-v3.5.1/layer/layer.js?20261003003540"></script>
+<script type="text/javascript">
+    window.NX_THEME_CFG = {"current":12,"themeMode":"auto","themes":[{"id":2,"name":"Blue Gene","swatch":"#3b6ea5"},{"id":3,"name":"Blasphemy Orange","swatch":"#e8833a"},{"id":4,"name":"Classic","swatch":"#8a8a8a"},{"id":6,"name":"Dark Passion","swatch":"#4a4668"},{"id":7,"name":"Bamboo Green","swatch":"#4a7c59"},{"id":8,"name":"Pink","swatch":"#e8899e"},{"id":11,"name":"Nebula","swatch":"#1677ff"},{"id":12,"name":"Kawaii","swatch":"#db2777"},{"id":13,"name":"Cyber","swatch":"#3b82f6"}],"canSwitch":true};
+</script>
+<script type="text/javascript" src="js/theme-switcher.js?20261003003540" defer></script>
+</head>
+<body>
+<table class="head" cellspacing="0" cellpadding="0" align="center">
+	<tr>
+		<td class="clear">
+			<div class="logo">LongPT</div>
+			<div class="slogan">长长久久，平平安安！</div>
+		</td>
+		<td class="clear nowrap" align="right" valign="middle">
+			<!-- 2026-09-19：捐赠入口由烤死文字的 donate.gif 换成跟随设计系统的矢量「爱心」药丸按钮。
+			     图标用内联 SVG（currentColor 填充），文字走 text_donate 语言键，明暗/主题都清晰、可本地化。
+			     样式在 styles/nexus.css 的 .nx-donate-btn。td 是 valign=middle，故不再需要旧的 margin-top:50px 硬撑。 -->
+			<a href="donate.php" class="nx-donate-btn" title="捐赠">
+				<svg class="nx-donate-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+				<span>捐赠</span>
+			</a>
+		</td>
+	</tr>
+</table>
+
+<table class="mainouter" width="1200" cellspacing="0" cellpadding="5" align="center">
+	<tr><td id="nav_block" class="text" align="center">
+<table class="main" width="1200" border="0" cellspacing="0" cellpadding="0"><tr><td class="embedded" ><nav id="nav"><ul class="menu"><li><a href="index.php"><i class="fas fa-home"></i> &nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li><a href="forums.php"><i class="fas fa-comments"></i> &nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li id="torrents-dropdown" class="dropdown"><a href="torrents.php" rel="nexus-menu-23"><i class="fas fa-download"></i> &nbsp;种&nbsp;&nbsp;子&nbsp; <i class="fas fa-chevron-down downarrowpointer"></i></a><div class="ddsubmenustyle nx-menu-drawer" id="torrents-submenu-drawer"><ul id="nexus-menu-23"><li><a href="torrents.php?tag_id=3"><i class="fas fa-crown"></i> 官种</a></li><li><a href="torrents.php?team1=1&team2=1&team3=1&incldead=0&spstate=0&inclbookmarked=0&approval_status=&size_begin=&size_end=&seeders_begin=1&seeders_end=2&leechers_begin=&leechers_end=&times_completed_begin=&times_completed_end=&added_begin=&added_end=&search=&search_area=0&search_mode=0"><i class="fas fa-exclamation-triangle"></i> 保种区</a></li><li><a href="torrents.php?cat=401"><i class="fas fa-film"></i> 电影</a></li><li><a href="torrents.php?cat=402"><i class="fas fa-tv"></i> 剧集</a></li><li><a href="torrents.php?cat=405"><i class="fas fa-heart"></i> 动画</a></li><li><a href="torrents.php?cat=410"><i class="fas fa-music"></i> 有声书</a></li></ul></div></li><li><a href="offers.php"><i class="fas fa-lightbulb"></i> &nbsp;候&nbsp;&nbsp;选&nbsp;</a></li><li><a href="viewrequests.php"><i class="fas fa-hands-helping"></i> &nbsp;求&nbsp;&nbsp;种&nbsp;</a></li><li class="selected"><a href="upload.php"><i class="fas fa-upload"></i> &nbsp;发&nbsp;&nbsp;布&nbsp;</a></li><li><a href="subtitles.php"><i class="fas fa-closed-captioning"></i> &nbsp;字&nbsp;&nbsp;幕&nbsp;</a></li><li id="games-dropdown" class="dropdown"><a href="redpacket.php"><i class="fas fa-gamepad"></i> 游戏 <i class="fas fa-chevron-down downarrowpointer"></i></a><div class="ddsubmenustyle nx-menu-drawer" id="games-submenu-drawer"><ul><li><a href="redpacket.php"><i class="fas fa-gift"></i> 魔力红包</a></li><li><a href="bonusrain.php"><i class="fas fa-coins"></i> 红包雨</a></li></ul></div></li><li><a href="rules.php"><i class="fas fa-book"></i> &nbsp;规&nbsp;&nbsp;则&nbsp;</a></li><li><a href="faq.php"><i class="fas fa-question-circle"></i> &nbsp;常见问题&nbsp;</a></li><li><a href="contactstaff.php"><i class="fas fa-envelope"></i> 联系管理组</a></li><li><a href="plugins" target="_blank"><i class="fas fa-puzzle-piece"></i> 插件管理</a></li></ul></nav>    <script type="text/javascript">
+    /* 导航二级菜单（种子 / 游戏 …）：运行时把抽屉提升到 <body> 直系，用 position:fixed + 视口坐标定位。
+     * 原因：nav 被 begin_main_frame() 包在 <table class="main"> 内，而 table.main 带
+     *      overflow:hidden（裁剪）+ backdrop-filter（层叠上下文）——抽屉留在里面会被
+     *      裁掉、并被同级 #info_block 盖住。提升到 body 后彻底摆脱裁剪与层叠陷阱。
+     * 坐标：position:fixed 即视口坐标，getBoundingClientRect() 可直接用，无需加 scrollY。
+     * 绑定按 .nx-menu-drawer 类而不是按 id：按 id 写的话，第二个下拉就得把整段抄一遍。 */
+    (function () {
+        function bind(trigger, drawer) {
+            // 提升到 body 直系（脱离 table.main 的 overflow:hidden / backdrop-filter）
+            if (drawer.parentNode !== document.body) {
+                document.body.appendChild(drawer);
+            }
+
+            var hideTimer = null;
+            var isOpen = false;
+
+            function place() {
+                var r = trigger.getBoundingClientRect();
+                /* 左对齐父项，但不能冲出视口右缘：窄屏下「种子」这类靠右的菜单项
+                   抽屉会溢出（实测 390 视口右缘算到 406px）。offsetWidth 不受
+                   transform 影响，收起态也能量到真实宽度。 */
+                var max = document.documentElement.clientWidth - drawer.offsetWidth - 8;
+                drawer.style.left = Math.max(8, Math.min(r.left, max)) + 'px';
+                drawer.style.top  = r.bottom + 'px';
+            }
+
+            function show() {
+                clearTimeout(hideTimer);
+                hideTimer = null;
+                place();
+                isOpen = true;
+                drawer.classList.add('is-open');
+            }
+
+            function hide() {
+                if (hideTimer) return;
+                hideTimer = setTimeout(function () {
+                    hideTimer = null;
+                    if (trigger.matches(':hover') || drawer.matches(':hover')) return;
+                    isOpen = false;
+                    drawer.classList.remove('is-open');
+                }, 140);
+            }
+
+            trigger.addEventListener('mouseenter', show);
+            trigger.addEventListener('mouseleave', hide);
+            drawer.addEventListener('mouseenter', show);
+            drawer.addEventListener('mouseleave', hide);
+
+            // 键盘可达性
+            trigger.addEventListener('focusin', show);
+            drawer.addEventListener('focusin', show);
+            drawer.addEventListener('focusout', function (e) {
+                if (!drawer.contains(e.relatedTarget) && !trigger.contains(e.relatedTarget)) hide();
+            });
+
+            // 打开时跟随滚动/缩放重新贴位（导航吸顶通常不变，此处为兜底）
+            window.addEventListener('scroll', function () { if (isOpen) place(); }, true);
+            window.addEventListener('resize', function () { if (isOpen) place(); });
+        }
+
+        function init() {
+            var drawers = document.querySelectorAll('#nav li.dropdown > .nx-menu-drawer');
+            for (var i = 0; i < drawers.length; i++) {
+                bind(drawers[i].parentNode, drawers[i]);
+            }
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    })();
+    </script>
+    </td></tr></table>
+
+<table id="info_block" cellpadding="4" cellspacing="0" border="0" width="100%"><tr>
+	<td><table width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
+		<td class="bottom" align="left">
+            <span class="medium">
+                <span class="nx-info-hello">欢迎回来, <span class="nowrap"><a  href="https://longpt.org/userdetails.php?id=10071" class='User_Name'><b class="rainbow">nan</b></a><img src="https://r2.longpt.org/pic/medals/kzdj.png" title="开站大吉" class="nexus-username-medal preview" loading="lazy" decoding="async" style="max-height: 11px;max-width: 11px;margin-left: 2pt"/><img src="https://r2.longpt.org/pic/medals/liuyue.png" title="六月龍" class="nexus-username-medal preview" loading="lazy" decoding="async" style="max-height: 11px;max-width: 11px;margin-left: 2pt"/><img src="https://r2.longpt.org/pic/medals/wuyue.png" title="五月龍" class="nexus-username-medal preview" loading="lazy" decoding="async" style="max-height: 11px;max-width: 11px;margin-left: 2pt"/></span></span>
+                <span class="nx-info-actions">
+                    <a class="nx-info-btn" href="logout.php">退出</a>
+                    <a class="nx-info-btn" href="usercp.php">&nbsp;控制面板&nbsp;</a>
+                                                            <a class="nx-info-btn" href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0">收藏</a>
+                                    </span>
+                <span class="nx-info-chips">
+                    <span class="nx-info-chip nx-info-chip--bonus">
+                        <font class="color_bonus">魔力值 </font>
+                        <b>783,189.7</b>
+                        <a href="mybonus.php">使用</a>
+                    </span>
+                    <span class="nx-info-chip nx-info-chip--attend">
+                        <a href="attendance.php" class="nx-info-link nx-info-link--done">[签到已得85, 补签卡: 43]</a>                        <!-- 2026-09-19：勋章 / 任务 补上图标。这两个链接此前是裸文字。
+                             语义 class 而非 href 选择器：chip 里一个容器含多个链接，
+                             base.css 的注释（618 行附近）早就写明 href 定位会打架。
+                             图标字形与颜色在 styles/nexus.css（三主题共用层）。 -->
+                        <a href="medal.php" class="nx-info-link nx-info-link--medal">勋章</a>
+                        <a href="task.php" class="nx-info-link nx-info-link--task">任务</a>
+                    </span>
+                    <span class="nx-info-chip nx-info-chip--invite">
+                        <font class="color_invite">邀请 </font>
+                        <b>12(2)</b>
+                        <a href="invite.php?id=10071">发送</a>
+                    </span>
+                </span>
+                <br />
+	            <span class="nx-stat nx-stat--ratio"><font class="color_ratio">分享率:</font><span class="nx-stat-v">64.408</span></span>
+                <span class="nx-stat nx-stat--up"><font class='color_uploaded'>上传量:</font><span class="nx-stat-v">6.934 TB</span></span>
+                <span class="nx-stat nx-stat--down"><font class='color_downloaded'>下载量:</font><span class="nx-stat-v">110.24 GB</span></span>
+                <span class="nx-stat nx-stat--active"><font class='color_active'>当前活动:</font><span class="nx-stat-v"><img class="arrowup" alt="Torrents seeding" title="当前做种" src="pic/trans.gif" />85 <img class="arrowdown" alt="Torrents leeching" title="当前下载" src="pic/trans.gif" />0</span></span>
+                <span class="nx-stat nx-stat--conn"><font class='color_connectable'>可连接:</font><span class="nx-stat-v"><b><font color="green">是</font></b> <font class='color_slots'>连接数：</font>无限制</span></span>
+                                            </span>
+        </td>
+                	<td class="bottom" align="right"><span class="medium">
+ <a href="friends.php"><img class="buddylist" alt="Buddylist" title="社交名单" src="pic/trans.gif" /></a> <a href="getrss.php"><img class="rss" alt="RSS" title="获取RSS" src="pic/trans.gif" /></a><br/><a href="messages.php"><img class="inboxnew" src="pic/trans.gif" alt="inbox" title="收件箱&nbsp;(有新短讯)" /></a> 155 (2 新)  <a href="messages.php?action=viewmailbox&amp;box=-1"><img class="sentbox" alt="sentbox" title="发件箱" src="pic/trans.gif" /></a> 0
+	</span></td>
+	</tr></table></td>
+</tr></table>
+
+</td></tr>
+
+<tr><td id="outer" align="center" class="outer" style="padding-top: 20px; padding-bottom: 20px">
+    <div class="recruitment" style="background: linear-gradient(45deg, #a8edea, #fed6e3); padding: 15px; border-radius: 10px; margin: 10px 0; text-align: center; font-weight: var(--nx-weight-semibold); box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        <span style="display: block; font-size: 1.1em;">官方QQ群：799374321，不定时有魔力、勋章抽奖，快来加入。</span>
+        <span style="display: block; font-size: 1.1em;">长期招募保种组、发布组、开发组人员加入，欢迎有兴趣的朋友联系管理员。</span>
+    </div>
+<div class="recruitment nx-rain-bar-global"><div class="nx-rain-bar-global-main"><span class="nx-rain-bar-global-title">红包雨「20261001」正在募捐</span><span class="nx-rain-bar-global-line">已募 291,949.1 / 500,000.0 魔力（58%），还差 208,050.9 就能开奖</span><div class="nx-rain-bar nx-rain-bar-global-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="58"><i style="width:58%"></i></div></div><div class="nx-rain-bar-global-act"><form method="post" action="bonusrain.php" class="nx-rain-bar-global-form"><input type="hidden" name="action" value="do_donate" /><input type="hidden" name="nonce" value="00000000000000000000000000000000" /><input type="hidden" name="mode" value="amount" /><input type="hidden" name="redirect" value="upload.php" /><span class="nx-rain-bar-global-amtbox"><label class="nx-sr-only" for="nx-rain-bar-amount">捐款额度</label><input type="number" id="nx-rain-bar-amount" name="amount" class="nx-input nx-rain-bar-global-amount" step="0.1" min="1000.0" max="208050.9" placeholder="1000.0" autocomplete="off" inputmode="decimal" /><span class="nx-rain-bar-global-unit">魔力</span></span><button type="submit" name="mode" value="amount" class="nx-btn nx-btn-primary">捐进奖池</button><button type="submit" name="mode" value="gap" class="nx-btn nx-rain-bar-global-fill" title="一键补满 208,050.9 魔力" data-nx-confirm="确定一键补满本期「20261001」？将扣走 208,050.9 魔力，捐进奖池后不可撤回。">一键补满 208,050.9</button></form></div></div><div class="msgalert red">
+<a href="messages.php" target='_blank'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;你有2条新短讯！点击查看&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</a></div>
+<div class="msgalert blue">
+<a href="task.php" target='_blank'>名称：保种任务-困难<br />
+时间：2026-10-03 09:30:45 ~ 2026-11-02 09:30:45<br />
+指标1：做种积分增量, 要求：40000 , 当前：10202, 结果：<span style="color: red">未完成！</span><br />
+<br />
+保种任务-困难<br />
+完成做种积分增量40000，即可完成该任务！</a></div>
+<table align="center" class="main" width="500" border="0" cellpadding="0" cellspacing="0"><tr><td class="embedded">
+<h2>对不起</h2>
+<table width="100%" border="1" cellspacing="0" cellpadding="10"><tr><td class="text">当前审核被拒绝的种子数：2 达到上限，不允许发布。</td></tr></table></td></tr></table>
+</td></tr></table><div id="footer"><div class="nx-footer-meta" style="margin-top: 10px; margin-bottom: 30px;" align="center"> (c)  <a href="https://longpt.org" target="_self">LongPT</a> 2025-2026 Powered by <a href="aboutnexus.php">NexusPHP</a><br /><br />[page created in <b> 0.033 </b> sec with <b>11</b> db queries, <b>14</b> reads and <b>7</b> writes of Redis and <b>863.09 KB</b> ram]</div>
+<div style="display: none;" id="lightbox" class="lightbox"></div><div style="display: none;" id="curtain" class="curtain"></div></div><script type="application/javascript" src="js/nexus.js?20261003003540"></script>
+<script type="application/javascript" src="vendor/jquery-goup-1.1.3/jquery.goup.min.js"></script>
+<script>
+jQuery(document).ready(function(){
+    jQuery.goup()
+});
+</script><img id="nexus-preview" style="display: none; position: absolute" src="" /></body></html>

@@ -1265,6 +1265,14 @@ class NexusPHPAdapter: SiteAdapter {
     }
 
     /// 上传表单的 action（城市把种子文件 POST 到独立上传域名，必须按页面 action 提交）
+    /// 页面里是否有真正的发种表单（能传种子文件的那种；页头捐赠、搜索这类小表单不算）
+    static func hasUploadForm(_ page: String) -> Bool {
+        let lower = page.lowercased()
+        return lower.contains("type=\"file\"") || lower.contains("type='file'")
+            || lower.contains("enctype=\"multipart/form-data\"")
+            || lower.contains("enctype='multipart/form-data'")
+    }
+
     static func formActionURL(_ page: String) -> String? {
         guard let form = HTMLUtil.group(page, "<form[^>]*enctype=[\"']multipart/form-data[\"'][^>]*>",
                                        group: 0, options: [.caseInsensitive]),
@@ -1673,6 +1681,12 @@ class NexusPHPAdapter: SiteAdapter {
               page.lowercased().contains("<form") else {
             throw BoxSendError.badInput("\(site.name) 上传页没有表单（页面为空或站点报错），请先检测该站 cookie")
         }
+        // 站点拒绝发种时不给表单（实测龙：审核被驳回的种子数达上限），只在同页写明原因。
+        // 以前会把页头上无关的小表单当发种表单提交，最后只回一句没头没尾的「请填写必填项目」。
+        if override?.uploadTwoStep != true, !Self.hasUploadForm(page),
+           let notice = Self.uploadBlockedNotice(page) {
+            throw BoxSendError.badInput("\(site.name) 上传页没有发种表单（站点拒绝发种）：\(notice)")
+        }
         // 表单 action 可以是站外绝对地址（城市：种子文件 POST 到独立上传域名）
         var action = Self.formActionURL(page) ?? uploadURL
         var fields = buildUploadFields(info, page: page)
@@ -1765,13 +1779,91 @@ class NexusPHPAdapter: SiteAdapter {
     /// （实测优堡/麒麟/蟹黄堡对同名不同 hash 的旧就这么回）。回查详情页的 Info Hash，
     /// 与本次上传的种子对不上就按「已存在」报，链接仍给这条已有种子，供推送下载器。
     private func newSeedOutcome(detailURL: String, torrentData: Data) -> UploadOutcome {
-        guard let mine = Bencode.infoHash(torrentData),
-              let page = try? client.fetchHTML(detailURL, referer: site.url),
-              let theirs = Self.pageInfoHash(page), theirs != mine else {
+        guard let page = try? client.fetchHTML(detailURL, referer: site.url) else {
             return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
         }
-        return UploadOutcome(success: true, message: "站内同名种子的种子文件不同（hash 不同）",
-                             detailURL: detailURL, alreadyExists: true)
+        // hash 对不上不等于这条种子不是我们刚发的：站点会重写种子文件（改 announce / private 标记，
+        // 实测高清视界重算出的 hash 就和上传的文件不同），只比 hash 会把刚发出去的新种判成「已存在」。
+        // 改用发布者与发布时间判归属；两项都判不了时按发布成功报。
+        switch Self.pageOwnership(page, torrentID: Self.torrentIDFromDetail(detailURL),
+                                  ourHash: Bencode.infoHash(torrentData), now: Date()) {
+        case .theirs:
+            return UploadOutcome(success: true, message: "站内同名种子不是本次发布的（发布者或发布时间对不上）",
+                                 detailURL: detailURL, alreadyExists: true)
+        case .ours, .unknown:
+            return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
+        }
+    }
+
+    enum PageOwnership { case ours, theirs, unknown }
+
+    /// 详情页这条种子是不是本次上传新建的
+    static func pageOwnership(_ html: String, torrentID: String?, ourHash: String?,
+                              now: Date = Date()) -> PageOwnership {
+        if let mine = ourHash?.lowercased(), let theirs = pageInfoHash(html), mine == theirs {
+            return .ours
+        }
+        if let me = currentUserID(html), let uploader = uploaderID(html) {
+            return me == uploader ? .ours : .theirs
+        }
+        if let created = pageCreatedAt(html), now.timeIntervalSince(created) > 30 * 60 {
+            return .theirs      // 半小时前就在站里的种子，不可能是刚才那次上传建的
+        }
+        if let tid = torrentID,
+           html.contains("edit.php?id=" + tid) || html.contains("editphp.php?id=" + tid) {
+            return .ours        // 编辑/删除入口只对发布者（和管理员）可见
+        }
+        return .unknown
+    }
+
+    /// 详情页 URL 里的种子 id
+    static func torrentIDFromDetail(_ url: String) -> String? {
+        if let id = HTMLUtil.group(url, "[?&]id=(\\d+)", group: 1, options: []) { return id }
+        return HTMLUtil.group(url, "/(\\d{2,})(?:[/?#]|$)", group: 1, options: [])
+    }
+
+    /// 当前登录用户的 id（页头「欢迎回来 …userdetails.php?id=NN…」）
+    static func currentUserID(_ html: String) -> String? {
+        HTMLUtil.group(html, "(?:欢迎回来|welcome back)[\\s\\S]{0,400}?user(?:details)?\\.php\\?id=(\\d+)", group: 1)
+    }
+
+    /// 种子发布者 id（详情页「… 由 <用户链接> 发布于 …」行）
+    static func uploaderID(_ html: String) -> String? {
+        HTMLUtil.group(html, "由(?:\\s|&nbsp;|<[^>]{1,300}>)*<a[^<]{0,300}?user(?:details)?\\.php\\?id=(\\d+)", group: 1,
+                       options: [])
+    }
+
+    /// 详情页上的种子发布时间（NexusPHP：「发布于<span title="2026-10-08 08:53:33">」）
+    static func pageCreatedAt(_ html: String) -> Date? {
+        guard let raw = HTMLUtil.group(
+            html,
+            "(?:发布于|添加时间|上传时间|上传于|uploaded)[\\s\\S]{0,80}?"
+                + "(\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}(?::\\d{2})?)", group: 1) else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        for fmt in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm", "yyyy-MM-dd'T'HH:mm:ss"] {
+            f.dateFormat = fmt
+            if let d = f.date(from: raw) { return d }
+        }
+        return nil
+    }
+
+    /// 站点不让发种时不给表单，只在同页写明原因（龙：审核被驳回的种子数达上限，不允许发布）
+    static func uploadBlockedNotice(_ html: String) -> String? {
+        let re = try? NSRegularExpression(
+            pattern: "<t[dh][^>]*class=[\"']?(?:text|std|msgalert[^\"'\\s]*)[\"']?[^>]*>(.*?)</t[dh]>",
+            options: [.caseInsensitive, .dotMatchesLineSeparators])
+        for m in re?.matches(in: html, options: [], range: NSRange(html.startIndex..., in: html)) ?? [] {
+            guard let r = Range(m.range(at: 1), in: html) else { continue }
+            let text = HTMLUtil.stripTags(String(html[r]))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.count >= 6, text.count < 300 else { continue }
+            if ["不允许", "无权", "上限", "被拒绝", "禁止", "等级不足", "积分不足"].contains(where: text.contains) {
+                return text
+            }
+        }
+        return nil
     }
 
     /// 详情页上的种子 info_hash（「Hash码: …」/「Info Hash: …」），取不到返回 nil

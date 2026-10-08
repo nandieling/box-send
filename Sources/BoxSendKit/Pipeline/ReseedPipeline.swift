@@ -33,6 +33,38 @@ public final class ReseedPipeline {
         return HTMLUtil.resolveURL(url, against: u)
     }
 
+    /// 限时执行一段同步工作：站点或图床卡住时不能把整轮转种拖到天荒地老
+    /// （实测肉丝下载源站截图能卡几分钟）。超时后放弃等待并按失败报，
+    /// 后台那次请求自己跑完，站点那边可能仍然发种成功。
+    private func bounded<T>(_ seconds: TimeInterval, _ what: String,
+                            _ work: @escaping () throws -> T) throws -> T {
+        if seconds <= 0 { return try work() }
+        let box = BoundedResult<T>()
+        let sem = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.set(Result { try work() })
+            sem.signal()
+        }
+        guard sem.wait(timeout: .now() + seconds) == .success, let result = box.get() else {
+            throw BoxSendError.badInput("\(what)超时（超过 \(Int(seconds)) 秒未返回）")
+        }
+        return try result.get()
+    }
+
+    /// 跨线程放结果的小盒子（超时后主流程可能先读，也可能后台先写）
+    private final class BoundedResult<T> {
+        private var stored: Result<T, Error>?
+        private let lock = NSLock()
+        func set(_ value: Result<T, Error>) {
+            lock.lock(); defer { lock.unlock() }
+            stored = value
+        }
+        func get() -> Result<T, Error>? {
+            lock.lock(); defer { lock.unlock() }
+            return stored
+        }
+    }
+
     /// 逐站实时状态（运行页卡片两行提示用）：短文案 + 阶段 + 详情。
     /// 文案固定为几种（转种中… / 转种成功 / 种子已存在，跳过 / 转种失败），
     /// 完整原因放 detail，交给悬浮提示与卡片下方说明行，卡片上不会被截断。
@@ -67,10 +99,13 @@ public final class ReseedPipeline {
         public var onSitePush: ((SiteStatus) -> Void)?
         /// 源站种子推送到下载器的事件
         public var onSourcePush: ((SiteStatus) -> Void)?
+        /// 单个目标站一次转种（查重 + 上传）的时长上限；站点或图床卡住时不拖垮整轮
+        public var siteTimeout: TimeInterval = 300
         /// 转种成功但需要人工注意的提示（siteID / 提示文案），例如附加信息留空
         public var onSiteWarning: ((String, String) -> Void)?
 
         public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil,
+                    siteTimeout: TimeInterval = 300,
                     onSiteEvent: ((SiteStatus) -> Void)? = nil,
                     onSitePush: ((SiteStatus) -> Void)? = nil,
                     onSourcePush: ((SiteStatus) -> Void)? = nil,
@@ -78,6 +113,7 @@ public final class ReseedPipeline {
             self.skipReseed = skipReseed
             self.skipPush = skipPush
             self.targets = targets
+            self.siteTimeout = siteTimeout
             self.onSiteEvent = onSiteEvent
             self.onSitePush = onSitePush
             self.onSourcePush = onSourcePush
@@ -209,7 +245,12 @@ public final class ReseedPipeline {
                         // 上传前先站内查重：显式配了 searchURL 的站，或 NexusPHP 这类有通用检索端点的站。
                         // 命中即跳过上传并把站内已有种子推给下载器；查重出错不阻断转种，查不到就照常上传
                         let canPrecheck = !(ts.overrides?.searchURL ?? "").isEmpty || tAdapter.canPrecheckDuplicate
-                        if canPrecheck, let exists = try? tAdapter.searchExists(release) {
+                        let precheck = canPrecheck
+                            ? (try? bounded(min(60, opts.siteTimeout / 3), "站内查重") {
+                                try tAdapter.searchExists(release)
+                            }) ?? nil
+                            : nil
+                        if let exists = precheck {
                             let uAbs = absoluteTargetURL(tid, exists)
                             report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                             state.markUploaded(site: tid, key: release.dedupKey)
@@ -220,7 +261,9 @@ public final class ReseedPipeline {
                                                          detail: "站内已有该种子（别人先发或此前已发）\n\(uAbs)"))
                             continue
                         }
-                        let outcome = try tAdapter.upload(release, torrentData: torrentData, filename: filename)
+                        let outcome = try bounded(opts.siteTimeout, "单站转种") {
+                            try tAdapter.upload(release, torrentData: torrentData, filename: filename)
+                        }
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
                             if outcome.alreadyExists {

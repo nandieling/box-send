@@ -59,9 +59,11 @@ public final class HTTPClient {
     // MARK: - 请求
 
     @discardableResult
-    public func get(_ url: String, referer: String? = nil, extraHeaders: [String: String] = [:]) throws -> Response {
+    public func get(_ url: String, referer: String? = nil, extraHeaders: [String: String] = [:],
+                    timeout: TimeInterval? = nil) throws -> Response {
         var req = try makeRequest(url: url, method: "GET", referer: referer, extraHeaders: extraHeaders)
         req.httpMethod = "GET"
+        if let timeout { req.timeoutInterval = timeout }
         return try perform(req)
     }
 
