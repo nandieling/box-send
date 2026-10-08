@@ -19,10 +19,8 @@ final class AppModel: ObservableObject {
     @Published var gistAuto: Bool = false
 
     // MARK: 运行
-    public struct TargetEvent: Equatable {
-        public var text: String
-        public var ok: Bool?    // nil = 进行中
-    }
+    /// 逐站实时状态（转种 / 推送两行）：短文案 + 阶段 + 完整详情，见 ReseedPipeline.SiteStatus
+    typealias TargetEvent = ReseedPipeline.SiteStatus
     /// 转种成功但需要人工注意的提示（siteID -> 文案）
     @Published var siteWarnings: [String: String] = [:]
     @Published var detailURL: String = ""
@@ -1236,20 +1234,14 @@ final class AppModel: ObservableObject {
             o.skipPush = !doP
             o.sourceQuote = quote
             o.targets = targets.isEmpty ? nil : targets
-            o.onSiteEvent = { [weak self] siteID, text, ok in
-                Task { @MainActor in
-                    self?.reseedEvents[siteID] = TargetEvent(text: text, ok: ok)
-                }
+            o.onSiteEvent = { [weak self] e in
+                Task { @MainActor in self?.reseedEvents[e.siteID] = e }
             }
-            o.onSitePush = { [weak self] siteID, text, ok in
-                Task { @MainActor in
-                    self?.pushEvents[siteID] = TargetEvent(text: text, ok: ok)
-                }
+            o.onSitePush = { [weak self] e in
+                Task { @MainActor in self?.pushEvents[e.siteID] = e }
             }
-            o.onSourcePush = { [weak self] text, ok in
-                Task { @MainActor in
-                    self?.sourcePushEvent = TargetEvent(text: text, ok: ok)
-                }
+            o.onSourcePush = { [weak self] e in
+                Task { @MainActor in self?.sourcePushEvent = e }
             }
             o.onSiteWarning = { [weak self] siteID, text in
                 Task { @MainActor in

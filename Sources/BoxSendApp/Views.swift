@@ -340,11 +340,7 @@ struct RunView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if let e = model.reseedEvents[s.id] { eventChip(e) }
             if let e = model.pushEvents[s.id] { eventChip(e) }
-            if let w = model.siteWarnings[s.id] {
-                Text(w).font(.caption).foregroundStyle(.orange)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            detailLine(s)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -388,15 +384,75 @@ struct RunView: View {
             }
         }
     }
+    // MARK: 站点卡片状态
 
-    // MARK: bindings / 状态提示
-
+    /// 状态胶囊：图标 + 短文案。窄卡片里让文字竖排换行（不截断），完整原因看悬浮提示
     @ViewBuilder
     private func eventChip(_ e: AppModel.TargetEvent) -> some View {
-        Text(e.text)
-            .font(.caption)
-            .foregroundStyle(e.ok == nil ? Color.secondary : (e.ok == true ? Color.green : Color.red))
-            .lineLimit(1)
+        let tint: Color = chipTint(e.phase)
+        HStack(alignment: .center, spacing: 3) {
+            Image(systemName: chipIcon(e.phase)).font(.system(size: 9))
+            Text(e.text).font(.caption)
+                .lineLimit(2).multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(Capsule().fill(tint.opacity(0.13)))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help(e.detail.isEmpty ? e.text : e.detail)
+    }
+
+    private func chipTint(_ p: AppModel.TargetEvent.Phase) -> Color {
+        switch p {
+        case .working: return .secondary
+        case .done: return .green
+        case .exists: return .blue
+        case .failed: return .red
+        }
+    }
+
+    private func chipIcon(_ p: AppModel.TargetEvent.Phase) -> String {
+        switch p {
+        case .working: return "circle.dashed"
+        case .done: return "checkmark.circle"
+        case .exists: return "arrow.down.circle"
+        case .failed: return "xmark.circle"
+        }
+    }
+
+    /// 卡片下方的说明行：失败原因 / 已存在详情 / 需人工注意的提示。
+    /// 允许换行（不截断成「…」），完整内容在悬浮提示里。
+    @ViewBuilder
+    private func detailLine(_ s: SiteConfig) -> some View {
+        if let d = detailText(s) {
+            Text(d.display).font(.caption2).foregroundStyle(d.tint)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .help(d.full)
+        }
+    }
+
+    private struct Detail { var display: String; var full: String; var tint: Color }
+
+    private func detailText(_ s: SiteConfig) -> Detail? {
+        for e in [model.reseedEvents[s.id], model.pushEvents[s.id]].compactMap({ $0 }) where e.phase == .failed {
+            guard !e.detail.isEmpty else { continue }
+            return Detail(display: shortDetail(e.detail), full: e.detail, tint: .red)
+        }
+        if let w = model.siteWarnings[s.id] { return Detail(display: w, full: w, tint: .orange) }
+        if let e = model.reseedEvents[s.id], e.phase == .exists, !e.detail.isEmpty {
+            return Detail(display: shortDetail(e.detail), full: e.detail, tint: .secondary)
+        }
+        return nil
+    }
+
+    /// 卡片上只留原因主体：调试页路径这类长尾巴收进悬浮提示
+    private func shortDetail(_ s: String) -> String {
+        guard let r = s.range(of: "（页面已存") else { return s }
+        return String(s[..<r.lowerBound])
     }
 }
 

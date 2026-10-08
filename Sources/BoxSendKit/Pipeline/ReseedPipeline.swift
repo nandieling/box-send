@@ -33,25 +33,47 @@ public final class ReseedPipeline {
         return HTMLUtil.resolveURL(url, against: u)
     }
 
+    /// 逐站实时状态（运行页卡片两行提示用）：短文案 + 阶段 + 详情。
+    /// 文案固定为几种（转种中… / 转种成功 / 种子已存在，跳过 / 转种失败），
+    /// 完整原因放 detail，交给悬浮提示与卡片下方说明行，卡片上不会被截断。
+    public struct SiteStatus: Equatable {
+        public enum Phase: Equatable {
+            case working       // 进行中
+            case done          // 本次真的发了新种 / 推送成功
+            case exists        // 站内已有该种子（别人先发），跳过上传，只推送站内种子
+            case failed        // 网络、站点校验等失败
+        }
+        public var siteID: String
+        public var text: String
+        public var phase: Phase
+        public var detail: String
+
+        public init(siteID: String, text: String, phase: Phase, detail: String = "") {
+            self.siteID = siteID
+            self.text = text
+            self.phase = phase
+            self.detail = detail
+        }
+    }
     public struct Options {
         public var skipReseed = false
         public var skipPush = false
         public var targets: [String]?    // nil = 用 config.targetSites
         /// 「批量转种」页的源站引用（可选）：非空时加在各目标站简介最上面并用引用包裹
         public var sourceQuote: String = ""
-        /// 逐站实时事件（GUI 卡片状态用）：siteID / 状态文案 / ok（nil = 进行中）
-        public var onSiteEvent: ((String, String, Bool?) -> Void)?
+        /// 逐站转种结果事件（GUI 卡片状态用）
+        public var onSiteEvent: ((SiteStatus) -> Void)?
         /// 目标站自己的 .torrent 推送事件（转种成功后逐站推送）
-        public var onSitePush: ((String, String, Bool?) -> Void)?
+        public var onSitePush: ((SiteStatus) -> Void)?
         /// 源站种子推送到下载器的事件
-        public var onSourcePush: ((String, Bool?) -> Void)?
+        public var onSourcePush: ((SiteStatus) -> Void)?
         /// 转种成功但需要人工注意的提示（siteID / 提示文案），例如附加信息留空
         public var onSiteWarning: ((String, String) -> Void)?
 
         public init(skipReseed: Bool = false, skipPush: Bool = false, targets: [String]? = nil,
-                    onSiteEvent: ((String, String, Bool?) -> Void)? = nil,
-                    onSitePush: ((String, String, Bool?) -> Void)? = nil,
-                    onSourcePush: ((String, Bool?) -> Void)? = nil,
+                    onSiteEvent: ((SiteStatus) -> Void)? = nil,
+                    onSitePush: ((SiteStatus) -> Void)? = nil,
+                    onSourcePush: ((SiteStatus) -> Void)? = nil,
                     onSiteWarning: ((String, String) -> Void)? = nil) {
             self.skipReseed = skipReseed
             self.skipPush = skipPush
@@ -155,7 +177,8 @@ public final class ReseedPipeline {
         // 4. 逐目标站转种
         let targets = opts.targets ?? config.targetSites
         // 转种成功的目标站 -> 其新种子详情页，稍后逐站推送该站自己的 .torrent
-        var targetPushes: [(siteID: String, detailURL: String)] = []
+        // 稍后要推送的目标站：站点 id + 种子详情页 + 「该站种子是否站内已有」（决定推送提示文案）
+        var targetPushes: [(siteID: String, detailURL: String, seedPreexisting: Bool)] = []
         if !opts.skipReseed {
             if release.isForbidReseed {
                 state.note("forbid-reseed marker hit, skip reseed: \(release.summary)")
@@ -163,60 +186,67 @@ public final class ReseedPipeline {
                 for tid in targets {
                     guard let ts = config.site(tid) else {
                         report.outcomes.append((tid, false, "未配置的站点 id"))
+                        opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种失败", phase: .failed,
+                                                     detail: "未配置的站点 id"))
                         continue
                     }
                     guard ts.enabled else {
                         report.outcomes.append((tid, false, "已禁用"))
                         continue
                     }
-                    opts.onSiteEvent?(tid, "转种中…", nil)
+                    opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种中…", phase: .working))
                     if state.isUploaded(site: tid, key: release.dedupKey) {
-                        report.outcomes.append((tid, true, "已转种过，跳过"))
-                        opts.onSiteEvent?(tid, "已转种过（跳过）", true)
+                        report.outcomes.append((tid, true, "转种成功（此前已转种）"))
+                        opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
+                                                     detail: "此前已转种过，本次跳过上传"))
                         if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                            targetPushes.append((tid, absoluteTargetURL(tid, tu)))
+                            targetPushes.append((tid, absoluteTargetURL(tid, tu), false))
                         }
                         continue
                     }
                     do {
                         let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
                         // 上传前先站内查重：显式配了 searchURL 的站，或 NexusPHP 这类有通用检索端点的站。
-                        // 命中即跳过上传，并把站内已有种子推给下载器（转种的目的就是让目标站种子做种）
-                        // 查重失败（站点检索端点异常）不该让整站转种失败：查不到就照常上传
+                        // 命中即跳过上传并把站内已有种子推给下载器；查重出错不阻断转种，查不到就照常上传
                         let canPrecheck = !(ts.overrides?.searchURL ?? "").isEmpty || tAdapter.canPrecheckDuplicate
                         if canPrecheck, let exists = try? tAdapter.searchExists(release) {
                             let uAbs = absoluteTargetURL(tid, exists)
-                            report.outcomes.append((tid, true, "已存在: \(uAbs)"))
+                            report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                             state.markUploaded(site: tid, key: release.dedupKey)
                             state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                            targetPushes.append((tid, uAbs))
+                            targetPushes.append((tid, uAbs, true))
                             state.note("reseed EXIST \(tid): 站内已有该种子，跳过上传，已有种子 \(uAbs)")
-                            opts.onSiteEvent?(tid, "已存在（跳过，推送已有种子）", true)
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
+                                                         detail: "站内已有该种子（别人先发或此前已发）\n\(uAbs)"))
                             continue
                         }
                         let outcome = try tAdapter.upload(release, torrentData: torrentData, filename: filename)
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
                             if outcome.alreadyExists {
-                                // 站点提示已存在（同 hash 种子已发布）：不算新上传，UI 显示「已存在」
+                                // 站点提示该种子已存在（同 hash / 同名种子已由别人发布）：不算本次转种成功
                                 var existing = outcome.detailURL
-                                // 各适配器自己决定怎么查（NexusPHP 没配 searchURL 会返回 nil）
                                 if existing == nil {
                                     existing = try? tAdapter.searchExists(release, relaxed: true)
                                 }
                                 if let u = existing {
                                     let uAbs = absoluteTargetURL(tid, u)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                                    targetPushes.append((tid, uAbs))
+                                    targetPushes.append((tid, uAbs, true))
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
-                                    opts.onSiteEvent?(tid, "已存在（跳过，推送已有种子）", true)
+                                    report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
+                                    opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
+                                                                 detail: "\(outcome.message)\n已有种子：\(uAbs)"))
                                 } else {
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），未找到已有种子链接，跳过目标站推送")
-                                    opts.onSiteEvent?(tid, "已存在（未推送：站内没检索到该种子）", true)
+                                    report.outcomes.append((tid, true, "种子已存在，跳过（站内没检索到该种子链接）"))
+                                    opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
+                                                                 detail: "\(outcome.message)\n站内没检索到该种子链接，本次未推送"))
                                 }
                             } else {
                                 state.note("reseed OK \(tid) <- \(release.summary)")
-                                opts.onSiteEvent?(tid, "转种成功", true)
+                                report.outcomes.append((tid, true, "转种成功"))
+                                opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done))
                                 // cmct / 劳改所：附加信息 = 手填源站引用 + 源简介自带引用块，
                                 // 两处都没有就提醒（不算失败）
                                 if SiteRegistry.reseedSourceText(for: release).isEmpty,
@@ -229,19 +259,21 @@ public final class ReseedPipeline {
                                 if let u = outcome.detailURL {
                                     let uAbs = absoluteTargetURL(tid, u)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                                    targetPushes.append((tid, uAbs))
+                                    targetPushes.append((tid, uAbs, false))
                                 } else {
                                     state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
                                 }
                             }
                         } else {
                             state.note("reseed FAIL \(tid) <- \(release.summary): \(outcome.message)")
-                            opts.onSiteEvent?(tid, "转种失败: \(outcome.message)", false)
+                            report.outcomes.append((tid, false, outcome.message))
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种失败", phase: .failed,
+                                                         detail: outcome.message))
                         }
-                        report.outcomes.append((tid, outcome.success, outcome.message))
                     } catch {
-                        report.outcomes.append((tid, false, "\(error.localizedDescription)"))
-                        opts.onSiteEvent?(tid, "转种失败: \(error.localizedDescription)", false)
+                        report.outcomes.append((tid, false, error.localizedDescription))
+                        opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种失败", phase: .failed,
+                                                     detail: error.localizedDescription))
                     }
                 }
             }
@@ -249,7 +281,7 @@ public final class ReseedPipeline {
             // skipReseed：从已有记录补齐目标站新种子链接，保证目标站 torrent 也能推送
             for tid in targets {
                 if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                    targetPushes.append((tid, absoluteTargetURL(tid, tu)))
+                    targetPushes.append((tid, absoluteTargetURL(tid, tu), true))
                 }
             }
         }
@@ -273,10 +305,11 @@ public final class ReseedPipeline {
                 report.pushed = true
                 report.pushID = "already pushed"
                 state.note("push: 已推送过，跳过: \(release.summary)")
-                opts.onSourcePush?("已推送过（跳过）", true)
+                opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
+                                              detail: "此前已推送过"))
             } else {
                 do {
-                    opts.onSourcePush?("推送到下载器中…", nil)
+                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送中…", phase: .working))
                     let result = try downloader.addTorrent(
                         data: torrentData, filename: filename,
                         savePath: config.downloader.savePath,
@@ -290,10 +323,12 @@ public final class ReseedPipeline {
                     var note = "push OK \(release.summary) upLimit=\(upLimit)"
                     if !result.note.isEmpty { note += " [\(result.note)]" }
                     state.note(note)
-                    opts.onSourcePush?("已推送到下载器", true)
+                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
+                                              detail: result.note))
                 } catch {
                     state.note("push FAIL \(release.summary): \(error.localizedDescription)")
-                    opts.onSourcePush?("推送失败: \(error.localizedDescription)", false)
+                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送失败", phase: .failed,
+                                              detail: error.localizedDescription))
                     throw error
                 }
             }
@@ -305,10 +340,13 @@ public final class ReseedPipeline {
         if !opts.skipPush {
             for item in targetPushes {
                 let pushKey = "\(item.siteID)#\(item.detailURL)"
-                opts.onSitePush?(item.siteID, "推送该站种子中…", nil)
+                opts.onSitePush?(SiteStatus(siteID: item.siteID, text: "推送中…", phase: .working))
+                // 本次没新发种的站提示「推送已有种子」，让用户分清推的是刚发的还是站内现成的
+                let pushedText = item.seedPreexisting ? "推送已有种子" : "已推送"
                 if state.isPushed(key: pushKey) {
                     report.pushes.append((item.siteID, true, "已推送过，跳过"))
-                    opts.onSitePush?(item.siteID, "已推送过（跳过）", true)
+                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: pushedText, phase: .done,
+                                                detail: "此前已推送过"))
                     continue
                 }
                 do {
@@ -332,11 +370,13 @@ public final class ReseedPipeline {
                     if !result.note.isEmpty { msg += " [\(result.note)]" }
                     report.pushes.append((item.siteID, true, msg))
                     state.note("push[\(item.siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
-                    opts.onSitePush?(item.siteID, "已推送", true)
+                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: pushedText, phase: .done,
+                                                detail: tInfo.name))
                 } catch {
                     report.pushes.append((item.siteID, false, error.localizedDescription))
                     state.note("push[\(item.siteID)] FAIL \(item.detailURL): \(error.localizedDescription)")
-                    opts.onSitePush?(item.siteID, "推送失败: \(error.localizedDescription)", false)
+                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: "推送失败", phase: .failed,
+                                                detail: error.localizedDescription))
                 }
             }
         }

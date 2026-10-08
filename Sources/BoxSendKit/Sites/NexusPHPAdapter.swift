@@ -1750,12 +1750,8 @@ class NexusPHPAdapter: SiteAdapter {
             try? data.write(to: URL(fileURLWithPath: fpath))
         }
         let msg = HTMLUtil.stripTags(errMsg)
-        // 站点提示同名/同 hash 种子已存在（如手动转过）：视为成功，不再重复发种
-        // TTG 的重复提示是「种子已经上传！」，其他站多为「该种子已存在！」/ already exists
-        // 同时检查原始 body，防止错误提取失败时漏判
-        // 站点提示同名/同 hash 种子已存在（如手动转过）：视为成功，不再重复发种
-        // TTG 的重复提示是「种子已经上传！」，其他站多为「该种子已存在！」/ already exists
-        // 同时检查原始 body，防止错误提取失败时漏判
+        // 兜底：站点提示同名/同 hash 种子已存在（TTG 说「种子已经上传！」，多数站说「该种子已存在！」）
+        // 视为成功但不算本次转种；连原始 body 一起查，防错误提取失败时漏判
         if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL) {
             return dup
@@ -1774,7 +1770,7 @@ class NexusPHPAdapter: SiteAdapter {
               let theirs = Self.pageInfoHash(page), theirs != mine else {
             return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
         }
-        return UploadOutcome(success: true, message: "已存在（站内已有同名种子，hash 不同）",
+        return UploadOutcome(success: true, message: "站内同名种子的种子文件不同（hash 不同）",
                              detailURL: detailURL, alreadyExists: true)
     }
 
@@ -1810,7 +1806,7 @@ class NexusPHPAdapter: SiteAdapter {
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(m, against: URL(string: uploadURL)!)
         }
-        return UploadOutcome(success: true, message: "已存在（查重兜底命中）",
+        return UploadOutcome(success: true, message: "站点回「种子已存在」，本次未新发种",
                              detailURL: existingURL, alreadyExists: true)
     }
 
