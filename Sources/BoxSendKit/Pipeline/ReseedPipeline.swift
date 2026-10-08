@@ -33,6 +33,93 @@ public final class ReseedPipeline {
         return HTMLUtil.resolveURL(url, against: u)
     }
 
+    /// 源站种子推下载器（按源站限速）。失败只记事件不抛出：转种与推下载器互不依赖，
+    /// 下载器连不上时也应该把种先发到目标站。
+    private func pushSourceTorrent(torrentData: Data, filename: String, upLimit: Int64,
+                                   release: ReleaseInfo, opts: Options, report: inout Report) {
+        if state.isPushed(key: release.dedupKey) {
+            report.pushed = true
+            report.pushID = "already pushed"
+            state.note("push: 已推送过，跳过: \(release.summary)")
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
+                                          detail: "此前已推送过"))
+            return
+        }
+        opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送中…", phase: .working))
+        do {
+            let result = try downloader.addTorrent(
+                data: torrentData, filename: filename,
+                savePath: config.downloader.savePath,
+                category: config.downloader.category,
+                skipChecking: config.downloader.skipChecking,
+                upLimit: upLimit
+            )
+            report.pushed = true
+            report.pushID = result.id
+            state.markPushed(key: release.dedupKey, id: result.id)
+            var note = "push OK \(release.summary) upLimit=\(upLimit)"
+            if !result.note.isEmpty { note += " [\(result.note)]" }
+            state.note(note)
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
+                                          detail: result.note))
+        } catch {
+            state.note("push FAIL \(release.summary): \(error.localizedDescription)")
+            report.pushes.append((release.siteID, false, "源站种子推送失败：\(error.localizedDescription)"))
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送失败", phase: .failed,
+                                          detail: error.localizedDescription))
+        }
+    }
+
+    /// 逐目标站推送该站自己的 .torrent（转完一站就推一站，不等整组）
+    /// 各站 .torrent 的 tracker 不同、info hash 通常也不同，在 qB 中是独立种子；
+    /// 按目标站限速（分组/站点 upLimit），避免某一站上传过快被封。
+    private func pushTargetSite(siteID: String, detailURL: String, seedPreexisting: Bool,
+                                debugDir: String, opts: Options, report: inout Report) {
+        let pushKey = "\(siteID)#\(detailURL)"
+        opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送中…", phase: .working))
+        // 本次没新发种的站提示「推送已有种子」，让用户分清推的是刚发的还是站内现成的
+        let pushedText = seedPreexisting ? "推送已有种子" : "已推送"
+        if state.isPushed(key: pushKey) {
+            report.pushes.append((siteID, true, "已推送过，跳过"))
+            opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
+                                        detail: "此前已推送过"))
+            return
+        }
+        do {
+            guard let ts = config.site(siteID) else {
+                report.pushes.append((siteID, false, "未配置的站点 id"))
+                return
+            }
+            let tAdapter = adapterFactory(ts, client, debugDir)
+            let tInfo = try tAdapter.fetchDetail(detailURL: detailURL)
+            let (tData, tName) = try tAdapter.downloadTorrentFile(tInfo)
+            let limit = config.effectiveUpLimit(siteID: siteID)
+            let result = try downloader.addTorrent(
+                data: tData, filename: tName,
+                savePath: config.downloader.savePath,
+                category: config.downloader.category,
+                skipChecking: config.downloader.skipChecking,
+                upLimit: limit
+            )
+            state.markPushed(key: pushKey, id: result.id)
+            var msg = "upLimit=\(limit == 0 ? "unlimited" : "\(limit) B/s")"
+            if !result.note.isEmpty { msg += " [\(result.note)]" }
+            report.pushes.append((siteID, true, msg))
+            state.note("push[\(siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
+            opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done, detail: tInfo.name))
+        } catch {
+            report.pushes.append((siteID, false, error.localizedDescription))
+            state.note("push[\(siteID)] FAIL \(detailURL): \(error.localizedDescription)")
+            opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送失败", phase: .failed,
+                                        detail: error.localizedDescription))
+        }
+    }
+
+    /// 站点适配器工厂（默认走内置注册表；单测注入假适配器以核对逐站执行顺序）
+    var adapterFactory: (SiteConfig, HTTPClient, String) -> any SiteAdapter = { site, client, debugDir in
+        SiteRegistry.adapter(for: site, client: client, debugDir: debugDir)
+    }
+
     /// 限时执行一段同步工作：站点或图床卡住时不能把整轮转种拖到天荒地老
     /// （实测肉丝下载源站截图能卡几分钟）。超时后放弃等待并按失败报，
     /// 后台那次请求自己跑完，站点那边可能仍然发种成功。
@@ -175,7 +262,7 @@ public final class ReseedPipeline {
             site = s
         }
         let debugDir = (config.dataDir as NSString).expandingTildeInPath
-        let adapter = SiteRegistry.adapter(for: site, client: client, debugDir: debugDir)
+        let adapter = adapterFactory(site, client, debugDir)
 
         // 2. 解析详情
         var release = try adapter.fetchDetail(detailURL: detailURL)
@@ -210,11 +297,17 @@ public final class ReseedPipeline {
             state.note("sizeGuard WARN \(release.summary): \(msg)")
         }
 
-        // 4. 逐目标站转种
+        // 3.6 源站种子先推下载器：这样源站种子尽早开始做种，
+        //     目标站则是转完一个立刻推那一站的种子（见第 4 步），不再等整组跑完
+        let upLimit = config.effectiveUpLimit(siteID: release.siteID)
+        report.upLimit = upLimit
+        if !opts.skipPush {
+            pushSourceTorrent(torrentData: torrentData, filename: filename, upLimit: upLimit,
+                              release: release, opts: opts, report: &report)
+        }
+
+        // 4. 逐目标站转种：每站转完当场把该站自己的 .torrent 推给下载器，再进下一站
         let targets = opts.targets ?? config.targetSites
-        // 转种成功的目标站 -> 其新种子详情页，稍后逐站推送该站自己的 .torrent
-        // 稍后要推送的目标站：站点 id + 种子详情页 + 「该站种子是否站内已有」（决定推送提示文案）
-        var targetPushes: [(siteID: String, detailURL: String, seedPreexisting: Bool)] = []
         if !opts.skipReseed {
             if release.isForbidReseed {
                 state.note("forbid-reseed marker hit, skip reseed: \(release.summary)")
@@ -236,12 +329,13 @@ public final class ReseedPipeline {
                         opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
                                                      detail: "此前已转种过，本次跳过上传"))
                         if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                            targetPushes.append((tid, absoluteTargetURL(tid, tu), false))
+                            pushTargetSite(siteID: tid, detailURL: absoluteTargetURL(tid, tu),
+                                           seedPreexisting: false, debugDir: debugDir, opts: opts, report: &report)
                         }
                         continue
                     }
                     do {
-                        let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
+                        let tAdapter = adapterFactory(ts, client, debugDir)
                         // 上传前先站内查重：显式配了 searchURL 的站，或 NexusPHP 这类有通用检索端点的站。
                         // 命中即跳过上传并把站内已有种子推给下载器；查重出错不阻断转种，查不到就照常上传
                         let canPrecheck = !(ts.overrides?.searchURL ?? "").isEmpty || tAdapter.canPrecheckDuplicate
@@ -255,10 +349,11 @@ public final class ReseedPipeline {
                             report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                             state.markUploaded(site: tid, key: release.dedupKey)
                             state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                            targetPushes.append((tid, uAbs, true))
                             state.note("reseed EXIST \(tid): 站内已有该种子，跳过上传，已有种子 \(uAbs)")
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
                                                          detail: "站内已有该种子（别人先发或此前已发）\n\(uAbs)"))
+                            pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
+                                           debugDir: debugDir, opts: opts, report: &report)
                             continue
                         }
                         let outcome = try bounded(opts.siteTimeout, "单站转种") {
@@ -275,11 +370,12 @@ public final class ReseedPipeline {
                                 if let u = existing {
                                     let uAbs = absoluteTargetURL(tid, u)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                                    targetPushes.append((tid, uAbs, true))
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
                                     report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
                                                                  detail: "\(outcome.message)\n已有种子：\(uAbs)"))
+                                    pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
+                                                   debugDir: debugDir, opts: opts, report: &report)
                                 } else {
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），未找到已有种子链接，跳过目标站推送")
                                     report.outcomes.append((tid, true, "种子已存在，跳过（站内没检索到该种子链接）"))
@@ -302,7 +398,8 @@ public final class ReseedPipeline {
                                 if let u = outcome.detailURL {
                                     let uAbs = absoluteTargetURL(tid, u)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
-                                    targetPushes.append((tid, uAbs, false))
+                                    pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: false,
+                                                   debugDir: debugDir, opts: opts, report: &report)
                                 } else {
                                     state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
                                 }
@@ -321,107 +418,19 @@ public final class ReseedPipeline {
                 }
             }
         } else {
-            // skipReseed：从已有记录补齐目标站新种子链接，保证目标站 torrent 也能推送
+            // skipReseed：把此前记录过的目标站种子逐站推一遍
             for tid in targets {
                 if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                    targetPushes.append((tid, absoluteTargetURL(tid, tu), true))
+                    pushTargetSite(siteID: tid, detailURL: absoluteTargetURL(tid, tu),
+                                   seedPreexisting: true, debugDir: debugDir, opts: opts, report: &report)
                 }
             }
         }
 
-        // 5. 推下载器（站点限速，以「站点分组」页为准）
-        let upLimit = config.effectiveUpLimit(siteID: release.siteID)
-        report.upLimit = upLimit
         let failedSites = report.outcomes.filter { !$0.ok }.map { $0.site }
-        // 推送策略：有任一目标站转种成功就推下载器（纯推送不转种时 outcomes 为空，照常推）。
-        // 之前要求「全部站点成功」才推，一处失败会让已成功的站点也拿不到下载器任务。
-        let reseedOk = report.outcomes.isEmpty || failedSites.count < report.outcomes.count
-        let shouldPush = !opts.skipPush && reseedOk
-        if !opts.skipPush && !failedSites.isEmpty {
-            let list = failedSites.joined(separator: "、")
-            state.note(shouldPush
-                ? "push：\(failedSites.count) 个目标站转种失败（\(list)），不影响已成功的站点推送"
-                : "push 跳过：\(failedSites.count) 个目标站全部转种失败（\(list)）")
-        }
-        if shouldPush {
-            if state.isPushed(key: release.dedupKey) {
-                report.pushed = true
-                report.pushID = "already pushed"
-                state.note("push: 已推送过，跳过: \(release.summary)")
-                opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
-                                              detail: "此前已推送过"))
-            } else {
-                do {
-                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送中…", phase: .working))
-                    let result = try downloader.addTorrent(
-                        data: torrentData, filename: filename,
-                        savePath: config.downloader.savePath,
-                        category: config.downloader.category,
-                        skipChecking: config.downloader.skipChecking,
-                        upLimit: upLimit
-                    )
-                    report.pushed = true
-                    report.pushID = result.id
-                    state.markPushed(key: release.dedupKey, id: result.id)
-                    var note = "push OK \(release.summary) upLimit=\(upLimit)"
-                    if !result.note.isEmpty { note += " [\(result.note)]" }
-                    state.note(note)
-                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
-                                              detail: result.note))
-                } catch {
-                    state.note("push FAIL \(release.summary): \(error.localizedDescription)")
-                    opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送失败", phase: .failed,
-                                              detail: error.localizedDescription))
-                    throw error
-                }
-            }
-        }
-
-        // 6. 逐目标站推送该站自己的 .torrent
-        //    各站 .torrent 的 tracker 不同、info hash 通常也不同，在 qB 中是独立种子；
-        //    按目标站限速（分组/站点 upLimit），避免某一站上传过快被封。
-        if !opts.skipPush {
-            for item in targetPushes {
-                let pushKey = "\(item.siteID)#\(item.detailURL)"
-                opts.onSitePush?(SiteStatus(siteID: item.siteID, text: "推送中…", phase: .working))
-                // 本次没新发种的站提示「推送已有种子」，让用户分清推的是刚发的还是站内现成的
-                let pushedText = item.seedPreexisting ? "推送已有种子" : "已推送"
-                if state.isPushed(key: pushKey) {
-                    report.pushes.append((item.siteID, true, "已推送过，跳过"))
-                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: pushedText, phase: .done,
-                                                detail: "此前已推送过"))
-                    continue
-                }
-                do {
-                    guard let ts = config.site(item.siteID) else {
-                        report.pushes.append((item.siteID, false, "未配置的站点 id"))
-                        continue
-                    }
-                    let tAdapter = SiteRegistry.adapter(for: ts, client: client, debugDir: debugDir)
-                    let tInfo = try tAdapter.fetchDetail(detailURL: item.detailURL)
-                    let (tData, tName) = try tAdapter.downloadTorrentFile(tInfo)
-                    let limit = config.effectiveUpLimit(siteID: item.siteID)
-                    let result = try downloader.addTorrent(
-                        data: tData, filename: tName,
-                        savePath: config.downloader.savePath,
-                        category: config.downloader.category,
-                        skipChecking: config.downloader.skipChecking,
-                        upLimit: limit
-                    )
-                    state.markPushed(key: pushKey, id: result.id)
-                    var msg = "upLimit=\(limit == 0 ? "unlimited" : "\(limit) B/s")"
-                    if !result.note.isEmpty { msg += " [\(result.note)]" }
-                    report.pushes.append((item.siteID, true, msg))
-                    state.note("push[\(item.siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
-                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: pushedText, phase: .done,
-                                                detail: tInfo.name))
-                } catch {
-                    report.pushes.append((item.siteID, false, error.localizedDescription))
-                    state.note("push[\(item.siteID)] FAIL \(item.detailURL): \(error.localizedDescription)")
-                    opts.onSitePush?(SiteStatus(siteID: item.siteID, text: "推送失败", phase: .failed,
-                                                detail: error.localizedDescription))
-                }
-            }
+        if !failedSites.isEmpty {
+            state.note("push：\(failedSites.count) 个目标站转种失败（\(failedSites.joined(separator: "、"))），"
+                + "不影响已成功的站点推送")
         }
         return report
     }
