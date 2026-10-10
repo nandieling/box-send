@@ -242,8 +242,8 @@ if (-not $SkipCore) {
     finally { Pop-Location }
 
     $built = Join-Path $root ".build\$Cfg"
-    if (-not (Test-Path (Join-Path $built 'boxsend.dll'))) {
-        throw "没找到 $built\boxsend.dll"
+    if (-not (Test-Path (Join-Path $built 'boxsend-core.dll'))) {
+        throw "没找到 $built\boxsend-core.dll"
     }
 
     Step '把核心库和 Swift 运行时 DLL 收进 native\'
@@ -279,8 +279,10 @@ Write-Host ('发布完成，用时 ' + [int]$t.Elapsed.TotalSeconds + ' 秒')
 # csproj 用 Link 把 native\ 拍平到输出根目录。核心库的依赖（swiftCore.dll 那一堆）是运行期
 # 动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在子目录里的表现是装上了却起不来
 Step '核对 native\ 已拍平'
-if (Test-Path (Join-Path $out 'native')) {
-    throw 'publish\native\ 还在：csproj 里 native\ 那行的 Link 拍平规则被改了，核心库会加载不到'
+$leftBehind = @(Get-ChildItem (Join-Path $out 'native') -Recurse -File -ErrorAction SilentlyContinue)
+if ($leftBehind) {
+    throw ('这些文件还在 publish\native\ 里：' + (($leftBehind | ForEach-Object Name) -join ', ') `
+           + '——csproj 里 native\ 那行的 Link 拍平规则被改了，核心库会加载不到')
 }
 $missingNative = @(Get-ChildItem $native -File | Where-Object { -not (Test-Path (Join-Path $out $_.Name)) } | ForEach-Object Name)
 if ($missingNative) { throw ('这些 native 文件没进 publish\：' + ($missingNative -join ', ')) }
