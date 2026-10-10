@@ -1,0 +1,83 @@
+<UserControl x:Class="BoxSend.Windows.Views.DownloaderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
+                        <Label Content="类型" />
+                        <ComboBox x:Name="Type" Height="28">
+                            <ComboBoxItem Content="qBittorrent" Tag="qbittorrent" />
+                            <ComboBoxItem Content="Transmission" Tag="transmission" />
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Grid.Row="0" Grid.Column="1">
+                        <Label Content="地址（如 http://127.0.0.1:8080）" />
+                        <TextBox x:Name="Url" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
+                        <Label Content="用户名" />
+                        <TextBox x:Name="User" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                        <Label Content="密码" />
+                        <DockPanel>
+                            <ToggleButton x:Name="Reveal" DockPanel.Dock="Right" Width="30" Content="👁"
+                                          Checked="OnReveal" Unchecked="OnReveal" />
+                            <PasswordBox x:Name="Pass" />
+                        </DockPanel>
+                        <TextBox x:Name="PassPeek" Visibility="Collapsed" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,8,0">
+                        <Label Content="保存路径（留空用下载器默认）" />
+                        <TextBox x:Name="SavePath" />
+                    </StackPanel>
+                    <StackPanel Grid.Row="2" Grid.Column="1">
+                        <Label Content="qBittorrent 分类" />
+                        <TextBox x:Name="Category" />
+                    </StackPanel>
+                </Grid>
+
+                <WrapPanel Margin="0,12,0,0">
+                    <Label Content="默认上传限速 MB/s" VerticalAlignment="Center" />
+                    <TextBox x:Name="DefaultLimit" Width="60" VerticalAlignment="Center" />
+                    <Label Content="推送时机" VerticalAlignment="Center" Margin="16,0,0,0" />
+                    <ComboBox x:Name="PushPolicy" Width="150" Height="28" VerticalAlignment="Center">
+                        <ComboBoxItem Content="转种成功就推" Tag="onSuccess" />
+                        <ComboBoxItem Content="总是推" Tag="always" />
+                    </ComboBox>
+                    <CheckBox x:Name="SkipCheck" Content="跳过校验" Margin="16,0,0,0" VerticalAlignment="Center" />
+                </WrapPanel>
+
+                <WrapPanel Margin="0,10,0,0">
+                    <Label Content="VPS 剩余空间（GB，留空不检查）" VerticalAlignment="Center" />
+                    <TextBox x:Name="VpsFree" Width="60" VerticalAlignment="Center" />
+                    <Label Content="不足时" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    <ComboBox x:Name="GuardMode" Width="110" Height="28" VerticalAlignment="Center">
+                        <ComboBoxItem Content="只提示" Tag="warn" />
+                        <ComboBoxItem Content="跳过推送" Tag="skip" />
+                    </ComboBox>
+                    <Label Content="余量 GB" VerticalAlignment="Center" Margin="12,0,0,0" />
+                    <TextBox x:Name="GuardMargin" Width="50" VerticalAlignment="Center" />
+                </WrapPanel>
+
+                <WrapPanel Margin="0,16,0,0">
+                    <Button Content="保存" Style="{StaticResource Primary}" Click="OnSave" />
+                    <Button Content="测试连接" Margin="10,0,0,0" Click="OnTest" />
+                    <TextBlock x:Name="Result" Margin="12,0,0,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                </WrapPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

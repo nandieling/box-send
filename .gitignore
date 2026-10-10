@@ -21,3 +21,11 @@ build/
 .vscode/
 .idea/
 .env
+
+# Windows 移植：构建产物与工具链拷来的运行时
+windows/**/bin/
+windows/**/obj/
+windows/publish/
+windows/installer/Output/
+windows/BoxSend.Windows/native/*.dll
+windows/installer/version.inc

@@ -23,7 +23,7 @@ public enum SoftwareUpdate {
         guard !version.isEmpty else { return nil }
         let assets = (obj["assets"] as? [[String: Any]]) ?? []
         var download: String?
-        for ext in ["dmg", "zip"] where download == nil {
+        for ext in assetExts where download == nil {
             if let hit = assets.first(where: { (($0["name"] as? String) ?? "").lowercased().hasSuffix(ext) }),
                let u = hit["browser_download_url"] as? String { download = u }
         }
@@ -34,6 +34,17 @@ public enum SoftwareUpdate {
                        title: (obj["name"] as? String) ?? "BoxSend \(version)",
                        url: (obj["html_url"] as? String) ?? releasesURL,
                        downloadURL: download)
+    }
+
+    /// 各平台优先下载的安装包后缀（GitHub 资产按此顺序挑，都不中则取第一个资产）
+    public static var assetExts: [String] {
+        #if os(Windows)
+        return ["exe", "msi", "zip"]
+        #elseif os(macOS)
+        return ["dmg", "zip"]
+        #else
+        return ["tar.gz", "zip"]
+        #endif
     }
 
     /// "v1.1" / "BoxSend 1.1" / "release-1.10.2" -> "1.1" / "1.1" / "1.10.2"

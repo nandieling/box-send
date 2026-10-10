@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(CommonCrypto)
-import CommonCrypto
-#endif
 
 /// 与 CryptoJS (OpenSSL 格式) 兼容的解密工具。
 /// PT-depiler 的 Gist 备份: AES-256-CBC, 口令派生 = EVP_BytesToKey(MD5)。
@@ -137,24 +134,29 @@ enum CryptoJSCompat {
         return p
     }
 
-    /// AES-256 密钥扩展
+    /// AES 密钥扩展（128 与 256 位密钥都支持：CookieCloud 新格式用 128，Gist 备份用 256）
     private static func expandKey(_ key: [UInt8]) -> [[UInt8]] {
-        precondition(key.count == 32)
+        precondition(key.count == 16 || key.count == 32, "仅支持 AES-128 / AES-256")
+        let nk = key.count / 4
+        let nr = nk + 6                     // 轮数 Nr = Nk + 6
         var w = [[UInt8]]()
-        for i in 0..<8 { w.append(Array(key[i * 4..<(i + 1) * 4])) }
-        for i in 8..<60 {
+        for i in 0..<nk { w.append(Array(key[i * 4..<(i + 1) * 4])) }
+        for i in nk..<(4 * (nr + 1)) {
             var temp = w[i - 1]
-            if i % 8 == 0 {
+            if i % nk == 0 {
                 temp = [temp[1], temp[2], temp[3], temp[0]]
                 temp = temp.map { aesSbox[Int($0)] }
-                temp[0] ^= rcon[i / 8 - 1]
-            } else if i % 8 == 4 {
+                temp[0] ^= rcon[i / nk - 1]
+            } else if nk > 6 && i % nk == 4 {
                 temp = temp.map { aesSbox[Int($0)] }
             }
-            w.append([w[i - 8][0] ^ temp[0], w[i - 8][1] ^ temp[1], w[i - 8][2] ^ temp[2], w[i - 8][3] ^ temp[3]])
+            w.append([w[i - nk][0] ^ temp[0], w[i - nk][1] ^ temp[1], w[i - nk][2] ^ temp[2], w[i - nk][3] ^ temp[3]])
         }
         return w
     }
+
+    /// 由轮密钥表推算轮数（128 位 10 轮，256 位 14 轮）
+    private static func rounds(_ w: [[UInt8]]) -> Int { w.count / 4 - 1 }
 
     private static let rcon: [UInt8] = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]
 
@@ -190,8 +192,9 @@ enum CryptoJSCompat {
                 st[c * 4 + 3] = gfMul(a0, 11) ^ gfMul(a1, 13) ^ gfMul(a2, 9) ^ gfMul(a3, 14)
             }
         }
-        addRoundKey(14)
-        for round in stride(from: 13, through: 1, by: -1) {
+        let nr = rounds(w)
+        addRoundKey(nr)
+        for round in stride(from: nr - 1, through: 1, by: -1) {
             invShiftRows()
             invSubBytes()
             addRoundKey(round)
@@ -257,8 +260,9 @@ enum CryptoJSCompat {
                 st[c * 4 + 3] = gfMul(a0, 3) ^ a1 ^ a2 ^ gfMul(a3, 2)
             }
         }
+        let nr = rounds(w)
         addRoundKey(0)
-        for round in 1..<14 {
+        for round in 1..<nr {
             subBytes()
             shiftRows()
             mixColumns()
@@ -266,7 +270,7 @@ enum CryptoJSCompat {
         }
         subBytes()
         shiftRows()
-        addRoundKey(14)
+        addRoundKey(nr)
         var out = [UInt8](repeating: 0, count: 16)
         for c in 0..<4 { for r in 0..<4 { out[c * 4 + r] = st[c * 4 + r] } }
         return out
@@ -314,31 +318,24 @@ enum CryptoJSCompat {
 
     /// AES-128-CBC 解密（CookieCloud 新格式：key = 16 个 hex 字符的 UTF-8 字节，固定零 IV，PKCS7）
     static func aes128CBCDecrypt(data: Data, key: [UInt8], iv: [UInt8]) throws -> Data {
-        #if canImport(CommonCrypto)
         precondition(key.count == 16, "AES-128 key 应为 16 字节")
         precondition(data.count % 16 == 0, "AES-CBC 密文长度应为 16 的倍数")
-        var outBuf = [UInt8](repeating: 0, count: data.count + 16)
-        let avail = outBuf.count
-        var moved = 0
-        let st: CCCryptorStatus = key.withUnsafeBufferPointer { kp in
-            iv.withUnsafeBufferPointer { vp in
-                data.withUnsafeBytes { dp in
-                    outBuf.withUnsafeMutableBufferPointer { op in
-                        CCCrypt(CCOperation(kCCDecrypt), CCAlgorithm(kCCAlgorithmAES), CCOptions(kCCOptionPKCS7Padding),
-                                kp.baseAddress, key.count, vp.baseAddress,
-                                dp.baseAddress, data.count, op.baseAddress, avail, &moved)
-                    }
-                }
-            }
+        let w = expandKey(key)
+        var out = Data(capacity: data.count)
+        var prev = Array(iv)
+        let bytes = [UInt8](data)
+        for off in stride(from: 0, to: bytes.count, by: 16) {
+            let cipher = Array(bytes[off..<(off + 16)])
+            let decrypted = blockDecrypt(cipher, w: w)
+            var plain = [UInt8](repeating: 0, count: 16)
+            for i in 0..<16 { plain[i] = decrypted[i] ^ prev[i] }
+            out.append(contentsOf: plain)
+            prev = cipher
         }
-        guard st == kCCSuccess else {
+        guard let pad = out.last, (1...16).contains(Int(pad)) else {
             throw BoxSendError.badInput("AES-128-CBC 解密失败（加密密码或 KEY 可能不正确）")
         }
-        return Data(outBuf.prefix(moved))
-        #else
-        _ = (data, key, iv)
-        throw BoxSendError.badInput("当前平台缺少 CommonCrypto")
-        #endif
+        return out.dropLast(Int(pad))
     }
 
     // MARK: - OpenSSL EVP 格式 (Salted__ + AES-256-CBC)

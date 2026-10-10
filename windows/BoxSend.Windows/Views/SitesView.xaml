@@ -1,0 +1,20 @@
+<UserControl x:Class="BoxSend.Windows.Views.SitesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <DockPanel>
+            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                <TextBox x:Name="NewGroupName" Width="150" Height="28" />
+                <Button x:Name="BtnAddGroup" Content="添加分组" Margin="6,0,0,0" Click="OnAddGroup" />
+                <Button x:Name="BtnAddSites" Content="批量添加站点" Margin="16,0,0,0"
+                        Style="{StaticResource Primary}" Click="OnAddSites" />
+                <Button x:Name="BtnCheckAll" Content="检测全部 cookie" Margin="16,0,0,0" Click="OnCheckAll" />
+                <TextBlock x:Name="Hint" Margin="16,0,0,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" FontSize="12" />
+            </WrapPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="Blocks" />
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

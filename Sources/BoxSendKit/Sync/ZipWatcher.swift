@@ -4,7 +4,7 @@ import Foundation
 /// 已导入的文件名记录在 state.importedZips，避免重复导入（失败的不标记，下次重试）。
 public enum ZipWatcher {
     public static func scanOnce(dir: String, password: String, store: CookieStore, state: StateStore) -> [String] {
-        let path = (dir as NSString).expandingTildeInPath
+        let path = Platform.expandPath(dir)
         guard let items = try? FileManager.default.contentsOfDirectory(atPath: path) else {
             return []
         }

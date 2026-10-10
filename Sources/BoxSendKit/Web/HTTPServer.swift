@@ -1,11 +1,13 @@
 import Foundation
-#if canImport(Glibc)
+#if os(Windows)
+import WinSDK
+#elseif canImport(Glibc)
 import Glibc
 #elseif canImport(Darwin)
 import Darwin
 #endif
 
-/// 极简 HTTP/1.1 服务器：纯 socket 实现，macOS/Linux 通用，Connection: close，线程每连接。
+/// 极简 HTTP/1.1 服务器：纯 socket 实现，macOS/Linux/Windows 通用，Connection: close，线程每连接。
 final class HTTPServer {
     struct Request {
         var method: String
@@ -38,37 +40,44 @@ final class HTTPServer {
 
     typealias Handler = (Request) -> Response
 
-    private var serverFD: Int32 = -1
+    private var serverFD: SocketFD = invalidSocket
     private var handler: Handler = { _ in .notFound }
     /// bind 后的实际端口（port=0 时由系统分配）
     var assignedPort: Int = 0
 
     func start(host: String, port: Int, handler: @escaping Handler) throws {
         self.handler = handler
+        platformSocketStartup()
+
+        #if os(Windows)
+        // WinSDK 把 SOCK_STREAM 导成带枚举包装的类型，跨 SDK 取字面值最稳（1 = 流式）
+        let fd = socket(AF_INET, Int32(1), 0)
+        #else
         #if canImport(Glibc)
         let type = Int32(SOCK_STREAM.rawValue)
         #else
         let type = SOCK_STREAM
         #endif
         let fd = socket(AF_INET, type, 0)
-        guard fd >= 0 else { throw BoxSendError.badInput("socket() 失败") }
-        var one: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
+        #endif
+        guard fd != invalidSocket else {
+            throw BoxSendError.badInput("socket() 失败（errno \(platformSocketErrno())）")
+        }
+        platformSetReuseAddr(fd)
 
-        var addr = sockaddr_in()
+        var addr = sockaddr_in()          // 全零 = INADDR_ANY
         addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(UInt16(port)).bigEndian
-        if host == "0.0.0.0" || host == "::" {
-            addr.sin_addr = in_addr(s_addr: INADDR_ANY)
-        } else {
-            var h = host
-            let cap = h.count + 1
-            let ok = withUnsafePointer(to: &h) {
-                $0.withMemoryRebound(to: CChar.self, capacity: cap) {
-                    inet_pton(AF_INET, $0, &addr.sin_addr)
-                }
+        addr.sin_port = UInt16(port).bigEndian
+        if host != "0.0.0.0" && host != "::" {
+            guard let v4 = Self.parseIPv4(host) else {
+                throw BoxSendError.badInput("非法 host: \(host)")
             }
-            guard ok == 1 else { throw BoxSendError.badInput("非法 host: \(host)") }
+            #if os(Windows)
+            // Windows 的 in_addr 是带 union 的结构，直接按 4 字节写入网络序
+            withUnsafeMutableBytes(of: &addr.sin_addr) { $0.storeBytes(of: v4, as: UInt32.self) }
+            #else
+            addr.sin_addr = in_addr(s_addr: v4)
+            #endif
         }
         let bound = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -76,7 +85,7 @@ final class HTTPServer {
             }
         }
         guard bound == 0 else {
-            close(fd)
+            platformSocketClose(fd)
             throw BoxSendError.badInput("bind \(host):\(port) 失败（端口被占用?）")
         }
         var sa = addr
@@ -86,7 +95,7 @@ final class HTTPServer {
         }
         assignedPort = Int(UInt16(bigEndian: sa.sin_port))
         guard listen(fd, 32) == 0 else {
-            close(fd)
+            platformSocketClose(fd)
             throw BoxSendError.badInput("listen 失败")
         }
         serverFD = fd
@@ -94,34 +103,34 @@ final class HTTPServer {
 
     /// 阻塞 accept 循环（在独立线程调用）
     func run() {
-        while serverFD >= 0 {
+        while serverFD != invalidSocket {
             var caddr = sockaddr()
             var len = socklen_t(MemoryLayout<sockaddr>.size)
             let cfd = accept(serverFD, &caddr, &len)
-            guard cfd >= 0 else { continue }
+            guard cfd != invalidSocket else { continue }
             let h = handler
             Thread.detachNewThread { self.serve(cfd, handler: h) }
         }
     }
 
-    private func serve(_ fd: Int32, handler: Handler) {
-        defer { close(fd) }
+    private func serve(_ fd: SocketFD, handler: Handler) {
+        defer { platformSocketClose(fd) }
         let data = readRequest(fd)
         guard let data else { return }
         guard let req = parse(data) else {
-            writeAll(fd, Data(Response.json(["ok": false, "error": "bad request"], status: 400).head()))
+            platformSendAll(fd, Data(Response.json(["ok": false, "error": "bad request"], status: 400).head()))
             return
         }
         let resp = handler(req)
-        writeAll(fd, resp.head() + resp.body)
+        platformSendAll(fd, resp.head() + resp.body)
     }
 
-    private func readRequest(_ fd: Int32) -> [UInt8]? {
+    private func readRequest(_ fd: SocketFD) -> [UInt8]? {
         var data = [UInt8]()
         var tmp = [UInt8](repeating: 0, count: 4096)
         let marker: [UInt8] = [0x0d, 0x0a, 0x0d, 0x0a]
         while true {
-            let n = recv(fd, &tmp, tmp.count, 0)
+            let n = tmp.withUnsafeMutableBufferPointer { platformRecv(fd, $0.baseAddress!, $0.count) }
             guard n > 0 else { return data.isEmpty ? nil : data }
             data.append(contentsOf: tmp[0..<n])
             guard let hEnd = Self.find(marker, in: data) else {
@@ -167,13 +176,16 @@ final class HTTPServer {
                        query: query, headers: headers, body: body)
     }
 
-    private func writeAll(_ fd: Int32, _ data: Data) {
-        var sent = 0
-        while sent < data.count {
-            let n = data.withUnsafeBytes { send(fd, $0.baseAddress!.advanced(by: sent), data.count - sent, 0) }
-            if n <= 0 { return }
-            sent += n
+    /// 点分十进制 IPv4 -> 网络字节序。不用 inet_pton：它在 Windows 的 SDK 里符号导入不稳定。
+    static func parseIPv4(_ s: String) -> UInt32? {
+        let parts = s.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return nil }
+        var out: UInt32 = 0
+        for p in parts {
+            guard p.count <= 3, let n = Int(p), (0...255).contains(n) else { return nil }
+            out = (out << 8) | UInt32(n)
         }
+        return out.bigEndian
     }
 
     private static func find(_ seq: [UInt8], in data: [UInt8]) -> Int? {
@@ -207,5 +219,58 @@ extension StringProtocol {
     var urlDecoded: String {
         let s = String(self).replacingOccurrences(of: "+", with: " ")
         return s.removingPercentEncoding ?? s
+    }
+}
+
+// MARK: - socket 平台差异
+
+#if os(Windows)
+private typealias SocketFD = SOCKET
+private let invalidSocket: SocketFD = INVALID_SOCKET
+
+/// Windows 用 socket 前必须初始化 Winsock（重复调用无副作用，进程退出不必 Cleanup）
+private func platformSocketStartup() {
+    var wsa = WSADATA()
+    _ = WSAStartup(0x0202, &wsa)
+}
+private func platformSocketErrno() -> Int { Int(WSAGetLastError()) }
+private func platformSocketClose(_ fd: SocketFD) { closesocket(fd) }
+private func platformSetReuseAddr(_ fd: SocketFD) {
+    var one: Int32 = 1
+    _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
+                   withUnsafePointer(to: &one) { $0.withMemoryRebound(to: CChar.self, capacity: 1, $0) },
+                   Int32(MemoryLayout<Int32>.size))
+}
+private func platformRecv(_ fd: SocketFD, _ buf: UnsafeMutableRawPointer, _ len: Int) -> Int {
+    Int(recv(fd, buf.bindMemory(to: CChar.self, capacity: len), Int32(len), 0))
+}
+private func platformSend(_ fd: SocketFD, _ p: UnsafeRawPointer, _ len: Int) -> Int {
+    Int(send(fd, p.bindMemory(to: CChar.self, capacity: len), Int32(len), 0))
+}
+#else
+private typealias SocketFD = Int32
+private let invalidSocket: SocketFD = -1
+
+private func platformSocketStartup() {}
+private func platformSocketErrno() -> Int { Int(errno) }
+private func platformSocketClose(_ fd: SocketFD) { close(fd) }
+private func platformSetReuseAddr(_ fd: SocketFD) {
+    var one: Int32 = 1
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
+}
+private func platformRecv(_ fd: SocketFD, _ buf: UnsafeMutableRawPointer, _ len: Int) -> Int {
+    Int(recv(fd, buf, len, 0))
+}
+private func platformSend(_ fd: SocketFD, _ p: UnsafeRawPointer, _ len: Int) -> Int {
+    Int(send(fd, p, len, 0))
+}
+#endif
+
+private func platformSendAll(_ fd: SocketFD, _ data: Data) {
+    var sent = 0
+    while sent < data.count {
+        let n = data.withUnsafeBytes { platformSend(fd, $0.baseAddress!.advanced(by: sent), data.count - sent) }
+        if n <= 0 { return }
+        sent += n
     }
 }

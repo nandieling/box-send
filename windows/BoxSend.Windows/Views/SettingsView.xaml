@@ -1,0 +1,56 @@
+<UserControl x:Class="BoxSend.Windows.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                <GroupBox Header="主题">
+                    <ItemsControl x:Name="ThemeList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </GroupBox>
+
+                <GroupBox Header="背景图片">
+                    <StackPanel>
+                        <WrapPanel>
+                            <Button Content="选择图片…" Click="OnPickImage" />
+                            <Button Content="移除背景图片" Margin="10,0,0,0" Click="OnClearImage" />
+                            <Label Content="图片透明度" Margin="16,0,0,0" VerticalAlignment="Center" />
+                            <Slider x:Name="BgOpacity" Width="150" Minimum="0" Maximum="1"
+                                    VerticalAlignment="Center" ValueChanged="OnOpacity" />
+                        </WrapPanel>
+                        <TextBlock x:Name="ImageState" Margin="0,6,0,0" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="软件更新">
+                    <StackPanel>
+                        <WrapPanel>
+                            <Button Content="检查更新" Click="OnCheckUpdate" />
+                            <Button x:Name="BtnDownload" Margin="10,0,0,0" Click="OnDownloadUpdate"
+                                    Visibility="Collapsed" />
+                            <Button Content="打开发布页" Margin="10,0,0,0" Click="OnOpenReleases" />
+                            <CheckBox x:Name="AutoUpdate" Content="启动时自动检查" Margin="16,0,0,0"
+                                      VerticalAlignment="Center" Click="OnAutoUpdate" />
+                        </WrapPanel>
+                        <TextBlock x:Name="UpdateState" Margin="0,8,0,0" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="关于">
+                    <StackPanel>
+                        <TextBlock x:Name="About" FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                        <TextBlock x:Name="ConfigPath" Margin="0,4,0,0" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

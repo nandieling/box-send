@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- C ABI 冒烟测试：在 macOS/Linux 上加载 libboxsend.dylib/.so，验证与 WPF 相同的 P/Invoke 声明。
+       跑法见 windows/README.md。 -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>boxsend-abi-probe</AssemblyName>
+    <RootNamespace>BoxSend.AbiProbe</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- 本机只装了 .NET 10 运行时；允许向上滚动，测试机不必再补装 8.0 -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../BoxSend.Windows/Interop/BoxSendApi.cs" />
+  </ItemGroup>
+
+  <!-- 直接把 swift build 的产物链接进输出目录，dotnet run 即可加载 -->
+  <ItemGroup>
+    <None Include="../../.build/debug/libboxsend.dylib" Link="libboxsend.dylib"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../.build/debug/libboxsend.dylib')" />
+    <None Include="../../.build/debug/libboxsend.so" Link="libboxsend.so"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('../../.build/debug/libboxsend.so')" />
+  </ItemGroup>
+
+</Project>

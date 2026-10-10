@@ -1,0 +1,120 @@
+<UserControl x:Class="BoxSend.Windows.Views.CookiesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <GroupBox Header="PT-depiler Gist 同步">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
+                            <Label Content="Gist ID" />
+                            <TextBox x:Name="GistId" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
+                            <Label Content="GitHub Token" />
+                            <DockPanel x:Name="GistTokenDock">
+                                <ToggleButton x:Name="GistReveal" DockPanel.Dock="Right" Width="30"
+                                              Content="👁" Checked="OnReveal" Unchecked="OnReveal" />
+                                <PasswordBox x:Name="GistToken" />
+                            </DockPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
+                            <Label Content="加密 KEY" />
+                            <PasswordBox x:Name="GistKey" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
+                            <Label Content="自动同步间隔（分钟）" />
+                            <TextBox x:Name="GistPoll" />
+                        </StackPanel>
+                        <WrapPanel Grid.Row="2" Grid.ColumnSpan="2">
+                            <CheckBox x:Name="GistAuto" Content="开启自动同步" VerticalAlignment="Center" Click="OnGistAuto" />
+                            <Button x:Name="BtnGist" Content="立即同步" Margin="12,0,0,0"
+                                    Style="{StaticResource Primary}" Click="OnSyncGist" />
+                            <Button x:Name="BtnSaveGist" Content="保存" Margin="8,0,0,0" Click="OnSaveGist" />
+                            <TextBlock x:Name="GistState" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                        </WrapPanel>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="CookieCloud 同步">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,8">
+                                <Label Content="服务器地址" />
+                                <TextBox x:Name="CcHost" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,8,8">
+                                <Label Content="KEY" />
+                                <TextBox x:Name="CcKey" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="1">
+                                <Label Content="端对端加密密码" />
+                                <PasswordBox x:Name="CcPassword" />
+                            </StackPanel>
+                        </Grid>
+                        <WrapPanel>
+                            <Label Content="间隔（分钟）" VerticalAlignment="Center" />
+                            <TextBox x:Name="CcPoll" Width="60" VerticalAlignment="Center" />
+                            <CheckBox x:Name="CcAuto" Content="自动同步" Margin="12,0,0,0" VerticalAlignment="Center" Click="OnCookieCloudAuto" />
+                            <Button Content="立即同步" Margin="12,0,0,0" Style="{StaticResource Primary}"
+                                    Click="OnSyncCookieCloud" />
+                            <Button Content="保存" Margin="8,0,0,0" Click="OnSaveCookieCloud" />
+                        </WrapPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="PT-depiler 本地备份（PTD_backup_*.zip）">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button Content="选择目录…" DockPanel.Dock="Right" Margin="8,0,0,0" Click="OnPickZipDir" />
+                            <TextBox x:Name="ZipDir" />
+                        </DockPanel>
+                        <WrapPanel Margin="0,8,0,0">
+                            <Label Content="备份密码" VerticalAlignment="Center" />
+                            <TextBox x:Name="ZipPassword" Width="160" />
+                            <Label Content="扫描间隔（分钟）" VerticalAlignment="Center" />
+                            <TextBox x:Name="ZipPoll" Width="56" />
+                            <CheckBox x:Name="ZipAuto" Content="自动扫描" Margin="8,0,0,0" VerticalAlignment="Center" Click="OnZipAuto" />
+                            <Button Content="立即扫描" Margin="12,0,0,0" Click="OnZipScan" />
+                            <Button Content="保存" Margin="8,0,0,0" Click="OnSaveZip" />
+                        </WrapPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="本地 cookie">
+                    <StackPanel>
+                        <WrapPanel Margin="0,0,0,8">
+                            <Button Content="手动填写 cookie…" Click="OnManualCookie" />
+                            <Button Content="只保留已启用站点" Margin="8,0,0,0" Click="OnTrim" />
+                            <Button Content="清空本地 cookie" Margin="8,0,0,0" Click="OnClear" />
+                            <Button Content="检测全部" Margin="8,0,0,0" Click="OnCheckAll" />
+                            <TextBlock x:Name="CookieTotal" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                        </WrapPanel>
+                        <ListBox x:Name="Hosts" Height="160" />
+                        <TextBlock x:Name="CookieMessage" Margin="0,8,0,0" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
+</UserControl>

@@ -1,0 +1,85 @@
+<UserControl x:Class="BoxSend.Windows.Views.RunView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <Label Content="源站种子链接（详情页地址，支持多站任一支持的页面）" />
+                <DockPanel>
+                    <Button x:Name="BtnRun" DockPanel.Dock="Right" Margin="8,0,0,0" Content="开始运行"
+                            Style="{StaticResource Primary}" Click="OnRun" />
+                    <TextBox x:Name="DetailUrl" Height="30" FontSize="13" />
+                </DockPanel>
+            </StackPanel>
+
+            <WrapPanel Grid.Row="1" Margin="0,12,0,0">
+                <CheckBox x:Name="DoReseed" Content="转种到目标站" IsChecked="True" Margin="0,0,16,0" />
+                <CheckBox x:Name="DoPush" Content="推送到下载器" IsChecked="True" Margin="0,0,16,0" />
+                <CheckBox x:Name="UseQuote" Content="源站引用" Margin="0,0,16,0" />
+                <Label Content="转种分组" VerticalAlignment="Center" />
+                <ComboBox x:Name="GroupPick" Width="160" Height="26" Margin="0,0,16,0" />
+                <Label Content="目标站" VerticalAlignment="Center" />
+                <ComboBox x:Name="SourceSitePick" Width="180" Height="26" />
+            </WrapPanel>
+
+            <TextBox x:Name="QuoteText" Grid.Row="2" Margin="0,10,0,0" Height="54"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     ToolTip="勾选「源站引用」后，这段文字加在各目标站简介最上面并用引用包裹" />
+
+            <Border Grid.Row="3" Margin="0,12,0,0" Background="{DynamicResource TextSurface}"
+                    CornerRadius="6" Padding="10">
+                <StackPanel>
+                    <Label Content="勾选目标站（按分组的先后顺序执行）" />
+                    <ItemsControl x:Name="TargetsList">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="4" Margin="0,12,0,0" Background="{DynamicResource TextSurface}"
+                    CornerRadius="6" Padding="10">
+                <DockPanel>
+                    <TextBlock x:Name="RunSummary" DockPanel.Dock="Top" Margin="0,0,0,8"
+                               Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="SiteEvents">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1"
+                                            Padding="0,6">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Background="{DynamicResource Accent}" CornerRadius="4"
+                                                        Padding="6,1" Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding PhaseText}" FontSize="11"
+                                                               Foreground="White" />
+                                                </Border>
+                                                <TextBlock Text="{Binding SiteId}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Text}" Margin="8,0,0,0" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Detail}" FontSize="11" Margin="0,3,0,0"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>
