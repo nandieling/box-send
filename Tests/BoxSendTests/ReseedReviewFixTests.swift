@@ -155,6 +155,43 @@ final class ReseedReviewFixTests: XCTestCase {
         XCTAssertEqual(value(fields, "type"), "501", "动画电影入 501 Movies(电影)")
     }
 
+    // MARK: - 春天主标题：蓝光 Remux 要写 BluRay
+
+    /// 用户实测（LuckPT 43775 寒蝉煌 S01 1080p Blu-ray Remux）：春天主标题写 Blu-ray 会被拒
+    func testCmctRemuxTitleRewritesBlurayToBluRay() throws {
+        var info = try sourceRelease()
+        info.torrentName = "Higurashi.no.Naku.Koro.ni.Rei.S01.2009.1080p.Blu-ray.Remux.AVC.LPCM.2.0-LuckAni.torrent"
+        let fields = adapter("cmct").buildUploadFields(info, page: try fixture("cmct-upload.html"))
+        let name = value(fields, "name") ?? ""
+        XCTAssertEqual(name, "Higurashi.no.Naku.Koro.ni.Rei.S01.2009.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni",
+                       "春天 Remux 主标题里的 Blu-ray 要改成 BluRay")
+        XCTAssertFalse(name.lowercased().contains("blu-ray"))
+    }
+
+    /// 非 Remux 发布（原盘 / 压制）不动：规则只管蓝光 Remux 那一种写法
+    func testCmctNonRemuxTitleKeepsBluraySpelling() throws {
+        var info = try sourceRelease()
+        info.torrentName = "Gintama.Movie.2.2013.1080p.Blu-ray.AVC.LPCM.5.1-U2.torrent"
+        let fields = adapter("cmct").buildUploadFields(info, page: try fixture("cmct-upload.html"))
+        XCTAssertTrue((value(fields, "name") ?? "").contains("Blu-ray"), "没有 Remux 段就不改写法")
+    }
+
+    func testRemuxTitleTokenRewritesAreWholeWord() {
+        let table = ["Blu-ray": "BluRay"]
+        XCTAssertEqual(NexusPHPAdapter.rewriteRemuxTitleTokens(
+            "Some.Show.S02 2015 1080p Blu-ray Remux AVC FLAC", table),
+            "Some.Show.S02 2015 1080p BluRay Remux AVC FLAC", "空格分隔的发布名同样改写")
+        XCTAssertEqual(NexusPHPAdapter.rewriteRemuxTitleTokens(
+            "Some.Show.2015.2160p.UHD.BLU-RAY.REMUX.HEVC", table),
+            "Some.Show.2015.2160p.UHD.BluRay.REMUX.HEVC", "大小写不敏感，原有大写风格不改")
+        XCTAssertEqual(NexusPHPAdapter.rewriteRemuxTitleTokens(
+            "Some.Movie.2013.1080p.Blu-ray.AVC", table),
+            "Some.Movie.2013.1080p.Blu-ray.AVC", "不含 Remux 段就不动")
+        XCTAssertEqual(NexusPHPAdapter.rewriteRemuxTitleTokens(
+            "Some.Movie.2013.1080p.x264.Blu-ray-Remux", table),
+            "Some.Movie.2013.1080p.x264.BluRay-Remux", "连字符分隔也算整词")
+    }
+
     // MARK: - 3. BDInfo 随种转出去：普通站 [quote] 引用，观众用 [mediainfo]
 
     func testBDInfoExtractedFromSourcePage() throws {

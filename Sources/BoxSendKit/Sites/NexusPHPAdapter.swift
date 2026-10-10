@@ -618,7 +618,30 @@ class NexusPHPAdapter: SiteAdapter {
             // 默认：ASCII 发布名，点换空格（保留 2015.1080p / 5.1 等版本号中的点）
             t = Self.prettyReleaseName(Self.asciiReleaseName(t))
         }
+        // 个别站点对 Remux 标题的写法有硬性要求（春天：Blu-ray 会被拒，必须 BluRay）
+        if let table = override?.remuxTitleTokens {
+            t = Self.rewriteRemuxTitleTokens(t, table)
+        }
         return t
+    }
+
+    /// 发布名里是否有独立的 Remux 段（按 . _ - 空格 分词，避免 REMUXED 之类误判）
+    static func hasRemuxToken(_ title: String) -> Bool {
+        title.range(of: #"(?i)(^|[._\s-])remux($|[._\s-])"#, options: .regularExpression) != nil
+    }
+
+    /// 蓝光 Remux 发布名的整词改写（保留原来的分隔符与点号风格）
+    /// "…1080p.Blu-ray.Remux.AVC…" -> "…1080p.BluRay.Remux.AVC…"
+    static func rewriteRemuxTitleTokens(_ title: String, _ table: [String: String]) -> String {
+        guard hasRemuxToken(title) else { return title }
+        var out = title
+        for (token, replacement) in table where !token.isEmpty && !replacement.isEmpty {
+            let pattern = "(?i)(^|[._\\s-])" + NSRegularExpression.escapedPattern(for: token) + "(?=$|[._\\s-])"
+            let safe = replacement.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "$", with: "\\$")
+            out = out.replacingOccurrences(of: pattern, with: "$1" + safe, options: [.regularExpression])
+        }
+        return out
     }
 
     /// 提取发布名中的 ASCII 段：去开头 [组名] 前缀，再从首个 ASCII 字母/数字起截取。

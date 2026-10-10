@@ -74,6 +74,10 @@ public struct SiteOverride: Codable {
     var titleMode: String?
     /// 解析详情标题后剥离的站名后缀（城市 "<title>" 带品牌后缀）
     var titleStrip: String?
+    /// 蓝光 Remux 发布的主标题写法改写（春天只认 "BluRay"，写 "Blu-ray" 会被拒）：
+    /// 键 = 标题里的 token（不区分大小写，按 . _ - 空格 分词整词匹配），值 = 改写后的写法；
+    /// 标题里没有独立的 Remux 段时不改
+    var remuxTitleTokens: [String: String]?
     var descrField: String?             // 默认 "descr"
     var imdbField: String?              // 默认 "imdbid"；中文站家族为 "url"，TTG 为 "imdb_c"
     /// imdb 字段值模板，{imdb} = tt 号；默认 "{imdb}"。url 型站点用 "http://www.imdb.com/title/{imdb}/"
@@ -177,6 +181,7 @@ extension SiteOverride {
         if let v = titleField { out.titleField = v }
         if let v = titleMode { out.titleMode = v }
         if let v = titleStrip { out.titleStrip = v }
+        if let v = remuxTitleTokens { out.remuxTitleTokens = base.remuxTitleTokens?.merging(v) { _, new in new } }
         if let v = descrField { out.descrField = v }
         if let v = imdbField { out.imdbField = v }
         if let v = imdbValueTemplate { out.imdbValueTemplate = v }

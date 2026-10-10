@@ -702,7 +702,7 @@ struct SitesView: View {
         }
     }
 
-    /// 站点卡片：名称 / 序号 / 地址 / cookie 有效性 / 上传限速
+    /// 站点卡片：名称 / 序号 / 地址 / cookie 有效性 / 上传限速（+ 猫站免费一天开关单独一行）
     /// 点击卡片开启 / 停用（加深色 = 已开启）；组内可拖拽或输入序号排序
     private func siteCard(_ s: SiteConfig, gi: Int) -> some View {
         let on = s.enabled
@@ -741,15 +741,20 @@ struct SitesView: View {
                 }
                 .frame(width: 60)
                 Text("MB/s").font(.caption).foregroundStyle(.secondary)
-                if model.siteSupportsAutoFree(s) {
-                    Spacer(minLength: 6)
+                Spacer(minLength: 6)
+            }
+            // 单独一行显示，卡片窄时标签不会被压成竖排（fixedSize 保证文字完整）
+            if model.siteSupportsAutoFree(s) {
+                HStack(spacing: 6) {
                     Toggle("发种后免费一天", isOn: Binding(
                         get: { model.siteAutoFree(s) },
                         set: { on in model.setSiteAutoFree(on, siteID: s.id) }))
                         .font(.caption)
                         .toggleStyle(.switch)
                         .controlSize(.mini)
+                        .fixedSize()
                         .help("发种成功后自动点一次站内「帖子免费1天」（要扣猫粮）；已在免费满一天就不重复扣")
+                    Spacer(minLength: 6)
                 }
             }
         }

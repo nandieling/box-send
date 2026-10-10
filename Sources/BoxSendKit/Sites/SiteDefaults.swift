@@ -97,6 +97,8 @@ extension SiteOverride {
         uploadActionPath: "takeupload.php",
         titleField: "name",
         titleMode: "torrentNameDotted",
+        // 春天规则：蓝光 Remux 的主标题必须写 BluRay，源站写成 Blu-ray 时改名
+        remuxTitleTokens: ["Blu-ray": "BluRay"],
         imdbField: "url",
         imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
         posterField: "url_poster",        // 海报 = 源简介首图
