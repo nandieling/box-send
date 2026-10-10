@@ -13,7 +13,11 @@ let package = Package(
         // 核心库：HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台（CLI 与 GUI 共用）
         .target(
             name: "BoxSendKit",
-            path: "Sources/BoxSendKit"
+            path: "Sources/BoxSendKit",
+            // 内置 HTTP 服务在 Windows 上走 Winsock，得显式链 ws2_32；其余平台不加
+            linkerSettings: [
+                .linkedLibrary("ws2_32", .when(platforms: [.windows])),
+            ]
         ),
         // C ABI 导出层：Windows WPF 界面进程内调用核心库（Linux/macOS 上用于验证 ABI）
         .target(

@@ -66,7 +66,13 @@ final class HTTPServer {
         platformSetReuseAddr(fd)
 
         var addr = sockaddr_in()          // 全零 = INADDR_ANY
+        #if os(Windows)
+        // WinSDK 里 sa_family_t 只是 ADDRESS_FAMILY 的 #define 别名，没被导入；字段本身是 ushort，
+        // 直接给 AF_INET 的字面值让类型自己推
+        addr.sin_family = 2
+        #else
         addr.sin_family = sa_family_t(AF_INET)
+        #endif
         addr.sin_port = UInt16(port).bigEndian
         if host != "0.0.0.0" && host != "::" {
             guard let v4 = Self.parseIPv4(host) else {
@@ -237,9 +243,11 @@ private func platformSocketErrno() -> Int { Int(WSAGetLastError()) }
 private func platformSocketClose(_ fd: SocketFD) { closesocket(fd) }
 private func platformSetReuseAddr(_ fd: SocketFD) {
     var one: Int32 = 1
-    _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR,
-                   withUnsafePointer(to: &one) { $0.withMemoryRebound(to: CChar.self, capacity: 1, $0) },
-                   Int32(MemoryLayout<Int32>.size))
+    // optval 要 const char *：按原始字节转一次，避开跨 SDK 的 withMemoryRebound 签名差异
+    withUnsafeBytes(of: &one) {
+        _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, $0.bindMemory(to: CChar.self).baseAddress,
+                       Int32(MemoryLayout<Int32>.size))
+    }
 }
 private func platformRecv(_ fd: SocketFD, _ buf: UnsafeMutableRawPointer, _ len: Int) -> Int {
     Int(recv(fd, buf.bindMemory(to: CChar.self, capacity: len), Int32(len), 0))
