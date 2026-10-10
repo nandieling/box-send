@@ -199,7 +199,16 @@ jobs:
           Start-Process "$env:RUNNER_TEMP\inno.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { throw "Inno Setup 装完还是没找到 ISCC.exe" }
 
+      # 自包含发布要从 nuget.org 拉 win-x64 运行时包（上百 MB）。缓存下来，restore 就不依赖网络了
+      - name: 缓存 NuGet 包
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-win-net8-${{ hashFiles('windows/**/*.csproj') }}
+          restore-keys: nuget-win-net8-
+
       - name: 打包安装包
+        timeout-minutes: 25
         shell: pwsh
         run: .\windows\build.ps1 -Setup
 

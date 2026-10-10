@@ -20,6 +20,10 @@ param(
 $ErrorActionPreference = 'Stop'
 # 外部命令的非零退出码一律交给下面的 $LASTEXITCODE 判，别让 PS 7.4+ 提前抛异常打断重试
 $PSNativeCommandUseErrorActionPreference = $false
+# CI 里跑时别被首次运行欢迎语、遥测、ASP.NET 开发证书这些额外动作拖住
+$env:DOTNET_NOLOGO = '1'
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
 $win   = $PSScriptRoot
 $root  = Split-Path -Parent $win
 $proj  = Join-Path $win 'BoxSend.Windows'
@@ -162,11 +166,46 @@ if (-not $SkipCore) {
 # ---------- 2. WPF 界面 ----------
 Step 'dotnet publish BoxSend.Windows'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
-# 自带运行时 = 成品涨到 160 MB 上下，换来的是「用户不用装 .NET」；不带则 1 MB 内，但要预装桌面运行时
+Write-Host ('dotnet SDK ' + (dotnet --version))
+# 自带运行时 = 成品涨到 190 MB 上下，换来的是「用户不用装 .NET」；不带则 1 MB 内，但要预装桌面运行时
 $sc = if ($FrameworkDependent) { 'false' } else { 'true' }
-& dotnet publish $proj -c Release -r win-x64 --self-contained $sc -o $out `
+# 还原单独一步：自包含发布要从 nuget.org 拉 .NET 与 WindowsDesktop 的 win-x64 运行时包（上百 MB），
+# 网络卡住时整步可以半小时不出一个字，所以 restore 与 publish 分开跑、各自计时、用 minimal 级别
+$t = [Diagnostics.Stopwatch]::StartNew()
+& dotnet restore $proj -r win-x64 -v minimal
+if ($LASTEXITCODE) { throw "dotnet restore 失败（退出码 $LASTEXITCODE）" }
+Write-Host ('还原完成，用时 ' + [int]$t.Elapsed.TotalSeconds + ' 秒')
+$t.Restart()
+& dotnet publish $proj -c Release -r win-x64 --self-contained $sc -o $out --no-restore -v minimal `
     -p:Version=$ver -p:DebugType=none -p:DebugSymbols=false
-if ($LASTEXITCODE) { throw "dotnet publish 失败" }
+if ($LASTEXITCODE) { throw "dotnet publish 失败（退出码 $LASTEXITCODE）" }
+Write-Host ('发布完成，用时 ' + [int]$t.Elapsed.TotalSeconds + ' 秒')
+
+# ---------- 2.5 加载冒烟 ----------
+# 核心库少拷一个运行时 DLL，表现是用户「双击没反应」，界面上什么提示都没有。
+# 这里在打包前用 LoadLibraryEx 真加载一次（0x8 = 按 DLL 所在目录找依赖），再核对 C ABI 导出符号。
+Step '加载 boxsend.dll 冒烟测试'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class BoxSendLoad {
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern IntPtr GetProcAddress(IntPtr hModule, string name);
+}
+'@
+$dll = Join-Path $out 'boxsend.dll'
+$h = [BoxSendLoad]::LoadLibraryEx($dll, [IntPtr]::Zero, 0x8)
+if (-not $h) {
+    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    throw "加载 $dll 失败（$(New-Object ComponentModel.Win32Exception $err)）——十有八九是 native\ 里少拷了依赖 DLL"
+}
+$missing = @('boxsend_create', 'boxsend_invoke', 'boxsend_free', 'boxsend_set_ocr',
+             'boxsend_version', 'boxsend_destroy', 'boxsend_last_error') |
+           Where-Object { -not [BoxSendLoad]::GetProcAddress($h, $_) }
+if ($missing) { throw ('导出符号缺失：' + ($missing -join ', ')) }
+Write-Host '加载成功，7 个导出符号齐全'
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'

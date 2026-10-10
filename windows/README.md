@@ -68,6 +68,9 @@ runner 是 Server 镜像、里面也没有 winget，所以走 curl 直连，两 
 winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份新值；
 下载地址 404 就把它旁边那个 `SWIFT_WINDOWS_URL` 填成完整地址。Inno Setup 已预装就复用，没有就静默装一个。
 
+`dotnet publish` 的还原单独一步并带 `~/.nuget/packages` 缓存：自包含发布要拉上百 MB 的 win-x64
+运行时包，这一步卡在网络上时整步可以半小时不出一个字，分开跑才能从计时行看出卡在哪。
+
 官方那个 `.exe` 是 **WiX Burn bundle**（winget 清单里 `InstallerType: burn`、`Scope: user`），
 只认 `/quiet /norestart /log <文件>`。别照 Inno 那套写 `/VERYSILENT`：burn 不认的参数等于没传，
 它会弹出向导等人在界面上点，CI 上没人点就一直挂着到超时。安装装到 runner 用户的
