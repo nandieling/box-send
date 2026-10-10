@@ -51,6 +51,11 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; 1.1 那版把核心库连同 Swift 运行时装在 {app}\native\ 子目录里（界面加载不到）。界面现在全放
+; {app} 根目录，旧子目录留着只占 7 MB 还让人分不清哪份在用，升级时清掉
+Type: filesandordirs; Name: "{app}\native"
+
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
