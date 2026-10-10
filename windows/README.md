@@ -47,14 +47,19 @@
 | 怎么触发 | 结果 |
 | --- | --- |
 | 推 tag（仓库现在的 tag 形如 `1.1`） | 两个包直接挂到该 tag 的 Release |
-| Actions 页面手动运行 | 只构建，产物留在 Runs 页可下载，不发版 |
+| Actions 页面手动运行 | 只构建，产物留在 Runs 页可下载，不发版；下方 `平台` 选 `windows` 就只出安装包 |
 | 提 PR / 推 main | 只跑两平台的测试 |
 
-Windows 作业会自己下载官方 Swift 发行包解压（runner 没预装）。换版本改 workflow 顶部 `env.SWIFT_WINDOWS`；
+手动运行：Actions 页左侧选 `打包` → 右侧「Run workflow」→ 选分支/tag 与平台 → 绿色按钮。
+产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.1-win-x64.exe`）。
+
+Windows 作业会自己下载安装器装 Swift 工具链（runner 没预装，Windows 那侧官方只发 `.exe`，没有 zip）。
+runner 是 Server 镜像、里面没有 winget，所以走 curl 直连，安装包近 2GB、装完还要解压几 GB，
+这一步单独给了 30 分钟超时。换版本改 workflow 顶部 `env.SWIFT_WINDOWS`；
 下载地址 404 就把它旁边那个 `SWIFT_WINDOWS_URL` 填成完整地址。Inno Setup 已预装就复用，没有就静默装一个。
 
-第一次跑大概率要在两处对一下：官方 zip 的确切文件名，以及核心库在 Windows 上的测试结果
-（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，跑绿之后改成 `false` 让它变成硬门禁）。
+还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
+跑绿之后改成 `false` 让它变成硬门禁）。
 
 ## 目录
 

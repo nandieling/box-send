@@ -4,8 +4,8 @@
 #   Actions 页面手动运行              → 只构建并留 artifact，不发版
 #   提 PR / 推 main                   → 只跑测试
 #
-# Windows 那侧需要 Swift 工具链：runner 没预装，按 swift.org 官方办法用 winget 装，
-# 装不上再直连下载安装器（地址格式取自 swift.org/install/windows，目录名是 windows10、Windows 只有 .exe）。
+# Windows 那侧需要 Swift 工具链：runner 没预装，只能直连下载官方安装器
+# （地址格式取自 swift.org/install/windows，目录名是 windows10、Windows 只有 .exe，没有 zip）。
 # 换版本改下面 env 里的 SWIFT_WINDOWS；直连地址不对就把它填进 SWIFT_WINDOWS_URL。
 name: 打包
 
@@ -15,6 +15,12 @@ on:
     tags: ['*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: 打哪个平台
+        type: choice
+        default: both
+        options: [both, macos, windows]
 
 env:
   SWIFT_WINDOWS: "6.4.0"
@@ -27,9 +33,10 @@ permissions:
 
 jobs:
   macOS:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'windows'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 测试
         run: |
@@ -38,6 +45,8 @@ jobs:
           # 先单独编译测试目标：编译错误与运行崩溃能一眼分开
           swift build --build-tests || { echo "!! 测试目标编译就没过"; exit 1; }
           swift test 2>&1 | grep -E "error:|Fatal error|failed|Executed .* tests" | tail -40
+          # 过滤日志会让退出码变成 tail 的，这里取回 swift test 自己的
+          exit "${PIPESTATUS[0]}"
 
       - name: 打包 .app
         run: |
@@ -45,7 +54,7 @@ jobs:
           ditto -c -k --keepParent dist/BoxSend.app "BoxSend-$(sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/BoxSendKit/Util/Version.swift | head -1)-macos.zip"
 
       - name: 留产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-app
           path: BoxSend-*-macos.zip
@@ -61,11 +70,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   Windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'macos'
     runs-on: windows-2022
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: 装 Swift 工具链
+        timeout-minutes: 30
         shell: pwsh
         env:
           SWIFT_WINDOWS: ${{ env.SWIFT_WINDOWS }}
@@ -74,39 +86,56 @@ jobs:
           $ErrorActionPreference = 'Continue'
           # 安装位置随安装器版本变，装完按目录扫出来再写进 PATH（Toolchains 与 Runtimes 都要）
           function Find-SwiftBins {
+            $bins = @()
             $roots = @("$env:LOCALAPPDATA\Programs\Swift", 'C:\Library\Developer\Toolchains',
-                       'C:\Program Files\Swift') | Where-Object { Test-Path $_ }
-            if (-not $roots) { return @() }
-            Get-ChildItem $roots -Recurse -Include swift.exe, swiftCore.dll -ErrorAction SilentlyContinue |
-              ForEach-Object { $_.DirectoryName } | Select-Object -Unique
+                       'C:\Program Files\Swift', 'C:\Swift') | Where-Object { Test-Path $_ }
+            foreach ($r in $roots) {
+              # 6.x 是分开的两份：Toolchains\<版本+Asserts>\usr\bin 与 Runtimes\<版本>\usr\bin
+              foreach ($sub in 'Toolchains', 'Runtimes') {
+                $bins += (Get-Item (Join-Path (Join-Path $r $sub) '*\usr\bin') -ErrorAction SilentlyContinue).FullName
+              }
+            }
+            if (-not $bins) {   # 布局又变了就递归兜底
+              foreach ($r in $roots) {
+                $bins += Get-ChildItem $r -Recurse -Filter swiftCore.dll -ErrorAction SilentlyContinue |
+                  ForEach-Object { $_.DirectoryName }
+              }
+            }
+            return $bins | Where-Object { $_ } | Select-Object -Unique
           }
           if (Get-Command swift.exe -ErrorAction SilentlyContinue) {
             "runner 上已有 swift：" + (Get-Command swift.exe).Source
             exit 0
           }
-          # 官方推荐的装法是 winget（静默参数由包管理器负责）：swift.org/install/windows 首页就是这么写的
           $v = $env:SWIFT_WINDOWS
-          "winget 安装 Swift.Toolchain（$v）"
-          winget install --id Swift.Toolchain -e --source winget --version $v `
-            --accept-package-agreements --accept-source-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) {
-            "指定版本装不上，改装 winget 里的最新版"
-            winget install --id Swift.Toolchain -e --source winget `
-              --accept-package-agreements --accept-source-agreements --disable-interactivity
+          $url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {
+            "https://download.swift.org/swift-$v-release/windows10/swift-$v-RELEASE/swift-$v-RELEASE-windows10.exe"
           }
+          # Windows runner 是 Server 镜像，里面没有 winget，只能直连安装器（近 2GB）。
+          # 用镜像自带的 curl：别用 Invoke-WebRequest，它先收完整响应再落盘、还要画进度条，
+          # 两 GB 下来看着就跟卡死一样，还容易吃满内存。
+          $exe = Join-Path $env:RUNNER_TEMP 'swift-installer.exe'
+          "下载安装器（约 2GB）$url"
+          foreach ($d in 'C', (($env:RUNNER_TEMP -split ':')[0])) {
+            $g = Get-PSDrive $d -ErrorAction SilentlyContinue
+            if ($g) { "盘 ${d}: 剩余 $([math]::Round($g.Free / 1GB, 1)) GB" }
+          }
+          $t = [Diagnostics.Stopwatch]::StartNew()
+          & curl.exe --silent --show-error --fail --location --retry 3 --retry-delay 5 -o $exe $url
+          if ($LASTEXITCODE -ne 0) { throw "下载失败，curl 退出码 $LASTEXITCODE" }
+          "下载完成 $([math]::Round((Get-Item $exe).Length / 1MB)) MB，用时 $([int]$t.Elapsed.TotalSeconds) 秒"
+          $t.Restart()
+          # Swift 官方安装器是 Inno 壳，静默参数照 Inno 那套
+          # 退出码不当硬门禁（要重启之类也会给非零），下面按找不找得到 swift 判定装没装上
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -PassThru -Wait
+          "安装器退出码 $($p.ExitCode)，用时 $([int]$t.Elapsed.TotalSeconds) 秒"
           $bins = Find-SwiftBins
           if (-not $bins) {
-            # winget 不配合就直连安装器；地址格式来自 swift.org 安装页（目录名是 windows10，Windows 只发 .exe）
-            $url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {
-              "https://download.swift.org/swift-$v-release/windows10/swift-$v-RELEASE/swift-$v-RELEASE-windows10.exe"
-            }
-            "下载安装器 $url"
-            Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\swift-installer.exe"
-            Start-Process "$env:RUNNER_TEMP\swift-installer.exe" `
-              -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -Wait
-            $bins = Find-SwiftBins
+            "找不到，列一下可能的安装位置："
+            Get-ChildItem 'C:\', 'C:\Program Files', "$env:LOCALAPPDATA\Programs" -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match 'swift' } | ForEach-Object { $_.FullName }
+            throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了"
           }
-          if (-not $bins) { throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了" }
           $bins | ForEach-Object { "加进 PATH：" + $_; Add-Content -Path $env:GITHUB_PATH -Value $_ }
 
       # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
@@ -115,7 +144,10 @@ jobs:
         continue-on-error: ${{ env.ALLOW_WINDOWS_TEST_FAILURE == 'true' }}
         run: |
           swift --version
-          swift test
+          swift build --build-tests
+          if ($LASTEXITCODE -ne 0) { throw "!! 测试目标编译就没过（退出码 $LASTEXITCODE）" }
+          swift test 2>&1 | Select-String -Pattern 'error:|Fatal error|failed|Executed .* tests' | Select-Object -Last 40
+          if ($LASTEXITCODE -ne 0) { throw "swift test 没过（退出码 $LASTEXITCODE）" }
 
       - name: 装 Inno Setup（runner 已预装则跳过）
         shell: pwsh
@@ -125,7 +157,8 @@ jobs:
                      "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") |
                    Where-Object { Test-Path $_ }
           if ($found) { "已预装：" + $found[0]; exit 0 }
-          Invoke-WebRequest "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:RUNNER_TEMP\inno.exe"
+          & curl.exe --silent --show-error --fail --location --retry 3 -o "$env:RUNNER_TEMP\inno.exe" "https://jrsoftware.org/download.php/is.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup 下载失败，curl 退出码 $LASTEXITCODE" }
           Start-Process "$env:RUNNER_TEMP\inno.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
           if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { throw "Inno Setup 装完还是没找到 ISCC.exe" }
 
@@ -134,7 +167,7 @@ jobs:
         run: .\windows\build.ps1 -Setup
 
       - name: 留产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: windows/installer/Output/*.exe
