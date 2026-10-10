@@ -73,40 +73,90 @@ function Invoke-SwiftBuild($cfg) {
     return $code
 }
 
-# 版本号只有一个来源：核心库里的 BoxSendVersion
-$verFile = Join-Path $root 'Sources\BoxSendKit\Util\Version.swift'
-$verMatch = Select-String -Path $verFile -Pattern 'static let version = "([^"]+)"' | Select-Object -First 1
-if (-not $verMatch) { throw '没能从 Version.swift 里读出版本号' }
-$ver = $verMatch.Matches[0].Groups[1].Value
-Write-Host ("BoxSend " + $ver) -ForegroundColor Green
+# C ABI 导出符号清单，与 Sources/BoxSendBridge/Exports.swift 里的 @_cdecl 对齐
+$script:AbiExports = @('boxsend_create', 'boxsend_invoke', 'boxsend_free', 'boxsend_set_ocr',
+                       'boxsend_version', 'boxsend_destroy', 'boxsend_last_error')
 
-# ---------- 1. 核心库 ----------
-if (-not $SkipCore) {
-    Step "swift build -c $Cfg --product boxsend"
-    # Windows 上 Swift 的标准库不在工具链里，而在 SDKROOT 指向的 Windows.sdk，
-    # 这个环境变量是 Swift 安装器写进用户环境的，装完工具链不换终端就读不到
-    if ($IsWindows -and -not $env:SDKROOT) {
-        Write-Warning '读不到环境变量 SDKROOT（Swift 靠它定位 Windows 平台标准库）。若是刚装完工具链，请重开一个终端再跑。'
-    }
-    Push-Location $root
-    try {
-        $code = Invoke-SwiftBuild $Cfg
-        if ($code) {
-            # 编译没过的话，补上 VS 开发者环境再试一次（MSVC 头文件与库的路径只在里面有）
-            if (-not (Import-VsDevEnvironment)) { throw "swift build 失败（退出码 $code）" }
-            Write-Host '已导入 VS 开发者环境，重试一次' -ForegroundColor Yellow
-            $code = Invoke-SwiftBuild $Cfg
-            if ($code) { throw "swift build 失败（导入 VS 开发者环境后仍没过，退出码 $code）" }
+# 读 PE 导出表 + 真加载一次的小助手。判空一律 ToInt64() 比 0，别把 IntPtr 丢给 PowerShell
+# 转 bool——「等于 0」和「非 null」两种语义能把「7 个符号全缺」读成「7 个符号全有」，
+# 带着空导出表的安装包就是这么混过冒烟测试的。
+$script:PeSource = @'
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class BoxSendPe {
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
+    static extern IntPtr GetProcAddress(IntPtr h, string name);
+
+    // 0x8 = LOAD_WITH_ALTERED_SEARCH_PATH：依赖按 DLL 自己所在目录找，和双击运行时一样
+    public static IntPtr Load(string path) { return LoadLibraryEx(path, IntPtr.Zero, 0x8); }
+    public static long Addr(IntPtr h, string name) { return GetProcAddress(h, name).ToInt64(); }
+
+    // 只为把「实际导出了哪些名字」打进日志：解析文件里的导出目录，不加载，也就不占文件
+    public static string[] ExportNames(string path) {
+        string[] none = new string[0];
+        byte[] b = File.ReadAllBytes(path);
+        if (b.Length < 0x40 || b[0] != 0x4d || b[1] != 0x5a) return none;      // 连 MZ 头都不是
+        int pe = BitConverter.ToInt32(b, 0x3c);
+        int opt = pe + 24;
+        if (pe < 0 || pe > b.Length - 24) return none;
+        // 数据目录起点：PE32+ 在可选头 +112，PE32 在 +96；导出目录是第 0 项
+        int dirs = opt + (BitConverter.ToUInt16(b, opt) == 0x20b ? 112 : 96);
+        if (dirs + 4 > b.Length || BitConverter.ToUInt32(b, dirs) == 0) return none;
+        int nsec = BitConverter.ToUInt16(b, pe + 6);
+        int sec0 = opt + BitConverter.ToUInt16(b, pe + 20);
+        Func<uint, int> off = rva => {                                        // RVA -> 文件偏移
+            for (int i = 0; i < nsec; i++) {
+                int s = sec0 + i * 40;
+                uint va = BitConverter.ToUInt32(b, s + 12);
+                uint span = Math.Max(BitConverter.ToUInt32(b, s + 8), BitConverter.ToUInt32(b, s + 16));
+                if (rva >= va && rva < va + span) return (int)(BitConverter.ToUInt32(b, s + 20) + (rva - va));
+            }
+            return -1;
+        };
+        int ed = off(BitConverter.ToUInt32(b, dirs));
+        if (ed < 0 || ed + 40 > b.Length) return none;
+        int no = off(BitConverter.ToUInt32(b, ed + 32));
+        int nn = BitConverter.ToUInt16(b, ed + 24);
+        if (no < 0) return none;
+        List<string> list = new List<string>();
+        for (int i = 0; i < nn; i++) {
+            int so = off(BitConverter.ToUInt32(b, no + i * 4));
+            if (so < 0 || so >= b.Length) continue;
+            int e = so;
+            while (e < b.Length && b[e] != 0) e++;
+            list.Add(Encoding.ASCII.GetString(b, so, e - so));
         }
+        return list.ToArray();
     }
-    finally { Pop-Location }
+}
+'@
 
-    $built = Join-Path $root ".build\$Cfg"
-    if (-not (Test-Path (Join-Path $built 'boxsend.dll'))) {
-        throw "没找到 $built\boxsend.dll"
+# 把导出符号情况打进日志并返回缺的名字（空数组 = 齐全）。-FileOnly 只查导出表不加载，
+# 用在核心库刚编完那一步：加载了就得卸载，而 Swift 的 DLL 卸载不是件可靠的事，犯不上。
+function Test-BoxSendExports([string]$dllPath, [switch]$FileOnly) {
+    if (-not $script:PeLoaded) { Add-Type -TypeDefinition $script:PeSource; $script:PeLoaded = $true }
+    $names = @([BoxSendPe]::ExportNames($dllPath))
+    $mine = @($names | Where-Object { $_ -like 'boxsend*' })
+    $shown = if ($mine) { $mine -join ', ' } else { '一个都没有' }
+    Write-Host ('  ' + (Split-Path -Leaf $dllPath) + '：导出表 ' + $names.Count + ' 项，boxsend* —— ' + $shown)
+    if ($FileOnly) { return @($script:AbiExports | Where-Object { $names -notcontains $_ }) }
+    $h = [BoxSendPe]::Load($dllPath)
+    if ($h.ToInt64() -eq 0) {
+        $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        $why = New-Object ComponentModel.Win32Exception $err
+        throw "加载 $dllPath 失败（$why）——十有八九是少拷了 Swift 运行时的依赖 DLL"
     }
+    return @($script:AbiExports | Where-Object { [BoxSendPe]::Addr($h, $_) -eq 0 })
+}
 
-    Step '把核心库和 Swift 运行时 DLL 收进 native\'
+# 把 boxsend.dll 和 Swift 运行时那堆 DLL 收进 native\（重链之后可以再来一遍）
+function Copy-CoreArtifacts([string]$built) {
     New-Item -ItemType Directory -Force -Path $native | Out-Null
     Get-ChildItem $native -Filter *.dll | Remove-Item
 
@@ -163,6 +213,50 @@ if (-not $SkipCore) {
     Write-Host '提示：漏依赖的权威判据是 boxsend.dll 的导入表，可用 dumpbin /dependents 核对。'
 }
 
+# 版本号只有一个来源：核心库里的 BoxSendVersion
+$verFile = Join-Path $root 'Sources\BoxSendKit\Util\Version.swift'
+$verMatch = Select-String -Path $verFile -Pattern 'static let version = "([^"]+)"' | Select-Object -First 1
+if (-not $verMatch) { throw '没能从 Version.swift 里读出版本号' }
+$ver = $verMatch.Matches[0].Groups[1].Value
+Write-Host ("BoxSend " + $ver) -ForegroundColor Green
+
+# ---------- 1. 核心库 ----------
+if (-not $SkipCore) {
+    Step "swift build -c $Cfg --product boxsend"
+    # Windows 上 Swift 的标准库不在工具链里，而在 SDKROOT 指向的 Windows.sdk，
+    # 这个环境变量是 Swift 安装器写进用户环境的，装完工具链不换终端就读不到
+    if ($IsWindows -and -not $env:SDKROOT) {
+        Write-Warning '读不到环境变量 SDKROOT（Swift 靠它定位 Windows 平台标准库）。若是刚装完工具链，请重开一个终端再跑。'
+    }
+    Push-Location $root
+    try {
+        $code = Invoke-SwiftBuild $Cfg
+        if ($code) {
+            # 编译没过的话，补上 VS 开发者环境再试一次（MSVC 头文件与库的路径只在里面有）
+            if (-not (Import-VsDevEnvironment)) { throw "swift build 失败（退出码 $code）" }
+            Write-Host '已导入 VS 开发者环境，重试一次' -ForegroundColor Yellow
+            $code = Invoke-SwiftBuild $Cfg
+            if ($code) { throw "swift build 失败（导入 VS 开发者环境后仍没过，退出码 $code）" }
+        }
+    }
+    finally { Pop-Location }
+
+    $built = Join-Path $root ".build\$Cfg"
+    if (-not (Test-Path (Join-Path $built 'boxsend.dll'))) {
+        throw "没找到 $built\boxsend.dll"
+    }
+
+    Step '把核心库和 Swift 运行时 DLL 收进 native\'
+    Copy-CoreArtifacts $built
+    # 先扫一眼导出表（只读文件不加载）。C ABI 符号没导出的话，装到用户机器上的表现是
+    # 「核心库启动失败：Unable to find an entry point named 'boxsend_create'」，
+    # 真加载的硬闸门在 2.5 步，这里只负责把问题暴露在刚编完的地方
+    if (Test-BoxSendExports (Join-Path $native 'boxsend.dll') -FileOnly) {
+        Write-Warning '核心库导出表不全，等 2.5 步真加载时再判一次'
+    }
+
+}
+
 # ---------- 2. WPF 界面 ----------
 Step 'dotnet publish BoxSend.Windows'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
@@ -182,30 +276,11 @@ if ($LASTEXITCODE) { throw "dotnet publish 失败（退出码 $LASTEXITCODE）" 
 Write-Host ('发布完成，用时 ' + [int]$t.Elapsed.TotalSeconds + ' 秒')
 
 # ---------- 2.5 加载冒烟 ----------
-# 核心库少拷一个运行时 DLL，表现是用户「双击没反应」，界面上什么提示都没有。
-# 这里在打包前用 LoadLibraryEx 真加载一次（0x8 = 按 DLL 所在目录找依赖），再核对 C ABI 导出符号。
-Step '加载 boxsend.dll 冒烟测试'
-Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class BoxSendLoad {
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-    public static extern IntPtr GetProcAddress(IntPtr hModule, string name);
-}
-'@
-$dll = Join-Path $out 'boxsend.dll'
-$h = [BoxSendLoad]::LoadLibraryEx($dll, [IntPtr]::Zero, 0x8)
-if (-not $h) {
-    $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-    throw "加载 $dll 失败（$(New-Object ComponentModel.Win32Exception $err)）——十有八九是 native\ 里少拷了依赖 DLL"
-}
-$missing = @('boxsend_create', 'boxsend_invoke', 'boxsend_free', 'boxsend_set_ocr',
-             'boxsend_version', 'boxsend_destroy', 'boxsend_last_error') |
-           Where-Object { -not [BoxSendLoad]::GetProcAddress($h, $_) }
+# 装进安装包的就是这一份：真加载 + 逐个查符号，别等用户机器上弹「核心库启动失败」才知道
+Step '加载 publish\boxsend.dll 冒烟测试'
+$missing = Test-BoxSendExports (Join-Path $out 'boxsend.dll')
 if ($missing) { throw ('导出符号缺失：' + ($missing -join ', ')) }
-Write-Host '加载成功，7 个导出符号齐全'
+Write-Host '加载成功，7 个导出符号齐全' -ForegroundColor Green
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'

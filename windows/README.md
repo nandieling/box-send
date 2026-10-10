@@ -76,6 +76,13 @@ winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份
 它会弹出向导等人在界面上点，CI 上没人点就一直挂着到超时。安装装到 runner 用户的
 `%LOCALAPPDATA%\Programs\Swift` 下（Toolchains 与 Runtimes 两份，都要进 PATH），不提权、不会有 UAC 弹窗。
 
+Swift 的 `@_cdecl` 在 Windows 上只保证符号名，不会自动把名字写进 DLL 导出表（COFF 认的是
+`.drectve` / `.def` / `/EXPORT:`，实测 6.4.0 编出来的 `boxsend.dll` 导出表是空的），界面表现为
+启动即报「核心库启动失败：Unable to find an entry point named 'boxsend_create' in DLL
+'boxsend'」。所以 `Package.swift` 给 `BoxSendBridge` 按名字逐个加了 `-Xlinker /EXPORT:`，
+`build.ps1` 则在打包前解析导出表、再 `LoadLibraryEx` 真加载一次核对这 7 个符号，缺就当场停下，
+不让空导出表的安装包出厂。
+
 还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
 跑绿之后改成 `false` 让它变成硬门禁）。
 

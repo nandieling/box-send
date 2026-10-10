@@ -1,6 +1,21 @@
 // swift-tools-version: 5.10
 import PackageDescription
 
+// C ABI 导出符号清单：与 Sources/BoxSendBridge/Exports.swift 里的 @_cdecl 一一对应
+let cdeclExports = [
+    "boxsend_create", "boxsend_invoke", "boxsend_free", "boxsend_set_ocr",
+    "boxsend_version", "boxsend_destroy", "boxsend_last_error",
+]
+
+// Windows 的 DLL 靠 COFF 导出表对外露名字，而 COFF 只有 .drectve / .def 两条自动路子，
+// Swift 的 @_cdecl 都不走——它只保证符号名，不保证进导出表（实测 6.4.0 编出来的
+// boxsend.dll 导出表是空的，症状是界面报「Unable to find an entry point named
+// 'boxsend_create' in DLL 'boxsend'」）。这里逐个名字交给链接器强制导出；
+// Mach-O / ELF 不需要，导出表由 public 可见性自动决定。
+let bridgeLinkerSettings: [LinkerSetting] = cdeclExports.map {
+    .unsafeFlags(["-Xlinker", "/EXPORT:\($0)"], .when(platforms: [.windows]))
+}
+
 let package = Package(
     name: "BoxSend",
     platforms: [.macOS(.v13)],
@@ -23,7 +38,8 @@ let package = Package(
         .target(
             name: "BoxSendBridge",
             dependencies: ["BoxSendKit"],
-            path: "Sources/BoxSendBridge"
+            path: "Sources/BoxSendBridge",
+            linkerSettings: bridgeLinkerSettings
         ),
         // 命令行（launchd/自动化）
         .executableTarget(
