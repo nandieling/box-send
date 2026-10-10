@@ -1,10 +1,9 @@
 import Foundation
-import CoreFoundation
 
 /// 站点名称默认排序：数字开头的名称在前（按名称不区分大小写比较），
 /// 其余按拼音字母顺序（中文取拼音首字母、纯拉丁名取首字母，同一首字母内按 zh-Hans-CN 拼音序）
 public enum NameSort {
-    private static let zhLocale: CFLocale = Locale(identifier: "zh-Hans-CN") as CFLocale
+    private static let zhLocale = Locale(identifier: "zh-Hans-CN")
 
     /// 各拼音首字母对应的最小拼音单字（用于二分确定中文名的拼音首字母）
     private static let probes: [Character: String] = [
@@ -72,11 +71,11 @@ public enum NameSort {
     }
 
     /// 拼音序（CLDR 中文语区排序 = 拼音，同音字按编码顺序）
+    /// 用 Foundation 的本地化比较而不是直接调 CoreFoundation：mac 上它本来就是
+    /// CFStringCompareWithOptionsAndLocale 的一层壳，结果一样；Windows 那套 Foundation 没有
+    /// CoreFoundation 这个模块，但同样落到 ICU 的 CLDR 排序，三个平台一套代码。
     static func zhLess(_ a: String, _ b: String) -> Bool {
-        CFStringCompareWithOptionsAndLocale(
-            a as CFString, b as CFString,
-            CFRange(location: 0, length: a.utf16.count), [], zhLocale
-        ).rawValue < 0
+        a.compare(b, options: [], locale: zhLocale) == .orderedAscending
     }
 }
 
