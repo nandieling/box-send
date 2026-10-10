@@ -141,10 +141,29 @@ do {
         if let previewSite = opt("--preview") {
             guard let s2 = config.site(previewSite) else { die("未知站点 \(previewSite)") }
             let a2 = SiteRegistry.adapter(for: s2, client: client, debugDir: dataDir)
+            // 与流水线一致：注入 TMDB 反查，源站没带链接时预览里也能看到补出来的值
+            var tmdbNote = ""
+            if let r = TMDBResolver.make(client: client, config: config.tmdb) {
+                a2.setTMDBLookup { info in
+                    let link = r.resolve(imdb: info.imdb, douban: info.douban,
+                                         name: info.name, altName: info.subtitle)
+                    if link == nil { tmdbNote = r.lastError ?? "反查没返回链接" }
+                    else if let warn = r.lastWarning { tmdbNote = warn }
+                    return link
+                }
+            }
+            // --quote：按「源站引用」开关后的样子预览（流水线里这段由 Options.sourceQuote 注入）
+            var previewRelease = report.release
+            if let q = opt("--quote") { previewRelease.extraQuote = q }
             print("--- 预览 \(previewSite) 上传字段 ---")
-            for (k, v) in try a2.previewUploadFields(report.release) {
+            let previewed = try a2.previewUploadFields(previewRelease)
+            for (k, v) in previewed {
                 let shown = v.count > 120 ? String(v.prefix(120)) + "…(\(v.count))" : v
                 print("  \(k) = \(shown.replacingOccurrences(of: "\\n", with: "\\n    "))")
+            }
+            // TMDB 没填上时把原因打出来，否则只能看到「站点说必填」这一句
+            if !previewed.contains(where: { $0.0.lowercased().contains("tmdb") }), !tmdbNote.isEmpty {
+                print("  tmdb: 未填 — \(tmdbNote)")
             }
         }
 

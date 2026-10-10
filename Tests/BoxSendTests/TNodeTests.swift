@@ -146,4 +146,63 @@ final class TNodeTests: XCTestCase {
         XCTAssertEqual(TNodeAdapter.kindFromCategory(504, name: "x"), .tvshow)
         XCTAssertEqual(TNodeAdapter.kindFromCategory(599, name: "Show S01E01 2020 1080p"), .series)
     }
+    // MARK: - 实测反馈：截图框不放海报、备注写制作引用
+
+    /// LuckPT 版式的源简介：海报 div + 制作信息 fieldset + 末尾截图
+    private func luckptStyleRelease() -> ReleaseInfo {
+        var info = ReleaseInfo(
+            siteID: "luckpt", detailURL: "https://pt.luckpt.de/details.php?id=43749",
+            name: "Gekijouban Gintama Kanketsu-hen 2013 1080p Blu-ray AVC DTS-HD MA 5.1-LuckDIY",
+            descr: """
+            <div class="poster"><img src="https://img2.pixhost.to/images/5566/692556572_ptgen_poster_fyc41z.jpg" /></div>
+            <fieldset><legend>制作信息</legend>原盘来自：Gintama Movie 2 1080p JPN Blu-ray-U2娘@Share<br />字幕来自字幕库：jsum@U2</fieldset>
+            <img src="https://img2.pixhost.to/images/5566/692557779_01.png" />
+            <img src="https://img2.pixhost.to/images/5566/692557792_02.png" />
+            """)
+        info.extraQuote = "转载自LuckPT，感谢发布者"
+        info.imdb = "tt2374144"
+        return info
+    }
+
+    func testZhuqueScreenshotExcludesPoster() {
+        let shots = TNodeAdapter.screenshotValue(luckptStyleRelease()).components(separatedBy: "\n")
+        XCTAssertEqual(shots, ["https://img2.pixhost.to/images/5566/692557779_01.png",
+                               "https://img2.pixhost.to/images/5566/692557792_02.png"],
+                       "截图框只放简介里的截图")
+        XCTAssertFalse(shots.contains { $0.contains("poster") })
+    }
+
+    func testZhuqueNoteIsSourceQuotePlusProductionCredits() {
+        XCTAssertEqual(TNodeAdapter.noteValue(luckptStyleRelease()),
+                       "转载自LuckPT，感谢发布者\n原盘来自：Gintama Movie 2 1080p JPN Blu-ray-U2娘@Share\n"
+                       + "字幕来自字幕库：jsum@U2",
+                       "备注 = 来源引用 + 源简介自带制作引用，不再堆链接")
+        var bare = luckptStyleRelease()
+        bare.extraQuote = ""
+        bare.descr = "<img src=\"https://img2.pixhost.to/x_01.png\" />正文"
+        XCTAssertEqual(TNodeAdapter.noteValue(bare),
+                       "转载自: https://pt.luckpt.de/details.php?id=43749", "没有来源可抄时退回源站链接")
+    }
+    func testPosterIsWhateverSitsAbovePTGenInfoBlock() {
+        // pt-gen 排版：海报在豆瓣资料表上面，链接与 class 都没有任何提示
+        let html = """
+        <img src="https://cdn.example.com/a1b2c3.jpg" />
+        ◎译　　名　测试片<br />◎豆瓣链接　https://movie.douban.com/subject/26386922/<br />
+        <img src="https://cdn.example.com/shot_01.png" />
+        <img src="https://cdn.example.com/shot_02.png" />
+        """
+        XCTAssertEqual(NexusPHPAdapter.posterURLs(from: html, base: "https://pt.luckpt.de/"),
+                       ["https://cdn.example.com/a1b2c3.jpg"], "资料表上面的图就是封面")
+        var info = ReleaseInfo(siteID: "luckpt", detailURL: "https://pt.luckpt.de/details.php?id=1",
+                               name: "Test Movie 2020 1080p Blu-ray", descr: html)
+        info.extraQuote = "转载自LuckPT，感谢发布者"
+        XCTAssertEqual(TNodeAdapter.screenshotValue(info).components(separatedBy: "\n"),
+                       ["https://cdn.example.com/shot_01.png", "https://cdn.example.com/shot_02.png"])
+        // 没有资料表、也没有海报标记时：全部图片都当截图
+        let plain = "<p>只有截图</p><img src=\"https://cdn.example.com/s1.png\" />"
+            + "<img src=\"https://cdn.example.com/s2.png\" />"
+        info.descr = plain
+        XCTAssertEqual(TNodeAdapter.screenshotValue(info).components(separatedBy: "\n").count, 2,
+                       "认不出海报时不该砍掉真截图")
+    }
 }

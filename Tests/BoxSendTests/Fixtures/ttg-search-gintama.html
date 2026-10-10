@@ -1,0 +1,1215 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link type="image/x-icon" href="/favicon.ico" rel="icon"/>
+<link type="image/x-icon" href="/favicon.ico" rel="shortcut icon"/>
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' *.cloudflare.com *.google-analytics.com *.cnzz.com; object-src 'none'; child-src https:">
+
+<script src="/js/jquery.min.js" type="text/javascript" /></script>
+<script>
+    function mobileplayer()
+    {
+        var platform = navigator.platform;
+        var ua = navigator.userAgent;
+        var ios = /iPhone|iPad|iPod/.test(platform) && ua.indexOf( "AppleWebKit" ) > -1;
+        var andriod = ua.indexOf( "Android" ) > -1;
+        if(ios || andriod) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function AC_FL_RunContent() {
+        var str = '';
+        var ret = AC_GetArgs(arguments, "clsid:d27cdb6e-ae6d-11cf-96b8-444553540000", "application/x-shockwave-flash");
+        if($.browser.msie && !$.browser.opera) {
+            str += '<object ';
+            for (var i in ret.objAttrs) {
+                str += i + '="' + ret.objAttrs[i] + '" ';
+            }
+            str += '>';
+            for (var i in ret.params) {
+                str += '<param name="' + i + '" value="' + ret.params[i] + '" /> ';
+            }
+            str += '</object>';
+        } else {
+            str += '<embed ';
+            for (var i in ret.embedAttrs) {
+                str += i + '="' + ret.embedAttrs[i] + '" ';
+            }
+            str += '></embed>';
+        }
+        return str;
+    }
+    function AC_GetArgs(args, classid, mimeType) {
+        var ret = new Object();
+        ret.embedAttrs = new Object();
+        ret.params = new Object();
+        ret.objAttrs = new Object();
+        for (var i = 0; i < args.length; i = i + 2){
+            var currArg = args[i].toLowerCase();
+            switch (currArg){
+                case "classid":break;
+                case "pluginspage":ret.embedAttrs[args[i]] = 'http://www.macromedia.com/go/getflashplayer';break;
+                case "src":ret.embedAttrs[args[i]] = args[i+1];ret.params["movie"] = args[i+1];break;
+                case "codebase":ret.objAttrs[args[i]] = 'http://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0';break;
+                case "onafterupdate":case "onbeforeupdate":case "onblur":case "oncellchange":case "onclick":case "ondblclick":case "ondrag":case "ondragend":
+                case "ondragenter":case "ondragleave":case "ondragover":case "ondrop":case "onfinish":case "onfocus":case "onhelp":case "onmousedown":
+                case "onmouseup":case "onmouseover":case "onmousemove":case "onmouseout":case "onkeypress":case "onkeydown":case "onkeyup":case "onload":
+                case "onlosecapture":case "onpropertychange":case "onreadystatechange":case "onrowsdelete":case "onrowenter":case "onrowexit":case "onrowsinserted":case "onstart":
+                case "onscroll":case "onbeforeeditfocus":case "onactivate":case "onbeforedeactivate":case "ondeactivate":case "type":
+                case "id":ret.objAttrs[args[i]] = args[i+1];break;
+                case "width":case "height":case "align":case "vspace": case "hspace":case "class":case "title":case "accesskey":case "name":
+                case "tabindex":ret.embedAttrs[args[i]] = ret.objAttrs[args[i]] = args[i+1];break;
+                default:ret.embedAttrs[args[i]] = ret.params[args[i]] = args[i+1];
+            }
+        }
+        ret.objAttrs["classid"] = classid;
+        if(mimeType) {
+            ret.embedAttrs["type"] = mimeType;
+        }
+        return ret;
+    }
+</script>
+<script src="/js/zoom2.v.js" type="text/javascript" /></script>
+<!--[if IE 6]>
+<script src="js/DD_belatedPNG_0.0.8a-min.js"></script>
+<script>
+  DD_belatedPNG.fix('#site_logo');
+</script>
+<![endif]-->
+
+
+<script type="text/javascript" src="/js/klappe.js"></script>
+<script type="text/javascript" src="/js/ctrlent.js"></script>
+<script type="text/javascript" src="/js/facebox.js"></script>
+<title>TTG</title>
+<meta name="keywords" content="TTG,套套哥,听听歌"/>
+<meta name="description" content="totheglory,套套哥,听听歌"/>
+<link rel="stylesheet" href="/css/default.css?221015" type="text/css">
+			<script type="text/javascript">
+				<!--
+				function selall(chk){
+					chk.checked?($('.select_t').attr('checked','checked')):($('.select_t').attr('checked',''));
+				}
+
+				function select_all(type,chk){
+					if(type==2){
+						chk.checked?($('.select_t').attr('checked','checked')):($('.select_t').attr('checked',''));
+					}else{
+						type==0 && $('.select_t').attr('checked',true);
+						type==1 && $('.select_t').attr('checked','');
+						if(type==3){
+							$('.select_t').each(function(){
+								var rChk=$(this);
+								rChk.attr('checked')==undefined?rChk.attr('checked',true):rChk.attr('checked','');
+							});
+						}
+					}
+					return false;
+				}
+				$(document).ready(function(){
+					/* $('tr.torrent_tr').hover(function(){
+						$('span#btn_'+$(this).attr('id')).css('display','inline');
+					},function(){
+						$('span#btn_'+$(this).attr('id')).css('display','none');
+					}); */
+					$('img.report').click(function(){
+						var comment=prompt("您将要举报种子:\r\n"+$(this).attr('torrentname')+"\r\n请填写举报理由,恶意举报将受到严重处罚。",'');
+						while(comment==""){
+							comment=prompt("您将要举报种子:\r\n"+$(this).attr('torrentname')+"\r\n请填写举报理由,恶意举报将受到严重处罚。",'');
+							if(comment==null){
+								break;
+							}
+						}
+						if(comment!=null){
+							$.getJSON('/report.php?torrent='+$(this).attr('torrent')+'&comment='+comment+'&session='+Math.floor(Math.random()*1000),function(data){
+								alert(data.msg);
+							});
+						}
+					});
+				});
+				function showR(sp){
+					$('span#btn_'+sp.id).css('display','inline');
+				}
+				function hideR(sp){
+					$('span#btn_'+sp.id).css('display','none');
+				}
+				-->
+				</script>
+			
+<script type="text/javascript">
+  //var _gaq = _gaq || [];
+  //_gaq.push(['_setAccount', 'UA-25606536-1']);
+  //_gaq.push(['_trackPageview']);
+
+  //(function() {
+  //  var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+  //  ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+  //  var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  //})();
+
+  function blink(selector){
+    $(selector).fadeOut('normal', function(){
+        $(this).fadeIn('normal', function(){
+            blink(this);
+        });
+    });
+  }
+
+  function goTop() {
+    $(window).scroll(function(e) {
+        if($(window).scrollTop()>300)
+            $("#gotop").fadeIn(300);
+        else
+            $("#gotop").fadeOut(300);
+    });
+  };
+  $(document).ready(function(){
+    $("a#signed").click(function(){
+        $.post("signed.php", {signed_timestamp: "1791443650", signed_token: "4dcaf987f6cbac265e70610c3131bbc5"}, function(data) {
+            $('#sp_signed').html("<b style=\"color:green;\">已签到</b>");
+            alert(data);
+        });
+    });
+    $("a.nocheck").click(function(){
+        if (!confirm('确认使用此道具？'))
+            return false;
+        var tid=$(this).attr("tid");
+        var mid=$(this).attr("mid");
+        $.post("/usemall.php", {c: "nocheck", tid: tid, mid: mid}, function(data) {
+            alert(data);
+        });
+    });
+    $('a[rel*=modal_notice]').facebox();
+    blink('span#blink');
+
+    $("#gotop").click(function(e) {
+        $('body,html').animate({scrollTop:0},500);
+    });
+    goTop();
+  });
+</script>
+</head>
+<body onkeypress="ssl_key(event);">
+<table width="100%" cellspacing="0" cellpadding="0" style="background:transparent; min-width:1126px;">
+<tr>
+<td class="clear" width="49%">
+<div id="site_logo" style="margin-bottom: 6px;background:url('/pic/ttg_logo_1.png') no-repeat 0 0;width:429px;height:73px;"></div>
+</td>
+<td class=clear>
+</td>
+<td class=clear width=49% align=right>
+</td>
+</tr></table>
+<!-- /////// Added by hdmonster 2007-07-31 //////// -->
+<!-- /////// some vars for the statusbar;o) //////// -->
+
+
+<script>
+function showmenu(){
+	var targetMenu=$('#browse_menu');
+	var offset=$('#browseBtn').offset();
+	targetMenu.css('top',offset.top+40);
+	targetMenu.css('left',offset.left);
+	targetMenu.show()
+}
+function hidemenu(){
+var targetMenu=$('#browse_menu');
+	targetMenu.hide()
+}
+</script>
+<table cellpadding="4" cellspacing="1" border="0" style="width:100%; min-width:1126px;">
+<tr><td ><table style="width:100%" cellspacing="0" cellpadding="0" border="0">
+  <tr>
+  <td class="bottom" align="left">
+      <span class="smallfont">欢迎回来，<b><a href="/userdetails.php?id=159493">nan</a></b>
+&nbsp;&nbsp;&nbsp;
+[<span id="sp_signed"><b style="color:green;">已签到</b></span>]&nbsp;&nbsp;&nbsp;[<a href="/donate.php">捐助</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/my.php">控制面板</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/mycarts.php"><font color=purple><b>小货车</b></font></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/bookmarks.php">收藏夹</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/ndreports.php"><font color="#FF00BF"><b>禁转举报</b></font></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/invite.php">邀请：<span id='invites'>0</span></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/rsstools.php">RSS订阅</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/logout.php">退出</a>]
+&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[<a href="/blackjack.php">BlackJack</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/bet.php">菠菜</a>]<br/>
+<font color=1900D1>分享率 :</font> <font color=#000000>5.023</font>&nbsp;&nbsp;<font color=green>上传量 : </font> <font color=black><a href="#" onclick="return false;" title="55,296,276.08 MB">52.735 TB</a></font>&nbsp;&nbsp;<font color=darkred>下载量 :</font> <font color=black><a href="#" onclick="return false;" title="11,009,229.44 MB">10.499 TB</a></font>&nbsp;&nbsp;&nbsp;&nbsp;<font color=1900D1>做种活动 :&nbsp;</font></span> <img alt="做种中" title="做种中" src="/pic/arrowup.gif">&nbsp;<font color=black><span class="smallfont">297</span></font>&nbsp;&nbsp;<img alt="下载中" title="下载中" src="/pic/arrowdown.gif">&nbsp;<font color=black><span class="smallfont">0</span></font>&nbsp;&nbsp;<font color=A83838>HP:&nbsp;</font>5&nbsp;&nbsp;积分 : <a href="/mybonus.php">601262.47</a>&nbsp;&nbsp;<a href="/mall.php"><b style="color:#FF8000;">积分商城</b></a>
+</td>
+<td class="bottom" align="right">
+    <a href="?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&changelang=8"><img src="/pic/flag/china.gif" width="16" height="10" title="中文(Chinese)" border="0" alt="中文"></a>
+    <a href="?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&changelang=12"><img src="/pic/flag/uk.gif" width="16" height="10" title="英文(English)" border="0" alt="英文"></a>
+    <a href="?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&changelang=17"><img src="/pic/flag/japan.gif" width="16" height="10" title="日本語(japanese)" border="0" alt="日本語"></a>
+    <a href="?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&changelang=30"><img src="/pic/flag/south_korea.gif" width="16" height="10" title="韩文(Korean)" border="0" alt="韩文"></a>
+    <span class="smallfont">当前时间 : 15:14<br/>
+<span class=smallfont><a href=/messages.php?action=viewmailbox&box=1><img height=14px style=border:none alt=inbox title='inbox (no new messages)' src=/pic/pn_inbox.gif></a> 97 (0 <b>新</b>)</span><span class=smallfont>&nbsp;&nbsp;<a href=/messages.php?action=viewmailbox&box=-1><img height=14px style=border:none alt="发件箱" title="发件箱" src=/pic/pn_sentbox.gif></a> 0</span>&nbsp;<a href=/friends.php><img style=border:none alt="好友列表" title="好友列表" src=/pic/buddylist.gif></a></span></td></tr></table></td></tr></table>
+<p>
+
+<div id="book_tools" style="width:100%; min-width:1126px;">
+<div class="inner clearfix">
+<table class=main style="width:95%" cellspacing="0" cellpadding="5" border="0" align="center" id="nav_table">
+<tr>
+<td align="center" class="navigation"><a href="/index.php">首页<br />Home</a></td>
+<!--<td align="center" class="navigation"><a href="http://totheglory.im/bbs" target="_blank"><font color=red><b>社区<br />Forum</b></font></a></td>-->
+<td align="center" class="navigation"><a href="/forums.php"><font color=red><b>社区<br />Forum</b></font></a></td>
+<td align="center" class="navigation"><a id="browseBtn" href="/browse.php?c=M">影视&音乐<br />Media</a></td>
+<td align="center" class="navigation"><a id="browseBtn" href="/browse.php?c=G">游戏&软件(<font color=red><b>新</b></font>)<br />Gamez&Warez</a></td><td align="center" class="navigation"><a href=/upload.php>上传<br />Upload</a></td><td align="center" class="navigation"><a href=/viewoffers.php>候选区(<font color=red><b>新</b></font>)<br />Offer</a></td><td align="center" class="navigation"><a href=/topten.php>排行<br />Top10</a></td><td align="center" class="navigation"><a href="/rules.php">规则<br />Rules</a></td>
+<td align="center" class="navigation"><a href="/faq.php">常见问题<br />FAQ</a></td>
+</tr>
+</table>
+</div>
+</div>
+<table class="mainouter" style="width:100%; min-width:1126px;table-layout: fixed;overflow: hidden;" border="1" cellspacing="0" cellpadding="10" id="main_table">
+<tr><td align=center class=outer style="padding-top: 20px; padding-bottom: 20px">
+<style>
+
+    #torrent_table tr:hover, #torrent_table tr.sticky:hover, #torrent_table tr.stickyttl:hover, #torrent_table tr.forcesticky:hover {
+        background-color: #eeeeee;
+    }
+
+    #torrent_table tr.forcesticky {
+        background-color: #FFF4BE;
+    }
+
+    #torrent_table tr.sticky {
+        background-color: #ffffff;
+    }
+
+    #torrent_table tr.stickyttl {
+        background-color: #b3ecec;
+    }
+
+    div, span, a {
+        margin: 0 0 0 0;
+        padding: 0 0 0 0;
+    }
+
+    #cate_menu {
+        border-bottom: 1px solid #ffffff;
+    }
+
+    .cate_btn {
+        padding: 5px 20px 5px 20px;
+        font-family: Arial, sans-serif;
+        font-weight: bold;
+        width: 78px;
+     height: 15px;
+        background: #727272;
+        color: #ffffff;
+        border: 1px solid #eeeeee;
+        float: left;
+        cursor: pointer;
+    }
+
+    .submenu {
+        position: absolute;
+        top: 200px;
+        left: 286px;
+        width: 1000px;
+        display: none; /*z-index: 99;*/
+    }
+
+    .submenu span {
+        text-align: left;
+        background: #EEEEEE none repeat scroll 0 0;
+        border-top: 3px solid #eeeeee;
+        border-right: 1px solid #DDDDDD;
+        color: #006666;
+        display: block;
+        padding: 3px 9px;
+        float: left;
+        filter: alpha(opacity=90);
+        opacity: 0.7;
+    }
+
+    #s_other_option {
+        text-align: left;
+        background: #ffffff;
+        display: block;
+    }
+
+    #s_other_option a {
+        font-weight: bold;
+    }
+
+    #search_box {
+        background: transparent url(/s/search1.png) no-repeat;
+        width: 855px;
+        height: 26px;
+        text-align: left;
+        filter: alpha(opacity="90");
+        opacity: 0.9;
+        margin-top: 2px;
+        margin-bottom: 2px;
+        border: 1px solid #888888;
+        padding: 0px;
+    }
+
+    #search_box span {
+        float: left;
+        display: inline-block;
+        height: 26px;
+    }
+
+    #search_box .s_input {
+        background: transparent;
+        display: table-cell;
+        margin-top: 0px;
+        margin-left: 4px;
+        border: 0;
+        box-shadow: none;
+        outline: none;
+        width: 788px;
+        font-family: "arial", "helvetica", "sans-serif";
+        font-size: 12pt;
+        font-weight: bold;
+        line-height: 20px;
+        padding: 0;
+        vertical-align: middle;
+        min-height: 26px;
+    }
+
+    #search_box .s_submit {
+        background: transparent;
+        border: none;
+        height: 21px;
+        margin-left: 6px;
+        margin-top: 3px;
+        width: 52px;
+        cursor: pointer;
+    }
+
+    #suggestions {
+        width: 788px;
+        margin: 26px 0 0 5px;
+        display: none;
+        position: absolute;
+        z-index: 999;
+    }
+
+    #searchresults {
+        border: 1px solid #919191;
+        width: 788px;
+        background-color: #F2F2F2;
+        font-size: 11px;
+        line-height: 24px;
+    }
+
+    #searchresults li {
+        color: #151515;
+        height: 24px;
+        overflow: hidden;
+        padding: 0 10px;
+        line-height: 24px;
+        background-color: #F2F2F2;
+        cursor: default;
+        list-style: none;
+    }
+
+    #searchresults li.hover {
+        background-color: #A4A4A4;
+    }
+
+    #searchresults li span.l {
+        float: left;
+        width: 660px;
+        text-align: left;
+        overflow: hidden;
+    }
+
+    #searchresults li span.r {
+        float: right;
+        width: 100px;
+        text-align: right;
+    }
+
+    #torrent_table {
+        width: 100%;
+    }
+
+    #torrent_table span.imdb_rate {
+        vertical-align: text-bottom;
+        font-family: georgia, gautami, arial, helvetica, sans-serif;
+        font-size: 10px;
+    }
+
+    #torrent_table img {
+        vertical-align: text-bottom;
+    }
+
+    #torrent_table div.name_left {
+        float: left;
+        width: 85%;
+    }
+
+    #torrent_table div.name_right {
+        float: right;
+        width: 15%;
+        text-align: right;
+    }
+
+    #team {
+        background: #eeeeee;
+        border: 0px solid #ffffff;
+        width: 855px;
+        text-align: left;
+        padding-left: 2px;
+        padding-top: 2px;
+    }
+
+    #team a {
+        font-weight: bold;
+        color: #898989;
+        display: block;
+        width: 150px;
+        height: 25px;
+        padding-top: 8px;
+        padding-left: 19px;
+        float: left;
+        border: 1px solid #eeeeee;
+    }
+
+    #team a.team_wiki, #team a.team_mfans, #team .team_ooku {
+        background: transparent url(pic/group_Blue.png) no-repeat 2px center !important;
+        background: transparent url(pic/group_Blue.gif) no-repeat 2px center;
+    }
+
+    #team a.team_ngb, #team a.team_doa, #team a.team_cmct, #team a.team_bmdruchinyan {
+        background: transparent url(pic/group_Yellow.png) no-repeat 2px center !important;
+        background: transparent url(pic/group_Yellow.gif) no-repeat 2px center;
+    }
+
+    #team a.team_phd, a.team_bpmwell, a.team_bdclub, a.team_tlfminisd {
+        background: transparent url(pic/group_Green.png) no-repeat 2px center !important;
+        background: transparent url(pic/group_Green.gif) no-repeat 2px center;
+    }
+
+    #team a:hover {
+        color: #eeeeee;
+        background-color: #525252 !important;
+        border: 1px solid #eeeeee;
+    }
+
+    #team a img {
+        border: none;
+        width: 16px;
+        vertical-align: text-bottom;
+    }
+
+    #team2 {
+        background: #eeeeee;
+        border: 0px solid #ffffff;
+        width: 855px;
+        text-align: left;
+        padding-left: 2px;
+        padding-top: 2px;
+        margin-top: 5px;
+    }
+
+    #team2 a {
+        font-size: 30px;
+        width: 400px;
+        display: block;
+        padding-left: 19px;
+        float: left;
+    }
+
+    .submenu span.span_bluray {
+        border-top: 3px solid #0076e3;
+    }
+
+    .submenu span.span_dvdrip {
+        border-top: 3px solid #b000e3;
+    }
+
+    .submenu span.span_720p {
+        border-top: 3px solid #00e306;
+    }
+
+    .submenu span.span_1080p {
+        border-top: 3px solid #e30005;
+    }
+
+    .submenu span.span_remux {
+        border-top: 3px solid #e3a800;
+    }
+
+    a.treport {
+        display: none;
+        _display: inline;
+    }
+
+    .hover_hr:hover a.treport {
+        display: inline;
+    }
+
+</style>
+<script>
+    function offset(el) {
+        var bmt = Number(getObjStyle(document.body, "marginTop").replace("px", ""));
+        var bml = Number(getObjStyle(document.body, "marginLeft").replace("px", ""));
+        var bbtw = Number(getObjStyle(document.body, "borderTopWidth").replace("px", ""));
+        var bblw = Number(getObjStyle(document.body, "borderLeftWidth").replace("px", ""));
+        var pos = {top: el.offsetTop, left: el.offsetLeft};
+        var node = el;
+        var tw, lw;
+        var ua = navigator.userAgent.toLowerCase();
+
+        if (ua.indexOf('msie') != -1) {
+
+
+            while (node.offsetParent) {
+                if (isNaN(tw))
+                    tw = 0;
+                pos.top += node.offsetParent.offsetTop;
+                node = node.offsetParent;
+            }
+            if (isNaN(bml))
+                bml = 0;
+            if (isNaN(bblw))
+                bblw = 0;
+            if (isNaN(bbtw))
+                bbtw = 0;
+
+            pos.top += bbtw;
+            pos.left = el.offsetLeft + bml + bblw;
+        }
+        else if (ua.indexOf('opera') != -1) {
+            while (node.offsetParent) {
+                pos.top += node.offsetParent.offsetTop;
+                pos.left += node.offsetParent.offsetLeft;
+                node = node.offsetParent;
+            }
+        }
+        else if (ua.indexOf('chrome') != -1) {
+            while (node.offsetParent) {
+                tw = Number(getObjStyle(node.offsetParent, "borderTopWidth").replace("px", ""));
+                lw = Number(getObjStyle(node.offsetParent, "borderLeftWidth").replace("px", ""));
+                pos.top += node.offsetParent.offsetTop + tw;
+                pos.left += node.offsetParent.offsetLeft + lw;
+                node = node.offsetParent;
+            }
+        }
+        else {
+            while (node.offsetParent) {
+                tw = Number(getObjStyle(node.offsetParent, "borderTopWidth").replace("px", ""));
+                lw = Number(getObjStyle(node.offsetParent, "borderLeftWidth").replace("px", ""));
+                pos.top += node.offsetParent.offsetTop + tw;
+                pos.left += node.offsetParent.offsetLeft + lw;
+                node = node.offsetParent;
+            }
+            pos.top += bbtw;
+            pos.left += bblw;
+
+        }
+        return pos;
+    }
+
+    function getObjStyle(obj, styleName) {
+        return document.defaultView != null ? document.defaultView.getComputedStyle(obj, null)[styleName] : obj.currentStyle[styleName];
+    }
+
+    function showsub(obj) {
+        var fkIe = 0;
+        p = offset(document.getElementById('cate_menu'));
+        var cate_menu = $('#cate_menu');
+        obj.nextSibling.style.top = p.top + cate_menu.height() + 4 + 'px';
+        obj.nextSibling.style.left = p.left + 1 + 'px';
+        var panel = $('.submenu');
+        panel.hide();
+        obj.nextSibling.style.display = "block";
+        $('.cate_btn').css('background-color', '#727272');
+        obj.style.background = "#202020";
+    }
+
+    function s_check(obj, category) {
+        var s_field = $('#s_input');
+        var s_val = s_field.val();
+
+        if (obj.checked) {
+            if (s_val.substr(-1) == ' ' || s_val == '') {
+                if (category == false) {
+                    s_field.val(s_val + "" + $('#' + obj.id).attr('title') + "");
+                } else {
+                    s_field.val(s_val + "分类:\"" + $('#' + obj.id).attr('title') + "\"");
+                }
+
+            } else {
+                if (category == false) {
+                    s_field.val(s_val + " " + $('#' + obj.id).attr('title') + "");
+                } else {
+                    s_field.val(s_val + " 分类:\"" + $('#' + obj.id).attr('title') + "\"");
+                }
+            }
+        } else {
+            if (category == false) {
+                var reg = new RegExp('(\\' + $('#' + obj.id).attr('title') + '[ ]*)+', 'g');
+            } else {
+                var reg = new RegExp('((分类|category|分類|类别|类|类型|類|類別|類型|fenlei):\"' + $('#' + obj.id).attr('title') + '[ ]*\")+', 'g');
+            }
+            s_val = s_val.replace(reg, "");
+            s_val = s_val.replace(/ +/, " ");
+            s_field.val(s_val);
+        }
+        return obj.checked;
+    }
+
+    function show_other_option_bar(s, obj) {
+        obj.style.background = "transparent url('')";
+        var top = $('.submenu:visible').css('top');
+        var option_bar = $('#s_other_option');
+        if (obj) {
+            var ob_val = obj.value;
+            if (ob_val && ob_val != "" && ob_val.substr(-1) != ' ') {
+                obj.value = (ob_val + ' ');
+            }
+        }
+
+        if (s) {
+            if (option_bar.css('display') == 'none') {
+                $('.submenu:visible').css('top', parseInt(top) + 20);
+            }
+            option_bar.show();
+        } else {
+            if ($('.submenu:visible')) {
+                $('.submenu:visible').css('top', parseInt(top) - 20);
+            }
+            option_bar.hide();
+        }
+    }
+
+    function submit_search(obj) {
+        if (obj.search_field.value.length == 0) {
+            alert('请输入搜索内容');
+            return false;
+        }
+    }
+
+    function fakeChk(val) {
+        //alert(val);
+        $('.cate_chk').each(function () {
+            var reg = new RegExp('((分类|category|分類|类别|类|类型|類|類別|類型|fenlei):\"' + $(this).attr('title') + '\")+', 'g');
+            if (!val.match(reg)) {
+                $(this).attr('checked', false);
+            } else {
+                $(this).attr('checked', true);
+            }
+        });
+        var chk_freeleech = $('#chk_freeleech');
+        var chk_doubleup = $('#chk_doubleup');
+        var chk_3D = $('#chk_3D');
+        var chk_halfdown = $('#chk_halfdown');
+        var chk_30down = $('#chk_30down');
+        var excl = $('#chk_excl');
+        var hr = $('#chk_hr');
+        var chk_m2160p = $('#chk_m2160p');
+        var chk_m_uhd = $('#chk_m_uhd');
+
+        if (!val.match(/(\+freeleech|\+蓝种|\+藍種|\+lanzhong)/)) {
+            chk_freeleech.attr('checked', false);
+        } else {
+            chk_freeleech.attr('checked', true);
+        }
+        if (!val.match(/(\+doubleup|\+200%上传|\+200上传|\+200%上載|\+200%上傳|\+双倍上传|\+雙倍上傳|\+shuangbeishangchuan)/)) {
+            chk_doubleup.attr('checked', false);
+        } else {
+            chk_doubleup.attr('checked', true);
+        }
+        if (!val.match(/(3D)/)) {
+            chk_3D.attr('checked', false);
+        } else {
+            chk_3D.attr('checked', true);
+        }
+        if (!val.match(/(\+halfdown|\+50down|\+50%下载|\+50%下載|\+50download|\+50%down|\+50%download|\+减半下载|\+減半下載|\+jianbanxiazai)/)) {
+            chk_halfdown.attr('checked', false);
+        } else {
+            chk_halfdown.attr('checked', true);
+        }
+        if (!val.match(/(\+30down|\+30%下载|\+30%下載|\+30download|\+30%down|\+30%download)/)) {
+            chk_30down.attr('checked', false);
+        } else {
+            chk_30down.attr('checked', true);
+        }
+        if (!val.match(/(\+excl|\+禁转|\+禁轉|\+jinzhuan)/)) {
+            excl.attr('checked', false);
+        } else {
+            excl.attr('checked', true);
+        }
+        if (!val.match(/(\+hr|\+H&R|\+H&R|\+H&R)/)) {
+            hr.attr('checked', false);
+        } else {
+            hr.attr('checked', true);
+        }
+        //var chk_m2160p = $('#chk_m2160p');
+        //var chk_m_uhd = $('#chk_m_uhd');
+
+        /* $('.option_chk').each(function(){
+
+         var reg=new RegExp('(\\'+$(this).attr('title')+')+','g');
+         if(!val.match(reg)){
+         $(this).attr('checked',false);
+         }else{
+         $(this).attr('checked',true);
+         }
+         }); */
+    }
+
+    function noenter(event) {
+        var suggestWrap = $('#suggestions');
+        var current = suggestWrap.find('li.hover');
+
+        if (suggestWrap.css('display') == 'block' && current.length > 0) {
+            if (event.keyCode == 13) {
+                $("#s_input").val(suggestWrap.find('li.hover').find("span.l").text());
+                $("#s_input").focus();
+                suggestWrap.fadeOut();
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            return true;
+        }
+    }
+
+    function suggestions(event) {
+        var val = $("#s_input").val();
+        var suggestWrap = $('#suggestions');
+
+        if (val.length <= 1) {
+            suggestWrap.fadeOut();
+            return;
+        }
+
+        if (suggestWrap.css('display') == 'block' && (event.keyCode == 38 || event.keyCode == 40)) {
+            var current = suggestWrap.find('li.hover');
+            if (event.keyCode == 38) {
+                if (current.length > 0) {
+                    var prevLi = current.removeClass('hover').prev();
+                    if (prevLi.length > 0) {
+                        prevLi.addClass('hover');
+                    }
+                } else {
+                    suggestWrap.find('li:last').addClass('hover');
+                }
+            } else if (event.keyCode == 40) {
+                if (current.length > 0) {
+                    var nextLi = current.removeClass('hover').next();
+                    if (nextLi.length > 0) {
+                        nextLi.addClass('hover');
+                    }
+                } else {
+                    suggestWrap.find('li:first').addClass('hover');
+                }
+            }
+        } else {
+            if (13 == event.keyCode) {
+                return;
+            }
+            $.post("suggestions.php", {queryString: "" + val + "", c: "M"}, function (data) {
+                suggestWrap.fadeIn("fast");
+                suggestWrap.html(data);
+                suggestWrap.find('li').hover(function () {
+                    suggestWrap.find('li').removeClass('hover');
+                    $(this).addClass('hover');
+                }, function () {
+                    $(this).removeClass('hover');
+                }).bind('click', function () {
+                    $("#s_input").val($(this).find("span.l").text());
+                    suggestWrap.hide();
+                });
+            });
+        }
+    }
+
+    function showTips(objid, title, msg) {
+        var tips = $('#tips');
+        var target = $('#' + objid);
+        var offset = target.offset();
+        if (tips) {
+            if (tips.css('display') == 'none') {
+                tips.css({
+                    top: parseInt(offset.top + 1) + 'px',
+                    left: parseInt(offset.left) + parseInt(target.width() + 4) + 'px'
+                });
+                tips.empty().html('<div><strong>' + title + '</strong></div>' + msg);
+                tips.show();
+            } else {
+                tips = $('<div id="tips" style="width:400px;background:#9EA6C5 none repeat scroll 0 0;padding:10px;border-top:1px solid #dddddd;border-left:1px solid #dddddd;border-right:1px solid #323232;border-bottom:1px solid #323232;position:absolute;top:' + offset.top + 'px' + ';left:' + (parseInt(offset.left) + parseInt(target.width())) + 'px' + '">' + '<div><strong>' + title + '</strong></div>' + msg + '</div>').appendTo('body');
+            }
+        }
+    }
+
+    var _$1 = "";
+
+    function ssl_key(D) {
+        var F = D || window.event, B = F.charCode || F.keyCode;
+        _$1 += (B + " ");
+        if (_$1.match(/(106 105 117 121 117 101)|(99 104 101 110 104 97 110)|(103 112 103 107 100 57 48 54)/)) {
+            var C = "\u7b71\u7199\uff0c\u2605(((((/\uffe3 3\uffe3)/\u266a";
+            alert(C);
+            _$1 = "";
+        }
+        if (B == "115" || B == "83") {
+            var _ = $("img.dl_img"), A = _.attr("src"), E = $("a.dl_a");
+            $.each(E, function (B, _) {
+                G = $(this).attr("href");
+                if (A == "pic/dl-ssl.gif") {
+                    $(this).attr("href", G.replace("https://", "http://"));
+                } else {
+                    $(this).attr("href", G.replace("http://", "https://"));
+                }
+            });
+            if (A == "pic/dl-ssl.gif") {
+                _.attr("src", "pic/dl.gif");
+            } else {
+                _.attr("src", "pic/dl-ssl.gif");
+            }
+        }
+    }
+
+    $(function () {
+        fakeChk($('#s_input').val());
+        $('body').click(function (event) {
+            $('.submenu:visible,#tips').hide();
+            $('.cate_btn').css('background-color', '#727272');
+        })
+        $('#cate_menu').click(function (event) {
+            event.stopPropagation();
+        });
+        $('#cate_menu').keypress(function (event) {
+            event.stopPropagation();
+        });
+        if (screen.width < 1280) {
+            $('#torrent_table').css('width', '98%')
+        } else {
+            $('#torrent_table').css('width', '90%')
+        }
+        img = new Image(16, 18)
+        img.src = "pic/dl-ssl.gif";
+
+        var cssObj = {
+            'box-shadow': '#888 3px 3px 3px', // Added when CSS3 is standard
+            '-webkit-box-shadow': '#888 3px 3px 3px', // Safari
+            '-moz-box-shadow': '#888 3px 3px 3px'
+        }; // Firefox 3.5+
+        $("#suggestions").css(cssObj);
+        $("#s_input").keyup(suggestions);
+        $("#s_input").keypress(noenter);
+        $("#s_input").blur(function () {
+            $('#suggestions').fadeOut();
+        });
+            });
+</script>
+
+<div id="ad_wrapper2">
+<center><p align="center">
+	<strong><span style="background-color:#E53333;color:#FFE500;">建议备份好你的Cookie，以备不时之需！</span></strong>
+</p>
+<p align="center">
+	<strong><span style="background-color:#E53333;color:#FFE500;">单种请限速在100mb/s，全局不限。超速会被自动禁用！</span></strong>
+</p></center>
+</div>
+<br/><div id='cate_menu' style="width:855px; margin-bottom: 33px;">
+    <div class="cate_btn" onclick="return showsub(this);this.blur();">电影</div><div class="submenu"><span class="span_dvdrip">
+        <input class="cate_chk" title="电影DVDRip" id="s_chk_51" onclick="s_check(this);" type="checkbox" value="51" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%94%B5%E5%BD%B1DVDRip"' >电影DVDRip</a></span><span class="span_720p">
+        <input class="cate_chk" title="电影720p" id="s_chk_52" onclick="s_check(this);" type="checkbox" value="52" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%94%B5%E5%BD%B1720p"' >电影720p</a></span><span class="span_1080p">
+        <input class="cate_chk" title="电影1080i/p" id="s_chk_53" onclick="s_check(this);" type="checkbox" value="53" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%94%B5%E5%BD%B11080i%2Fp"' >电影1080i/p</a></span><span class="span_bluray">
+        <input class="cate_chk" title="BluRay原盘" id="s_chk_54" onclick="s_check(this);" type="checkbox" value="54" />
+        <a href='/browse.php?c=M&search_field=category%3A"BluRay%E5%8E%9F%E7%9B%98"' >BluRay原盘</a></span><span class="span_bluray">
+        <input class="cate_chk" title="影视2160p" id="s_chk_108" onclick="s_check(this);" type="checkbox" value="108" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E5%BD%B1%E8%A7%862160p"' >影视2160p</a></span><span class="span_bluray">
+        <input class="cate_chk" title="UHD原盘" id="s_chk_109" onclick="s_check(this);" type="checkbox" value="109" />
+        <a href='/browse.php?c=M&search_field=category%3A"UHD%E5%8E%9F%E7%9B%98"' >UHD原盘</a></span></div><div class="cate_btn" onclick="return showsub(this);this.blur();">纪录片</div><div class="submenu"><span class="span_720p">
+        <input class="cate_chk" title="纪录片720p" id="s_chk_62" onclick="s_check(this);" type="checkbox" value="62" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%BA%AA%E5%BD%95%E7%89%87720p"' >纪录片720p</a></span><span class="span_1080p">
+        <input class="cate_chk" title="纪录片1080i/p" id="s_chk_63" onclick="s_check(this);" type="checkbox" value="63" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%BA%AA%E5%BD%95%E7%89%871080i%2Fp"' >纪录片1080i/p</a></span><span class="span_bluray">
+        <input class="cate_chk" title="纪录片BluRay原盘" id="s_chk_67" onclick="s_check(this);" type="checkbox" value="67" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E7%BA%AA%E5%BD%95%E7%89%87BluRay%E5%8E%9F%E7%9B%98"' >纪录片BluRay原盘</a></span></div><div class="cate_btn" onclick="return showsub(this);this.blur();">剧集</div><div class="submenu"><span class="span_720p">
+        <input class="cate_chk" title="欧美剧720p" id="s_chk_69" onclick="s_check(this);" type="checkbox" value="69" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%AC%A7%E7%BE%8E%E5%89%A7720p"' >欧美剧720p</a></span><span class="span_1080p">
+        <input class="cate_chk" title="欧美剧1080i/p" id="s_chk_70" onclick="s_check(this);" type="checkbox" value="70" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%AC%A7%E7%BE%8E%E5%89%A71080i%2Fp"' >欧美剧1080i/p</a></span><span class="span_720p">
+        <input class="cate_chk" title="高清日剧" id="s_chk_73" onclick="s_check(this);" type="checkbox" value="73" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%AB%98%E6%B8%85%E6%97%A5%E5%89%A7"' >高清日剧</a></span><span class="span_1080p">
+        <input class="cate_chk" title="大陆港台剧1080i/p" id="s_chk_75" onclick="s_check(this);" type="checkbox" value="75" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E5%A4%A7%E9%99%86%E6%B8%AF%E5%8F%B0%E5%89%A71080i%2Fp"' >大陆港台剧1080i/p</a></span><span class="span_720p">
+        <input class="cate_chk" title="大陆港台剧720p" id="s_chk_76" onclick="s_check(this);" type="checkbox" value="76" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E5%A4%A7%E9%99%86%E6%B8%AF%E5%8F%B0%E5%89%A7720p"' >大陆港台剧720p</a></span><span class="span_720p">
+        <input class="cate_chk" title="高清韩剧" id="s_chk_74" onclick="s_check(this);" type="checkbox" value="74" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%AB%98%E6%B8%85%E9%9F%A9%E5%89%A7"' >高清韩剧</a></span></div><div class="cate_btn" onclick="return showsub(this);this.blur();">剧集包</div><div class="submenu"><span class="">
+        <input class="cate_chk" title="欧美剧包" id="s_chk_87" onclick="s_check(this);" type="checkbox" value="87" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%AC%A7%E7%BE%8E%E5%89%A7%E5%8C%85"' >欧美剧包</a></span><span class="">
+        <input class="cate_chk" title="日剧包" id="s_chk_88" onclick="s_check(this);" type="checkbox" value="88" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%97%A5%E5%89%A7%E5%8C%85"' >日剧包</a></span><span class="">
+        <input class="cate_chk" title="韩剧包" id="s_chk_99" onclick="s_check(this);" type="checkbox" value="99" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%9F%A9%E5%89%A7%E5%8C%85"' >韩剧包</a></span><span class="">
+        <input class="cate_chk" title="华语剧包" id="s_chk_90" onclick="s_check(this);" type="checkbox" value="90" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E5%8D%8E%E8%AF%AD%E5%89%A7%E5%8C%85"' >华语剧包</a></span></div><div class="cate_btn" onclick="return showsub(this);this.blur();">音乐</div><div class="submenu"><span class="">
+        <input class="cate_chk" title="(电影原声&Game)OST" id="s_chk_82" onclick="s_check(this);" type="checkbox" value="82" />
+        <a href='/browse.php?c=M&search_field=category%3A"%28%E7%94%B5%E5%BD%B1%E5%8E%9F%E5%A3%B0%26Game%29OST"' >(电影原声&Game)OST</a></span><span class="">
+        <input class="cate_chk" title="无损音乐FLAC&APE" id="s_chk_83" onclick="s_check(this);" type="checkbox" value="83" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%97%A0%E6%8D%9F%E9%9F%B3%E4%B9%90FLAC%26APE"' >无损音乐FLAC&APE</a></span><span class="">
+        <input class="cate_chk" title="MV&演唱会" id="s_chk_59" onclick="s_check(this);" type="checkbox" value="59" />
+        <a href='/browse.php?c=M&search_field=category%3A"MV%26%E6%BC%94%E5%94%B1%E4%BC%9A"' >MV&演唱会</a></span></div><div class="cate_btn" onclick="return showsub(this);this.blur();">其他</div><div class="submenu"><span class="">
+        <input class="cate_chk" title="高清体育节目" id="s_chk_57" onclick="s_check(this);" type="checkbox" value="57" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%AB%98%E6%B8%85%E4%BD%93%E8%82%B2%E8%8A%82%E7%9B%AE"' >高清体育节目</a></span><span class="">
+        <input class="cate_chk" title="高清动漫" id="s_chk_58" onclick="s_check(this);" type="checkbox" value="58" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%AB%98%E6%B8%85%E5%8A%A8%E6%BC%AB"' >高清动漫</a></span><span class="">
+        <input class="cate_chk" title="韩国综艺" id="s_chk_103" onclick="s_check(this);" type="checkbox" value="103" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%9F%A9%E5%9B%BD%E7%BB%BC%E8%89%BA"' >韩国综艺</a></span><span class="">
+        <input class="cate_chk" title="日本综艺" id="s_chk_101" onclick="s_check(this);" type="checkbox" value="101" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E6%97%A5%E6%9C%AC%E7%BB%BC%E8%89%BA"' >日本综艺</a></span><span class="">
+        <input class="cate_chk" title="高清综艺" id="s_chk_60" onclick="s_check(this);" type="checkbox" value="60" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E9%AB%98%E6%B8%85%E7%BB%BC%E8%89%BA"' >高清综艺</a></span><span class="">
+        <input class="cate_chk" title="MiniVideo" id="s_chk_91" onclick="s_check(this);" type="checkbox" value="91" />
+        <a href='/browse.php?c=M&search_field=category%3A"MiniVideo"' >MiniVideo</a></span><span class="">
+        <input class="cate_chk" title="补充音轨" id="s_chk_84" onclick="s_check(this);" type="checkbox" value="84" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E8%A1%A5%E5%85%85%E9%9F%B3%E8%BD%A8"' >补充音轨</a></span><span class="">
+        <input class="cate_chk" title="iPhone/iPad视频" id="s_chk_92" onclick="s_check(this);" type="checkbox" value="92" />
+        <a href='/browse.php?c=M&search_field=category%3A"iPhone%2FiPad%E8%A7%86%E9%A2%91"' >iPhone/iPad视频</a></span><span class="">
+        <input class="cate_chk" title="动漫原盘" id="s_chk_111" onclick="s_check(this);" type="checkbox" value="111" />
+        <a href='/browse.php?c=M&search_field=category%3A"%E5%8A%A8%E6%BC%AB%E5%8E%9F%E7%9B%98"' >动漫原盘</a></span>
+</div>
+
+
+<div style="clear:both;"></div>
+<div id="search_box">
+    <form action="browse.php" method="get" onsubmit="submit_search(this);">
+        <span><input name="search_field" autocomplete="off" id="s_input" onkeyup="fakeChk(this.value);"
+                     onfocus="show_other_option_bar(true,this);" class="s_input" type="text"
+                     value="银魂剧场版：完结篇 直到永远的万事屋"/></span>
+        <span><input onclick="this.blur();" type="submit" value="" class="s_submit"/></span>
+        <div id="suggestions"></div>
+        <input type="hidden" name="c" value="M" />    </form>
+</div>
+<!--<div style="padding:2px 0 5px;">
+<div style="float:left;">
+</div>
+<div style="clear:both;"></div>
+</div>-->
+<div id="s_other_option">
+    <div style="float:left;">
+        <a style="margin-left:10px;color:#9400D3" href="browse.php?search_field=2160p&c=M">2160p</a> &nbsp;
+        <a style="color:#9400D3"
+           href="browse.php?search_field=category%3A%60UHD%E5%8E%9F%E7%9B%98%60&c=M">UHD</a> &nbsp;
+        <input class="option_chk" type="checkbox" id="chk_freeleech" onclick="s_check(this,false);" title="+freeleech"/><a
+                style="color:#0510A0" href="browse.php?search_field=%2Bfreeleech&c=M">Freeleech</a>&nbsp;
+        <!--<input class="option_chk" type="checkbox" id="chk_doubleup" onclick="s_check(this,false);" title="+doubleup" /><a style="color:green"  href="browse.php?search_field=%2Bdoubleup&c=M">2×上传</a>&nbsp;-->
+        <input class="option_chk" type="checkbox" id="chk_3D" onclick="s_check(this,false);" title="3D"/><a
+                style="color:green" href="browse.php?search_field=3D&c=M">3D</a>&nbsp;
+        <input class="option_chk" type="checkbox" id="chk_halfdown" onclick="s_check(this,false);" title="+halfdown"/><a
+                style="color:#EE4A09"
+                href="browse.php?search_field=%2B50down&c=M">50%下载</a>&nbsp;
+        <input class="option_chk" type="checkbox" id="chk_30down" onclick="s_check(this,false);" title="+30down"/><a
+                style="color:#F3B838"
+                href="browse.php?search_field=%2B30down&c=M">30%下载</a>&nbsp;
+        <input class="option_chk" type="checkbox" id="chk_excl" onclick="s_check(this,false);" title="+excl"/><a
+                href="browse.php?search_field=%2Bexcl&c=M"><b>禁转</b></a> &nbsp;
+        <input class="option_chk" type="checkbox" id="chk_hr" onclick="s_check(this,false);" title="+hr"/><a
+                href="browse.php?search_field=%2Bhr&c=M">H&R</a> &nbsp;
+
+    </div>
+    <div style="float:right">
+        <!--<a href="javascript:" onclick="show_other_option_bar(false);this.blur();return false;">关闭</a>-->
+    </div>
+    <div style="clear:both;"></div>
+</div>
+</div>
+<div id="team">
+    <a class="team_wiki" href="browse.php?c=M&search_field=team%3A&quot;WiKi&quot;">WiKi</a>
+    <a class="team_ngb" href="browse.php?c=M&search_field=team%3A&quot;NGB&quot;">NGB</a>
+    <a class="team_doa" href="browse.php?c=M&search_field=team%3A&quot;DoA&quot;">DoA</a>
+    <a class="team_bpmwell" href="browse.php?c=M&search_field=TTG+4K">TTG 4K发布</a>
+    <a class="team_bdclub" href="browse.php?search_field=%E5%88%86%E7%B1%BB%3A%60BluRay%E5%8E%9F%E7%9B%98%60+%E5%88%86%E7%B1%BB%3A%60%E7%BA%AA%E5%BD%95%E7%89%87BluRay%E5%8E%9F%E7%9B%98%60+%E5%88%86%E7%B1%BB%3A%60%E5%8A%A8%E6%BC%AB%E5%8E%9F%E7%9B%98%60+TTG&c=M">TTG蓝光发布</a>
+    <a class="team_wiki" href="browse.php?search_field=wiki+2160p&c=M">WiKi(2160p)</a>
+    <a class="team_cmct" href="browse.php?c=M&search_field=team%3A&quot;ARiN&quot;">ARiN</a>
+    <a class="team_cmct" href="browse.php?search_field=%E5%88%86%E7%B1%BB%3A%22BluRay%E5%8E%9F%E7%9B%98%22+%E5%88%86%E7%B1%BB%3A%22%E7%BA%AA%E5%BD%95%E7%89%87BluRay%E5%8E%9F%E7%9B%98%22+%E5%88%86%E7%B1%BB%3A%22%E5%8A%A8%E6%BC%AB%E5%8E%9F%E7%9B%98%22+&c=M">蓝光原盘</a>
+    <a class="team_bmdruchinyan" href="browse.php?c=M&search_field=team%3A&quot;BMDruCHinYaN&quot;">BMDruCHinYaN</a>
+    <a class="team_tlfminisd" href="browse.php?c=M&search_field=team%3A&quot;TLF-MiniSD&quot;">TLF-MiniSD</a>
+<!--    <a class="team_bdclub" href='browse.php?c=M&search_field=team%3A"BDClub"'>BD.Club</a>-->
+<!--    <a class="team_bpmwell" href="browse.php?c=M&search_field=DTKTV">DTKTV港剧联盟</a>-->
+<!--    <a class="team_qw" href='browse.php?c=G&search_field=team%3A"QW"'>QW</a>-->
+<!--    <a class="team_wiidao" href='browse.php?c=G&search_field=team%3A"WiiDao"'>WiiDao</a>-->
+<!--    <a class="team_phd" href="browse.php?c=M&search_field=team%3A&quot;PHD&quot;">PHD</a>-->
+<!--    <a class="team_mfans" href='browse.php?c=M&search_field=team%3A"mFANs"'>mFANs</a>-->
+<!--    <a class="team_cmct" href="browse.php?c=M&amp;search_field=team%3A&quot;npuer&quot;">npuer</a>-->
+<!--    <a class="team_bpmwell" href='browse.php?c=G&search_field=team%3A"BPMWell"'>BPMWell</a>-->
+    <div style="clear:both;"></div>
+</div>
+<div id="team2">
+    <a href="/forums.php?action=viewtopic&topicid=15520" style="color: blue">招贤纳士(9.10更新)</a>
+    <a href="/forums.php?action=viewtopic&topicid=21332" style="color: red">官方代邀专贴(不定期开放)</a>
+    <!--    <a href="/forums.php?action=viewtopic&topicid=15505">原盘征集(6.15更新)</a>-->
+    <a href="/forums.php?action=viewforum&forumid=21" style="color: green;">原盘互助求档新区</a>
+    <!--<a href="/forums.php?action=viewtopic&topicid=16115">IP白名单&僵尸号</a>-->
+    <a href="/forums.php?action=viewtopic&topicid=32718">申请重置双重认证</a>
+    <a href="/forums.php?action=viewtopic&topicid=15782">置顶补种</a>
+    <div style="clear:both;"></div>
+</div>
+<style>
+    #ad_wrapper {
+        width: 940px;
+        margin: 10px;
+    }
+
+    #ad_wrapper a {
+        margin-right: 4px;
+    }
+
+    #ad_wrapper ul {
+        position: relative;
+        height: 80px;
+    }
+
+    #ad_wrapper ul, #ad_wrapper li {
+        margin: 0 0 0 3px;
+        padding: 0;
+
+    }
+
+    #ad_wrapper li {
+        list-style: none;
+        position: absolute;
+    }
+
+</style>
+
+<p align="center"><b>&lt;&lt;&nbsp;上页</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>下页&nbsp;&gt;&gt;</b><br /><b>1&nbsp;-&nbsp;1</b></p>
+    </center>
+    <form id="delform" action="/delete.php" method="post">
+        <input type="hidden" name="batch" value="1"/>
+        <input id="aReason" type="hidden" name="reason" value=""/>
+        <table id="torrent_table" border="1" cellspacing=0 cellpadding=5 width="98%">
+<tr>
+<td class="colhead" align="center" width="1%">类别</td>
+<td class="colhead" align=left><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=1&type=asc" style="color:#FFFFFF">名称</a></td>
+<!--<td class="heading" align=left>DL</td>-->
+<td class="colhead" align="right"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=2&type=desc" style="color:#FFFFFF">文件</a></td>
+<td class="colhead" align="right"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=3&type=desc" style="color:#FFFFFF">评论</a></td>
+<!--<td class="colhead" align="center">Rating</td>-->
+<td class="colhead" align="center"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=4&type=desc" style="color:#FFFFFF">添加于</a></td>
+<td class="colhead" align="center">TTL</td>
+<td class="colhead" align="center"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=5&type=desc" style="color:#FFFFFF">大小</a></td>
+<!--
+<td class="colhead" align=right>Views</td>
+<td class="colhead" align=right>Hits</td>
+-->
+<td class="colhead" align="center" nowrap="nowrap"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=6&type=desc" style="color:#FFFFFF">完成</a></td>
+<td class="colhead" align="right" nowrap="nowrap"><a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=7&type=desc" style="color:#FFFFFF">做种</a>/<a href="/browse.php?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=8&type=desc" style="color:#FFFFFF">下载</a></td>
+<td class="colhead" align=center nowrap="nowrap"><a href="/<? print browse.php; ?>?c=M&search_field=%E9%93%B6%E9%AD%82%E5%89%A7%E5%9C%BA%E7%89%88%EF%BC%9A%E5%AE%8C%E7%BB%93%E7%AF%87+%E7%9B%B4%E5%88%B0%E6%B0%B8%E8%BF%9C%E7%9A%84%E4%B8%87%E4%BA%8B%E5%B1%8B&sort=9&type=desc" style="color:#FFFFFF">上传者</a></td>
+</tr>
+<tr class="hover_hr " id=805271>
+<td align=center style='padding: 0px'><a href="/browse.php?c=M&search_field=category:%22%E9%AB%98%E6%B8%85%E5%8A%A8%E6%BC%AB%22"><img border="0" src="/pic/cate/f1/cartoon.png" alt="高清动漫" style="margin:2px;" /></a></td>
+<td align=left ><div class="name_left"><a href="/t/805271/"><b>Gekijouban Gintama Kanketsu-hen Yorozuyayo eien nare 2013 1080p Blu-ray AVC DTS-HD MA 5 1-LuckDIY <br /><span style="font-weight:normal;border">银魂剧场版：完结篇 直到永远的万事屋 内封中字</span></b></a>
+<span id="btn_805271" ><a class="treport" href="" title="举报" onclick="javascript:void(0);return false;"><img src="/pic/report2.gif" class="report" torrentname="Gekijouban Gintama Kanketsu-hen Yorozuyayo eien nare 2013 1080p Blu-ray AVC DTS-HD MA 5 1-LuckDIY [银魂剧场版：完结篇 直到永远的万事屋 内封中字]" torrent="805271" border=0 style="CURSOR: pointer;" alt="收藏"/></a></span></div><div class="name_right"><span style="line-height:100%;"><img style='width: 16px;margin:0 2px 0 0;' src="/pic/ck_que.png" border=0 /><a class="dl_a" href="/dl/805271/9522"><img class="dl_img" src=/pic/dl.gif border=0 alt="下载种子文件" title="下载种子文件" /></a><a href="javascript:void(0);" class=bookmark tid=805271><img border=0 src=/pic/bookmark.gif alt="收藏" title="收藏" /></a><img border=0 src=/pic/mycart.gif alt=我的小货车 title="我的小货车" value=805271 class=mycart style='cursor:pointer' /></span><br /><img src="/pic/IMDb.png" border=0 style="vertical-align:text-bottom;margin:2px 2px 0 0;" alt="IMDb"/><span class="imdb_rate"><a href="https://www.imdb.com/title/tt2374144/">8.3</a></span></div><div class="process green"><span style="width: 100%;"></span></div><div style="clear:both;"></div></td>
+<td align="right"><b><a href="/details.php?id=805271&amp;hit=1&amp;filelist=1">9</a></b></td>
+<td align="right">0</td>
+<td align=center><nobr>2026-03-27<br />23:08:56</nobr></td>
+<td align=center>4672<br>小时</td>
+<td align=center>35.61<br>GB</td>
+<td align=center>37<br>次</td>
+<td align=right><b><a href=/details.php?id=805271&amp;hit=1&amp;toseeders=1><font color=#000000>10</font></a></b>/
+0</td>
+<td align=center><b>[匿名用户]</b></td>
+</tr>
+</table>
+    </form>
+    <script>
+        //select all
+        $("#select_all").click(function () {
+            //$(this).attr('checked')?($('.select_t').attr('checked','checked')):($('.select_t').attr('checked',''));
+            $("form#delform").find("input[type='checkbox']").attr('checked', $(this).is(':checked'));
+        });
+        //bookmark
+        $("a.bookmark").click(function () {
+            var tid = $(this).attr("tid");
+            $.post("/bookmark.php", {tid: tid}, function (data) {
+                var res = eval('(' + data + ')');
+                alert(res.msg);
+                if (!!res.status) {
+                    if (res.status == 1) {
+                        $("#" + tid).css("background-color", "#F5A9BC");
+                    } else {
+                        $("#" + tid).css("background-color", "");
+                    }
+                }
+            });
+        });
+        //mycart
+        $(".mycart").click(function () {
+            var obj = {tid: $(this).attr('value')};
+            if (!!$("#" + obj.tid).data("running")) {
+                return false;
+            }
+            $("#" + obj.tid).data("running", 1);
+            $.ajax({
+                type: "POST",
+                url: "/mycart.php",
+                datatype: "json",
+                data: obj,
+                success: function (msg) {
+                    var res = eval('(' + msg + ')');
+                    alert(res.msg);
+                    if (!!res.status) {
+                        if (res.status == 1) {
+                            $("#" + obj.tid).css("background-color", "#87CEFA");
+                        } else {
+                            $("#" + obj.tid).css("background-color", "");
+                        }
+                    }
+                    $("#" + obj.tid).data("running", 0);
+                }
+            })
+        });
+    </script>
+
+    <p align="center"><b>1&nbsp;-&nbsp;1</b><br /><b>&lt;&lt;&nbsp;上页</b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>下页&nbsp;&gt;&gt;</b></p>
+<script type="text/javascript" src="/js/jquery.prettyPhoto.js"></script>
+<link rel="stylesheet" type="text/css" href="/css/prettyPhoto.css"/>
+<script type="text/javascript">
+    $("a[rel^='prettyPhoto']").prettyPhoto({
+        deeplinking: false,
+        counter_separator_label: ' of ',
+        gallery_markup: '',
+        social_tools: '',
+        slideshow: false,
+        opacity: 0.29
+    });
+</script>
+<script type="text/javascript">
+    function submitdel() {
+        var reason = prompt("请确认您将要进行的操作，并记录操作理由", '');
+        if (reason != null) {
+            $('#aReason').val(reason);
+            $('#delform').submit();
+        }
+        return false;
+    }
+
+    function submitsticky(type) {
+        if (!confirm('您确认操作？'))
+            return false;
+        $('#aSticky').val(type);
+        $('#action').val("sticky");
+        $('#delform').submit();
+    }
+</script>
+
+<div style="position: absolute; top: 200px; left: 286px; width: 880px; display: none; z-index: 99;" id="menu_panel"></div>
+</td></tr><tr valign=top><td align="center" style="background-color:#E6E6FA;line-height:220%"><a href="/disclaimer.php" target="_blank">免责条款</a> | <script type="text/javascript">var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_4085974'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s94.cnzz.com/stat.php%3Fid%3D4085974%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></td></tr></table><div id="gotop" title="回到顶部"></div>
+    <!--<script type="text/javascript">
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-50968028-1', 'totheglory.im');
+        ga('send', 'pageview');
+    </script>-->
+  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4bc70e2c01a94c73b74392e4234840661791215815920" integrity="sha512-L0ha0OXavK/8okipN9F8BtP84dg9DUhPERbBXzwI6dgTA55d2+yweo3pn5CSFYs45/r8md2+xvUPtTdvTNRfjA==" data-cf-beacon='{"version":"2024.11.0","token":"d96713e2f2e84d0ab3d8c51596434649","r":1,"spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a47358bf6dbeb6a8',t:'MTc5MTQ0MzY0NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>
+

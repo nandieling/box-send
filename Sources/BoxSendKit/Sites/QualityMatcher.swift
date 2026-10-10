@@ -21,7 +21,9 @@ enum QualityMatcher {
         "medium": [
             "remux": Rule(match: ["remux"], exclude: []),
             "uhdbd": Rule(match: ["uhd", "4kultrahd"], exclude: ["uhdtv", "iptv"]),
-            "bluray": Rule(match: ["bluray"], exclude: ["uhd"]),
+            // 站点写法差异大："Blu-ray" / "BD 原盘"（库非）/ "Blu-Ray(原盘)"（铂金家）；
+            // MiniBD 是小体积压制、BDRip 是重编码，都不算碟
+            "bluray": Rule(match: ["bluray", "bd"], exclude: ["uhd", "mini", "rip"]),
             "webdl": Rule(match: ["webdl"], exclude: []),
             "webrip": Rule(match: ["webrip"], exclude: []),
             "hdtv": Rule(match: ["hdtv", "iptv", "tv"], exclude: ["uhdtv"]),
@@ -77,6 +79,12 @@ enum QualityMatcher {
             "dsd": Rule(match: ["dsd"], exclude: []),
             "av3a": Rule(match: ["av3a"], exclude: []),
         ],
+        // 来源（source_sel）：转种既不是本站官种、也不是本站原创，优先「转载/转种」，
+        // 其次纯兜底「其他」；官方/原创/自拍这类归属声明不参与兜底
+        "source": [
+            "reseed": Rule(match: ["转载", "转种"], exclude: ["官方", "原创"]),
+            "other": Rule(match: ["other", "其它", "其他"], exclude: []),
+        ],
         // 处理（processing_sel）：各站语义不同（烧包=处理方式、麒麟=年份、蟹黄堡=地区），
         // 匹配不到就留空，不用 first 兜底
         "processing": [
@@ -113,6 +121,10 @@ enum QualityMatcher {
             "720p": ["720p", "sd", "first"],
             "sd": ["sd", "720p", "first"],
         ],
+        "source": [
+            "reseed": ["reseed", "other"],
+            "other": ["other"],
+        ],
         "processing": [
             "remux": ["remux", "disc", "other"],
             "uhdbd": ["disc", "remux", "other"],
@@ -134,25 +146,27 @@ enum QualityMatcher {
             "prores": ["prores", "first"],
         ],
         "audiocodec": [
-            "dtsma": ["dtsma", "truehd", "dtsx", "dtsc", "dts", "eac3", "ac3", "aac", "first"],
-            "truehd": ["truehd", "dtsma", "eac3", "ac3", "first"],
-            "dtsx": ["dtsx", "dtsma", "dts", "eac3", "first"],
-            "dtsc": ["dtsc", "dts", "dtsx", "first"],
-            "eac3": ["eac3", "ac3", "aac", "first"],
-            "ac3": ["ac3", "eac3", "aac", "first"],
-            "dts": ["dts", "dtsx", "dtsc", "ac3", "aac", "first"],
-            "flac": ["flac", "ape", "pcm", "first"],
-            "ape": ["ape", "flac", "first"],
-            "aac": ["aac", "m4a", "mp3", "first"],
-            "mp3": ["mp3", "aac", "first"],
-            "pcm": ["pcm", "other", "first"],
-            "ogg": ["ogg", "first"],
-            "m4a": ["m4a", "aac", "first"],
-            "opus": ["opus", "ogg", "first"],
-            "alac": ["alac", "flac", "aac", "first"],
-            "wav": ["wav", "pcm", "other", "first"],
-            "dsd": ["dsd", "flac", "first"],
-            "av3a": ["av3a", "dts", "ac3", "first"],
+            // 音频不做「第一个选项」兜底：站点没列出这个编码时宁可不选
+            // （慕雪阁的动漫音频表里没有 FLAC，按老链会勾成 APE）
+            "dtsma": ["dtsma", "truehd", "dtsx", "dtsc", "dts", "eac3", "ac3", "aac"],
+            "truehd": ["truehd", "dtsma", "eac3", "ac3"],
+            "dtsx": ["dtsx", "dtsma", "dts", "eac3"],
+            "dtsc": ["dtsc", "dts", "dtsx"],
+            "eac3": ["eac3", "ac3", "aac"],
+            "ac3": ["ac3", "eac3", "aac"],
+            "dts": ["dts", "dtsx", "dtsc", "ac3", "aac"],
+            "flac": ["flac"],
+            "ape": ["ape"],
+            "aac": ["aac", "m4a", "mp3"],
+            "mp3": ["mp3", "aac"],
+            "pcm": ["pcm", "other"],
+            "ogg": ["ogg"],
+            "m4a": ["m4a", "aac"],
+            "opus": ["opus", "ogg"],
+            "alac": ["alac", "flac"],
+            "wav": ["wav", "pcm", "other"],
+            "dsd": ["dsd", "flac"],
+            "av3a": ["av3a", "dts", "ac3"],
         ],
     ]
 
@@ -178,12 +192,42 @@ enum QualityMatcher {
     /// 多命中选项按发布实际特征选，而不是按选项先后顺序碰运气
     struct Context {
         var isUHD = false                 // 2160p/8K 发布：UHD/4K 选项优先，否则回避
+        var isDIY = false                 // DIY 发布：有 "Blu-ray/DIY" 这类选项就选它，别选纯原盘
+        var isDisc = false                // 碟片发布：不许退到「压制/Encode」（聆音只有 Encode 与 Other，该选 Other）
         var kindKeywords: [String] = []   // 分类关键词（动漫/电影…）：组合式选项（"动漫-完结"）优先
         var completed = false             // 整季/完结："完结"加分、"连载"减分
-        init(isUHD: Bool = false, kindKeywords: [String] = [], completed: Bool = false) {
+        init(isUHD: Bool = false, isDIY: Bool = false, isDisc: Bool = false,
+             kindKeywords: [String] = [], completed: Bool = false) {
             self.isUHD = isUHD
+            self.isDIY = isDIY
+            self.isDisc = isDisc
             self.kindKeywords = kindKeywords.map { QualityMatcher.normalize($0) }
             self.completed = completed
+        }
+    }
+
+    /// 「压制/重编码/流媒体」类选项：碟片发布不该落到这些上（1PT 的 DTS-HD MA 也不能算重编码）
+    static func isEncodeLike(_ norm: String) -> Bool {
+        ["encode", "压制", "重编码", "rip", "webdl", "webrip", "hdtv"].contains { norm.contains($0) }
+    }
+
+    /// DTS 家族发布：站点同时给了 DTS 类选项时不许回退到杜比 TrueHD/Atmos
+    /// （1PT 音频只有 TrueHD 与 DTS，按顺序会选成 TrueHD）；只有 TrueHD 时才用它兜底
+    static func isDolbyLabelForDTS(_ token: String, _ norm: String, dtsAvailable: Bool) -> Bool {
+        dtsAvailable && ["dtsma", "dtsx", "dtsc", "dts"].contains(token)
+            && ["truehd", "atmos", "dolby"].contains(where: { norm.contains($0) })
+    }
+
+    /// 选项表是否含介质项（Remux / Blu-ray / WEB-DL…）：来源下拉在有的站是介质表
+    /// （蟹黄堡、青蛙、烧包），有的站是发布归属表（官方/转载/原创），两种选法完全不同。
+    /// 判成介质表就交给 medium token 匹配，不走「转载」那套
+    static func hasMediumOption(_ options: [(value: String, label: String)]) -> Bool {
+        let keys = ["medium", "processing"].flatMap { attr in
+            (rules[attr] ?? [:]).filter { $0.key != "other" }.values.flatMap { $0.match }
+        }
+        return options.contains { o in
+            let n = normalize(o.label)
+            return keys.contains { n.contains($0) }
         }
     }
 
@@ -201,17 +245,24 @@ enum QualityMatcher {
                       ctx: Context = Context()) -> String? {
         struct Opt { let value: String; let norm: String; let order: Int }
         let opts = options.enumerated().map { Opt(value: $1.value, norm: normalize($1.label), order: $0) }
-        guard !opts.isEmpty, let chain = chains[attr]?[token] ?? chains[attr]?["other"] else { return nil }
+        guard !opts.isEmpty, var chain = chains[attr]?[token] ?? chains[attr]?["other"] else { return nil }
+        // 碟片发布的回退链里不许出现「压制/HDTV/流媒体」，宁可不填（聆音：只该选 Other）
+        if ctx.isDisc { chain = chain.filter { !["encode", "webrip", "webdl", "hdtv"].contains($0) } }
+        let dtsAvailable = opts.contains { $0.norm.contains("dts") }
         for t in chain {
             if t == "first" {
-                return opts.first(where: { $0.value != "0" && !$0.norm.contains("请选") })?.value
+                let usable = opts.filter { $0.value != "0" && !$0.norm.contains("请选") }
+                if ctx.isDisc, let ok = usable.first(where: { !isEncodeLike($0.norm) }) { return ok.value }
+                return usable.first?.value
             }
             guard let rule = rules[attr]?[t] else { continue }
             let otherOnly = (t == "other")
             var best: (score: Int, order: Int, value: String)?
             for o in opts where rule.match.contains(where: { o.norm.contains($0) })
                 && !rule.exclude.contains(where: { o.norm.contains($0) })
-                && (!otherOnly || isOtherLabel(o.norm)) {
+                && (!otherOnly || isOtherLabel(o.norm))
+                && !(ctx.isDisc && isEncodeLike(o.norm))
+                && !isDolbyLabelForDTS(token, o.norm, dtsAvailable: dtsAvailable) {
                 var score = 10 - min(o.order, 9)            // 同分时保持原有顺序偏好
                 for (i, pat) in rule.match.enumerated() {
                     var hit = 0
@@ -223,6 +274,10 @@ enum QualityMatcher {
                 }
                 if ["uhd", "4k", "2160"].contains(where: { o.norm.contains($0) }) {
                     score += ctx.isUHD ? 7 : -7      // 4K 发布要盖过"Remux"这类更短的精确项
+                }
+                // DIY 发布优先 "Blu-ray/DIY"（铂金家/1PT/咖啡/库非都有这项）；不是 DIY 就别选它
+                if ["medium", "processing"].contains(attr), o.norm.contains("diy") {
+                    score += ctx.isDIY ? 7 : -6
                 }
                 if ctx.kindKeywords.contains(where: { o.norm.contains($0) }) { score += 6 }
                 if o.norm.contains("完结") || o.norm.contains("完結") { score += ctx.completed ? 3 : -2 }

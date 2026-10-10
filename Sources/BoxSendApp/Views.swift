@@ -741,6 +741,16 @@ struct SitesView: View {
                 }
                 .frame(width: 60)
                 Text("MB/s").font(.caption).foregroundStyle(.secondary)
+                if model.siteSupportsAutoFree(s) {
+                    Spacer(minLength: 6)
+                    Toggle("发种后免费一天", isOn: Binding(
+                        get: { model.siteAutoFree(s) },
+                        set: { on in model.setSiteAutoFree(on, siteID: s.id) }))
+                        .font(.caption)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .help("发种成功后自动点一次站内「帖子免费1天」（要扣猫粮）；已在免费满一天就不重复扣")
+                }
             }
         }
         .padding(10)
@@ -1549,10 +1559,73 @@ struct SettingsView: View {
                             Label("查看使用教程", systemImage: "book.fill")
                         }
                         .buttonStyle(.borderedProminent)
-                        Text("图文教程：添加站点分组、配置 Cookie、批量转种、推送下载器与外观设置。")
+                        Text("图文教程：添加站点分组、配置 Cookie、批量转种、推送下载器、TMDB 反查、软件更新与外观设置。")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
                     }
+                }
+                CardSection("软件更新") {
+                    HStack(spacing: 10) {
+                        Text("当前版本 \(BoxSendVersion.version)")
+                            .font(.callout.monospacedDigit())
+                        Button(model.checkingUpdate ? "检查中…" : "检查更新") { model.checkForUpdate() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.checkingUpdate)
+                        if model.checkingUpdate { ProgressView().controlSize(.small) }
+                        if let rel = model.updateRelease, let d = rel.downloadURL,
+                           SoftwareUpdate.isNewer(rel.version, than: BoxSendVersion.version) {
+                            Button("下载 \(rel.version) 安装包") { model.openURL(d) }
+                        }
+                        Button("打开发布页") { model.openURL(SoftwareUpdate.releasesURL) }
+                            .controlSize(.small)
+                        Spacer()
+                    }
+                    if let r = model.updateResult {
+                        Text(r)
+                            .foregroundStyle(updateTint(r))
+                            .textSelection(.enabled)
+                    }
+                    Toggle("启动时自动检查新版本", isOn: Binding(
+                        get: { model.config.autoUpdateCheck },
+                        set: { on in
+                            model.config.autoUpdateCheck = on
+                            model.saveConfig()
+                        }))
+                    Text("更新地址：\(SoftwareUpdate.repoURL) 。检查只读 GitHub 的发布接口；"
+                         + "有新版本点「下载安装包」，双击 dmg 替换旧版本即可，站点、Cookie 与设置都在本机，不会被动到。")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                CardSection("TMDB 链接（豆瓣 / IMDb 反查）") {
+                    Toggle("发种时自动补 TMDB 链接", isOn: Binding(
+                        get: { model.tmdbConfig.enabled },
+                        set: { on in model.updateTMDB { $0.enabled = on } }))
+                    LabeledRow("API 代理网关地址") {
+                        TextField(TMDBConfig.officialAPIBase, text: Binding(
+                            get: { model.tmdbConfig.apiBase },
+                            set: { v in model.updateTMDB { $0.apiBase = v } }))
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    LabeledRow("API Key（网关代填时留空）") {
+                        RevealField(text: Binding(
+                            get: { model.tmdbConfig.apiKey },
+                            set: { v in model.updateTMDB { $0.apiKey = v } }))
+                    }
+                    HStack(spacing: 12) {
+                        Button(model.testingTMDB ? "测试中…" : "测试查询") { model.testTMDB() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.testingTMDB)
+                        if model.testingTMDB { ProgressView() }
+                    }
+                    if let r = model.tmdbTestResult {
+                        Text(r)
+                            .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
+                            .textSelection(.enabled)
+                    }
+                    Text("目标站把 TMDB 链接设为必填（如杜比）、而源站简介里没有时，用种子的 IMDb 号或豆瓣号去 TMDB 查条目号。"
+                         + "国内直连 api.themoviedb.org 常不通：填自己的网关地址即可绕开，留空走官方接口。"
+                         + "网关地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写软件会自动补一次再试。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 CardSection("主题（渐变色）") {
                     LazyVGrid(columns: columns, spacing: 12) {
@@ -1594,6 +1667,12 @@ struct SettingsView: View {
         }
     }
 
+        /// 更新结果文案的配色：失败红、有新版本橙、其余（已最新）绿
+    private func updateTint(_ r: String) -> Color {
+        if r.hasPrefix("检查失败") { return .red }
+        return r.hasPrefix("发现新版本") ? .orange : .green
+    }
+
     private func themeCard(_ t: AppTheme) -> some View {
         let selected = model.config.appearance.themeID == t.id
         return VStack(alignment: .leading, spacing: 4) {
@@ -1631,6 +1710,7 @@ struct TutorialSheet: View {
                         "点分组名旁的「添加站点」批量添加：搜索站点、点击卡片选中（加深色 = 已选），拖拽或输入序号排序（序号重复会弹窗提示），点「添加」。",
                         "点击站点卡片开启 / 停用该站；「全选」一键切换分组内全部站点；「手动添加cookie或api key」为选中站点填写 cookie 或 API Key（馒头等 API 站的 key 不显示在卡片上，只在该弹窗里填写）。",
                         "「检测cookie或api key」批量检查 cookie / API Key 有效性，检测中右侧出现「停止检测」，点击可提前停止；「移除站点」「移除分组」均需两次确认。",
+                        "支持「帖子免费1天」的站点（如猫站）卡片上会出现「发种后免费一天」开关：打开后发种成功就自动点一次站内免费按钮（要扣站内积分）；帖子已在免费满一天时不重复扣。",
                     ])
                     section("2. 配置与备份 Cookie", image: "cookies", steps: [
                         "PT-depiler Gist 同步：填写 GitHub Token 与 Gist ID，可开启自动同步 / 自动扫描并设置间隔秒数。",
@@ -1651,7 +1731,20 @@ struct TutorialSheet: View {
                         "「检验连接」验证可用性；勾选「跳过检验」后推送时不再校验。",
                         "转种成功的种子会自动推送到下载器开始下载。",
                     ])
-                    section("5. 外观设置", image: "settings", steps: [
+                    section("5. TMDB 链接自动反查", image: nil, steps: [
+                        "部分站点（如杜比）把 TMDB 链接设为必填，源站简介里没有 TMDB 时发种会被拒。",
+                        "「设置」页「TMDB 链接」卡片勾选「发种时自动补 TMDB 链接」：发种前用种子的 IMDb 号或豆瓣号去 TMDB 查条目号，填进目标站的 TMDB 输入框；查不到时留空，由你手动填写。",
+                        "国内直连 api.themoviedb.org 常不通：在「API 代理网关地址」填自己的网关，留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写会先按你填的试、404 再自动补 /3 重试。",
+                        "网关只是转发时仍要填 TMDB 的 API Key；只有网关自己代填 Key 时才留空。",
+                        "「测试查询」用一条固定片例验证网关是否可用。",
+                    ])
+                    section("6. 软件更新", image: nil, steps: [
+                        "更新地址就是项目仓库 https://github.com/nandieling/box-send，「设置」页「软件更新」卡片能看到当前版本并检查新版本。",
+                        "默认每次启动在后台查一次（只读 GitHub 的发布接口，不上传任何本机数据）；不想自动查就关掉「启动时自动检查新版本」，改成手动点「检查更新」。",
+                        "发现新版本点「下载安装包」，双击 dmg 替换旧版本即可：站点、Cookie、限速与主题设置都存在本机，升级不会被动到。",
+                        "直连 GitHub 不通时会提示连不上，此时点「打开发布页」自己下载最新 dmg。",
+                    ])
+                    section("7. 外观设置", image: "settings", steps: [
                         "「设置」页选择渐变主题；主题渐变、强调色与明暗模式覆盖所有窗口与区块。",
                         "可添加背景图片（PNG/JPG/HEIC）并用滑块调整透明度，不改变窗口与各弹窗的大小比例。",
                         "「使用教程」按钮可随时查看本图文教程。",
@@ -1672,7 +1765,7 @@ struct TutorialSheet: View {
         .boxsendAppearance()
     }
 
-    private func section(_ title: String, image: String, steps: [String]) -> some View {
+    private func section(_ title: String, image: String? = nil, steps: [String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline).fontWeight(.semibold)
             ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
@@ -1682,8 +1775,10 @@ struct TutorialSheet: View {
                     Text(step).font(.caption)
                 }
             }
-            tutorialImage(image)
-                .padding(.top, 4)
+            if let image {
+                tutorialImage(image)
+                    .padding(.top, 4)
+            }
         }
     }
 
@@ -1702,4 +1797,3 @@ struct TutorialSheet: View {
         }
     }
 }
-

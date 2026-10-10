@@ -64,7 +64,8 @@ extension SiteOverride {
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
         qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 19, "uhdbd8k": 19, "uhd8k": 19, "uhd": 4, "webdl": 18, "bluray": 1, "encode": 4, "hdtv": 6], "codec": ["hevc": 5, "avc": 1, "vc1": 2, "mpeg2": 4, "av1": 3, "xvid": 6], "audiocodec": ["dtsma": 10, "truehd": 11, "ac3": 7, "dts": 3, "flac": 1, "ape": 2, "lpcm": 13, "pcm": 13, "wav": 12, "aac": 6, "alac": 14, "m4a": 14], "standard": ["1080p": 1, "1080i": 2, "720p": 3, "2160p": 6, "8k": 7]],
         subtitleField: "small_descr",
-        tagCheckboxes: ["chinese_sub": "cnsub", "limited": "limited"],
+        // CHD 的标签是无文案的图标复选框（只能按字段名配）：中字 / 限转 / DIY
+        tagCheckboxes: ["chinese_sub": "cnsub", "limited": "limited", "diy": "diy"],
         teamField: "team_sel",
         teamOtherValue: 0,
         teamPatterns: ["CHDBits": 14, "CHDHKTV": 11, "CHDWEB": 12, "CHDTV": 2, "CHDPAD": 15, "CHDBPM": 28, "GrammyFan": 29, "OneHD": 8, "blucook": 16, "SGNB": 13, "REMUX": 1, "KAN": 19, "JKCT": 22, "BMDru": 23, "Destiny": 25, "GrassTV": 27, "SP": 26]
@@ -103,11 +104,18 @@ extension SiteOverride {
         categoryField: "type",
         screenshotField: "url_vimages",   // 必填：截图 URL 文本域（每行一个，取源简介图片，不含海报）
         searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
-        categoryMap: ["movie": 501, "series": 502, "documentary": 503, "music": 508, "anime": 509, "other": 509],
+        // 春天没有动漫分区（509 就是「Other(其他类型)」）：动画按本身形态入 501 电影 / 502 剧集，
+        // 「动画」只当标签勾（animation 复选框），别让体裁决定分区
+        categoryMap: ["movie": 501, "series": 502, "documentary": 503, "music": 508,
+                      "anime/movie": 501, "anime/series": 502, "anime": 501, "other": 509],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
-        qualityValueMaps: ["medium": ["remux": 4, "uhdbd": 1, "uhdbd8k": 1, "uhd8k": 1, "uhd": 1, "webdl": 7, "bluray": 6, "encode": 6, "hdtv": 5, "dvd": 10, "track": 99], "codec": ["hevc": 1, "avc": 2, "vc1": 3, "mpeg2": 4, "av1": 5], "audiocodec": ["dtsma": 1, "truehd": 2, "lpcm": 6, "pcm": 6, "dts": 3, "eac3": 11, "ac3": 4, "aac": 5, "flac": 7, "ape": 8, "wav": 9, "mp3": 10, "opus": 12], "standard": ["2160p": 1, "1080p": 2, "1080i": 3, "720p": 4, "sd": 5, "8k": 99]],
-        subtitleField: "small_descr"
+        qualityValueMaps: ["medium": ["remux": 4, "uhdbd": 1, "uhdbd8k": 1, "uhd8k": 1, "uhd": 1, "webdl": 7, "bluray": 1, "encode": 6, "hdtv": 5, "dvd": 10, "track": 99], "codec": ["hevc": 1, "avc": 2, "vc1": 3, "mpeg2": 4, "av1": 5], "audiocodec": ["dtsma": 1, "truehd": 2, "lpcm": 6, "pcm": 6, "dts": 3, "eac3": 11, "ac3": 4, "aac": 5, "flac": 7, "ape": 8, "wav": 9, "mp3": 10, "opus": 12], "standard": ["2160p": 1, "1080p": 2, "1080i": 3, "720p": 4, "sd": 5, "8k": 99]],
+        subtitleField: "small_descr",
+        // 春天没有「完结」标签，对应的是「合集」（pack=1）：整季/合集包才勾，
+        // 其余标签（中字/动画/应求/DIY 等）仍由页面复选框文案动态匹配
+        tagField: "pack",
+        tagMap: ["completed": "1"]
     )
 
     /// audiences（Audiences）
@@ -119,18 +127,25 @@ extension SiteOverride {
         doubanField: "douban_id",
         categoryField: "type",
         searchURL: "torrents.php?search={name}",  // 2026-09-29 实测可用（查重）
-        categoryMap: ["movie": 401, "series": 402, "documentary": 406, "music": 408, "anime": 409, "other": 409],
+        // 没有动漫分区（409 是「其他」）：动画按本身形态入电影/剧集，「动画」只当标签勾
+        categoryMap: ["movie": 401, "series": 402, "tvshow": 403, "documentary": 406, "music": 408,
+                      "anime/movie": 401, "anime/series": 402, "anime": 401, "other": 409],
         extraUploadFields: ["uplver": "yes"],
         qualitySelects: ["medium_sel": "medium", "codec_sel": "codec", "audiocodec_sel": "audiocodec", "standard_sel": "standard"],
         qualityValueMaps: ["medium": ["remux": 3, "uhdbd": 12, "uhdbd8k": 12, "uhd8k": 12, "uhd": 15, "webdl": 10, "bluray": 1, "encode": 15, "hdtv": 5, "dvd": 2, "track": 9], "codec": ["hevc": 6, "avc": 1, "vc1": 2, "mpeg2": 4, "av1": 7], "audiocodec": ["dtsc": 25, "truehd atmos": 26, "dtsma": 19, "truehd": 20, "lpcm": 21, "pcm": 21, "eac3 atmos": 18, "eac3": 18, "ac3": 18, "dts": 3, "aac": 6, "flac": 1, "ape": 2, "opus": 27, "wav": 22, "mp3": 23, "m4a": 24], "standard": ["8k": 10, "2160p": 5, "1080p": 1, "1080i": 2, "720p": 3, "sd": 4]],
         subtitleField: "small_descr",
+        mediainfoTag: "mediainfo",       // 简介里的 MediaInfo/BDInfo 用 [mediainfo] 引用
         tagField: "tags[]",
-        tagMap: ["chinese_sub": "zz", "hdr10": "hdr10", "hdr10plus": "hdrm", "dovi": "db", "forbid": "jz", "limited": "xz"]
+        // 制作组那一栏（DIY/动画/完结）：动画剧集与动画电影都要勾「动画」
+        tagMap: ["chinese_sub": "zz", "hdr10": "hdr10", "hdr10plus": "hdrm", "dovi": "db", "forbid": "jz",
+                 "limited": "xz", "diy": "diy", "anime": "dh", "animation": "dh"]
     )
 
     /// ttg（TTG）
     /// .torrent 直链为 /dl/<id>/<随机号>（页面另有 /dl/<id>/zip/<n> 截图包与 /dl/<id>/<32位hex> 种子链接）
     static let ttg = SiteOverride(
+        // 种子详情链接是 /t/<id>/（结果页、成功跳转、"已存在"提示页都是这个形式）
+        detailLinkPattern: "details\\.php\\?id=\\d+|/t/\\d{3,}",
         torrentLinkPattern: "/dl/\\d+/\\d+$",
         uploadActionPath: "takeupload.php",
         titleField: "name",
@@ -159,6 +174,9 @@ extension SiteOverride {
         tagCheckboxes: ["chinese_sub": "zhongzi", "forbid": "jinzhuan", "official": "guanfang",
                         "mandarin": "guoyu", "cantonese": "yueyu", "english_sub": "ensub",
                         "demand": "yingqiu", "diy": "diy"],
+        // 猫站把发种做成「发帖」，详情页有「帖子免费1天」（扣 3000 猫粮）：
+        // 站点卡片上勾选后自动点一次（链接带 nonce/sign，发完种现抓现用）
+        freeOnceMarker: "art=freeoneday",
         regionField: "team_sel",
         regionPatterns: ["中国大陆": 1, "内地": 1, "中国": 1, "香港": 2, "台湾": 3, "美国": 4, "加拿大": 4, "英国": 4, "法国": 4, "德国": 4, "意大利": 4, "西班牙": 4, "瑞典": 4, "韩国": 5, "日本": 6, "印度": 7],
         regionOtherValue: 8

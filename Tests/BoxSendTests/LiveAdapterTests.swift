@@ -30,7 +30,11 @@ final class LiveAdapterTests: XCTestCase {
     func testLiveUpload() throws {
         let (cfg, cookies) = try liveSetup()
         let info = try sourceRelease()
-        let torrent = try Data(contentsOf: URL(fileURLWithPath: "/tmp/src56812.torrent"))
+        let torrentPath = "/tmp/src56812.torrent"
+        guard FileManager.default.fileExists(atPath: torrentPath) else {
+            throw XCTSkip("缺 \(torrentPath)（实站上传要用的源种子）")
+        }
+        let torrent = try Data(contentsOf: URL(fileURLWithPath: torrentPath))
         let only = ProcessInfo.processInfo.environment["BOXSEND_LIVE_SITES"]?
             .split(separator: ",").map(String.init) ?? ["rousi", "yzyy", "haidan"]
         for id in only {
@@ -60,7 +64,25 @@ final class LiveAdapterTests: XCTestCase {
         let adapter = SiteRegistry.adapter(for: site, client: client, debugDir: support)
         let info = try adapter.fetchDetail(detailURL: url)
         let (data, name) = try adapter.downloadTorrentFile(info)
-        print("LIVE-PUSH \(id): \(info.name) | \(name) | \(data.count) bytes | hash=\(Bencode.infoHash(data) ?? "-")")
+        print("LIVE-PUSH \(id): \(info.name) | \(name) | \(data.count) bytes | "
+            + "hash=\(Bencode.infoHash(data) ?? "-") | tracker=\(Bencode.announceURLs(data).joined(separator: ","))")
+    }
+
+    /// 实站验证：慢图床的截图要真能拉下来（肉丝发种就卡死在这一步）。
+    /// 图床地址会换，只作粗略验证：至少拿到 2 张、拿不到时报错要说清原因。
+    func testLiveScreenshotDownload() throws {
+        try liveSetup()
+        let urls = ["https://img2.pixhost.to/images/5566/692557779_01.png",
+                    "https://img2.pixhost.to/images/5566/692557792_02.png",
+                    "https://img2.pixhost.to/images/5566/692557800_03.png"]
+        let client = HTTPClient(cookies: CookieStore(), userAgent: "Mozilla/5.0")
+        let started = Date()
+        let (out, errors) = PeerGoAdapter.downloadShots(urls, client: client,
+                                                       referer: "https://pt.luckpt.de/", limit: 3)
+        let secs = Int(Date().timeIntervalSince(started))
+        print("LIVE-SHOTS: 拿到 \(out.count)/3 张，用时 \(secs)s，字节 \(out.map { $0.data.count })，errors=\(errors)")
+        XCTAssertGreaterThanOrEqual(out.count, 1, "慢图床也该在预算内拉到至少一张截图：\(errors)")
+        XCTAssertLessThanOrEqual(secs, 270, "截图下载必须留在额度内，否则整站会被流水线超时掐掉")
     }
 
     /// 上传字段预览（不发种）：确认 hdvideo 这类站点的 pt_gen / 必填下拉真实取值

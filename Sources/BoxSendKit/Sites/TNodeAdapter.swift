@@ -405,15 +405,27 @@ final class TNodeAdapter: SiteAdapter {
             setField("tmdbtype", tmdb.type)
             setField("tmdbid", String(tmdb.id))
         }
-        setField("screenshot",
-                 Self.imageURLs(fromHTML: info.descr, base: URL(string: info.detailURL))
-                     .joined(separator: "\n"))
+        setField("screenshot", Self.screenshotValue(info))
         setField("mediainfo", info.mediainfo)
-        var note = (info.extraQuoteText.isEmpty ? "" : info.extraQuoteText + "\n")
-            + "转载自: \(info.detailURL)"
-        if let imdb = info.imdb { note += "\nIMDb: https://www.imdb.com/title/\(imdb)/" }
-        setField("note", note)
+        setField("note", Self.noteValue(info))
         return fields
+    }
+
+    /// 截图框只放截图：海报（源简介封面图）不该混进来。
+    /// 只剔认得出的海报（资料表上面的图 / poster 容器 / 链接字样），
+    /// 简介里全是截图时不该少一张
+    static func screenshotValue(_ info: ReleaseInfo) -> String {
+        guard let base = URL(string: info.detailURL) else { return "" }
+        let posters = Set(NexusPHPAdapter.posterURLs(from: info.descr, base: info.detailURL))
+        return NexusPHPAdapter.allImageURLs(from: info.descr, base: base)
+            .filter { !posters.contains($0) }.joined(separator: "\n")
+    }
+
+    /// 备注 = 转种来源 + 源简介自带的制作引用（「原盘来自…」「字幕来自…」），
+    /// 与 cmct / 劳改所的「附加信息」同一套内容；两处都没有才退回源站链接一行
+    static func noteValue(_ info: ReleaseInfo) -> String {
+        let note = SiteRegistry.reseedSourceText(for: info)
+        return note.isEmpty ? "转载自: \(info.detailURL)" : note
     }
 
     func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)] {

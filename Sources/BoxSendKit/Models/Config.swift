@@ -123,6 +123,8 @@ public struct SiteOverride: Codable {
     var subtitleField: String?
     /// 简介格式：bbcode（中文站默认）| html
     var descrFormat: String?
+    /// 简介里 MediaInfo/BDInfo 引用块用的 BBCode 标签名（观众要写成 [mediainfo]；默认 quote）
+    var mediainfoTag: String?
     /// 简介开头加"转载自<源站>，感谢发布者。"（织梦等站要求注明转种来源）
     var descrSourcePrefix: Bool?
     /// 转种来源里写的源站名（默认用站点显示名；如 LuckPT 显示名为"幸运"时改写品牌名）
@@ -132,6 +134,10 @@ public struct SiteOverride: Codable {
     var tagMap: [String: String]?
     /// 独立复选框标签（个别站的标签是若干独立 checkbox，命中时提交 字段名=yes）：规范标签 -> 字段名
     var tagCheckboxes: [String: String]?
+    /// 站内「帖子免费1天」链接的特征串（猫站 "art=freeoneday"）：发种成功后按特征找回带签名的链接再点
+    var freeOnceMarker: String?
+    /// 发种成功后自动点一次站内免费链接（猫站要扣猫粮，用户在站点卡片上勾选才生效）
+    var autoFreeAfterUpload: Bool?
     /// 标签型下拉（选项值就是文案，如城市 HDCity 的 tag1ing/tag2ing）：按规范标签文案依次填值
     var tagSelectFields: [String]?
     /// 两步上传（城市 HDCity：第一步只提交种子文件+站点 token，站点回跳到元信息表单页，第二步提交元信息）
@@ -177,6 +183,8 @@ extension SiteOverride {
         if let v = doubanField { out.doubanField = v }
         if let v = doubanValueTemplate { out.doubanValueTemplate = v }
         if let v = tmdbField { out.tmdbField = v }
+        if let v = freeOnceMarker { out.freeOnceMarker = v }
+        if let v = autoFreeAfterUpload { out.autoFreeAfterUpload = v }
         if let v = posterField { out.posterField = v }
         if let v = descrStyle { out.descrStyle = v }
         if let v = categoryField { out.categoryField = v }
@@ -188,6 +196,7 @@ extension SiteOverride {
         if let v = userAgent { out.userAgent = v }
         if let v = subtitleField { out.subtitleField = v }
         if let v = descrFormat { out.descrFormat = v }
+        if let v = mediainfoTag { out.mediainfoTag = v }
         if let v = tagField { out.tagField = v }
         if let v = teamField { out.teamField = v }
         if let v = teamOtherValue { out.teamOtherValue = v }
@@ -443,9 +452,13 @@ public struct AppConfig: Codable {
     /// 「批量转种」页的源站引用（可选）：勾选且文本非空时，加在各目标站简介最上面并用引用包裹
     public var sourceQuoteEnabled: Bool
     public var sourceQuoteText: String
+    /// TMDB 反查（豆瓣/IMDb -> TMDB 条目链接）：杜比这类把 TMDB 链接设为必填的站用
+    public var tmdb: TMDBConfig?
+    /// 启动时自动检查新版本（GitHub Releases）：关掉后只在「设置 → 软件更新」里手动点
+    public var autoUpdateCheck: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -465,6 +478,8 @@ public struct AppConfig: Codable {
         unmanagedSiteOrder = try c.decodeIfPresent([String].self, forKey: .unmanagedSiteOrder) ?? []
         sourceQuoteEnabled = try c.decodeIfPresent(Bool.self, forKey: .sourceQuoteEnabled) ?? false
         sourceQuoteText = try c.decodeIfPresent(String.self, forKey: .sourceQuoteText) ?? ""
+        tmdb = try c.decodeIfPresent(TMDBConfig.self, forKey: .tmdb)
+        autoUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .autoUpdateCheck) ?? true
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
@@ -473,7 +488,8 @@ public struct AppConfig: Codable {
                 webToken: String?, groups: [GroupConfig] = [],
                 zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
                 unmanagedSiteOrder: [String] = [],
-                sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "") {
+                sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "",
+                tmdb: TMDBConfig? = nil, autoUpdateCheck: Bool = true) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -488,12 +504,35 @@ public struct AppConfig: Codable {
         self.unmanagedSiteOrder = unmanagedSiteOrder
         self.sourceQuoteEnabled = sourceQuoteEnabled
         self.sourceQuoteText = sourceQuoteText
+        self.tmdb = tmdb
+        self.autoUpdateCheck = autoUpdateCheck
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
 
     public func site(_ id: String) -> SiteConfig? {
         sourceSites.first { $0.id == id }
+    }
+
+    // MARK: 站点级「发种后自动免费一天」（猫站这类有站内免费入口的站）
+
+    /// 该站是否支持自动免费（判据是内置表里配了站内免费链接的特征串）
+    public func siteSupportsAutoFree(_ id: String) -> Bool {
+        guard let s = site(id) else { return false }
+        return SiteRegistry.effectiveSite(s).overrides?.freeOnceMarker != nil
+    }
+
+    /// 用户在该站上是否打开了自动免费
+    public func siteAutoFree(_ id: String) -> Bool {
+        guard let s = site(id) else { return false }
+        return SiteRegistry.effectiveSite(s).overrides?.autoFreeAfterUpload == true
+    }
+
+    public mutating func setSiteAutoFree(_ on: Bool, siteID: String) {
+        guard let i = sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
+        var ov = sourceSites[i].overrides ?? SiteOverride()
+        ov.autoFreeAfterUpload = on
+        sourceSites[i].overrides = ov
     }
 
     /// 按详情页链接定位源站配置：任何已添加 / 已收录站点都能作源站。

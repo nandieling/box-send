@@ -387,8 +387,9 @@ final class PeerGoAdapter: SiteAdapter {
         var urls = all.filter { Self.isScreenshotCandidate($0) }
         if urls.isEmpty { urls = all }
         if urls.isEmpty, let p = NexusPHPAdapter.posterURL(from: info.descr, base: site.url) { urls = [p] }
-        // Referer 用源站：图床按来源防盗链时，带目标站 referer 会被拒
-        let (out, errors) = Self.downloadShots(Array(urls.prefix(6)), client: client,
+        // Referer 用源站：图床按来源防盗链时，带目标站 referer 会被拒。
+        // 候选只取 3 张：慢图床（pixhost 实测整站 ~50 KB/s、单张 2-3 MB）多下的一张也用不上
+        let (out, errors) = Self.downloadShots(Array(urls.prefix(3)), client: client,
                                               referer: info.detailURL, limit: 3)
         guard !out.isEmpty else {
             let why = errors.isEmpty
@@ -409,16 +410,27 @@ final class PeerGoAdapter: SiteAdapter {
         return true
     }
 
-    /// 并发下载截图：按原顺序返回成功的，失败的留下原因供报错用
+    /// 下载截图：按原顺序返回成功的，失败的留下原因供报错用。
+    /// pixhost 这类图床实测整站限速 ~50 KB/s、单张截图 2-3 MB，一张要一两分钟：
+    /// 单张限时放宽到 150 秒（之前 6 张并发每张都卡死在 30 秒超时上，一张也没拿到），
+    /// 拿到一张就够发种；
+    /// 候选就 3 张、一轮全发出去（分两轮等于把最慢的两张串起来等，实测会顶到单站超时），
+    /// 整批再给预算，超时后手里有图就直接发，别把整站转种拖成"单站转种超时"。
     static func downloadShots(_ urls: [String], client: HTTPClient, referer: String,
-                              limit: Int) -> (out: [(data: Data, ext: String, mime: String)], errors: [String]) {
+                              limit: Int, timeout: TimeInterval = 150,
+                              concurrency: Int = 3, totalBudget: TimeInterval = 210)
+        -> (out: [(data: Data, ext: String, mime: String)], errors: [String]) {
         guard !urls.isEmpty else { return ([], []) }
+        let deadline = Date().addingTimeInterval(totalBudget)
+        // 单张超时跟着剩余额度收：图床慢时一轮 150 秒 + 收尾宽限就能吃掉整个站点超时
+        func budgetTimeout() -> TimeInterval { min(timeout, max(20, deadline.timeIntervalSinceNow - 15)) }
         var slots = [Data?](repeating: nil, count: urls.count)
         var errs = [String?](repeating: nil, count: urls.count)
         let lock = NSLock()
-        DispatchQueue.concurrentPerform(iterations: urls.count) { i in
+        func got() -> Int { lock.lock(); defer { lock.unlock() }; return slots.compactMap { $0 }.count }
+        func fetch(_ i: Int) {
             let host = URL(string: urls[i])?.host ?? urls[i]
-            let result = Result { try client.get(urls[i], referer: referer, timeout: 30) }
+            let result = Result { try client.get(urls[i], referer: referer, timeout: budgetTimeout()) }
             lock.lock()
             defer { lock.unlock() }
             switch result {
@@ -434,6 +446,22 @@ final class PeerGoAdapter: SiteAdapter {
                 }
             }
         }
+        func stopForBudget() -> Bool { got() >= limit || (got() >= 1 && Date() >= deadline) }
+        var pending = Array(urls.indices)
+        for attempt in 0...1 {
+            if attempt > 0 {
+                // 第一轮已经拿到图就收手：站点只要求至少一张，再等一轮不值两分钟
+                // 已经拿到图就收手（站点只要求至少一张）；额度不足 40 秒也别再开一轮
+                if got() >= 1 || deadline.timeIntervalSinceNow < 40 { break }
+                pending = urls.indices.filter { slots[$0] == nil }
+            }
+            for start in stride(from: 0, to: pending.count, by: max(1, concurrency)) {
+                if stopForBudget() { break }
+                let chunk = Array(pending[start..<min(start + max(1, concurrency), pending.count)])
+                DispatchQueue.concurrentPerform(iterations: chunk.count) { fetch(chunk[$0]) }
+                if stopForBudget() { break }
+            }
+        }
         var out: [(data: Data, ext: String, mime: String)] = []
         for (i, raw) in slots.enumerated() {
             guard let raw, out.count < limit else { continue }
@@ -445,7 +473,17 @@ final class PeerGoAdapter: SiteAdapter {
             let ext = lower.contains(".png") ? "png" : (lower.contains(".webp") ? "webp" : "jpg")
             out.append((raw, ext, "image/" + (ext == "jpg" ? "jpeg" : ext)))
         }
-        return (out, errs.compactMap { $0 })
+        // 同一台图床的重复报错合并成一条，三行一样的话看不出到底试了什么
+        var counts: [String: Int] = [:]
+        var order: [String] = []
+        for e in errs.compactMap({ $0 }) {
+            if counts[e] == nil { order.append(e) }
+            counts[e, default: 0] += 1
+        }
+        let errors = order.map { e in
+            counts[e, default: 0] > 1 ? "\(e) ×\(counts[e, default: 0])" : e
+        }
+        return (out, errors)
     }
 
     private func description(_ info: ReleaseInfo) -> String {

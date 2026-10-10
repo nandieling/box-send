@@ -22,6 +22,8 @@ public protocol SiteAdapter: AnyObject {
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
     /// 上传字段预览（调试用，CLI info --preview）
     func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)]
+    /// 注入 TMDB 反查回调（NexusPHP 家族支持：源站没给 TMDB 链接时按豆瓣/IMDb 反查）
+    func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?)
 }
 
 extension SiteAdapter {
@@ -31,6 +33,8 @@ extension SiteAdapter {
     var canPrecheckDuplicate: Bool { false }
     /// 默认不支持宽松判定，退回严格查重
     func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? { try searchExists(info) }
+    /// 框架暂无反查需求（源站直接给出 TMDB 链接的站够用）
+    func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?) {}
 }
 
 public struct UploadOutcome {

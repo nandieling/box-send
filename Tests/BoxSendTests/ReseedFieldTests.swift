@@ -102,7 +102,8 @@ final class ReseedFieldTests: XCTestCase {
         XCTAssertEqual(first(f, "source_sel[4]"), "4", "来源=日本")
         XCTAssertEqual(first(f, "medium_sel[4]"), "6", "1080p 发布要选 Remux，不是 UHD Remux")
         let tags = values(f, "tags[4][]")
-        XCTAssertEqual(Set(tags), Set(["9", "3"]), "中字+完结；官方是源站概念，目标站不打")
+        // 15=高码高帧：1080p Remux 实测码率远超 9 Mbps，按「高码」规则该勾
+        XCTAssertEqual(Set(tags), Set(["9", "3", "15"]), "中字+完结+高码；官方是源站概念，目标站不打")
     }
 
     func testWrappedLabelWithIconParses() throws {
@@ -140,8 +141,8 @@ final class ReseedFieldTests: XCTestCase {
         XCTAssertEqual(first(f, "audiocodec_sel[4]"), "7", "无 PCM/LPCM 选项时应选 Other，不是 WAV")
         XCTAssertTrue(values(f, "tags[4][]").contains("12"), "完结")
         guard let descr = first(f, "descr") else { return XCTFail("无 descr") }
-        // 织梦 overrides 明确写了 descrSourcePrefix：仍加一行纯文本来源（与官种自动引用无关）
-        XCTAssertTrue(descr.hasPrefix("转载自LuckPT，感谢发布者。\n"), String(descr.prefix(60)))
+        // 织梦 overrides 明确写了 descrSourcePrefix：来源要声明，且并进简介最上面的制作引用块
+        XCTAssertTrue(descr.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。\n"), String(descr.prefix(80)))
     }
 
     // MARK: 10 整季剧集 -> 完结

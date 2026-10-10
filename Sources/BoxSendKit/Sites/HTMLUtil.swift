@@ -222,7 +222,11 @@ enum HTMLUtil {
                 label = stripTags(String(after[..<em.lowerBound]))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            out.append((name, value, label))
+            // 复选框文案常写成 "DIY&nbsp;" 这种带实体的形式，解码后才是人看的文案
+            let text = decodeEntities(label)
+                .trimmingCharacters(in: .whitespacesAndNewlines
+                    .union(CharacterSet(charactersIn: "\u{00A0}　")))   // &nbsp; 解出来是普通空格，全角/不换行空格一并去
+            out.append((name, value, text))
         }
         return out
     }

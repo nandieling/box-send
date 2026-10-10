@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import BoxSendKit
 import SwiftUI
+import AppKit
 
 /// GUI 应用核心模型：配置读写 / cookie 导入 / 转种执行 / 日志
 @MainActor
@@ -58,6 +59,13 @@ final class AppModel: ObservableObject {
     // MARK: 下载器
     @Published var testingDownloader = false
     @Published var downloaderTestResult: String? = nil
+    @Published var testingTMDB = false
+    @Published var tmdbTestResult: String? = nil
+
+    // MARK: 软件更新
+    @Published var checkingUpdate = false
+    @Published var updateResult: String? = nil
+    @Published var updateRelease: SoftwareUpdate.Release? = nil
 
     // MARK: 日志
     @Published var notes: [String] = []
@@ -117,6 +125,13 @@ final class AppModel: ObservableObject {
         if config.zipWatch?.enabled == true {
             zipAuto = true
             startZipTimer()
+        }
+        // 启动后顺手查一次更新（可在「设置 → 软件更新」里关掉）：只弹一行结果，不打扰
+        if config.autoUpdateCheck {
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self?.checkForUpdate(silent: true)
+            }
         }
     }
 
@@ -1202,7 +1217,87 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: TMDB 反查 / 站点自动免费
+
+    /// TMDB 配置（用户没配过时给一份默认值，界面上直接改）
+    var tmdbConfig: TMDBConfig { config.tmdb ?? TMDBConfig() }
+
+    func updateTMDB(_ mutate: (inout TMDBConfig) -> Void) {
+        var c = config.tmdb ?? TMDBConfig()
+        mutate(&c)
+        config.tmdb = c
+        saveConfig()
+    }
+
+    /// 站点是否支持「发种后自动免费一天」（内置表里配了站内免费链接特征的站，目前只有猫站）
+    func siteSupportsAutoFree(_ s: SiteConfig) -> Bool { config.siteSupportsAutoFree(s.id) }
+
+    func siteAutoFree(_ s: SiteConfig) -> Bool { config.siteAutoFree(s.id) }
+
+    func setSiteAutoFree(_ on: Bool, siteID: String) {
+        config.setSiteAutoFree(on, siteID: siteID)
+        saveConfig()
+    }
+
+    /// 拿一条站内已知条目试查（银魂剧场版：tt2374144 / 豆瓣 11615927），验证网关与 key 通不通
+    func testTMDB() {
+        saveConfig()
+        var cfg = tmdbConfig
+        cfg.enabled = true
+        testingTMDB = true
+        tmdbTestResult = nil
+        Task {
+            let client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+            let r = TMDBResolver(client: client, config: cfg)
+            if let link = r.resolve(imdb: "tt2374144", douban: "11615927",
+                                    name: "Gekijouban Gintama Kanketsu-hen 2013 1080p Blu-ray") {
+                tmdbTestResult = "成功: \(link)"
+            } else {
+                tmdbTestResult = "失败: " + (r.lastError ?? "TMDB 没有匹配条目")
+            }
+            testingTMDB = false
+        }
+    }
+
     // MARK: 运行
+
+    /// 检查 GitHub Releases 的最新版本。silent = 启动时自动查：没有新版本就什么都不显示。
+    func checkForUpdate(silent: Bool = false) {
+        saveConfig()
+        checkingUpdate = true
+        if !silent {
+            updateResult = nil
+            updateRelease = nil
+        }
+        let client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+        let current = BoxSendVersion.version
+        // GitHub 直连可能要等十几秒，放到后台线程，别冻住界面
+        Task.detached(priority: .utility) {
+            let outcome = SoftwareUpdate.latest(client: client)
+            await MainActor.run {
+                self.checkingUpdate = false
+                switch outcome {
+                case .found(let rel):
+                    self.updateRelease = rel
+                    if SoftwareUpdate.isNewer(rel.version, than: current) {
+                        self.updateResult = "发现新版本 \(rel.version)（当前 \(current)）：\(rel.title)"
+                    } else if silent {
+                        self.updateResult = nil
+                    } else {
+                        self.updateResult = "已是最新版本 \(current)"
+                    }
+                case .failed(let err):
+                    if !silent { self.updateResult = "检查失败：\(err)" }
+                }
+            }
+        }
+    }
+
+    /// 在默认浏览器里打开链接（发布页 / 安装包）
+    func openURL(_ s: String) {
+        guard let u = URL(string: s) else { return }
+        NSWorkspace.shared.open(u)
+    }
 
     func run() {
         let url = detailURL.trimmingCharacters(in: .whitespaces)

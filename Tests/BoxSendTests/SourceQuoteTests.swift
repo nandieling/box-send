@@ -35,8 +35,10 @@ final class SourceQuoteTests: XCTestCase {
     func testManualQuoteOnTopOfBBCodeDescr() throws {
         let d = try descr("crabpt", source(quote: manual))
         XCTAssertNotNil(d)
-        XCTAssertTrue(d!.hasPrefix("[quote]\n转载自LuckPT，感谢发布者。原盘来自U2:摇曳百合 第三季\n字幕来自华盟字幕社\n[/quote]\n"),
-                      "手填引用应原样置顶包裹，实际开头: \(d!.prefix(120))")
+        // 手填来源引用不再单开一段：源简介最上面已是制作引用时，来源并作该块第一行（织梦按此审核）
+        XCTAssertTrue(d!.hasPrefix("[quote]\n" + manual + "\n" + srcQuoteBlock + "\n[/quote]"),
+                      "来源应是首个引用块的第一行、制作引用紧随同块，实际开头: \(d!.prefix(240))")
+        XCTAssertFalse(d!.contains("[/quote]\n[quote]"), "不该再拆成两段并列引用")
     }
 
     func testManualQuoteReplacesAutoOfficialPrefix() throws {

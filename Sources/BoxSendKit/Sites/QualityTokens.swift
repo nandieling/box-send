@@ -47,6 +47,24 @@ enum QualityTokens {
         return nil
     }
 
+    /// 发布名形态："series" = 整季/多集（有季或集标记），"movie" = 单片。
+    /// 观众这类没有动漫版块的站要用它把动画分进 电影 / 剧集 两个分区。
+    static func releaseShape(from name: String) -> String {
+        let n = name.lowercased()
+        let patterns = [
+            #"s\d{1,2}[.\-_ ]?e\d{1,3}"#,          // S01E02 / S03-E05
+            #"\bep\d{1,3}\b"#,                     // EP03
+            #"(?<!\d)\d{1,2}x\d{1,3}(?!\d)"#,      // 8x12
+            #"第\s*\d+\s*[集话話季]"#,               // 第12集
+            #"全\s*\d+\s*[集话話]"#,                // 全24话
+            #"\bs\d{1,2}\b"#,                      // 整季包 S03
+        ]
+        for pat in patterns where n.range(of: pat, options: .regularExpression) != nil {
+            return "series"
+        }
+        return "movie"
+    }
+
     /// 视频编码 token：先看发布名；Remux 的名字常不写编码（或只写 REMUX），
     /// 这时用 MediaInfo 视频轨的 Format/Codec ID（用户要求按 mediainfo 判定）。
     static func codec(from name: String, mediainfo: String = "") -> String? {
@@ -118,6 +136,28 @@ enum QualityTokens {
         return nil
     }
 
+    /// 是否为连载体裁（有集数可言）：分类是剧集/综艺天然是连载；动漫要能看到集数痕迹
+    /// （S01E02、EP03、8x12、第12集、全24话、S03 整季包、[01-24] 区间）。
+    /// 源站标签之外，"完结"二字要成为依据，必须先有这些集数痕迹。
+    static func isEpisodicRelease(_ info: ReleaseInfo) -> Bool {
+        if [.series, .tvshow].contains(info.kind ?? .other) { return true }
+        if releaseShape(from: info.name) == "series" { return true }
+        let text = info.name + "\n" + info.subtitle
+        if text.range(of: "全\\s*\\d+\\s*[集话話季]", options: .regularExpression) != nil { return true }
+        // 集数区间：[01-24]、01-24 集；前后不允许再接数字或小数点，避免 "2.1-5.1" 这类音轨写法命中
+        let range = "(?<![\\d.~至-])\\d{1,3}\\s*[-~至]\\s*\\d{1,3}(?![\\d.~至-])"
+        return info.name.range(of: range, options: .regularExpression) != nil
+    }
+
+    /// 单片（电影/剧场版/映画/OVA）：这类发布没有「连载/完结」可言。
+    /// 只看发布名与副标题（源站译名），简介正文里提到剧场版不算。
+    static func isFilmRelease(_ info: ReleaseInfo) -> Bool {
+        if info.kind == .movie { return true }
+        let text = info.name + "\n" + info.subtitle
+        return text.range(of: "剧场版|劇場版|映画|电影版|電影版|\\bOVA\\b|\\bmovie\\b|\\bfilm\\b",
+                          options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     /// 发布名中的年份（第一个 19xx/20xx 四位数字）
     /// 规范标签判定（源名 + 简介 + mediainfo 文本证据）——各适配器共享
     /// 标签文案 -> 规范标签（源站"标签"行文案、目标站复选框文案共用一张表）
@@ -136,6 +176,9 @@ enum QualityTokens {
         ("forbid", ["禁转", "禁止转载", "jz"]),
         ("limited", ["限转", "xz"]),
         ("diy", ["diy", "自压"]),
+        // 「高分」「高码」是站内审核用的质量标签（龙）：判据见 doubanRating / videoBitrateMbps
+        ("highrating", ["高分", "高评分"]),
+        ("highbitrate", ["高码率", "高码"]),
         // 表里刻意没有 official / first：官种、首发都是源站自己的概念，
         // 转出去的种子既不是本站官种、也不是本站首发，一律不跟随源站。
         ("disc", ["原盘"]),
@@ -195,6 +238,14 @@ enum QualityTokens {
             }
         }
         for tag in genreTags(info.genre) where !tags.contains(tag) { tags.append(tag) }
+        // 质量标签：豆瓣 ≥8 分打「高分」，码率达到本站分辨率门槛打「高码」（龙按这两项审核）
+        if let score = doubanRating(info), score >= highRatingThreshold { tags.append("highrating") }
+        if isHighBitrateRelease(info) { tags.append("highbitrate") }
+        // 「完结」是连载体的概念：动画电影（剧场版/映画/OVA）即使被源站标了完结也不跟随
+        if isFilmRelease(info) { tags.removeAll { $0 == "completed" } }
+        // DIY 不算原盘发布：52PT、劳改所把「原盘」与「DIY」当互斥标签审核，
+        // 媒介下拉已经选了 Blu-ray/DIY，再勾原盘就是自相矛盾
+        if tags.contains("diy") { tags.removeAll { $0 == "disc" } }
         return tags
     }
 
@@ -225,9 +276,13 @@ enum QualityTokens {
         if info.sourceTags.contains(where: {
             ["未完结", "未完結", "连载", "連載", "更新中", "正在更新", "分集"].contains($0)
         }) { return false }
+        // 电影（含动画电影）没有连载概念：标题叫「完结篇」也不算
+        if isFilmRelease(info) { return false }
         if info.sourceTags.contains(where: {
             ($0.contains("完结") || $0.contains("完結")) && !$0.contains("未")
         }) { return true }
+        // 往下是文案启发式：得先有集数痕迹，否则简介正文里出现「完结」就误判整季完结
+        guard isEpisodicRelease(info) else { return false }
         let raw = (HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.name)
             .replacingOccurrences(of: "未完结", with: "")
             .replacingOccurrences(of: "未完結", with: "")
@@ -286,5 +341,110 @@ enum QualityTokens {
         if n.contains("720p") { return "720p" }
         if n.contains("480") || n.contains("sd") || n.contains("dvd") { return "sd" }
         return nil
+    }
+
+    // MARK: - 评分与码率（「高分」「高码」标签的判据）
+
+    /// 豆瓣 8 分以上算「高分」
+    static let highRatingThreshold = 8.0
+
+    /// 「高码」门槛（Mbps）：龙按分辨率分档，其余分辨率不设门槛
+    static let highBitrateThresholds: [(standard: String, mbps: Double)] = [
+        ("8k", 15), ("2160p", 15), ("1080p", 9), ("1080i", 9), ("720p", 4),
+    ]
+
+    /// 简介里的豆瓣评分（"◎豆瓣评分　9.3/10" / "❁ 豆瓣评分: 9.3"）；取不到返回 nil
+    static func doubanRating(_ info: ReleaseInfo) -> Double? {
+        rating(from: HTMLUtil.stripTags(info.descr))
+    }
+
+    /// "豆瓣评分 9.3/10"、"豆瓣評分：9.3" -> 9.3
+    static func rating(from text: String) -> Double? {
+        guard let re = try? NSRegularExpression(
+            pattern: "豆瓣\\s*[评評]分[^0-9]{0,6}([0-9]{1,2}(?:[.,][0-9]{1,2})?)",
+            options: [.caseInsensitive]) else { return nil }
+        let ns = NSRange(text.startIndex..., in: text)
+        for m in re.matches(in: text, options: [], range: ns) {
+            guard let r = Range(m.range(at: 1), in: text),
+                  let v = Double(number(text[r])) else { continue }
+            if (0...10).contains(v) { return v }
+        }
+        return nil
+    }
+
+    /// 视频整体码率（Mbps）：优先 BDInfo「Total Bitrate: 46.11 Mbps」与
+    /// MediaInfo「Overall bit rate : 42.1 Mb/s」，两处都没有时按 种子大小 ÷ 片长 估算。
+    static func videoBitrateMbps(_ info: ReleaseInfo) -> Double? {
+        let text = info.mediainfo + "\n" + HTMLUtil.stripTags(info.descr)
+        if let mbps = declaredBitrateMbps(text) { return mbps }
+        guard let size = info.size, size > 0, let secs = durationSeconds(text), secs >= 60 else { return nil }
+        return Double(size) * 8 / secs / 1_000_000
+    }
+
+    /// 文本里明确写出的整体码率（BDInfo 的 Total Bitrate / MediaInfo 的 Overall bit rate）
+    static func declaredBitrateMbps(_ text: String) -> Double? {
+        // BDInfo 与 MediaInfo 都用空格对齐冒号，间隔可以有几十个字符
+        let patterns = ["total\\s*bitrate[^0-9]{0,40}([0-9][0-9 .,]*)\\s*(mbps|mb/s|kbps|kb/s)",
+                        "overall\\s*bit\\s*rate[^0-9]{0,40}([0-9][0-9 .,]*)\\s*(mbps|mb/s|kbps|kb/s)"]
+        for pat in patterns {
+            guard let re = try? NSRegularExpression(pattern: pat, options: [.caseInsensitive]) else { continue }
+            let ns = NSRange(text.startIndex..., in: text)
+            for m in re.matches(in: text, options: [], range: ns) {
+                guard let vr = Range(m.range(at: 1), in: text),
+                      let ur = Range(m.range(at: 2), in: text),
+                      let v = Double(number(text[vr])) else { continue }
+                let unit = text[ur].lowercased()
+                let mbps = unit.hasPrefix("kb") ? v / 1000 : v
+                if mbps > 0.05, mbps < 100_000 { return mbps }
+            }
+        }
+        return nil
+    }
+
+    /// 片长（秒）：简介「◎片　　长　110分钟」、BDInfo「Length: 1:50:34」、MediaInfo「Duration : 1 h 33 min」
+    static func durationSeconds(_ text: String) -> Double? {
+        func first(_ pattern: String, _ groups: [Int]) -> [String]? {
+            guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+            let ns = NSRange(text.startIndex..., in: text)
+            for m in re.matches(in: text, options: [], range: ns) {
+                let vals = groups.compactMap { g -> String? in
+                    guard let r = Range(m.range(at: g), in: text) else { return nil }
+                    return String(text[r])
+                }
+                if vals.count == groups.count { return vals }
+            }
+            return nil
+        }
+        if let v = first("片[^0-9]{0,8}长[^0-9]{0,8}([0-9]{1,4})\\s*(?:分钟|分|min)", [1]),
+           let mins = Double(number(v[0])), mins >= 1 { return mins * 60 }
+        if let v = first("([0-9]{1,2}):([0-9]{2}):([0-9]{2})", [1, 2, 3]),
+           let h = Double(v[0]), let m = Double(v[1]), let s = Double(v[2]) {
+            return h * 3600 + m * 60 + s
+        }
+        if let v = first("([0-9]{1,3})\\s*(?:h|小时)\\s*([0-9]{1,2})?\\s*(?:min|分钟)?", [1, 2]) {
+            let h = Double(v[0]) ?? 0
+            let m = v.count > 1 ? (Double(number(v[1])) ?? 0) : 0
+            if h * 60 + m >= 1 { return h * 3600 + m * 60 }
+        }
+        return nil
+    }
+
+    /// "3 552" / "1,920" / "46.11" -> 可用于 Double() 的写法（千分位去掉，小数点保留）
+    private static func number(_ s: some StringProtocol) -> String {
+        var t = String(s).replacingOccurrences(of: " ", with: "")
+        if t.contains(".") {
+            t = t.replacingOccurrences(of: ",", with: "")      // "38,237,134" 千分位
+        } else {
+            t = t.replacingOccurrences(of: ",", with: ".")     // "9,3" 欧式小数点
+        }
+        return t
+    }
+
+    /// 达到本站分辨率的「高码」门槛
+    static func isHighBitrateRelease(_ info: ReleaseInfo) -> Bool {
+        guard let mbps = videoBitrateMbps(info),
+              let std = standard(from: info.name) else { return false }
+        guard let need = highBitrateThresholds.first(where: { $0.standard == std })?.mbps else { return false }
+        return mbps >= need
     }
 }

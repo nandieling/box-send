@@ -35,17 +35,19 @@ public final class ReseedPipeline {
 
     /// 源站种子推下载器（按源站限速）。失败只记事件不抛出：转种与推下载器互不依赖，
     /// 下载器连不上时也应该把种先发到目标站。
+    /// 这一行讲的是「源站种子」，文案统一用获取（源站种子获取中… / 源站种子已获取），
+    /// 和目标站卡片上的推送区分开，免得看着像目标站已经推完。
     private func pushSourceTorrent(torrentData: Data, filename: String, upLimit: Int64,
                                    release: ReleaseInfo, opts: Options, report: inout Report) {
         if state.isPushed(key: release.dedupKey) {
             report.pushed = true
             report.pushID = "already pushed"
             state.note("push: 已推送过，跳过: \(release.summary)")
-            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
-                                          detail: "此前已推送过"))
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "源站种子已获取", phase: .done,
+                                          detail: "此前已获取过"))
             return
         }
-        opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送中…", phase: .working))
+        opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "源站种子获取中…", phase: .working))
         do {
             let result = try downloader.addTorrent(
                 data: torrentData, filename: filename,
@@ -60,12 +62,12 @@ public final class ReseedPipeline {
             var note = "push OK \(release.summary) upLimit=\(upLimit)"
             if !result.note.isEmpty { note += " [\(result.note)]" }
             state.note(note)
-            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "已推送", phase: .done,
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "源站种子已获取", phase: .done,
                                           detail: result.note))
         } catch {
             state.note("push FAIL \(release.summary): \(error.localizedDescription)")
-            report.pushes.append((release.siteID, false, "源站种子推送失败：\(error.localizedDescription)"))
-            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "推送失败", phase: .failed,
+            report.pushes.append((release.siteID, false, "源站种子获取失败：\(error.localizedDescription)"))
+            opts.onSourcePush?(SiteStatus(siteID: release.siteID, text: "源站种子获取失败", phase: .failed,
                                           detail: error.localizedDescription))
         }
     }
@@ -106,7 +108,11 @@ public final class ReseedPipeline {
             if !result.note.isEmpty { msg += " [\(result.note)]" }
             report.pushes.append((siteID, true, msg))
             state.note("push[\(siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
-            opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done, detail: tInfo.name))
+            // 下载器给的附加说明必须显示出来：种子 hash 与源站相同时 qB 只回"已存在"，
+            // 补没补上本站 tracker 全在这句话里，只写"已推送"会把没生效的推送看成成功
+            opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
+                                        detail: result.note.isEmpty ? tInfo.name
+                                                                    : "\(tInfo.name)\n\(result.note)"))
         } catch {
             report.pushes.append((siteID, false, error.localizedDescription))
             state.note("push[\(siteID)] FAIL \(detailURL): \(error.localizedDescription)")
@@ -263,6 +269,8 @@ public final class ReseedPipeline {
         }
         let debugDir = (config.dataDir as NSString).expandingTildeInPath
         let adapter = adapterFactory(site, client, debugDir)
+        // TMDB 反查（设置里配置了才建）：目标站上传页有 TMDB 输入框、又没从源站带出链接时才发请求
+        let tmdb = TMDBResolver.make(client: client, config: config.tmdb)
 
         // 2. 解析详情
         var release = try adapter.fetchDetail(detailURL: detailURL)
@@ -336,6 +344,18 @@ public final class ReseedPipeline {
                     }
                     do {
                         let tAdapter = adapterFactory(ts, client, debugDir)
+                        // 注入 TMDB 反查：适配器只在上传页真有 TMDB 输入框、且源站没带链接时才调用
+                        tAdapter.setTMDBLookup { info in
+                            guard let r = tmdb else { return nil }
+                            let link = r.resolve(imdb: info.imdb, douban: info.douban,
+                                                 name: info.name, altName: info.subtitle)
+                            if link == nil, let why = r.lastError {
+                                self.state.note("tmdb[\(tid)] 反查失败：\(why)")
+                            } else if let link, let warn = r.lastWarning {
+                                self.state.note("tmdb[\(tid)] 反查填写 \(link)：\(warn)")
+                            }
+                            return link
+                        }
                         // 上传前先站内查重：显式配了 searchURL 的站，或 NexusPHP 这类有通用检索端点的站。
                         // 命中即跳过上传并把站内已有种子推给下载器；查重出错不阻断转种，查不到就照常上传
                         let canPrecheck = !(ts.overrides?.searchURL ?? "").isEmpty || tAdapter.canPrecheckDuplicate
@@ -401,14 +421,40 @@ public final class ReseedPipeline {
                                     pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: false,
                                                    debugDir: debugDir, opts: opts, report: &report)
                                 } else {
-                                    state.note("reseed \(tid): 发布成功但未拿到新种子链接，跳过目标站推送")
+                                    // 站点回「发布成功」却没给新种子链接（实测海胆）：回站内检索一次把链接
+                                    // 找回来照常推送；实在找不到要明确提醒，静默跳过会被看成已经在做种
+                                    let recovered: String? = canPrecheck
+                                        ? (try? bounded(min(60, opts.siteTimeout / 3), "站内回查") {
+                                            try tAdapter.searchExists(release, relaxed: true)
+                                        }) ?? nil
+                                        : nil
+                                    if let u = recovered {
+                                        let uAbs = absoluteTargetURL(tid, u)
+                                        state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
+                                        state.note("reseed \(tid): 站点未回新种子链接，站内回查命中 \(uAbs)")
+                                        report.outcomes.append((tid, true, "转种成功（站内回查补到种子链接）"))
+                                        opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
+                                                                     detail: "站点没回新种子链接，站内回查补到：\(uAbs)"))
+                                        pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: false,
+                                                       debugDir: debugDir, opts: opts, report: &report)
+                                    } else {
+                                        let w = "发布成功，但站点没回新种子链接、站内回查也没找到：本次未推送下载器，请到站内手动推送"
+                                        state.note("reseed \(tid): \(w)")
+                                        report.warnings.append((tid, w))
+                                        opts.onSiteWarning?(tid, w)
+                                    }
                                 }
                             }
                         } else {
                             state.note("reseed FAIL \(tid) <- \(release.summary): \(outcome.message)")
-                            report.outcomes.append((tid, false, outcome.message))
+                            var msg = outcome.message
+                            // 杜比的「你必须填写TMDB链接」：顺带指个路，免得用户不知道去哪配
+                            if msg.localizedCaseInsensitiveContains("tmdb"), tmdb == nil {
+                                msg += "（未配置 TMDB 反查：设置 → TMDB 链接 → API 网关/API Key）"
+                            }
+                            report.outcomes.append((tid, false, msg))
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种失败", phase: .failed,
-                                                         detail: outcome.message))
+                                                         detail: msg))
                         }
                     } catch {
                         report.outcomes.append((tid, false, error.localizedDescription))

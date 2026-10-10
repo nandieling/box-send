@@ -8,6 +8,9 @@ class NexusPHPAdapter: SiteAdapter {
     let override: SiteOverride?
     /// 上传失败时把页面 HTML 存到这里排查（<dataDir>/debug/）
     let debugDir: String?
+    /// 源站没带 TMDB 链接时的反查回调（流水线注入：豆瓣/IMDb -> TMDB 条目链接）。
+    /// 只有上传页真的有 TMDB 输入框时才调用，避免白跑一次外网请求。
+    var tmdbLookup: ((ReleaseInfo) -> String?)?
 
     init(site: SiteConfig, client: HTTPClient, debugDir: String? = nil) {
         self.site = site
@@ -15,6 +18,8 @@ class NexusPHPAdapter: SiteAdapter {
         self.override = site.overrides
         self.debugDir = debugDir
     }
+
+    func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?) { tmdbLookup = lookup }
 
     var uploadPath: String { override?.uploadPath ?? "upload.php" }
     var uploadAction: String {
@@ -27,6 +32,19 @@ class NexusPHPAdapter: SiteAdapter {
     var categoryField: String { override?.categoryField ?? "category" }
     var fileField: String { override?.fileField ?? "file" }
     var listPath: String { "torrents.php" }
+
+    /// 本站「种子详情页」链接的正则。默认经典 NexusPHP 的 details.php?id=，
+    /// 站点用 detailLinkPattern 改写（TTG 是 /t/<id>/）。
+    /// 站内查重、站点回「已存在」、上传成功跳转三处都靠它定位链接，
+    /// 判错会让「已存在」的种子找不回链接，也就推不进下载器。
+    var detailHrefPattern: String {
+        override?.detailLinkPattern ?? Self.defaultDetailHrefPattern
+    }
+
+    /// 「(?<![a-zA-Z_])」是必须的：海胆的「发布成功」页里只有 userdetails.php?id=（本人 UID），
+    /// 不排除会把用户主页当成刚发的种子链接，推送时拿它去解析详情，报「无法解析 HAIDAN 标题」
+    static let defaultDetailHrefPattern =
+        "(?<![a-zA-Z_])details\\.php\\?id=\\d+|/torrents\\.php\\?id=\\d+"
 
     // MARK: - 详情解析
 
@@ -44,7 +62,7 @@ class NexusPHPAdapter: SiteAdapter {
 
     /// 页面是否为详情页（含任一详情容器）。用于识别新主题站点“返回列表页”的行为。
     static func looksLikeDetailPage(_ html: String) -> Bool {
-        for id in ["kdescr", "largedescribe", "hdarea", "top"] {
+        for id in ["kdescr", "largedescribe", "hdarea", "top", "kt_d"] {
             if html.contains("id=\"\(id)\"") || html.contains("id='\(id)'") {
                 return true
             }
@@ -498,7 +516,8 @@ class NexusPHPAdapter: SiteAdapter {
             if noResultMarkers.contains(where: { html.contains($0) }) { continue }
             // 结果行 = 详情链接的锚文本（各站搜索结果名称在 <a href="details.php?id=..">名称</a> 内）
             if let hit = Self.searchNameInResults(html: html, releaseName: target,
-                                                  base: URL(string: url)!, relaxed: relaxed) {
+                                                  base: URL(string: url)!,
+                                                  hrefPattern: detailHrefPattern, relaxed: relaxed) {
                 return hit.href
             }
         }
@@ -639,16 +658,38 @@ class NexusPHPAdapter: SiteAdapter {
     private func resolveCategory(_ info: ReleaseInfo, page: String) -> CategoryHit? {
         let kind = info.kind?.rawValue ?? "other"
         let profile = QualityTokens.catProfile(from: info.name, kind: info.kind)
+        let shape = QualityTokens.releaseShape(from: info.name)
         let groups = HTMLUtil.selectGroups(page, name: categoryField)
         // 静态表：值需落在某个下拉选项里（多个 type 下拉时定位所属组）
         var staticValue: String?
+        var matchedMap: [String: String] = [:]   // 命中「本分类/其他」这一档的表，供动画分流取相邻分类
         if let map = override?.categoryMap {
             if let profile, let v = map["\(kind)/\(profile)"] { staticValue = String(v) }
-            if staticValue == nil, let v = map[kind] ?? map["other"] { staticValue = String(v) }
+            // 形态键（anime/series、anime/movie）：站点没有动漫版块时按单片/整季分流
+            if staticValue == nil, let v = map["\(kind)/\(shape)"] { staticValue = String(v) }
+            if staticValue == nil, let v = map[kind] ?? map["other"] {
+                staticValue = String(v)
+                matchedMap = map.mapValues(String.init)
+            }
         }
         if staticValue == nil, let map = override?.categoryStringMap {
             if let profile, let v = map["\(kind)/\(profile)"] { staticValue = v }
-            if staticValue == nil, let v = map[kind] ?? map["other"] { staticValue = v }
+            if staticValue == nil, let v = map["\(kind)/\(shape)"] { staticValue = v }
+            if staticValue == nil, let v = map[kind] ?? map["other"] {
+                staticValue = v
+                matchedMap = map
+            }
+        }
+        // 静态表里 anime 只能填成和「其他」同一个值 = 这站没配动漫分区（观众、春天这类）：
+        // 动画按形态落进 剧集/电影。单分区站（海棠、tccf：所有分类共用一个值）相邻分类的值
+        // 也等于「其他」，条件不成立，仍留在原值。
+        if kind == "anime", let otherValue = matchedMap["other"], staticValue == otherValue {
+            for alt in Self.substituteKinds(for: kind, shape: shape) {
+                if let v = matchedMap[alt], v != otherValue {
+                    staticValue = v
+                    break
+                }
+            }
         }
         if let v = staticValue {
             if let g = groups.first(where: { $0.options.contains(where: { $0.value == v }) }) {
@@ -673,6 +714,13 @@ class NexusPHPAdapter: SiteAdapter {
             return nil
         }
         if let hit = matchKeywords(Self.kindKeywords.first { $0.0 == kind }?.1 ?? []) { return hit }
+        // 站点没有动漫分区（观众这类只有电影/剧集/纪录片的站）：动画按本身形态落进剧集/电影，
+        // 不退到「其他」——动画是标签，不该决定分区
+        if kind == "anime" {
+            for alt in Self.substituteKinds(for: kind, shape: shape) {
+                if let hit = matchKeywords(Self.kindKeywords.first { $0.0 == alt }?.1 ?? []) { return hit }
+            }
+        }
         if kind != "other", let hit = matchKeywords(Self.kindKeywords.first { $0.0 == "other" }!.1) {
             return hit
         }
@@ -755,6 +803,14 @@ class NexusPHPAdapter: SiteAdapter {
         }?.value
     }
 
+    /// 「来源」下拉里声明发布归属的选项：官方/原创/自拍只有源站自己能声明，
+    /// 转种既不能勾选，也不能在匹配不到介质时拿它们兜底
+    static func isSourceOwnershipLabel(_ label: String) -> Bool {
+        let n = QualityMatcher.normalize(QualityTokens.toSimplified(label))
+        return ["官方", "官种", "原创", "自拍", "复活区", "official", "original",
+                "selfshot", "selfrip", "selfprod"].contains(n)
+    }
+
     /// 源介质下拉（tr_source 型：值依赖 medium+standard 组合，如 BD Remux 1080 vs UHD Remux 2160）
     private func applySourceSelect(_ info: ReleaseInfo, _ set: (String, String) -> Void) {
         guard let field = override?.sourceSelectField, let map = override?.sourceMap else { return }
@@ -776,6 +832,13 @@ class NexusPHPAdapter: SiteAdapter {
         ("movie", ["电影", "movie", "film"]),
         ("other", ["其他", "其它", "other", "misc"]),
     ]
+
+    /// 站点没有该分类时的退让顺序：动画先看本身形态（整季→剧集，单片→电影），
+    /// 其余体裁沿用固定顺序（纪录片最常见：多数中小站没有独立纪录片版块）
+    static func substituteKinds(for kind: String, shape: String) -> [String] {
+        guard kind == "anime" else { return kindSubstitutes[kind] ?? [] }
+        return shape == "series" ? ["series", "movie", "tvshow"] : ["movie", "series", "tvshow"]
+    }
 
     /// 站点没有该分类、也没有「其他」时的退让顺序（纪录片最常见：多数中小站没有独立纪录片版块）
     static let kindSubstitutes: [String: [String]] = [
@@ -817,8 +880,12 @@ class NexusPHPAdapter: SiteAdapter {
         // 动态填充：标准字段名（新版 NexusPHP 为 xxx_sel[mode] 数组式，旧版为裸 xxx_sel）
         func tok(_ k: String) -> String? { tokens[k].flatMap { $0 } }
         let standardToken = tok("standard")
+        let mediumToken = tok("medium")
         let ctx = QualityMatcher.Context(
             isUHD: ["2160p", "8k"].contains(standardToken ?? ""),
+            isDIY: canonicalTags(info).contains("diy"),
+            // 碟片发布（含 DVD/REMUX）：媒介下拉不许退到「压制/HDTV」
+            isDisc: ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(mediumToken ?? ""),
             kindKeywords: Self.kindKeywords.first { $0.0 == (info.kind?.rawValue ?? "other") }?.1 ?? [],
             completed: QualityTokens.isCompletedRelease(info))
         let dyn: [(base: String, attr: String, token: String?)] = [
@@ -844,6 +911,7 @@ class NexusPHPAdapter: SiteAdapter {
             return out.filter { !explicitFields.contains($0) }
         }
         // Scene / P2P 二选一的来源下拉（吐鲁番）：转种来的都是 P2P 发布，别按 medium 兜底选到 Scene
+        var sourceDecided: Set<String> = []
         for name in names(for: "source_sel") {
             guard let g = HTMLUtil.selectGroups(page, name: name).first else { continue }
             var hasScene = false, p2pValue: String?
@@ -852,10 +920,16 @@ class NexusPHPAdapter: SiteAdapter {
                 if n.contains("scene") || n.contains("0day") { hasScene = true }
                 if p2pValue == nil, n.contains("p2p") || n.contains("non-scene") { p2pValue = o.value }
             }
-            if hasScene, let v = p2pValue { set(name, v) }
+            if hasScene, let v = p2pValue {
+                set(name, v)
+                // 定了就不再让下面按 medium 匹配：吐鲁番的 0DAY/Scene 排第一，
+                // 兜底会把刚选好的 P2P/Non-Scene 顶回去（用户明确要求来源不勾 0day）
+                sourceDecided.insert(name)
+            }
         }
         for d in dyn {
             for name in names(for: d.base) {
+                if sourceDecided.contains(name) { continue }
                 var groups = HTMLUtil.selectGroups(page, name: name)
                 guard !groups.isEmpty else { continue }
                 var done = false
@@ -865,6 +939,21 @@ class NexusPHPAdapter: SiteAdapter {
                     set(name, v)
                     done = true
                 }
+                // 发布归属型来源表（官方/转载/原创…）先按「转载/转种」选：转来的种子
+                // 既不是本站官种也不是本站原创，让首项兜底会勾成「官方」（彩虹岛的 1 就是官方）。
+                // 介质型来源表（蟹黄堡/青蛙/烧包的 source_sel 实为媒介）不参与，仍按 medium 匹配。
+                let ownsSource = groups[0].options.contains { Self.isSourceOwnershipLabel($0.label) }
+                if !done, d.base == "source_sel", ownsSource {
+                    if !QualityMatcher.hasMediumOption(groups[0].options),
+                       let v = QualityMatcher.match(token: "reseed", attr: "source",
+                                                    options: groups[0].options) {
+                        set(name, v)
+                        done = true
+                    } else {
+                        groups[0].options = groups[0].options
+                            .filter { !Self.isSourceOwnershipLabel($0.label) }
+                    }
+                }
                 // 组合式来源（烧包"动漫-完结"/"电影-Remux"）：先限定到本分类的子集
                 if !done, d.base == "source_sel", !ctx.kindKeywords.isEmpty {
                     let subset = groups[0].options.filter { o in
@@ -872,6 +961,14 @@ class NexusPHPAdapter: SiteAdapter {
                         return ctx.kindKeywords.contains { n.contains($0) }
                     }
                     if !subset.isEmpty { groups[0].options = subset }
+                }
+                // 来源表里的 0DAY/Scene：转种来的不是站内 0day 发布，兜底也不许勾它
+                if !done, d.base == "source_sel" {
+                    let noScene = groups[0].options.filter { o in
+                        let n = QualityMatcher.normalize(o.label)
+                        return !(n.contains("0day") || n.contains("scene"))
+                    }
+                    if !noScene.isEmpty { groups[0].options = noScene }
                 }
                 if !done, let token = d.token,
                    let v = QualityMatcher.match(token: token, attr: d.attr, options: groups[0].options, ctx: ctx) {
@@ -888,15 +985,15 @@ class NexusPHPAdapter: SiteAdapter {
                 if done { break }
             }
         }
-        // 制作组/团队下拉：转种带来的发布组不是本站制作组，留在"请选择一项"会被服务端拒，选「其他」
+        // 制作组/团队下拉：转种带来的发布组不是本站制作组，留在"请选择一项"会被服务端拒，选「其他」。
+        // 「个人原创/self」是宣称自己做的，不能拿来兜底（时光的下拉里它就排在 Other 前面）
         if override?.teamOtherFallback != false && override?.teamField == nil {
             for base in ["team_sel", "team"] {
                 for name in names(for: base) {
                     guard let g = HTMLUtil.selectGroups(page, name: name).first else { continue }
                     let hit = g.options.first { o in
                         guard o.value != "0" else { return false }
-                        let n = QualityMatcher.normalize(o.label)
-                        return n == "其他" || n == "其它" || n == "other" || n == "self" || n.contains("个人原创")
+                        return QualityMatcher.isOtherLabel(QualityMatcher.normalize(o.label))
                     }
                     if let hit { set(name, hit.value); break }
                 }
@@ -1046,8 +1143,11 @@ class NexusPHPAdapter: SiteAdapter {
     /// MediaInfo/BDInfo 特征判定；strict 模式（简介内的引用块等）额外要求足够多的 "键 : 值" 行，
     /// 避免把整段简介当 MediaInfo 摘走
     static func isMediaInfoText(_ t: String, strict: Bool = false) -> Bool {
-        let marker = t.contains("Unique ID") || t.contains("DISC TITLE") || t.contains("Complete name")
-            || t.contains("CompleteName") || (t.contains("Format") && t.contains("Duration"))
+        let n = t.lowercased()
+        // MediaInfo（Unique ID / Complete name）与 BDInfo（DISC INFO / PLAYLIST REPORT）两套特征
+        let marker = ["unique id", "disc title", "disc info", "disc label", "disc size",
+                      "complete name", "completename", "playlist report", "bdinfo"]
+            .contains { n.contains($0) } || (n.contains("format") && n.contains("duration"))
         guard marker else { return false }
         guard strict else { return true }
         let re = try! NSRegularExpression(pattern: "^\\s*[A-Za-z][A-Za-z0-9 ()/.#_-]{1,40}\\s*[:：]\\s*\\S")
@@ -1061,7 +1161,13 @@ class NexusPHPAdapter: SiteAdapter {
 
     /// 简介中全部图片 URL（文档顺序、去重）：锚包图取 href 原图，其余取 img src
     static func allImageURLs(from descrHTML: String, base: URL) -> [String] {
-        var out: [String] = []
+        imageURLs(from: descrHTML, base: base).map(\.url)
+    }
+
+    /// 简介里的图片直链 + 它在 HTML 中的位置（海报判定要看图片排在资料表前还是后）；
+    /// 同一张图只留第一处
+    static func imageURLs(from descrHTML: String, base: URL) -> [(url: String, offset: Int)] {
+        var out: [(url: String, offset: Int)] = []
         var seen = Set<String>()
         let re = try! NSRegularExpression(
             pattern: "<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>\\s*<img[^>]*>|<img[^>]*src=[\"']([^\"']+)[\"']",
@@ -1075,7 +1181,9 @@ class NexusPHPAdapter: SiteAdapter {
                let r = Range(m.range(at: 2), in: descrHTML) {
                 u = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(String(descrHTML[r])), against: base)
             } else { continue }
-            if Self.isImageURL(u), seen.insert(u).inserted { out.append(u) }
+            guard Self.isImageURL(u), seen.insert(u).inserted,
+                  let r = Range(m.range, in: descrHTML) else { continue }
+            out.append((u, descrHTML.distance(from: descrHTML.startIndex, to: r.lowerBound)))
         }
         return out
     }
@@ -1088,19 +1196,53 @@ class NexusPHPAdapter: SiteAdapter {
         return head.contains("action=[\"']takelogin.php") || head.contains("action='takelogin.php")
     }
 
-    static func posterURL(from descrHTML: String, base: String) -> String? {
-        guard let baseU = URL(string: base) else { return nil }
+    /// pt-gen 生成的豆瓣资料块的特征字：简介里出现其中之一，就认为那里是资料表的开头
+    static let doubanInfoMarkers = ["◎", "豆瓣链接", "豆瓣简介", "imdb链接", "imdb 链接",
+                                    "douban.com/subject", "themoviedb.org"]
+
+    /// 简介里 pt-gen/豆瓣资料块的起始位置（取最早出现的特征字；没有返回 nil）
+    static func doubanInfoBlockStart(in html: String) -> Int? {
+        var best: Int?
+        for marker in doubanInfoMarkers {
+            guard let r = html.range(of: marker, options: .caseInsensitive) else { continue }
+            let off = html.distance(from: html.startIndex, to: r.lowerBound)
+            if best == nil || off < best! { best = off }
+        }
+        return best
+    }
+
+    /// 封面海报图（可能不止一张：海报 + 背板）：
+    /// 1) pt-gen/豆瓣资料块上面的图片一律算封面——pt-gen 排版固定把海报放在资料表之前；
+    /// 2) 认不出资料块时，认 class 含 poster/cover 的容器，或链接写着 poster/cover/封面。
+    /// 都认不出返回空数组，由调用方决定要不要拿首图兜底。
+    static func posterURLs(from descrHTML: String, base: String) -> [String] {
+        guard let baseU = URL(string: base) else { return [] }
+        let images = imageURLs(from: descrHTML, base: baseU)
+        if let marker = doubanInfoBlockStart(in: descrHTML) {
+            let above = images.filter { $0.offset < marker }.map(\.url)
+            if !above.isEmpty { return above }
+        }
         let divRe = try! NSRegularExpression(
-            pattern: "<div[^>]*class=[\"'][^\"']*poster[^\"']*[\"'][^>]*>(.*?)</div>",
+            pattern: "<(?:div|figure|td|li)[^>]*class=[\"'][^\"']*(?:poster|cover)[^\"']*[\"'][^>]*>(.*?)</(?:div|figure|td|li)>",
             options: [.caseInsensitive, .dotMatchesLineSeparators])
         if let m = divRe.firstMatch(in: descrHTML, options: [], range: NSRange(descrHTML.startIndex..., in: descrHTML)),
            m.numberOfRanges > 1, let r = Range(m.range(at: 1), in: descrHTML) {
-            let inner = String(descrHTML[r])
-            if let src = HTMLUtil.group(inner, "<img[^>]*src=[\"']([^\"']+)[\"']", group: 1, options: [.caseInsensitive]) {
+            if let src = HTMLUtil.group(String(descrHTML[r]), "<img[^>]*src=[\"']([^\"']+)[\"']", group: 1,
+                                        options: [.caseInsensitive]) {
                 let u = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(src), against: baseU)
-                if Self.isImageURL(u) { return u }
+                if Self.isImageURL(u) { return [u] }
             }
         }
+        return images.compactMap { img in
+            let n = img.url.lowercased()
+            return (n.contains("poster") || n.contains("cover") || n.contains("封面")) ? img.url : nil
+        }
+    }
+
+    /// 海报图：认得出的优先，认不出按 PT 简介惯例把首图当封面
+    static func posterURL(from descrHTML: String, base: String) -> String? {
+        if let p = posterURLs(from: descrHTML, base: base).first { return p }
+        guard let baseU = URL(string: base) else { return nil }
         return allImageURLs(from: descrHTML, base: baseU).first
     }
 
@@ -1108,7 +1250,9 @@ class NexusPHPAdapter: SiteAdapter {
     static func screenshotURLs(from descrHTML: String, base: String) -> [String] {
         guard let baseU = URL(string: base) else { return [] }
         let all = allImageURLs(from: descrHTML, base: baseU)
-        guard let poster = posterURL(from: descrHTML, base: base) else { return all }
+        let posters = Set(posterURLs(from: descrHTML, base: base))
+        if !posters.isEmpty { return all.filter { !posters.contains($0) } }
+        guard let poster = all.first else { return all }
         return all.filter { $0 != poster }
     }
 
@@ -1212,8 +1356,10 @@ class NexusPHPAdapter: SiteAdapter {
 
 
     static func isImageURL(_ s: String) -> Bool {
-        let path = (s as NSString).deletingPathExtension.lowercased()
-        return [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"].contains { path.hasSuffix($0) }
+        // 扩展名单独取（deletingPathExtension 会把后缀去掉，拿它比 .jpg 永远不中）
+        let ext = ((URL(string: s)?.pathExtension.isEmpty == false
+                    ? URL(string: s)!.pathExtension : (s as NSString).pathExtension)).lowercased()
+        return ["jpg", "jpeg", "png", "webp", "gif", "avif"].contains(ext)
             || s.lowercased().contains("pic/") || s.lowercased().contains("image")
     }
 
@@ -1228,7 +1374,8 @@ class NexusPHPAdapter: SiteAdapter {
                                               dropScreenshots: override?.screenshotField != nil)
         var out = BBCode.fromHTML(html, base: URL(string: site.url))
         if embedMediainfo {
-            out = BBCode.insertMediainfo(out, mediainfo: info.mediainfo)
+            out = BBCode.insertMediainfo(out, mediainfo: info.mediainfo,
+                                         tag: override?.mediainfoTag ?? "quote")
         }
         return out
     }
@@ -1241,16 +1388,43 @@ class NexusPHPAdapter: SiteAdapter {
     /// 也避免和源简介自带的引用块叠成两段。
     private func withSourcePrefix(_ text: String, _ info: ReleaseInfo) -> String {
         let line = "转载自\(sourceLabel(info))，感谢发布者。"
+        let isHTML = (override?.descrFormat ?? "bbcode") == "html"
         if !info.extraQuoteText.isEmpty {
-            return ((override?.descrFormat ?? "bbcode") == "html"
-                    ? info.extraQuoteHTML : info.extraQuoteBBCode) + text
+            if !isHTML, let merged = Self.mergeIntoLeadingQuote(source: info.extraQuoteText, text: text) {
+                return merged
+            }
+            return (isHTML ? info.extraQuoteHTML : info.extraQuoteBBCode) + text
         }
         var out = text
-        if override?.descrSourcePrefix == true { out = line + "\n" + out }
+        if override?.descrSourcePrefix == true {
+            out = Self.mergeIntoLeadingQuote(source: line, text: text) ?? (line + "\n" + out)
+        }
         // 源页没解析出简介（版式特殊/页面异常）时兜一句：目标站几乎都把简介设成必填，
         // 空着会让整批目标站一起回「你必须填写简介！」
         if out.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out = Self.fallbackDescr(info) }
         return out
+    }
+
+    /// 源简介最上面就是制作引用（「原盘来自…」「字幕来自…」这类）时，把转种来源并到同一个
+    /// 引用块的第一行：织梦按「转载资源请在简介中声明来源」审核，两段并列的引用块会被判成没声明。
+    /// MediaInfo/BDInfo 引用块不并（那是技术参数），已经声明过来源的也不重复插。
+    static func mergeIntoLeadingQuote(source: String, text: String) -> String? {
+        let head = text.drop(while: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
+        guard let open = head.range(of: "[quote]", options: .caseInsensitive),
+              open.lowerBound == head.startIndex,
+              let close = head.range(of: "[/quote]", options: .caseInsensitive,
+                                     range: open.upperBound..<head.endIndex) else { return nil }
+        let inner = String(head[open.upperBound..<close.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !inner.isEmpty, !isMediainfoQuote(inner), !isMediaInfoText(inner) else { return nil }
+        let lower = inner.lowercased()
+        if ["转载自", "转载", "転載", "来源", "出处", "source:", "courtesy of"]
+            .contains(where: { lower.contains($0) }) { return nil }
+        let lead = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !lead.isEmpty else { return nil }
+        let openTag = String(head[open.lowerBound..<open.upperBound])
+        let closeTag = String(head[close.lowerBound..<close.upperBound])
+        return openTag + "\n" + lead + "\n" + inner + "\n" + closeTag + String(head[close.upperBound...])
     }
 
     /// 简介兜底文本
@@ -1328,9 +1502,11 @@ class NexusPHPAdapter: SiteAdapter {
     }
 
     /// 动态标签：解析页面复选框，按文案匹配规范标签后提交（新站免逐站配置）。
+    /// excluding 传入已由 tagMap / tagCheckboxes / tagSelectFields 处理过的规范标签，避免同一标签重复提交。
     /// 字段名含 tag/chinese/exclusive 的按"文案包含关键词"匹配；其余字段名（如 pterclub 的
     /// zhongzi/jinzhuan 拼音命名）只接受文案与关键词完全一致，避免误勾表单里其它复选框。
-    private func dynamicTagValues(_ info: ReleaseInfo, page: String) -> [(name: String, value: String)] {
+    private func dynamicTagValues(_ info: ReleaseInfo, page: String,
+                                  excluding: Set<String> = []) -> [(name: String, value: String)] {
         func nameGated(_ n: String) -> Bool {
             let base = n.replacingOccurrences(of: #"[\d]+"#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
@@ -1344,7 +1520,7 @@ class NexusPHPAdapter: SiteAdapter {
         var out: [(name: String, value: String)] = []
         var claimed: Set<String> = []
         for (tag, keywords) in QualityTokens.tagTextMap {
-            guard tags.contains(tag) else { continue }
+            guard tags.contains(tag), !excluding.contains(tag) else { continue }
             let keys = keywords.map(norm)
             func claimedBox(_ b: (name: String, value: String, label: String)) -> Bool {
                 claimed.contains("\(b.name)\u{1}\(b.value)")
@@ -1509,12 +1685,12 @@ class NexusPHPAdapter: SiteAdapter {
                 setField("pt_gen", "https://www.imdb.com/title/\(imdb)/")
             }
         }
-        if let tmdb = info.tmdb {
-            // 熊猫的输入框叫 tmdb、杜比叫 tmdb_url：配置没写也能自动填
-            if let field = usable(override?.tmdbField, builtin?.tmdbField) ?? Self.autoTMDBField(page) {
-                let bare = field.lowercased().hasSuffix("id")
-                setField(field, bare ? (HTMLUtil.group(tmdb, "/(\\d+)(?:$|[^0-9])") ?? tmdb) : tmdb)
-            }
+        // TMDB：先认表单里有没有输入框（熊猫叫 tmdb、杜比叫 tmdb_url，配置没写也自动认），
+        // 源站简介没带链接时再按豆瓣/IMDb 反查——杜比把这项设成必填，空着会被整单打回
+        if let field = usable(override?.tmdbField, builtin?.tmdbField) ?? Self.autoTMDBField(page),
+           let tmdb = info.tmdb ?? tmdbLookup?(info) {
+            let bare = field.lowercased().hasSuffix("id")
+            setField(field, bare ? (HTMLUtil.group(tmdb, "/(\\d+)(?:$|[^0-9])") ?? tmdb) : tmdb)
         }
         // 分类（支持质量型键 "<kind>/<profile>"，字符串表与动态解析；多下拉时定位 mode）
         var catMode: String?
@@ -1543,24 +1719,30 @@ class NexusPHPAdapter: SiteAdapter {
         // 常见可选字段的默认值（只提交表单里真实存在的字段；部分站对未知/空字段校验更严）
         if page.contains("name=\"nfo\"") || page.contains("name='nfo'") { setField("nfo", "") }
         if page.contains("name=\"anonymous\"") || page.contains("name='anonymous'") { setField("anonymous", "1") }
+        // 已显式配置过的规范标签：动态匹配只补这些没覆盖到的（见下方 dynamicTagValues）
+        var mappedTags: Set<String> = []
         // 标签（同名多次）
         if let tagField = override?.tagField, let map = override?.tagMap {
             for tag in canonicalTags(info) {
-                if let v = map[tag] { fields.append(.init(tagField, v)) }
+                guard let v = map[tag] else { continue }
+                mappedTags.insert(tag)
+                if fields.contains(where: { $0.name == tagField && $0.value == v }) { continue }
+                fields.append(.init(tagField, v))
             }
         }
         // 独立复选框标签（chdbits 等：cnsub=yes）
         if let box = override?.tagCheckboxes {
             for tag in canonicalTags(info) {
-                if let f = box[tag] { setField(f, "yes") }
+                guard let f = box[tag] else { continue }
+                mappedTags.insert(tag)
+                setField(f, "yes")
             }
         }
         // 标签型下拉（城市 HDCity tag1ing/tag2ing：选项值就是文案，按规范标签文案填）
         var usedTagOptions: Set<String> = []
-        var usedTags: Set<String> = []
         for field in override?.tagSelectFields ?? [] {
             guard let options = HTMLUtil.selectGroups(page, name: field).first?.options, !options.isEmpty else { continue }
-            for tag in canonicalTags(info) where !usedTags.contains(tag) {
+            for tag in canonicalTags(info) where !mappedTags.contains(tag) {
                 guard let keys = QualityTokens.tagTextMap.first(where: { $0.tag == tag })?.keywords else { continue }
                 // 选项形如"喜剧/Comedy"：按分隔段整段比对，避免"Jazz/爵士乐"被关键词 zz 误命中
                 if let hit = options.first(where: { o in
@@ -1571,16 +1753,17 @@ class NexusPHPAdapter: SiteAdapter {
                 }) {
                     setField(field, hit.value)
                     usedTagOptions.insert(hit.value)
-                    usedTags.insert(tag)
+                    mappedTags.insert(tag)
                     break
                 }
             }
         }
-        // 动态标签：无显式标签配置时按页面 tags 复选框文案匹配（新站免逐站配置）
-        if override?.tagField == nil && override?.tagCheckboxes == nil {
-            for (tag, value) in dynamicTagValues(info, page: page) {
-                fields.append(.init(tag, value))
-            }
+        // 动态标签：按页面复选框文案匹配（新站免逐站配置）。
+        // 配了 tagMap/tagCheckboxes 的站也走一遍，只补配置没覆盖的规范标签——
+        // 例如源站「标签」行写了 DIY，而本站 tagMap 里没配 diy，也应该勾上本站的 DIY 复选框。
+        for (name, value) in dynamicTagValues(info, page: page, excluding: mappedTags)
+        where !fields.contains(where: { $0.name == name && $0.value == value }) {
+            fields.append(.init(name, value))
         }
         // 制作组后缀（海胆等：文本框，站点按种子名末尾的发布组校验，缺了直接拒收）
         if HTMLUtil.group(page, "<input[^>]*name=[\"'](team_suffix)[\"']") != nil {
@@ -1676,6 +1859,12 @@ class NexusPHPAdapter: SiteAdapter {
         } else {
             page = try client.fetchHTML(uploadURL, referer: site.url)
         }
+        // 异地登录会把发布页跳去两步验证（杜比 take2fa.php），发种表单压根没渲染：
+        // 硬提交半套字段只会得到「请填写必填项目」，这里说清该做什么
+        if Self.twoFactorGate(page), !Self.hasUploadForm(page) {
+            throw BoxSendError.badInput("\(site.name) 发布页被两步验证拦住（要输验证码）："
+                                        + "请先在浏览器登录该站完成一次两步验证，再重新转种")
+        }
         // 表单页抓空/抓到错误页（烧包整站 500 时就是这样）：直接给原因，别让 POST 报"未识别的返回"
         guard !page.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               page.lowercased().contains("<form") else {
@@ -1730,11 +1919,13 @@ class NexusPHPAdapter: SiteAdapter {
         // 先判成功特征会把「已存在」误报成「转种成功」。要求页面同时是失败/重复提示版式，
         // 免得成功页里偶发出现「已存在」字样时反过来误判。
         if Self.hasExistMarker(body), Self.looksLikeRejectedPage(body),
-           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL) {
+           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
+                                           detailPattern: detailHrefPattern) {
             return dup
         }
         // 成功特征: 跳到新种子详情页 / 发布成功提示
-        if let m = HTMLUtil.firstMatch(finalURL, "(?:details\\.php\\?id=\\d+|/torrents\\.php\\?id=\\d+)"), !m.isEmpty {
+        if let m = HTMLUtil.firstMatch(finalURL, Self.defaultDetailHrefPattern + "|" + detailHrefPattern),
+           !m.isEmpty {
             let u = URL(string: uploadURL)!
             return newSeedOutcome(detailURL: HTMLUtil.resolveURL(m, against: u), torrentData: torrentData)
         }
@@ -1744,7 +1935,15 @@ class NexusPHPAdapter: SiteAdapter {
             return newSeedOutcome(detailURL: site.url + "details.php?id=" + id, torrentData: torrentData)
         }
         if resp.status == 200, body.contains("new torrent") || body.contains("发布成功") || body.contains("Torrent added") {
-            return UploadOutcome(success: true, message: "发布成功", detailURL: nil)
+            // 站点只说「发布成功」、没跳详情页（实测海胆）：响应页里若只有唯一一条详情链接，
+            // 就是刚发的那条种子，拿它去推下载器；否则交给流水线回站内检索
+            if let sole = Self.soleDetailURL(body: body, base: URL(string: uploadURL)!,
+                                             hrefPattern: detailHrefPattern) {
+                return newSeedOutcome(detailURL: sole, torrentData: torrentData)
+            }
+            var msg = "发布成功"
+            if let p = dumpDebugHTML(body) { msg += "（响应页已存 \(p)）" }
+            return UploadOutcome(success: true, message: msg, detailURL: nil)
         }
         // 失败: 提取错误信息 + 保存页面
         var errMsg = Self.extractUploadError(body: body, status: resp.status)
@@ -1767,12 +1966,28 @@ class NexusPHPAdapter: SiteAdapter {
         // 兜底：站点提示同名/同 hash 种子已存在（TTG 说「种子已经上传！」，多数站说「该种子已存在！」）
         // 视为成功但不算本次转种；连原始 body 一起查，防错误提取失败时漏判
         if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
-           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL) {
+           let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
+                                           detailPattern: detailHrefPattern) {
             return dup
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
         }
         preconditionFailure("unreachable")
+    }
+
+    /// 「发布成功」响应页里唯一的详情页链接：只有一条时它就是刚发的种子；
+    /// 出现多条（推荐位、相关种子）时不猜，交给调用方回站内检索。
+    static func soleDetailURL(body: String, base: URL, hrefPattern: String) -> String? {
+        let hrefs = HTMLUtil.anchorText(body, hrefPattern: hrefPattern).map {
+            HTMLUtil.resolveURL($0.href, against: base)
+        }
+        guard !hrefs.isEmpty else { return nil }
+        // 同一条种子的链接可能写法不同（带不带 &hit=1）：按种子 id 归一后再判唯一
+        let keys = Set(hrefs.map { u in
+            HTMLUtil.group(u, "[?&#]id=(\\d+)", group: 1).map { "id:\($0)" } ?? u
+        })
+        guard keys.count == 1 else { return nil }
+        return hrefs.min(by: { $0.count < $1.count })
     }
 
     /// 站点跳到详情页不等于发了新种：站内已有同名种子时它也可能跳回那条详情页
@@ -1791,8 +2006,68 @@ class NexusPHPAdapter: SiteAdapter {
             return UploadOutcome(success: true, message: "站内同名种子不是本次发布的（发布者或发布时间对不上）",
                                  detailURL: detailURL, alreadyExists: true)
         case .ours, .unknown:
-            return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
+            var msg = "发布成功"
+            if let note = autoFreeOneDay(page: page, detailURL: detailURL) { msg += "，\(note)" }
+            return UploadOutcome(success: true, message: msg, detailURL: detailURL)
         }
+    }
+
+    /// 站内「帖子免费1天」（猫站）：新种发成功后按详情页那条带签名的链接点一下。
+    /// 免费要扣猫粮，促销还剩一整天就不重复扣；站点给新帖的几小时促销照旧续到一天。
+    private func autoFreeOneDay(page: String, detailURL: String) -> String? {
+        guard override?.autoFreeAfterUpload == true, let marker = override?.freeOnceMarker else { return nil }
+        guard let id = Self.torrentIDFromDetail(detailURL) else { return "自动免费跳过：拿不到种子 id" }
+        if let hours = Self.promoRemainingHours(page), hours >= Self.freeOnceFullDayHours {
+            return "已在免费中（剩余 \(Int(hours)) 小时），未重复扣猫粮"
+        }
+        guard let href = Self.freeOnceLink(page: page, marker: marker, torrentID: id),
+              let base = URL(string: detailURL) else {
+            return "自动免费跳过：详情页没有免费入口（不是自己发的帖子或已过期）"
+        }
+        guard let resp = try? client.get(HTMLUtil.resolveURL(href, against: base),
+                                        referer: detailURL) else {
+            return "自动免费失败：请求没通"
+        }
+        return Self.freeOnceResult(body: String(data: resp.data, encoding: .utf8) ?? "",
+                                   status: resp.status)
+    }
+
+    /// 「免费1天」扣费额度小、时长固定，站点给新帖的促销够一天就没必要再扣一次
+    static let freeOnceFullDayHours = 23.0
+
+    /// 详情页里那条带签名的免费链接（猫站形如 details.php?art=freeoneday&id=895830&nonce=…&sign=…，
+    /// nonce/sign 每次渲染都变，只能现抓现用）
+    static func freeOnceLink(page: String, marker: String, torrentID: String) -> String? {
+        let esc = NSRegularExpression.escapedPattern(for: marker)
+        for (_, url) in HTMLUtil.firstMatches(page, "href=([\"'])([^\"']*\(esc)[^\"']*)\\1",
+                                             options: [.caseInsensitive]) where url.contains("id=\(torrentID)") {
+            return url
+        }
+        return nil
+    }
+
+    /// 点完之后的回执：成功是「祝贺你，你已把该帖子免费1天。」，失败给一行红字
+    static func freeOnceResult(body: String, status: Int) -> String {
+        if body.contains("你已把该帖子免费") || body.contains("祝贺你") { return "已自动免费一天" }
+        if let red = HTMLUtil.group(body, "color=[\"']?red[\"']?[^>]*>([^<]{2,200})", group: 1,
+                                    options: [.caseInsensitive])?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !red.isEmpty {
+            return "自动免费失败：\(HTMLUtil.decodeEntities(red))"
+        }
+        return status == 200 ? "已提交免费请求（站点未给明确回执）" : "自动免费失败：HTTP \(status)"
+    }
+
+    /// 详情页当前促销的剩余小时数（标题旁「剩余时间：<span title="2026-10-09 19:41:08">」）；
+    /// 站点与本机同时区，直接按本地时间比
+    static func promoRemainingHours(_ html: String, now: Date = Date()) -> Double? {
+        guard let raw = HTMLUtil.group(html,
+                "剩余时间[\\s\\S]{0,160}?title=\"?(\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2})\"?",
+                group: 1, options: []) else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        guard let date = f.date(from: raw.replacingOccurrences(of: "T", with: " ")) else { return nil }
+        return date.timeIntervalSince(now) / 3600
     }
 
     enum PageOwnership { case ours, theirs, unknown }
@@ -1850,6 +2125,15 @@ class NexusPHPAdapter: SiteAdapter {
     }
 
     /// 站点不让发种时不给表单，只在同页写明原因（龙：审核被驳回的种子数达上限，不允许发布）
+    /// 发布页被两步验证页替换（页面里只剩跳 take2fa.php 的脚本或「两步验证」提示）
+    static func twoFactorGate(_ html: String) -> Bool {
+        if html.range(of: "take2fa\\.php|two-factor|2fa\\.php", options: [.regularExpression, .caseInsensitive]) != nil {
+            return true
+        }
+        let text = HTMLUtil.decodeEntities(HTMLUtil.stripTags(html))
+        return text.contains("两步验证") || text.contains("兩步驗證")
+    }
+
     static func uploadBlockedNotice(_ html: String) -> String? {
         let re = try? NSRegularExpression(
             pattern: "<t[dh][^>]*class=[\"']?(?:text|std|msgalert[^\"'\\s]*)[\"']?[^>]*>(.*?)</t[dh]>",
@@ -1881,20 +2165,23 @@ class NexusPHPAdapter: SiteAdapter {
             || lower.contains("already upload") || lower.contains("duplicate")
     }
 
-    /// 「已存在」提示页 -> 成功结果（尽力带上已有种子的详情链接，供后续推送下载器）
-    static func duplicateOutcome(body: String, uploadURL: String) -> UploadOutcome? {
+    /// 「已存在」提示页 -> 成功结果（尽力带上已有种子的详情链接，供后续推送下载器）。
+    /// detailPattern = 本站详情链接正则（TTG 是 /t/<id>/，默认 details.php?id=）。
+    static func duplicateOutcome(body: String, uploadURL: String,
+                                 detailPattern: String = "(?:details|torrents)\\.php\\?id=\\d+") -> UploadOutcome? {
+        let link = "(?:" + detailPattern + ")"
         var existingURL: String?
-        if let m = HTMLUtil.group(body, "href=[\"']([^\"']*?(?:details|torrents)\\.php\\?id=\\d+[^\"']*)[\"']", group: 1),
+        if let m = HTMLUtil.group(body, "href=[\"']([^\"']*?" + link + "[^\"']*)[\"']"),
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: URL(string: uploadURL)!)
         }
         if existingURL == nil,
-           let m = HTMLUtil.group(body, "(https?://[^\\s<>\"]+?(?:details|torrents)\\.php\\?id=\\d+[^\\s<>\"]*)", group: 1),
+           let m = HTMLUtil.group(body, "(https?://[^\\s<>\"]+?" + link + "[^\\s<>\"]*)", group: 1),
            !m.contains("userdetails") {
             existingURL = m
         }
         if existingURL == nil,
-           let m = HTMLUtil.group(body, "(?<![>\"\'=\\w])(?:details|torrents)\\.php\\?id=\\d+(?:&[^\\s<>\"]*)?", group: 1),
+           let m = HTMLUtil.group(body, "(?<![>\"\'=\\w])" + link + "(?:&[^\\s<>\"]*)?", group: 1),
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(m, against: URL(string: uploadURL)!)
         }

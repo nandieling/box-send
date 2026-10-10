@@ -215,10 +215,13 @@ enum BBCode {
     }
 
     /// 把 MediaInfo 插入到末尾截图 [img] 区块之前；无截图则追加到末尾。
-    static func insertMediainfo(_ bbcode: String, mediainfo: String) -> String {
+    /// tag = 引用标签：多数中文站用 quote，观众要写成 [mediainfo]（站点按 MediaInfo 排版渲染）。
+    static func insertMediainfo(_ bbcode: String, mediainfo: String, tag: String = "quote") -> String {
         let mi = mediainfo.trimmingCharacters(in: Self.trimSet)
         guard !mi.isEmpty else { return bbcode }
-        let block = "[quote]\n\(mi)\n[/quote]"
+        let name = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        let t = name.isEmpty ? "quote" : name
+        let block = "[\(t)]\n\(mi)\n[/\(t)]"
         let lines = bbcode.components(separatedBy: "\n")
         var insertAt: Int? = nil
         for (i, line) in lines.enumerated().reversed() {

@@ -288,7 +288,10 @@ public final class HTTPClient {
             try? lines.joined(separator: "\n").data(using: .utf8)?.write(to: URL(fileURLWithPath: dump))
         }
         let sem = DispatchSemaphore(value: 0)
-        var result: Result<Response, Error> = .failure(BoxSendError.badInput("no response"))
+        // 慢图床/慢站点是"一直在传但传不完"，URLSession 的空闲超时不会触发，
+        // 到最后只剩这里放弃等待——报错要说清是等超时了，别写个 no response 让人猜
+        var result: Result<Response, Error> = .failure(BoxSendError.badInput(
+            "响应超时（\(Int(max(req.timeoutInterval, 1))) 秒内没下完）"))
         let task = session.dataTask(with: req) { data, response, error in
             defer { sem.signal() }
             if let error {
@@ -316,7 +319,12 @@ public final class HTTPClient {
             result = .success(resp)
         }
         task.resume()
-        _ = sem.wait(timeout: .now() + timeout + 30)
+        // 硬上限认这一次请求自己的 timeoutInterval：调用方（例如慢图床的截图下载）
+        // 会按单张大小放宽，站点页面请求仍按默认。到点取消任务，
+        // 否则被放弃的请求还在占带宽，越拖越慢（pixhost 整站限速时尤其明显）。
+        if sem.wait(timeout: .now() + max(req.timeoutInterval, timeout) + 30) == .timedOut {
+            task.cancel()
+        }
         let resp = try result.get()
         if let up = Self.httpsUpgradedRequest(req, finalURL: resp.finalURL) {
             return try performOnce(up)        // 请求体要跟着换到 https 上重发一次

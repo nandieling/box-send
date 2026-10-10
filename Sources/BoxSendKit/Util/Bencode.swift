@@ -57,6 +57,51 @@ public enum Bencode {
         return sha1Hex(Data(data[start..<end]))
     }
 
+    /// 顶层 announce / announce-list 里的 tracker URL（按出现顺序去重）。
+    /// 推送时用来把目标站的 tracker 补挂到下载器里已有的同 hash 种子上。
+    public static func announceURLs(_ data: Data) -> [String] {
+        var out: [String] = []
+        func add(_ s: String) {
+            let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, !out.contains(t) { out.append(t) }
+        }
+        guard data.count > 1, data[data.startIndex] == 0x64 else { return [] }   // 'd'
+        var i = data.startIndex + 1
+        while i < data.endIndex {
+            if data[i] == 0x65 { break }                                        // 'e'
+            guard let (key, ni) = readString(at: i, data) else { return out }
+            i = ni
+            if key == "announce", let (v, ni2) = readString(at: i, data) {
+                add(v)
+                i = ni2
+            } else if key == "announce-list", i < data.endIndex, data[i] == 0x6C {
+                // l l <url> e ... e ：每档一个 tracker 层
+                var j = i + 1
+                while j < data.endIndex, data[j] != 0x65 {
+                    if data[j] == 0x6C {
+                        var k = j + 1
+                        while k < data.endIndex, data[k] != 0x65 {
+                            guard let (v, nk) = readString(at: k, data) else { break }
+                            add(v)
+                            k = nk
+                        }
+                        j = k < data.endIndex ? k + 1 : data.endIndex
+                    } else if let nj = skipValue(at: j, data) {
+                        j = nj
+                    } else {
+                        break
+                    }
+                }
+                i = j < data.endIndex ? j + 1 : data.endIndex
+            } else if let ni2 = skipValue(at: i, data) {
+                i = ni2
+            } else {
+                return out
+            }
+        }
+        return out
+    }
+
     /// YemaPT piecesHash：info 字典内 `pieces` 整个 bencoded 值（含 `<len>:` 前缀）的 SHA-1，40 位 hex
     public static func piecesHashHex(_ data: Data) -> String? {
         var i = 0
