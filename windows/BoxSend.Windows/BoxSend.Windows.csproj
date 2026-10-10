@@ -14,8 +14,10 @@
     <!-- 让 macOS/Linux 也能编译校验（不产出可运行的 Windows 界面） -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 打包默认自包含（用户无需装 .NET），这里的 false 只是本地裸 build 的省事默认；
+         build.ps1 用命令行参数覆盖，命令行优先级高于工程属性 -->
     <SelfContained>false</SelfContained>
-    <!-- 目标机装了 .NET 9/10 桌面运行时也能直接跑，不必回头补 8.0 -->
+    <!-- 万一用了 -FrameworkDependent，装了 .NET 9/10 桌面运行时的机器也能直接跑 -->
     <RollForward>Major</RollForward>
     <ApplicationIcon Condition="Exists('boxsend.ico')">boxsend.ico</ApplicationIcon>
   </PropertyGroup>

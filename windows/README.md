@@ -25,9 +25,13 @@
    ICU / curl 等，从工具链 `usr\bin` 按模式扫）拷进 `BoxSend.Windows\native\`，csproj 会整目录带进输出。
    不同工具链版本文件名有出入，漏拷时 Windows 会直接报缺哪个 DLL，照名补进 `native\` 即可；
    权威判据是导入表：`dumpbin /dependents boxsend.dll`。
-3. `dotnet publish -c Release -r win-x64 --self-contained false`
-   框架依赖发布：成品不到 1 MB，前提是机器上有 .NET 8+ 桌面运行时（装了 9/10 也行，`RollForward=Major`）。
-   想省掉这个前提就加 `--self-contained true -p:PublishSingleFile=false`，代价是成品涨到百 MB 级。
+   顺带从 `System32` 拷一份 `vcruntime140.dll` 之类做随包部署——Swift 运行时是 MSVC 编的，
+   干净的 Win11 上少了它会双击没反应，而自包含的 .NET 只带它自己那份 `_cor3`。
+3. `dotnet publish -c Release -r win-x64 --self-contained true`
+   默认**自带 .NET 运行时**，用户机器上什么都不用装。实测 161 MB / 465 个文件，
+   `xz -9e` 压完 47 MB，安装包最终大约就是这个量级（mac 版 `.app` 是 7.4 MB，差距全在 .NET 运行时本体）。
+   嫌大就加 `-FrameworkDependent` 换回框架依赖：成品 1 MB 内，代价是用户得先装 .NET 8 桌面运行时。
+   （WPF 不支持裁剪，`PublishTrimmed` 用不上，这块体积省不动。）
 4. `-Setup` 时调 Inno Setup，产出 `windows\installer\Output\BoxSend-<版本>-win-x64.exe`。
    版本号从核心库 `Sources\BoxSendKit\Util\Version.swift` 读（写进未入库的 `installer\version.inc`），
    安装包名、exe 属性里的版本、界面右上角显示的版本永远是同一个数，只在 `Version.swift` 里改一次。

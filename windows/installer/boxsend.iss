@@ -12,7 +12,10 @@
 #define MyAppExeName "BoxSend.exe"
 #define MyAppURL "https://github.com/nandieling/box-send"
 
+; 自包含发布：.NET 运行时和 Swift 运行时都在包里，用户机器无需预装任何东西
 [Setup]
+; 解包约 160 MB，磁盘下限给 400 MB 余量
+DiskSpaceMinimum=409600
 AppId={{8C4B9E3A-7D15-4F0B-9C2E-51A7D3B6F110}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
@@ -57,28 +60,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-// .NET 8+ 桌面运行时缺失时给出人话提示（自包含包不需要这段）
-function DesktopRuntimeInstalled: Boolean;
-var
-  Names: TArrayOfString;
-  I: Integer;
-begin
-  Result := False;
-  if not RegGetValueNames(HKLM64, 'SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedruntime', Names) then
-    Exit;
-  for I := 0 to GetArrayLength(Names) - 1 do
-    if Pos('Microsoft.WindowsDesktop.App', Names[I]) > 0 then
-      Result := True;
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if CurStep = ssPostInstall then
-    if not DesktopRuntimeInstalled then
-      MsgBox('本机还没装 .NET 8 桌面运行时（Windows Desktop Runtime）。' + #13#10 +
-             '如果双击 BoxSend.exe 没反应，去微软官网下载 x64 版 Desktop Runtime 装上即可。' + #13#10 +
-             'https://dotnet.microsoft.com/download/dotnet/8.0',
-             mbInformation, MB_OK);
-end;

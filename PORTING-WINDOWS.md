@@ -84,16 +84,23 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 5. **双跑对拍**：同一份 `boxsend.json`、同一批 cookie，mac 与 Windows 各跑同一条源种链接，
    比对发种结果、推送、限速、日志。这一步是功能等价的真正验收，别省。
 6. 长任务：开始转种后关窗口，从托盘回来确认状态与日志连续。
-7. 换台没装 .NET 的机器试一次（安装包会提示去哪儿补 Desktop Runtime）。
+7. 换台干净机器（别装过 .NET、也别装过 VC++ 运行库）装一遍：自包含包不依赖 .NET，
+   但 Swift 运行时可能找 `VCRUNTIME140.dll`。脚本会把它随包带一份，验证这条有没有生效就靠这一步。
 8. 分发前签名：`boxsend.dll` 和 `BoxSend.exe` 都要签，不然 SmartScreen 和杀软各拦一道。
 
 ## 体积
 
-本机实测：框架依赖发布的界面部分 **0.7 MB**（`BoxSend.dll` 254 KB + 启动器 302 KB + 图标），
-核心库 release 编译 **2.9 MB**（macOS 上的 dylib；Windows 上代码量相同）。
-剩下的大头是 Swift 工具链的运行时 DLL，得在 Windows 上实测后才能给准数，量级估计十几 MB。
-界面用框架依赖发布的前提是机器上有 .NET 8+ 桌面运行时；改成 `--self-contained true` 就没这个前提，
-但成品涨到百 MB 级。
+按「不让用户装 .NET」定的默认：自包含发布。实测数据如下。
+
+| | 解包 | 压缩后 |
+| --- | --- | --- |
+| 自包含（默认） | 161 MB / 465 个文件 | 47 MB（`xz -9e`，安装包同量级） |
+| 框架依赖（`-FrameworkDependent`） | 0.7 MB 界面 + 2.9 MB 核心 | 几 MB，但用户要先装 .NET 8 桌面运行时 |
+| macOS 版 | `BoxSend.app` 7.4 MB | — |
+
+涨的 150 MB 全是 .NET 运行时本体（WPF 不支持 `PublishTrimmed`，裁剪省不动；里面还连带了用不上的
+WinForms 约 22 MB，真要抠体积可以在发布后按依赖树删，属于可优化的零头）。
+核心库 release 编译 2.9 MB，Swift 工具链那批运行时 DLL 还没在 Windows 上量过，量级十几 MB。
 
 ## 踩过记在这儿
 

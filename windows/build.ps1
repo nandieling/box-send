@@ -2,16 +2,19 @@
 Windows 打包脚本（在 Windows 上运行，PowerShell 7 或 Windows PowerShell 5.1 均可）
 
   .\windows\build.ps1              # release：核心库 -> native\ -> WPF -> publish\
+  .\windows\build.ps1 -Setup       # 再打成 installer\Output\*.exe
   .\windows\build.ps1 -Cfg debug   # 调试用
-  .\windows\build.ps1 -Setup       # 最后再用 Inno Setup 打成安装包
+  .\windows\build.ps1 -FrameworkDependent   # 不带 .NET 运行时（成品小，但用户机器要自己装）
 
+默认自带 .NET 运行时：用户机器上什么都不用装，双击就跑。
 前置：Swift for Windows 工具链（https://www.swift.org/install/windows/）、.NET 8 SDK、
       需要安装包时再装 Inno Setup 6。
 #>
 param(
     [ValidateSet('debug', 'release')] [string]$Cfg = 'release',
     [switch]$Setup,
-    [switch]$SkipCore
+    [switch]$SkipCore,
+    [switch]$FrameworkDependent
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,6 +66,16 @@ if (-not $SkipCore) {
             }
         }
     }
+    # Swift 运行时是 MSVC 编的，可能要 VCRUNTIME140；.NET 自包含只带它自己那份 _cor3。
+    # 随包放一份 app-local 的最保险，否则干净的 Win11 上表现是「双击没反应」。
+    foreach ($crt in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
+        $sys = Join-Path $env:SystemRoot "System32\$crt"
+        if ((Test-Path $sys) -and -not (Test-Path (Join-Path $native $crt))) {
+            Copy-Item $sys $native
+            $copied += $crt
+        }
+    }
+
     Write-Host ("核心库 + 运行时依赖共 " + (1 + $copied.Count) + " 个 DLL：")
     Get-ChildItem $native -Filter *.dll | ForEach-Object { Write-Host ("  " + $_.Name + "  " + [math]::Round($_.Length / 1kb) + " KB") }
     Write-Host '提示：漏依赖的权威判据是 boxsend.dll 的导入表，可用 dumpbin /dependents 核对。'
@@ -71,13 +84,18 @@ if (-not $SkipCore) {
 # ---------- 2. WPF 界面 ----------
 Step 'dotnet publish BoxSend.Windows'
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
-& dotnet publish $proj -c Release -r win-x64 --self-contained false -o $out -p:Version=$ver
+# 自带运行时 = 成品涨到 160 MB 上下，换来的是「用户不用装 .NET」；不带则 1 MB 内，但要预装桌面运行时
+$sc = if ($FrameworkDependent) { 'false' } else { 'true' }
+& dotnet publish $proj -c Release -r win-x64 --self-contained $sc -o $out `
+    -p:Version=$ver -p:DebugType=none -p:DebugSymbols=false
 if ($LASTEXITCODE) { throw "dotnet publish 失败" }
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'
 $total = (Get-ChildItem $out -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host ("publish\ 合计 {0} MB（不含 .NET 桌面运行时本体）" -f [math]::Round($total / 1mb, 1))
+$files = (Get-ChildItem $out -Recurse -File).Count
+Write-Host ("publish\ 合计 {0} MB / {1} 个文件（自包含含 .NET 运行时；安装包压缩后约为其 1/3）" `
+            -f [math]::Round($total / 1mb, 1), $files)
 Get-ChildItem $out -File | Sort-Object Length -Descending | Select-Object -First 8 |
     ForEach-Object { Write-Host ("  {0,8} KB  {1}" -f [math]::Round($_.Length / 1kb), $_.Name) }
 
