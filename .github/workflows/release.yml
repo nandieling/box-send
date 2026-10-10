@@ -219,14 +219,14 @@ jobs:
           path: windows/installer/Output/*.exe
 
       # 核心库单独留一份：安装包是 Inno 6.7 的容器，mac 上解不开；导出符号出问题时
-      # 拿这一个就能直接查导出表。失败也传，正是要看它的时候
+      # 拿这一个就能直接查导出表和导入表。失败也传，正是要看它的时候
       - name: 留核心库
         if: always()
         continue-on-error: true      # 核心库没编出来的话，别再叠一条红叉挡在真错误前面
         uses: actions/upload-artifact@v7
         with:
           name: windows-core-dll
-          path: windows/publish/boxsend.dll
+          path: windows/publish/boxsend-core.dll
 
       - name: 发版时传上 Release
         if: startsWith(github.ref, 'refs/tags/')

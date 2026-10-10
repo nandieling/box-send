@@ -7,10 +7,9 @@ let cdeclExports = [
     "boxsend_version", "boxsend_destroy", "boxsend_last_error",
 ]
 
-// Windows 的 DLL 靠 COFF 导出表对外露名字，而 COFF 只有 .drectve / .def 两条自动路子，
-// Swift 的 @_cdecl 都不走——它只保证符号名，不保证进导出表（实测 6.4.0 编出来的
-// boxsend.dll 导出表是空的，症状是界面报「Unable to find an entry point named
-// 'boxsend_create' in DLL 'boxsend'」）。这里逐个名字交给链接器强制导出；
+// Windows 的 DLL 靠 COFF 导出表对外露名字，而 COFF 只认 .drectve / .def 这两种自动写法，
+// Swift 的 @_cdecl 都不走：它只保证符号名，不保证进导出表。这里把名单显式交给链接器，
+// windows/build.ps1 打包前会解析导出表核对一遍（漏的名字要撑到用户开机才露脸）。
 // Mach-O / ELF 不需要，导出表由 public 可见性自动决定。
 let bridgeLinkerSettings: [LinkerSetting] = cdeclExports.map {
     .unsafeFlags(["-Xlinker", "/EXPORT:\($0)"], .when(platforms: [.windows]))
@@ -20,9 +19,11 @@ let package = Package(
     name: "BoxSend",
     platforms: [.macOS(.v13)],
     products: [
-        // 动态库：产物名在三平台上都叫 boxsend（Windows boxsend.dll / macOS libboxsend.dylib），
-        // 与 C# 侧 DllImport("boxsend") 的解析规则一致，打包时不需要改名
-        .library(name: "boxsend", type: .dynamic, targets: ["BoxSendBridge"]),
+        // 动态库：Windows 得 boxsend-core.dll、macOS 得 libboxsend-core.dylib。
+        // 名字特意带上 -core：Windows 文件名不分大小写，核心库若叫 boxsend.dll 会和 WPF
+        // 那份托管程序集 BoxSend.dll 撞成一个，界面加载到的是自己，报「Unable to find an
+        // entry point named 'boxsend_create' in DLL 'boxsend'」——还不发生在 mac 上。
+        .library(name: "boxsend-core", type: .dynamic, targets: ["BoxSendBridge"]),
     ],
     targets: [
         // 核心库：HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台（CLI 与 GUI 共用）

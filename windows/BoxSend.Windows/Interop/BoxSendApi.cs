@@ -7,19 +7,26 @@ using System.Text.Json.Nodes;
 namespace BoxSend.Windows.Interop;
 
 /// <summary>
-/// 核心库（Swift 侧 boxsend.dll）的进程内调用。
+/// 核心库（Swift 侧 boxsend-core.dll）的进程内调用。
 /// 契约只有一个：<see cref="Invoke"/> 收发 JSON 字符串，耗时动作在服务内部后台线程跑，
 /// 界面靠 snapshot / events 轮询取进度。
 /// </summary>
 public sealed class BoxSendApi : IDisposable
 {
-    private const string Lib = "boxsend";
+    // 核心库在 Windows 上不叫 boxsend.dll：那名字会被自己的托管程序集 BoxSend.dll 抢走
+    // （Windows 文件名不分大小写），所以 Swift 那边的产物叫 boxsend-core
+    private const string Lib = "boxsend-core";
+
+    // 字符串一律显式声明成 UTF-8：不写的话 .NET 按系统 ANSI 码页转换，中文系统（ACP 936）上
+    // 站名、筛选词这些进得去 JSON 也出得来，只是全成了乱码，而 CI 的英文 runner 上看不出来
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern IntPtr boxsend_create(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? configPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? dataDir);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr boxsend_create(string? configPath, string? dataDir);
-
-    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr boxsend_invoke(IntPtr handle, string requestJson);
+    private static extern IntPtr boxsend_invoke(
+        IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string requestJson);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     private static extern void boxsend_free(IntPtr ptr);
@@ -40,7 +47,7 @@ public sealed class BoxSendApi : IDisposable
     private IntPtr _handle;
     private readonly OcrCallback? _ocr;
 
-    /// macOS 上验证 ABI 时用绝对路径加载；Windows 从程序目录按常规解析 boxsend.dll
+    /// macOS 上验证 ABI 时用绝对路径加载；Windows 从程序目录按常规解析核心库
     static BoxSendApi()
     {
         NativeLibrary.SetDllImportResolver(typeof(BoxSendApi).Assembly, Resolve);
@@ -51,9 +58,9 @@ public sealed class BoxSendApi : IDisposable
         if (libraryName != Lib) return IntPtr.Zero;
         foreach (var candidate in new[]
                  {
-                     Path.Combine(AppContext.BaseDirectory, "boxsend.dll"),
-                     Path.Combine(AppContext.BaseDirectory, "libboxsend.dylib"),
-                     Path.Combine(AppContext.BaseDirectory, "libboxsend.so"),
+                     Path.Combine(AppContext.BaseDirectory, "boxsend-core.dll"),
+                     Path.Combine(AppContext.BaseDirectory, "libboxsend-core.dylib"),
+                     Path.Combine(AppContext.BaseDirectory, "libboxsend-core.so"),
                  })
         {
             if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var loaded)) return loaded;

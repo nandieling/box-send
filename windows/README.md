@@ -1,6 +1,6 @@
 # Windows 版怎么编
 
-界面是原生 WPF（.NET 8），核心逻辑直接用 macOS 那套 Swift 代码，编成 `boxsend.dll` 由界面进程内加载。
+界面是原生 WPF（.NET 8），核心逻辑直接用 macOS 那套 Swift 代码，编成 `boxsend-core.dll` 由界面进程内加载。
 在 Windows 上一键到底：
 
 ```powershell
@@ -26,13 +26,18 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
 
 ## 这个脚本做了四件事
 
-1. `swift build -c release --product boxsend`
-   产物名跨平台统一叫 `boxsend`（Windows 得 `boxsend.dll`，macOS 得 `libboxsend.dylib`），
-   和 C# 侧 `DllImport("boxsend")` 的解析规则对齐，打包不用改名。
-2. 把 `boxsend.dll` 连同一批 Swift 运行时 DLL（`swiftCore.dll` / `Foundation.dll` / `dispatch.dll` /
+1. `swift build -c release --product boxsend-core`
+   Windows 得 `boxsend-core.dll`，macOS 得 `libboxsend-core.dylib`，和 C# 侧 `DllImport` 的名字对齐。
+   名字带 `-core` 不是讲究：Windows 文件名不分大小写，核心库若叫 `boxsend.dll` 就和 WPF 那份
+   托管程序集 `BoxSend.dll` 撞成一个，界面加载到的是自己那份托管程序集（它是合法 PE，能加载，
+   只是没有导出符号），报「Unable to find an entry point named 'boxsend_create'」。
+2. 把 `boxsend-core.dll` 连同一批 Swift 运行时 DLL（`swiftCore.dll` / `Foundation.dll` / `dispatch.dll` /
    ICU / curl 等，从工具链 `usr\bin` 按模式扫）拷进 `BoxSend.Windows\native\`，csproj 会整目录带进输出。
    不同工具链版本文件名有出入，漏拷时 Windows 会直接报缺哪个 DLL，照名补进 `native\` 即可；
-   权威判据是导入表：`dumpbin /dependents boxsend.dll`。
+   权威判据是导入表：`dumpbin /dependents boxsend-core.dll`。
+   csproj 里那份 `None Include="native\**\*"` 带 `Link` 把目录拍平——Swift 那套 DLL 之间的依赖是
+   运行期动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在 `native\` 子目录里的表现
+   是「装上了但起不来」。
    顺带从 `System32` 拷一份 `vcruntime140.dll` 之类做随包部署——Swift 运行时是 MSVC 编的，
    干净的 Win11 上少了它会双击没反应，而自包含的 .NET 只带它自己那份 `_cor3`。
 3. `dotnet publish -c Release -r win-x64 --self-contained true`
@@ -76,12 +81,14 @@ winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份
 它会弹出向导等人在界面上点，CI 上没人点就一直挂着到超时。安装装到 runner 用户的
 `%LOCALAPPDATA%\Programs\Swift` 下（Toolchains 与 Runtimes 两份，都要进 PATH），不提权、不会有 UAC 弹窗。
 
-Swift 的 `@_cdecl` 在 Windows 上只保证符号名，不会自动把名字写进 DLL 导出表（COFF 认的是
-`.drectve` / `.def` / `/EXPORT:`，实测 6.4.0 编出来的 `boxsend.dll` 导出表是空的），界面表现为
-启动即报「核心库启动失败：Unable to find an entry point named 'boxsend_create' in DLL
-'boxsend'」。所以 `Package.swift` 给 `BoxSendBridge` 按名字逐个加了 `-Xlinker /EXPORT:`，
-`build.ps1` 则在打包前解析导出表、再 `LoadLibraryEx` 真加载一次核对这 7 个符号，缺就当场停下，
-不让空导出表的安装包出厂。
+两条 Windows 独有的坑，都已经变成构建期闸门：
+
+- **导出表**。COFF 的导出表只认 `.drectve` / `.def` 两种自动写法，Swift 的 `@_cdecl` 都不走，
+  它只保证符号名。`Package.swift` 给 `BoxSendBridge` 按名字逐个加了 `-Xlinker /EXPORT:`，
+  `build.ps1` 打包前解析导出表、再 `LoadLibraryEx` 真加载一次核对这 7 个符号，缺就当场停下。
+- **加载路径**。核心库和 15 个运行时 DLL 必须和 `BoxSend.exe` 同目录，见上面第 2 条。
+
+这两条的现场表现都一样：界面弹「核心库启动失败」，而 mac 上什么都看不出来。
 
 还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
 跑绿之后改成 `false` 让它变成硬门禁）。
@@ -104,7 +111,7 @@ windows/
 
 ```bash
 swift test                                        # 核心库回归（含无头服务契约测试）
-swift build                                       # 产出 .build/debug/libboxsend.dylib
+swift build                                       # 产出 .build/debug/libboxsend-core.dylib
 dotnet run --project windows/abi-probe            # 用 WPF 同一份 P/Invoke 声明加载真库跑一遍
 ```
 

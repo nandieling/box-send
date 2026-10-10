@@ -22,9 +22,11 @@
     <ApplicationIcon Condition="Exists('boxsend.ico')">boxsend.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- 核心库：由 Swift 工具链产出 boxsend.dll + Swift 运行时 DLL，整目录带进输出 -->
+  <!-- 核心库：由 Swift 工具链产出 boxsend-core.dll + Swift 运行时 DLL，整目录带进输出 -->
   <ItemGroup>
-    <None Include="native\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Link 不带目录 = 拍平到输出根目录。dotnet 默认会保留 native\ 这层，而核心库的依赖
+         （swiftCore.dll 那一堆）是运行期动态加载的，Windows 只在「exe 所在目录 + PATH」里找 -->
+    <None Include="native\**\*" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="assets\**\*" CopyToOutputDirectory="PreserveNewest" Condition="Exists('assets')" />
     <!-- 运行时按文件读图标（任务栏/托盘），exe 里那份是文件管理器看的 -->
     <Content Include="boxsend.ico" CopyToOutputDirectory="PreserveNewest" Condition="Exists('boxsend.ico')" />

@@ -6,7 +6,7 @@
 ```
 macOS    SwiftUI/AppKit ─┐
                          ├─ BoxSendKit（站点/转种流水线/cookie/下载器/Gist·CookieCloud/Web 控制台）
-Windows  WPF ──P/Invoke──┘   boxsend.dll（C ABI + JSON 契约）
+Windows  WPF ──P/Invoke──┘   boxsend-core.dll（C ABI + JSON 契约）
 ```
 
 选它的理由很直接：核心 1.1 万多行只依赖 Foundation，并且早就在 Debian 上无头跑通
@@ -77,18 +77,18 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 
 ## 到 Windows 机器上要做的事
 
-1. `swift build --product boxsend` 与 `swift test` 先全绿 —— 核心在 Windows 上编译过没有别的说法。
+1. `swift build --product boxsend-core` 与 `swift test` 先全绿 —— 核心在 Windows 上编译过没有别的说法。
    （CI 的 Windows 作业已经在做这件事，本地可以不重复。）
-2. `dotnet run --project windows/abi-probe`（Windows 上加载的就是 `boxsend.dll`）。
+2. `dotnet run --project windows/abi-probe`（Windows 上加载的就是 `boxsend-core.dll`）。
 3. `.\windows\build.ps1`，跑 `windows\publish\BoxSend.exe`。首次启动若报缺 DLL，就是 Swift 运行时
-   没拷全，按提示名从工具链 `usr\bin` 补进 `BoxSend.Windows\native\`；`dumpbin /dependents boxsend.dll` 是权威判据。
+   没拷全，按提示名从工具链 `usr\bin` 补进 `BoxSend.Windows\native\`；`dumpbin /dependents boxsend-core.dll` 是权威判据。
 4. 六页逐项对照 mac 版：建组、批量加站、组限速、逐站检测、下载器测试、TMDB、主题与背景图。
 5. **双跑对拍**：同一份 `boxsend.json`、同一批 cookie，mac 与 Windows 各跑同一条源种链接，
    比对发种结果、推送、限速、日志。这一步是功能等价的真正验收，别省。
 6. 长任务：开始转种后关窗口，从托盘回来确认状态与日志连续。
 7. 换台干净机器（别装过 .NET、也别装过 VC++ 运行库）装一遍：自包含包不依赖 .NET，
    但 Swift 运行时可能找 `VCRUNTIME140.dll`。脚本会把它随包带一份，验证这条有没有生效就靠这一步。
-8. 分发前签名：`boxsend.dll` 和 `BoxSend.exe` 都要签，不然 SmartScreen 和杀软各拦一道。
+8. 分发前签名：`boxsend-core.dll` 和 `BoxSend.exe` 都要签，不然 SmartScreen 和杀软各拦一道。
 
 ## 体积
 

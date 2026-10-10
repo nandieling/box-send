@@ -58,7 +58,7 @@ function Import-VsDevEnvironment {
 # 跑 swift build 并只回显关键行。swift build 失败时会把整条前端编译命令打出来（几十 KB），
 # 真正的报错行被冲得看不见，这里只留 error/warning/进度行；失败时再补输出结尾 30 行。
 function Invoke-SwiftBuild($cfg) {
-    $lines = @(& swift build -c $cfg --product boxsend 2>&1 | ForEach-Object { [string]$_ })
+    $lines = @(& swift build -c $cfg --product boxsend-core 2>&1 | ForEach-Object { [string]$_ })
     $code = $LASTEXITCODE
     foreach ($l in $lines) {
         if ($l -notmatch 'error|warning|Build complete|Linking|Compiling') { continue }
@@ -155,12 +155,12 @@ function Test-BoxSendExports([string]$dllPath, [switch]$FileOnly) {
     return @($script:AbiExports | Where-Object { [BoxSendPe]::Addr($h, $_) -eq 0 })
 }
 
-# 把 boxsend.dll 和 Swift 运行时那堆 DLL 收进 native\（重链之后可以再来一遍）
+# 把核心库和 Swift 运行时那堆 DLL 收进 native\（重链之后可以再来一遍）
 function Copy-CoreArtifacts([string]$built) {
     New-Item -ItemType Directory -Force -Path $native | Out-Null
     Get-ChildItem $native -Filter *.dll | Remove-Item
 
-    Copy-Item (Join-Path $built 'boxsend.dll') $native
+    Copy-Item (Join-Path $built 'boxsend-core.dll') $native
 
     # Swift 6 的 Windows 发行包是分家的：swift.exe 在 Toolchains\...\usr\bin，
     # swiftCore.dll / Foundation.dll 这些运行时在 Runtimes\...\usr\bin，只扫前者会拷不全。
@@ -210,7 +210,7 @@ function Copy-CoreArtifacts([string]$built) {
 
     Write-Host ("核心库 + 运行时依赖共 " + (1 + $copied.Count) + " 个 DLL：")
     Get-ChildItem $native -Filter *.dll | ForEach-Object { Write-Host ("  " + $_.Name + "  " + [math]::Round($_.Length / 1kb) + " KB") }
-    Write-Host '提示：漏依赖的权威判据是 boxsend.dll 的导入表，可用 dumpbin /dependents 核对。'
+    Write-Host '提示：漏依赖的权威判据是 boxsend-core.dll 的导入表，可用 dumpbin /dependents 核对。'
 }
 
 # 版本号只有一个来源：核心库里的 BoxSendVersion
@@ -222,7 +222,7 @@ Write-Host ("BoxSend " + $ver) -ForegroundColor Green
 
 # ---------- 1. 核心库 ----------
 if (-not $SkipCore) {
-    Step "swift build -c $Cfg --product boxsend"
+    Step "swift build -c $Cfg --product boxsend-core"
     # Windows 上 Swift 的标准库不在工具链里，而在 SDKROOT 指向的 Windows.sdk，
     # 这个环境变量是 Swift 安装器写进用户环境的，装完工具链不换终端就读不到
     if ($IsWindows -and -not $env:SDKROOT) {
@@ -251,7 +251,7 @@ if (-not $SkipCore) {
     # 先扫一眼导出表（只读文件不加载）。C ABI 符号没导出的话，装到用户机器上的表现是
     # 「核心库启动失败：Unable to find an entry point named 'boxsend_create'」，
     # 真加载的硬闸门在 2.5 步，这里只负责把问题暴露在刚编完的地方
-    if (Test-BoxSendExports (Join-Path $native 'boxsend.dll') -FileOnly) {
+    if (Test-BoxSendExports (Join-Path $native 'boxsend-core.dll') -FileOnly) {
         Write-Warning '核心库导出表不全，等 2.5 步真加载时再判一次'
     }
 
@@ -275,10 +275,20 @@ $t.Restart()
 if ($LASTEXITCODE) { throw "dotnet publish 失败（退出码 $LASTEXITCODE）" }
 Write-Host ('发布完成，用时 ' + [int]$t.Elapsed.TotalSeconds + ' 秒')
 
+# ---------- 2.2 核心库到位 ----------
+# csproj 用 Link 把 native\ 拍平到输出根目录。核心库的依赖（swiftCore.dll 那一堆）是运行期
+# 动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在子目录里的表现是装上了却起不来
+Step '核对 native\ 已拍平'
+if (Test-Path (Join-Path $out 'native')) {
+    throw 'publish\native\ 还在：csproj 里 native\ 那行的 Link 拍平规则被改了，核心库会加载不到'
+}
+$missingNative = @(Get-ChildItem $native -File | Where-Object { -not (Test-Path (Join-Path $out $_.Name)) } | ForEach-Object Name)
+if ($missingNative) { throw ('这些 native 文件没进 publish\：' + ($missingNative -join ', ')) }
+
 # ---------- 2.5 加载冒烟 ----------
 # 装进安装包的就是这一份：真加载 + 逐个查符号，别等用户机器上弹「核心库启动失败」才知道
-Step '加载 publish\boxsend.dll 冒烟测试'
-$missing = Test-BoxSendExports (Join-Path $out 'boxsend.dll')
+Step '加载 publish\boxsend-core.dll 冒烟测试'
+$missing = Test-BoxSendExports (Join-Path $out 'boxsend-core.dll')
 if ($missing) { throw ('导出符号缺失：' + ($missing -join ', ')) }
 Write-Host '加载成功，7 个导出符号齐全' -ForegroundColor Green
 
