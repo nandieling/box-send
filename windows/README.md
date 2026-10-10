@@ -53,10 +53,16 @@
 手动运行：Actions 页左侧选 `打包` → 右侧「Run workflow」→ 选分支/tag 与平台 → 绿色按钮。
 产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.1-win-x64.exe`）。
 
-Windows 作业会自己下载安装器装 Swift 工具链（runner 没预装，Windows 那侧官方只发 `.exe`，没有 zip）。
-runner 是 Server 镜像、里面没有 winget，所以走 curl 直连，安装包近 2GB、装完还要解压几 GB，
-这一步单独给了 30 分钟超时。换版本改 workflow 顶部 `env.SWIFT_WINDOWS`；
+Windows 作业会自己下载安装器装 Swift 工具链（runner 没预装，Windows 那侧官方只发 `.exe`，没有 zip；
+runner 是 Server 镜像、里面也没有 winget，所以走 curl 直连，两 GB 十几秒就下来了）。
+换版本改 workflow 顶部 `env.SWIFT_WINDOWS`，同时把 `SWIFT_WINDOWS_SHA256` 换成
+winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份新值；
 下载地址 404 就把它旁边那个 `SWIFT_WINDOWS_URL` 填成完整地址。Inno Setup 已预装就复用，没有就静默装一个。
+
+官方那个 `.exe` 是 **WiX Burn bundle**（winget 清单里 `InstallerType: burn`、`Scope: user`），
+只认 `/quiet /norestart /log <文件>`。别照 Inno 那套写 `/VERYSILENT`：burn 不认的参数等于没传，
+它会弹出向导等人在界面上点，CI 上没人点就一直挂着到超时。安装装到 runner 用户的
+`%LOCALAPPDATA%\Programs\Swift` 下（Toolchains 与 Runtimes 两份，都要进 PATH），不提权、不会有 UAC 弹窗。
 
 还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
 跑绿之后改成 `false` 让它变成硬门禁）。

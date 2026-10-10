@@ -25,6 +25,8 @@ on:
 env:
   SWIFT_WINDOWS: "6.4.0"
   SWIFT_WINDOWS_URL: ""
+  # 安装包校验值，抄自 winget 清单 microsoft/winget-pkgs 里 Swift.Toolchain 那一份；换版本记得一起改
+  SWIFT_WINDOWS_SHA256: "76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03"
   # 核心库在 Windows 上还没跑过测试，先不让它挡住出包；跑绿之后改成 false
   ALLOW_WINDOWS_TEST_FAILURE: "true"
 
@@ -82,6 +84,7 @@ jobs:
         env:
           SWIFT_WINDOWS: ${{ env.SWIFT_WINDOWS }}
           SWIFT_WINDOWS_URL: ${{ env.SWIFT_WINDOWS_URL }}
+          SWIFT_WINDOWS_SHA256: ${{ env.SWIFT_WINDOWS_SHA256 }}
         run: |
           $ErrorActionPreference = 'Continue'
           # 安装位置随安装器版本变，装完按目录扫出来再写进 PATH（Toolchains 与 Runtimes 都要）
@@ -124,16 +127,34 @@ jobs:
           & curl.exe --silent --show-error --fail --location --retry 3 --retry-delay 5 -o $exe $url
           if ($LASTEXITCODE -ne 0) { throw "下载失败，curl 退出码 $LASTEXITCODE" }
           "下载完成 $([math]::Round((Get-Item $exe).Length / 1MB)) MB，用时 $([int]$t.Elapsed.TotalSeconds) 秒"
+          if ($env:SWIFT_WINDOWS_SHA256) {   # 两 GB 的包，先验一下再装
+            $want = $env:SWIFT_WINDOWS_SHA256.Replace('-', '')
+            $got = (Get-FileHash $exe -Algorithm SHA256).Hash
+            if ($got -ne $want) { throw "安装包 SHA256 对不上（预期 $want，实际 $got），换个版本记得同步这里的值" }
+            "SHA256 校验通过"
+          }
           $t.Restart()
-          # Swift 官方安装器是 Inno 壳，静默参数照 Inno 那套
-          # 退出码不当硬门禁（要重启之类也会给非零），下面按找不找得到 swift 判定装没装上
-          $p = Start-Process $exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -PassThru -Wait
+          # 官方安装器是 WiX Burn bundle（winget 清单里 InstallerType: burn），只认 burn 那套参数。
+          # 传 Inno 的 /VERYSILENT 等于什么参数都没传，它会弹向导等人在界面上点，CI 上就是死等。
+          # 清单里 Scope: user，装在 %LOCALAPPDATA% 下，不需要提权，不会有 UAC 弹窗卡住。
+          $log = Join-Path $env:RUNNER_TEMP 'swift-burn.log'
+          $p = Start-Process $exe -ArgumentList '/quiet', '/norestart', '/log', $log -PassThru
+          if (-not $p.WaitForExit(1500000)) {   # 25 分钟硬闸，别让作业干等；日志留在下面这步之前打出来
+            @($p) + @(Get-Process burn -ErrorAction SilentlyContinue) | ForEach-Object {
+              try { $_.Kill() } catch {}
+            }
+            if (Test-Path $log) { "卡住时 burn 日志最后 40 行："; Get-Content $log -Tail 40 }
+            throw "安装超过 25 分钟没结束"
+          }
+          $p.WaitForExit()
+          # 退出码不当硬门禁（3010 是「装好了但要重启」），下面按找不找得到 swift 判定装没装上
           "安装器退出码 $($p.ExitCode)，用时 $([int]$t.Elapsed.TotalSeconds) 秒"
           $bins = Find-SwiftBins
           if (-not $bins) {
             "找不到，列一下可能的安装位置："
             Get-ChildItem 'C:\', 'C:\Program Files', "$env:LOCALAPPDATA\Programs" -Directory -ErrorAction SilentlyContinue |
               Where-Object { $_.Name -match 'swift' } | ForEach-Object { $_.FullName }
+            if (Test-Path $log) { "burn 日志最后 60 行："; Get-Content $log -Tail 60 }
             throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了"
           }
           $bins | ForEach-Object { "加进 PATH：" + $_; Add-Content -Path $env:GITHUB_PATH -Value $_ }
