@@ -23,7 +23,8 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 | `Platform.hooks.unzip` | `/usr/bin/unzip` | 系统自带 `tar.exe -xf`，或由宿主注入 |
 | AES（CookieCloud） | 纯 Swift 实现 | 同一份纯 Swift 实现（不再用 CommonCrypto） |
 | 内置 HTTP 服务 | Darwin socket | Winsock 分支，手写点分 IPv4 解析 |
-| 数据目录 | `~/.boxsend` | `%APPDATA%\BoxSend` |
+| 站点名拼音排序 | `CFStringCompareWithOptionsAndLocale` | 同一行 `String.compare(locale:)`（Windows 的 Foundation 没有 CoreFoundation 模块，但同样走 ICU 的 CLDR 排序） |
+| 数据目录 | `~/Library/Application Support/BoxSend` | `%APPDATA%\BoxSend` |
 
 钩子都在 `Sources/BoxSendKit/Platform/Platform.swift`，不注入就走 mac 的老路，所以 macOS 版行为一字未改。
 

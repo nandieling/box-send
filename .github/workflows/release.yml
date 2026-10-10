@@ -180,7 +180,10 @@ jobs:
           swift --version
           swift build --build-tests
           if ($LASTEXITCODE -ne 0) { throw "!! 测试目标编译就没过（退出码 $LASTEXITCODE）" }
-          swift test 2>&1 | Select-String -Pattern 'error:|Fatal error|failed|Executed .* tests' | Select-Object -Last 40
+          # swift 失败时会打印整条前端编译命令（几十 KB），这里只留关键行并限长
+          swift test 2>&1 | Select-String -Pattern 'error|Fatal error|failed|Executed .* tests' |
+            ForEach-Object { if ($_.Line.Length -gt 300) { $_.Line.Substring(0, 300) + ' …' } else { $_.Line } } |
+            Select-Object -Last 40
           if ($LASTEXITCODE -ne 0) { throw "swift test 没过（退出码 $LASTEXITCODE）" }
 
       - name: 装 Inno Setup（runner 已预装则跳过）

@@ -51,6 +51,24 @@ function Import-VsDevEnvironment {
     return $true
 }
 
+# 跑 swift build 并只回显关键行。swift build 失败时会把整条前端编译命令打出来（几十 KB），
+# 真正的报错行被冲得看不见，这里只留 error/warning/进度行；失败时再补输出结尾 30 行。
+function Invoke-SwiftBuild($cfg) {
+    $lines = @(& swift build -c $cfg --product boxsend 2>&1 | ForEach-Object { [string]$_ })
+    $code = $LASTEXITCODE
+    foreach ($l in $lines) {
+        if ($l -notmatch 'error|warning|Build complete|Linking|Compiling') { continue }
+        if ($l.Length -gt 300) { Write-Host ($l.Substring(0, 300) + ' …') } else { Write-Host $l }
+    }
+    if ($code) {
+        Write-Host '-- 输出结尾 --' -ForegroundColor DarkGray
+        $lines | Select-Object -Last 30 | ForEach-Object {
+            if ($_.Length -gt 300) { Write-Host ($_.Substring(0, 300) + ' …') } else { Write-Host $_ }
+        }
+    }
+    return $code
+}
+
 # 版本号只有一个来源：核心库里的 BoxSendVersion
 $verFile = Join-Path $root 'Sources\BoxSendKit\Util\Version.swift'
 $verMatch = Select-String -Path $verFile -Pattern 'static let version = "([^"]+)"' | Select-Object -First 1
@@ -68,13 +86,13 @@ if (-not $SkipCore) {
     }
     Push-Location $root
     try {
-        & swift build -c $Cfg --product boxsend
-        if ($LASTEXITCODE) {
+        $code = Invoke-SwiftBuild $Cfg
+        if ($code) {
             # 编译没过的话，补上 VS 开发者环境再试一次（MSVC 头文件与库的路径只在里面有）
-            if (-not (Import-VsDevEnvironment)) { throw 'swift build 失败' }
+            if (-not (Import-VsDevEnvironment)) { throw "swift build 失败（退出码 $code）" }
             Write-Host '已导入 VS 开发者环境，重试一次' -ForegroundColor Yellow
-            & swift build -c $Cfg --product boxsend
-            if ($LASTEXITCODE) { throw 'swift build 失败（导入 VS 开发者环境后仍没过）' }
+            $code = Invoke-SwiftBuild $Cfg
+            if ($code) { throw "swift build 失败（导入 VS 开发者环境后仍没过，退出码 $code）" }
         }
     }
     finally { Pop-Location }
