@@ -14,13 +14,10 @@
 
 ; 自包含发布：.NET 运行时和 Swift 运行时都在包里，用户机器无需预装任何东西
 [Setup]
-; 解包约 160 MB，磁盘下限给 400 MB 余量
-DiskSpaceMinimum=409600
 AppId={{8C4B9E3A-7D15-4F0B-9C2E-51A7D3B6F110}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
-VersionDisplayVersion={#MyAppVersion}
 DefaultGroupName={#MyAppName}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes

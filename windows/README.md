@@ -36,8 +36,9 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
    顺带从 `System32` 拷一份 `vcruntime140.dll` 之类做随包部署——Swift 运行时是 MSVC 编的，
    干净的 Win11 上少了它会双击没反应，而自包含的 .NET 只带它自己那份 `_cor3`。
 3. `dotnet publish -c Release -r win-x64 --self-contained true`
-   默认**自带 .NET 运行时**，用户机器上什么都不用装。实测 161 MB / 465 个文件，
-   `xz -9e` 压完 47 MB，安装包最终大约就是这个量级（mac 版 `.app` 是 7.4 MB，差距全在 .NET 运行时本体）。
+   默认**自带 .NET 运行时**，用户机器上什么都不用装。CI 上实测 `publish\` 188 MB / 480 个文件
+   （含 Swift 运行时；大头是 PresentationFramework / System.Private.CoreLib / WinForms 那几块），
+   LZMA2 压完安装包约为其三分之一（mac 版 `.app` 是 7.4 MB，差距全在运行时本体）。
    嫌大就加 `-FrameworkDependent` 换回框架依赖：成品 1 MB 内，代价是用户得先装 .NET 8 桌面运行时。
    （WPF 不支持裁剪，`PublishTrimmed` 用不上，这块体积省不动。）
 4. `-Setup` 时调 Inno Setup，产出 `windows\installer\Output\BoxSend-<版本>-win-x64.exe`。
