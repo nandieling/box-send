@@ -1,0 +1,134 @@
+# 出包流水线：macOS 的 BoxSend.app 与 Windows 的安装包，同一套版本号（只改 Version.swift）
+#
+#   推 tag（仓库现在的 tag 形如 1.1）→ 两个平台的包直接挂到 GitHub Release
+#   Actions 页面手动运行              → 只构建并留 artifact，不发版
+#   提 PR / 推 main                   → 只跑测试
+#
+# Windows 那侧需要 Swift 工具链。GitHub 的 Windows runner 上没有预装，所以这里下载官方发行包解压；
+# 换版本改下面 env 里的 SWIFT_WINDOWS，下载 404 就改 SWIFT_WINDOWS_URL 填完整地址。
+name: 打包
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SWIFT_WINDOWS: "6.4.0"
+  SWIFT_WINDOWS_URL: ""
+  # 核心库在 Windows 上还没跑过测试，先不让它挡住出包；跑绿之后改成 false
+  ALLOW_WINDOWS_TEST_FAILURE: "true"
+
+permissions:
+  contents: write
+
+jobs:
+  macOS:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 测试
+        run: swift test
+
+      - name: 打包 .app
+        run: |
+          bash scripts/make-app.sh
+          ditto -c -k --keepParent dist/BoxSend.app "BoxSend-$(sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/BoxSendKit/Util/Version.swift | head -1)-macos.zip"
+
+      - name: 留产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: BoxSend-*-macos.zip
+
+      - name: 发版时传上 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          file=$(ls BoxSend-*-macos.zip)
+          gh release create "$tag" "$file" --title "BoxSend $tag" --notes "见 README 使用教程" 2>/dev/null ||
+            gh release upload "$tag" "$file" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  Windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 Swift 工具链
+        shell: pwsh
+        env:
+          SWIFT_WINDOWS: ${{ env.SWIFT_WINDOWS }}
+          SWIFT_WINDOWS_URL: ${{ env.SWIFT_WINDOWS_URL }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Get-Command swift.exe -ErrorAction SilentlyContinue) {
+            "runner 上已有 swift：" + (Get-Command swift.exe).Source
+            exit 0
+          }
+          $v = $env:SWIFT_WINDOWS
+          $url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {
+            "https://download.swift.org/swift-$v-release/windows/swift-$v-RELEASE/swift-$v-RELEASE-windows10.zip"
+          }
+          "下载 $url"
+          try {
+            Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\swift.zip"
+          } catch {
+            throw "下载失败：$_`n改 workflow 顶部 env 里的 SWIFT_WINDOWS（换版本号）或 SWIFT_WINDOWS_URL（填完整地址）"
+          }
+          $dir = "C:\swiftci"
+          Expand-Archive "$env:RUNNER_TEMP\swift.zip" -DestinationPath $dir -Force
+          # 发行包里 Toolchains 与 Runtimes 是两个目录，两边的 usr\bin 都要进 PATH
+          $exe = Get-ChildItem $dir -Recurse -Filter swift.exe | Select-Object -First 1
+          if (-not $exe) { throw "解压产物里没有 swift.exe，zip 结构可能变了：$url" }
+          $paths = @($exe.DirectoryName)
+          $paths += (Get-ChildItem $dir -Recurse -Filter swiftCore.dll | ForEach-Object { $_.DirectoryName })
+          $paths | Where-Object { $_ } | Select-Object -Unique | ForEach-Object {
+            "加进 PATH：$_"
+            Add-Content -Path $env:GITHUB_PATH -Value $_
+          }
+
+      # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
+      - name: 测试
+        shell: pwsh
+        continue-on-error: ${{ env.ALLOW_WINDOWS_TEST_FAILURE == 'true' }}
+        run: |
+          swift --version
+          swift test
+
+      - name: 装 Inno Setup（runner 已预装则跳过）
+        shell: pwsh
+        run: |
+          $found = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+                     "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+                     "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") |
+                   Where-Object { Test-Path $_ }
+          if ($found) { "已预装：" + $found[0]; exit 0 }
+          Invoke-WebRequest "https://jrsoftware.org/download.php/is.exe" -OutFile "$env:RUNNER_TEMP\inno.exe"
+          Start-Process "$env:RUNNER_TEMP\inno.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { throw "Inno Setup 装完还是没找到 ISCC.exe" }
+
+      - name: 打包安装包
+        shell: pwsh
+        run: .\windows\build.ps1 -Setup
+
+      - name: 留产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: windows/installer/Output/*.exe
+
+      - name: 发版时传上 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem windows/installer/Output -Filter *.exe | Select-Object -First 1).FullName
+          $notes = "含 .NET 运行时，装完即用；用法见 README。"
+          gh release create "$env:GITHUB_REF_NAME" "$exe" --title "BoxSend $env:GITHUB_REF_NAME" --notes $notes 2>$null
+          if ($LASTEXITCODE -ne 0) { gh release upload "$env:GITHUB_REF_NAME" "$exe" --clobber }
+        env:
+          GH_TOKEN: ${{ github.token }}

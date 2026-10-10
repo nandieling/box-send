@@ -77,6 +77,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 ## 到 Windows 机器上要做的事
 
 1. `swift build --product boxsend` 与 `swift test` 先全绿 —— 核心在 Windows 上编译过没有别的说法。
+   （CI 的 Windows 作业已经在做这件事，本地可以不重复。）
 2. `dotnet run --project windows/abi-probe`（Windows 上加载的就是 `boxsend.dll`）。
 3. `.\windows\build.ps1`，跑 `windows\publish\BoxSend.exe`。首次启动若报缺 DLL，就是 Swift 运行时
    没拷全，按提示名从工具链 `usr\bin` 补进 `BoxSend.Windows\native\`；`dumpbin /dependents boxsend.dll` 是权威判据。

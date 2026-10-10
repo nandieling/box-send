@@ -51,18 +51,39 @@ if (-not $SkipCore) {
 
     Copy-Item (Join-Path $built 'boxsend.dll') $native
 
-    # Swift 工具链的运行时与依赖。不同版本文件名有出入：按模式扫，命中多少拷多少，
-    # 最终以「拷过去能跑起来」为准；漏拷时 Windows 会直接报「找不到 XXX.dll」，照名补即可。
+    # Swift 6 的 Windows 发行包是分家的：swift.exe 在 Toolchains\...\usr\bin，
+    # swiftCore.dll / Foundation.dll 这些运行时在 Runtimes\...\usr\bin，只扫前者会拷不全。
+    # 做法是把「PATH 里有 swiftCore.dll 的目录」都算进来，再加 Toolchains 旁边那个 Runtimes。
     $toolchainBin = Split-Path -Parent (Get-Command swift).Source
+    $bins = New-Object System.Collections.Generic.List[string]
+    $bins.Add($toolchainBin)
+    foreach ($dir in ($env:Path -split ';')) {
+        if ($dir -and (Test-Path (Join-Path $dir 'swiftCore.dll'))) { $bins.Add($dir) }
+    }
+    # PATH 没配全时退一步：拿 Toolchains 同级的 Runtimes 根目录，逐个版本目录找 usr\bin
+    # （Toolchains 的目录名带 +Asserts 后缀，Runtimes 的不带，别指望直接字符串替换）
+    $rtRoot = $toolchainBin -replace '\\Toolchains\\.*$', '\Runtimes'
+    if (Test-Path $rtRoot) {
+        Get-ChildItem $rtRoot -Directory | ForEach-Object {
+            $b = Join-Path $_.FullName 'usr\bin'
+            if (Test-Path $b) { $bins.Add($b) }
+        }
+    }
+    $bins = $bins | Select-Object -Unique
+
+    # 文件名跟着工具链版本变，按模式扫，命中多少拷多少；漏拷时 Windows 会直接报缺哪个 DLL。
     $patterns = @('swiftrt.dll', 'swiftCore.dll', 'swift*-*.dll', 'swiftWinSDK.dll', 'swiftCXX.dll',
                   'dispatch.dll', 'BlocksRuntime.dll', 'Foundation*.dll', 'FoundationXML.dll',
-                  'icu*.dll', 'curl*.dll', 'zlib*.dll', 'xml2.dll', 'sqlite3.dll')
+                  'icu*.dll', 'curl*.dll', 'zlib*.dll', 'xml2.dll', 'sqlite3.dll', 'mimalloc.dll')
     $copied = @()
-    foreach ($p in $patterns) {
-        Get-ChildItem -Path $toolchainBin -Filter $p -ErrorAction SilentlyContinue | ForEach-Object {
-            if (-not (Test-Path (Join-Path $native $_.Name))) {
-                Copy-Item $_.FullName $native
-                $copied += $_.Name
+    foreach ($bin in $bins) {
+        Write-Host ('  扫描 ' + $bin)
+        foreach ($p in $patterns) {
+            Get-ChildItem -Path $bin -Filter $p -ErrorAction SilentlyContinue | ForEach-Object {
+                if (-not (Test-Path (Join-Path $native $_.Name))) {
+                    Copy-Item $_.FullName $native
+                    $copied += $_.Name
+                }
             }
         }
     }

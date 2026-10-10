@@ -39,6 +39,23 @@
 
 安装完的数据在 `%APPDATA%\BoxSend`（配置、cookies、状态），卸载时保留，重装自动接着用。
 
+## 用 GitHub Actions 出包（不用本机装工具链）
+
+`.github/workflows/release.yml` 里两个作业并行：macOS 出 `.app`、Windows 出安装包，
+版本号同一个来源（`Sources/BoxSendKit/Util/Version.swift`）。
+
+| 怎么触发 | 结果 |
+| --- | --- |
+| 推 tag（仓库现在的 tag 形如 `1.1`） | 两个包直接挂到该 tag 的 Release |
+| Actions 页面手动运行 | 只构建，产物留在 Runs 页可下载，不发版 |
+| 提 PR / 推 main | 只跑两平台的测试 |
+
+Windows 作业会自己下载官方 Swift 发行包解压（runner 没预装）。换版本改 workflow 顶部 `env.SWIFT_WINDOWS`；
+下载地址 404 就把它旁边那个 `SWIFT_WINDOWS_URL` 填成完整地址。Inno Setup 已预装就复用，没有就静默装一个。
+
+第一次跑大概率要在两处对一下：官方 zip 的确切文件名，以及核心库在 Windows 上的测试结果
+（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，跑绿之后改成 `false` 让它变成硬门禁）。
+
 ## 目录
 
 ```
