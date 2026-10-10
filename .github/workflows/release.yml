@@ -158,6 +158,19 @@ jobs:
             throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了"
           }
           $bins | ForEach-Object { "加进 PATH：" + $_; Add-Content -Path $env:GITHUB_PATH -Value $_ }
+          # Windows 平台的 Swift 标准库不在工具链里，而在 …\Platforms\Windows.platform\Developer\SDK\Windows.sdk，
+          # 安装器是靠写「用户环境变量 SDKROOT」把这条路告诉 swiftc 的（swift-installer-scripts 里
+          # windows.wxs 的 <Environment Name="SDKROOT">）。runner 进程比安装动作早启动，读不到注册表里
+          # 新写的值，编译就会报 unable to load standard library for target 'x86_64-unknown-windows-msvc'。
+          # 本机开发不会遇到：装完重开一个终端就有值了。
+          $sdk = [Environment]::GetEnvironmentVariable('SDKROOT', 'User')
+          if (-not $sdk -or -not (Test-Path $sdk)) { $sdk = [Environment]::GetEnvironmentVariable('SDKROOT', 'Machine') }
+          if (-not $sdk -or -not (Test-Path $sdk)) {   # 注册表那条没写成就按布局找
+            $guess = Join-Path $env:LOCALAPPDATA 'Programs\Swift\Platforms\Windows.platform\Developer\SDK\Windows.sdk'
+            $sdk = (Get-Item $guess -ErrorAction SilentlyContinue).FullName
+          }
+          if ($sdk) { "SDKROOT=$sdk（写进后续步骤环境）"; "SDKROOT=$sdk" | Add-Content -Path $env:GITHUB_ENV }
+          else { "警告：没找到 Windows.platform 下的 Windows.sdk，编译可能仍说缺少标准库" }
 
       # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
       - name: 测试

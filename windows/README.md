@@ -16,6 +16,14 @@
 | 编界面 | .NET 8 SDK |
 | 打安装包 | Inno Setup 6.3 及以上（可选，不装就交付 `publish\` 目录） |
 
+装完 Swift 工具链要**重开一个终端**再跑脚本。Windows 平台的 Swift 标准库不在工具链里，而在
+`…\Platforms\Windows.platform\Developer\SDK\Windows.sdk`，安装器是靠写用户环境变量 `SDKROOT`
+把这条路告诉 `swiftc` 的；不换终端就读不到，报法是
+`unable to load standard library for target 'x86_64-unknown-windows-msvc'`。
+脚本检测到 `SDKROOT` 缺失会先提醒一句；真编译失败时它会自动导一次 VS 开发者环境
+（`INCLUDE` / `LIB` / `WindowsSdkDir`）再试一次，因为 MSVC 头文件的路径也只在开发者环境里。
+CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITHUB_ENV`，PATH 写进 `GITHUB_PATH`。
+
 ## 这个脚本做了四件事
 
 1. `swift build -c release --product boxsend`

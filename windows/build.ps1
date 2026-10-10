@@ -18,6 +18,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 外部命令的非零退出码一律交给下面的 $LASTEXITCODE 判，别让 PS 7.4+ 提前抛异常打断重试
+$PSNativeCommandUseErrorActionPreference = $false
 $win   = $PSScriptRoot
 $root  = Split-Path -Parent $win
 $proj  = Join-Path $win 'BoxSend.Windows'
@@ -25,6 +27,29 @@ $native = Join-Path $proj 'native'
 $out   = Join-Path $win 'publish'
 
 function Step($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
+
+# 把 Visual Studio 开发者环境（INCLUDE / LIB / LIBPATH / WindowsSdkDir 等）导进当前进程。
+# Swift for Windows 编译时要靠这些定位 MSVC 与 Windows SDK：Swift 官方安装器只往用户环境里
+# 写了 SDKROOT，剩下的路径得靠 VsDevCmd。找不到 VS 就返回 $false，由调用方决定怎么办。
+function Import-VsDevEnvironment {
+    if ($env:INCLUDE -and $env:LIB) { return $false }      # 已经在开发者环境里，没东西可导
+    $pf86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    $vswhere = if ($pf86) { Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe' } else { $null }
+    if (-not $vswhere -or -not (Test-Path $vswhere)) { return $false }
+    $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+          -property installationPath | Select-Object -First 1
+    if (-not $vs) { return $false }
+    $dev = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
+    if (-not (Test-Path $dev)) { return $false }
+    # 借一个临时 .bat 把 VsDevCmd 设的变量打印出来，省掉往 cmd /c 里套引号
+    $bat = Join-Path ([IO.Path]::GetTempPath()) 'boxsend-vsenv.bat'
+    Set-Content -Path $bat -Encoding Ascii -Value "@echo off`r`ncall `"$dev`" -arch=amd64 -no_logo`r`nset"
+    foreach ($line in (& $env:ComSpec /c $bat)) {
+        if ($line -match '^([^=]+)=(.*)$') { Set-Item -LiteralPath ('env:' + $Matches[1]) -Value $Matches[2] }
+    }
+    Remove-Item $bat -ErrorAction SilentlyContinue
+    return $true
+}
 
 # 版本号只有一个来源：核心库里的 BoxSendVersion
 $verFile = Join-Path $root 'Sources\BoxSendKit\Util\Version.swift'
@@ -36,8 +61,22 @@ Write-Host ("BoxSend " + $ver) -ForegroundColor Green
 # ---------- 1. 核心库 ----------
 if (-not $SkipCore) {
     Step "swift build -c $Cfg --product boxsend"
+    # Windows 上 Swift 的标准库不在工具链里，而在 SDKROOT 指向的 Windows.sdk，
+    # 这个环境变量是 Swift 安装器写进用户环境的，装完工具链不换终端就读不到
+    if ($IsWindows -and -not $env:SDKROOT) {
+        Write-Warning '读不到环境变量 SDKROOT（Swift 靠它定位 Windows 平台标准库）。若是刚装完工具链，请重开一个终端再跑。'
+    }
     Push-Location $root
-    try { & swift build -c $Cfg --product boxsend; if ($LASTEXITCODE) { throw "swift build 失败" } }
+    try {
+        & swift build -c $Cfg --product boxsend
+        if ($LASTEXITCODE) {
+            # 编译没过的话，补上 VS 开发者环境再试一次（MSVC 头文件与库的路径只在里面有）
+            if (-not (Import-VsDevEnvironment)) { throw 'swift build 失败' }
+            Write-Host '已导入 VS 开发者环境，重试一次' -ForegroundColor Yellow
+            & swift build -c $Cfg --product boxsend
+            if ($LASTEXITCODE) { throw 'swift build 失败（导入 VS 开发者环境后仍没过）' }
+        }
+    }
     finally { Pop-Location }
 
     $built = Join-Path $root ".build\$Cfg"
