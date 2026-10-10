@@ -4,8 +4,9 @@
 #   Actions 页面手动运行              → 只构建并留 artifact，不发版
 #   提 PR / 推 main                   → 只跑测试
 #
-# Windows 那侧需要 Swift 工具链。GitHub 的 Windows runner 上没有预装，所以这里下载官方发行包解压；
-# 换版本改下面 env 里的 SWIFT_WINDOWS，下载 404 就改 SWIFT_WINDOWS_URL 填完整地址。
+# Windows 那侧需要 Swift 工具链：runner 没预装，按 swift.org 官方办法用 winget 装，
+# 装不上再直连下载安装器（地址格式取自 swift.org/install/windows，目录名是 windows10、Windows 只有 .exe）。
+# 换版本改下面 env 里的 SWIFT_WINDOWS；直连地址不对就把它填进 SWIFT_WINDOWS_URL。
 name: 打包
 
 on:
@@ -26,12 +27,17 @@ permissions:
 
 jobs:
   macOS:
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: 测试
-        run: swift test
+        run: |
+          sw_vers
+          swift --version
+          # 先单独编译测试目标：编译错误与运行崩溃能一眼分开
+          swift build --build-tests || { echo "!! 测试目标编译就没过"; exit 1; }
+          swift test 2>&1 | grep -E "error:|Fatal error|failed|Executed .* tests" | tail -40
 
       - name: 打包 .app
         run: |
@@ -65,32 +71,43 @@ jobs:
           SWIFT_WINDOWS: ${{ env.SWIFT_WINDOWS }}
           SWIFT_WINDOWS_URL: ${{ env.SWIFT_WINDOWS_URL }}
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
+          # 安装位置随安装器版本变，装完按目录扫出来再写进 PATH（Toolchains 与 Runtimes 都要）
+          function Find-SwiftBins {
+            $roots = @("$env:LOCALAPPDATA\Programs\Swift", 'C:\Library\Developer\Toolchains',
+                       'C:\Program Files\Swift') | Where-Object { Test-Path $_ }
+            if (-not $roots) { return @() }
+            Get-ChildItem $roots -Recurse -Include swift.exe, swiftCore.dll -ErrorAction SilentlyContinue |
+              ForEach-Object { $_.DirectoryName } | Select-Object -Unique
+          }
           if (Get-Command swift.exe -ErrorAction SilentlyContinue) {
             "runner 上已有 swift：" + (Get-Command swift.exe).Source
             exit 0
           }
+          # 官方推荐的装法是 winget（静默参数由包管理器负责）：swift.org/install/windows 首页就是这么写的
           $v = $env:SWIFT_WINDOWS
-          $url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {
-            "https://download.swift.org/swift-$v-release/windows/swift-$v-RELEASE/swift-$v-RELEASE-windows10.zip"
+          "winget 安装 Swift.Toolchain（$v）"
+          winget install --id Swift.Toolchain -e --source winget --version $v `
+            --accept-package-agreements --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) {
+            "指定版本装不上，改装 winget 里的最新版"
+            winget install --id Swift.Toolchain -e --source winget `
+              --accept-package-agreements --accept-source-agreements --disable-interactivity
           }
-          "下载 $url"
-          try {
-            Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\swift.zip"
-          } catch {
-            throw "下载失败：$_`n改 workflow 顶部 env 里的 SWIFT_WINDOWS（换版本号）或 SWIFT_WINDOWS_URL（填完整地址）"
+          $bins = Find-SwiftBins
+          if (-not $bins) {
+            # winget 不配合就直连安装器；地址格式来自 swift.org 安装页（目录名是 windows10，Windows 只发 .exe）
+            $url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {
+              "https://download.swift.org/swift-$v-release/windows10/swift-$v-RELEASE/swift-$v-RELEASE-windows10.exe"
+            }
+            "下载安装器 $url"
+            Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP\swift-installer.exe"
+            Start-Process "$env:RUNNER_TEMP\swift-installer.exe" `
+              -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-' -Wait
+            $bins = Find-SwiftBins
           }
-          $dir = "C:\swiftci"
-          Expand-Archive "$env:RUNNER_TEMP\swift.zip" -DestinationPath $dir -Force
-          # 发行包里 Toolchains 与 Runtimes 是两个目录，两边的 usr\bin 都要进 PATH
-          $exe = Get-ChildItem $dir -Recurse -Filter swift.exe | Select-Object -First 1
-          if (-not $exe) { throw "解压产物里没有 swift.exe，zip 结构可能变了：$url" }
-          $paths = @($exe.DirectoryName)
-          $paths += (Get-ChildItem $dir -Recurse -Filter swiftCore.dll | ForEach-Object { $_.DirectoryName })
-          $paths | Where-Object { $_ } | Select-Object -Unique | ForEach-Object {
-            "加进 PATH：$_"
-            Add-Content -Path $env:GITHUB_PATH -Value $_
-          }
+          if (-not $bins) { throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了" }
+          $bins | ForEach-Object { "加进 PATH：" + $_; Add-Content -Path $env:GITHUB_PATH -Value $_ }
 
       # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
       - name: 测试

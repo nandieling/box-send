@@ -36,7 +36,9 @@ let package = Package(
         .testTarget(
             name: "BoxSendTests",
             dependencies: ["BoxSendKit"],
-            path: "Tests/BoxSendTests"
+            path: "Tests/BoxSendTests",
+            // 夹具按 #filePath 从源码目录读，不需要 SwiftPM 当资源拷一遍
+            exclude: ["Fixtures"]
         ),
     ]
 )
