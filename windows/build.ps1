@@ -176,7 +176,8 @@ function Copy-CoreArtifacts([string]$built) {
     $q.Enqueue((Join-Path $native 'boxsend-core.dll'))
     while ($q.Count) {
         $from = $q.Dequeue()
-        $key = [IO.Path]::GetFileName($from).ToLowerInvariant()
+        $srcName = [IO.Path]::GetFileName($from)
+        $key = $srcName.ToLowerInvariant()
         if ($seen.ContainsKey($key)) { continue }
         $seen[$key] = $true
         foreach ($imp in [BoxSend.Windows.Interop.PeReader]::Imports($from)) {
@@ -190,9 +191,9 @@ function Copy-CoreArtifacts([string]$built) {
             if (Test-Path -LiteralPath $to) { $q.Enqueue($to); continue }
             # VC 运行库算不算「系统自带」取决于那台机器装没装 redistributable，必须随包走
             if ($imp -match '^(msvcp140|vcruntime140|concrt140|vccorlib)') {
-                $gaps.Add("$imp（$([IO.Path]::GetFileName $from) 导入；VS 的 redist 目录里没有）")
+                $gaps.Add("$imp（$srcName 导入；VS 的 redist 目录里没有）")
             } elseif (-not (Test-Path -LiteralPath (Join-Path $sys32 $imp))) {
-                $gaps.Add("$imp（$([IO.Path]::GetFileName $from) 导入；工具链和 System32 里都没有）")
+                $gaps.Add("$imp（$srcName 导入；工具链和 System32 里都没有）")
             }
         }
     }
@@ -211,8 +212,9 @@ function Test-BoxSendClosure([string]$dir) {
     $bad = New-Object System.Collections.Generic.List[string]
     foreach ($f in @(Get-ChildItem $native -File | ForEach-Object { Join-Path $dir $_.Name }) ) {
         if (-not (Test-Path -LiteralPath $f)) { continue }
+        $name = [IO.Path]::GetFileName($f)
         foreach ($m in [BoxSend.Windows.Interop.PeReader]::MissingDependencies($f, @($dir, $sys32))) {
-            $bad.Add("$([IO.Path]::GetFileName $f) 缺 $m")
+            $bad.Add("$name 缺 $m")
         }
     }
     return @($bad)
