@@ -31,15 +31,16 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
    名字带 `-core` 不是讲究：Windows 文件名不分大小写，核心库若叫 `boxsend.dll` 就和 WPF 那份
    托管程序集 `BoxSend.dll` 撞成一个，界面加载到的是自己那份托管程序集（它是合法 PE，能加载，
    只是没有导出符号），报「Unable to find an entry point named 'boxsend_create'」。
-2. 把 `boxsend-core.dll` 连同一批 Swift 运行时 DLL（`swiftCore.dll` / `Foundation.dll` / `dispatch.dll` /
-   ICU / curl 等，从工具链 `usr\bin` 按模式扫）拷进 `BoxSend.Windows\native\`，csproj 会整目录带进输出。
-   不同工具链版本文件名有出入，漏拷时 Windows 会直接报缺哪个 DLL，照名补进 `native\` 即可；
-   权威判据是导入表：`dumpbin /dependents boxsend-core.dll`。
-   csproj 里那份 `None Include="native\**\*"` 带 `Link` 把目录拍平——Swift 那套 DLL 之间的依赖是
-   运行期动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在 `native\` 子目录里的表现
-   是「装上了但起不来」。
-   顺带从 `System32` 拷一份 `vcruntime140.dll` 之类做随包部署——Swift 运行时是 MSVC 编的，
-   干净的 Win11 上少了它会双击没反应，而自包含的 .NET 只带它自己那份 `_cor3`。
+2. 从 `boxsend-core.dll` 的导入表出发，一层层把依赖闭包拷进 `BoxSend.Windows\native\`。
+   不按文件名猜：Swift 运行时的 DLL 名跟着版本变，6.4 就有 `swift_Concurrency.dll` /
+   `swift_StringProcessing.dll` / `swiftDispatch.dll` 三个不在任何通配里，装到用户机器上表现为
+   「Unable to load DLL 'boxsend-core' or one of its dependencies」。解析用 `Interop\PeReader.cs`
+   （界面和脚本编同一份），VC++ 运行库取 VS 里那份官方支持随包部署的集合（连
+   `msvcp140_codecvt_ids.dll` 这些卫星 DLL 一起）——Swift 运行时是 MSVC 编的，而自包含的 .NET
+   只带它自己那份 `_cor3`。
+   csproj 里那份 `None Include="native\**\*"` 带 `Link` 把目录拍平：这些 DLL 之间的依赖是运行期
+   动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在 `native\` 子目录里的表现是
+   「装上了但起不来」。
 3. `dotnet publish -c Release -r win-x64 --self-contained true`
    默认**自带 .NET 运行时**，用户机器上什么都不用装。CI 上实测 `publish\` 188 MB / 480 个文件
    （含 Swift 运行时；大头是 PresentationFramework / System.Private.CoreLib / WinForms 那几块），
@@ -84,11 +85,13 @@ winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份
 两条 Windows 独有的坑，都已经变成构建期闸门：
 
 - **导出表**。COFF 的导出表只认 `.drectve` / `.def` 两种自动写法，Swift 的 `@_cdecl` 都不走，
-  它只保证符号名。`Package.swift` 给 `BoxSendBridge` 按名字逐个加了 `-Xlinker /EXPORT:`，
-  `build.ps1` 打包前解析导出表、再 `LoadLibraryEx` 真加载一次核对这 7 个符号，缺就当场停下。
-- **加载路径**。核心库和 15 个运行时 DLL 必须和 `BoxSend.exe` 同目录，见上面第 2 条。
+  它只保证符号名。`Package.swift` 给 `BoxSendBridge` 按名字逐个加了 `-Xlinker /EXPORT:`。
+- **依赖闭包与加载路径**。核心库和它的运行时 DLL 必须和 `BoxSend.exe` 同目录，见上面第 2 条；
+  CI 上工具链目录一直在 PATH 里，漏拷的 DLL 会被 PATH 兜住，所以打包前还有一道
+  `Test-BoxSendClosure`：成品里每个 DLL 的导入项要么在成品里、要么是 Windows 自带，缺就不过。
 
-这两条的现场表现都一样：界面弹「核心库启动失败」，而 mac 上什么都看不出来。
+三条闸门（导出表、拍平、闭包）都在打包脚本里，界面启动时也会把缺的依赖名报进对话框。
+这些坑 mac 上一个都看不出来。
 
 还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
 跑绿之后改成 `false` 让它变成硬门禁）。

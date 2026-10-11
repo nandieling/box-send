@@ -35,13 +35,19 @@ function Step($msg) { Write-Host "`n== $msg" -ForegroundColor Cyan }
 # 把 Visual Studio 开发者环境（INCLUDE / LIB / LIBPATH / WindowsSdkDir 等）导进当前进程。
 # Swift for Windows 编译时要靠这些定位 MSVC 与 Windows SDK：Swift 官方安装器只往用户环境里
 # 写了 SDKROOT，剩下的路径得靠 VsDevCmd。找不到 VS 就返回 $false，由调用方决定怎么办。
-function Import-VsDevEnvironment {
-    if ($env:INCLUDE -and $env:LIB) { return $false }      # 已经在开发者环境里，没东西可导
+function Get-VsInstallPath {
+    if ($script:vsPath) { return $script:vsPath }
     $pf86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     $vswhere = if ($pf86) { Join-Path $pf86 'Microsoft Visual Studio\Installer\vswhere.exe' } else { $null }
-    if (-not $vswhere -or -not (Test-Path $vswhere)) { return $false }
-    $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-          -property installationPath | Select-Object -First 1
+    if (-not $vswhere -or -not (Test-Path $vswhere)) { return $null }
+    $script:vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+                     -property installationPath | Select-Object -First 1
+    return $script:vsPath
+}
+
+function Import-VsDevEnvironment {
+    if ($env:INCLUDE -and $env:LIB) { return $false }      # 已经在开发者环境里，没东西可导
+    $vs = Get-VsInstallPath
     if (-not $vs) { return $false }
     $dev = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
     if (-not (Test-Path $dev)) { return $false }
@@ -77,94 +83,39 @@ function Invoke-SwiftBuild($cfg) {
 $script:AbiExports = @('boxsend_create', 'boxsend_invoke', 'boxsend_free', 'boxsend_set_ocr',
                        'boxsend_version', 'boxsend_destroy', 'boxsend_last_error')
 
+# PE 解析与加载：直接编界面工程里那份源码，脚本和界面看到的永远是同一张导入表
+function Ensure-PeReader {
+    if (-not $script:PeReady) {
+        Add-Type -Path (Join-Path $proj 'Interop\PeReader.cs')
+        $script:PeReady = $true
+    }
+}
+
 # 读 PE 导出表 + 真加载一次的小助手。判空一律 ToInt64() 比 0，别把 IntPtr 丢给 PowerShell
 # 转 bool——「等于 0」和「非 null」两种语义能把「7 个符号全缺」读成「7 个符号全有」，
 # 带着空导出表的安装包就是这么混过冒烟测试的。
-$script:PeSource = @'
-using System;
-using System.IO;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using System.Text;
-
-public static class BoxSendPe {
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
-    static extern IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
-    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Ansi)]
-    static extern IntPtr GetProcAddress(IntPtr h, string name);
-
-    // 0x8 = LOAD_WITH_ALTERED_SEARCH_PATH：依赖按 DLL 自己所在目录找，和双击运行时一样
-    public static IntPtr Load(string path) { return LoadLibraryEx(path, IntPtr.Zero, 0x8); }
-    public static long Addr(IntPtr h, string name) { return GetProcAddress(h, name).ToInt64(); }
-
-    // 只为把「实际导出了哪些名字」打进日志：解析文件里的导出目录，不加载，也就不占文件
-    public static string[] ExportNames(string path) {
-        string[] none = new string[0];
-        byte[] b = File.ReadAllBytes(path);
-        if (b.Length < 0x40 || b[0] != 0x4d || b[1] != 0x5a) return none;      // 连 MZ 头都不是
-        int pe = BitConverter.ToInt32(b, 0x3c);
-        int opt = pe + 24;
-        if (pe < 0 || pe > b.Length - 24) return none;
-        // 数据目录起点：PE32+ 在可选头 +112，PE32 在 +96；导出目录是第 0 项
-        int dirs = opt + (BitConverter.ToUInt16(b, opt) == 0x20b ? 112 : 96);
-        if (dirs + 4 > b.Length || BitConverter.ToUInt32(b, dirs) == 0) return none;
-        int nsec = BitConverter.ToUInt16(b, pe + 6);
-        int sec0 = opt + BitConverter.ToUInt16(b, pe + 20);
-        Func<uint, int> off = rva => {                                        // RVA -> 文件偏移
-            for (int i = 0; i < nsec; i++) {
-                int s = sec0 + i * 40;
-                uint va = BitConverter.ToUInt32(b, s + 12);
-                uint span = Math.Max(BitConverter.ToUInt32(b, s + 8), BitConverter.ToUInt32(b, s + 16));
-                if (rva >= va && rva < va + span) return (int)(BitConverter.ToUInt32(b, s + 20) + (rva - va));
-            }
-            return -1;
-        };
-        int ed = off(BitConverter.ToUInt32(b, dirs));
-        if (ed < 0 || ed + 40 > b.Length) return none;
-        int no = off(BitConverter.ToUInt32(b, ed + 32));
-        int nn = BitConverter.ToUInt16(b, ed + 24);
-        if (no < 0) return none;
-        List<string> list = new List<string>();
-        for (int i = 0; i < nn; i++) {
-            int so = off(BitConverter.ToUInt32(b, no + i * 4));
-            if (so < 0 || so >= b.Length) continue;
-            int e = so;
-            while (e < b.Length && b[e] != 0) e++;
-            list.Add(Encoding.ASCII.GetString(b, so, e - so));
-        }
-        return list.ToArray();
-    }
-}
-'@
 
 # 把导出符号情况打进日志并返回缺的名字（空数组 = 齐全）。-FileOnly 只查导出表不加载，
 # 用在核心库刚编完那一步：加载了就得卸载，而 Swift 的 DLL 卸载不是件可靠的事，犯不上。
 function Test-BoxSendExports([string]$dllPath, [switch]$FileOnly) {
-    if (-not $script:PeLoaded) { Add-Type -TypeDefinition $script:PeSource; $script:PeLoaded = $true }
-    $names = @([BoxSendPe]::ExportNames($dllPath))
+    Ensure-PeReader
+    $names = @([BoxSend.Windows.Interop.PeReader]::Exports($dllPath))
     $mine = @($names | Where-Object { $_ -like 'boxsend*' })
     $shown = if ($mine) { $mine -join ', ' } else { '一个都没有' }
     Write-Host ('  ' + (Split-Path -Leaf $dllPath) + '：导出表 ' + $names.Count + ' 项，boxsend* —— ' + $shown)
     if ($FileOnly) { return @($script:AbiExports | Where-Object { $names -notcontains $_ }) }
-    $h = [BoxSendPe]::Load($dllPath)
+    $h = [BoxSend.Windows.Interop.NativeProbe]::Load($dllPath)
     if ($h.ToInt64() -eq 0) {
-        $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
-        $why = New-Object ComponentModel.Win32Exception $err
-        throw "加载 $dllPath 失败（$why）——十有八九是少拷了 Swift 运行时的依赖 DLL"
+        $why = New-Object ComponentModel.Win32Exception ([Runtime.InteropServices.Marshal]::GetLastWin32Error())
+        throw "加载 $dllPath 失败（$why）"
     }
-    return @($script:AbiExports | Where-Object { [BoxSendPe]::Addr($h, $_) -eq 0 })
+    return @($script:AbiExports | Where-Object {
+        [BoxSend.Windows.Interop.NativeProbe]::Addr($h, $_) -eq 0 })
 }
 
-# 把核心库和 Swift 运行时那堆 DLL 收进 native\（重链之后可以再来一遍）
-function Copy-CoreArtifacts([string]$built) {
-    New-Item -ItemType Directory -Force -Path $native | Out-Null
-    Get-ChildItem $native -Filter *.dll | Remove-Item
-
-    Copy-Item (Join-Path $built 'boxsend-core.dll') $native
-
-    # Swift 6 的 Windows 发行包是分家的：swift.exe 在 Toolchains\...\usr\bin，
-    # swiftCore.dll / Foundation.dll 这些运行时在 Runtimes\...\usr\bin，只扫前者会拷不全。
-    # 做法是把「PATH 里有 swiftCore.dll 的目录」都算进来，再加 Toolchains 旁边那个 Runtimes。
+# 工具链里放 DLL 的目录：Swift 6 的 Windows 发行包是分家的，swift.exe 在 Toolchains\...\usr\bin，
+# swiftCore.dll 这些运行时在 Runtimes\...\usr\bin，只扫前者会拷不全
+function Get-ToolchainBins {
     $toolchainBin = Split-Path -Parent (Get-Command swift).Source
     $bins = New-Object System.Collections.Generic.List[string]
     $bins.Add($toolchainBin)
@@ -180,37 +131,91 @@ function Copy-CoreArtifacts([string]$built) {
             if (Test-Path $b) { $bins.Add($b) }
         }
     }
-    $bins = $bins | Select-Object -Unique
+    return @($bins | Select-Object -Unique)
+}
 
-    # 文件名跟着工具链版本变，按模式扫，命中多少拷多少；漏拷时 Windows 会直接报缺哪个 DLL。
-    $patterns = @('swiftrt.dll', 'swiftCore.dll', 'swift*-*.dll', 'swiftWinSDK.dll', 'swiftCXX.dll',
-                  'dispatch.dll', 'BlocksRuntime.dll', 'Foundation*.dll', 'FoundationXML.dll',
-                  'icu*.dll', 'curl*.dll', 'zlib*.dll', 'xml2.dll', 'sqlite3.dll', 'mimalloc.dll')
-    $copied = @()
-    foreach ($bin in $bins) {
-        Write-Host ('  扫描 ' + $bin)
-        foreach ($p in $patterns) {
-            Get-ChildItem -Path $bin -Filter $p -ErrorAction SilentlyContinue | ForEach-Object {
-                if (-not (Test-Path (Join-Path $native $_.Name))) {
-                    Copy-Item $_.FullName $native
-                    $copied += $_.Name
-                }
+# Swift 运行时是 MSVC 编的，要 vcruntime140 / msvcp140；自包含的 .NET 只带它自己那份 _cor3。
+# 优先拷 VS 里那份官方支持随包部署的集合（连 codecvt_ids 这些卫星 DLL 一起），干净机器上
+# 没装 redistributable 也能跑
+function Copy-VcRuntime {
+    $src = $null
+    $vs = Get-VsInstallPath
+    if ($vs) {
+        $src = Get-ChildItem (Join-Path $vs 'VC\Redist\MSVC') -Directory -ErrorAction SilentlyContinue |
+               Sort-Object Name -Descending |
+               ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -ErrorAction SilentlyContinue |
+                                Where-Object { $_.Name -like 'Microsoft.VC*.vcruntime' } } |
+               Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $src) { $src = Join-Path $env:SystemRoot 'System32' }   # 退一步：本机这份
+    foreach ($f in @(Get-ChildItem $src -Filter '*.dll' -Recurse -ErrorAction SilentlyContinue |
+                     Where-Object { $_.Name -match '^(msvcp140|vcruntime140|concrt140|vccorlib)' })) {
+        $to = Join-Path $native $f.Name
+        if (-not (Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $f.FullName $to; $script:copied += $f.Name }
+    }
+}
+
+# 按导入表把依赖收全。Swift 运行时的 DLL 名跟着版本变（6.4 的 swift_Concurrency /
+# swift_StringProcessing / swiftDispatch 就不在旧的那串通配里），照表追才不会漏；漏拷在 CI
+# 上还不一定看得见——工具链目录就在 PATH 里，加载器能兜住，到用户机器上就是「找不到模块」
+function Copy-CoreArtifacts([string]$built) {
+    Ensure-PeReader
+    New-Item -ItemType Directory -Force -Path $native | Out-Null
+    Get-ChildItem $native -Filter *.dll | Remove-Item
+    $script:copied = @()
+
+    Copy-Item -LiteralPath (Join-Path $built 'boxsend-core.dll') (Join-Path $native 'boxsend-core.dll')
+    $script:copied += 'boxsend-core.dll'
+    Copy-VcRuntime
+
+    $bins = Get-ToolchainBins
+    $sys32 = Join-Path $env:SystemRoot 'System32'
+    $seen = @{}
+    $gaps = New-Object System.Collections.Generic.List[string]
+    $q = New-Object System.Collections.Generic.Queue[string]
+    $q.Enqueue((Join-Path $native 'boxsend-core.dll'))
+    while ($q.Count) {
+        $from = $q.Dequeue()
+        $key = [IO.Path]::GetFileName($from).ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        foreach ($imp in [BoxSend.Windows.Interop.PeReader]::Imports($from)) {
+            if ([BoxSend.Windows.Interop.PeReader]::IsDownlevelApi($imp)) { continue }
+            $to = Join-Path $native $imp
+            if (-not (Test-Path -LiteralPath $to)) {
+                $hit = @($bins | ForEach-Object { Join-Path $_ $imp }) |
+                       Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+                if ($hit) { Copy-Item -LiteralPath $hit $to; $script:copied += $imp }
+            }
+            if (Test-Path -LiteralPath $to) { $q.Enqueue($to); continue }
+            # VC 运行库算不算「系统自带」取决于那台机器装没装 redistributable，必须随包走
+            if ($imp -match '^(msvcp140|vcruntime140|concrt140|vccorlib)') {
+                $gaps.Add("$imp（$([IO.Path]::GetFileName $from) 导入；VS 的 redist 目录里没有）")
+            } elseif (-not (Test-Path -LiteralPath (Join-Path $sys32 $imp))) {
+                $gaps.Add("$imp（$([IO.Path]::GetFileName $from) 导入；工具链和 System32 里都没有）")
             }
         }
     }
-    # Swift 运行时是 MSVC 编的，可能要 VCRUNTIME140；.NET 自包含只带它自己那份 _cor3。
-    # 随包放一份 app-local 的最保险，否则干净的 Win11 上表现是「双击没反应」。
-    foreach ($crt in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
-        $sys = Join-Path $env:SystemRoot "System32\$crt"
-        if ((Test-Path $sys) -and -not (Test-Path (Join-Path $native $crt))) {
-            Copy-Item $sys $native
-            $copied += $crt
+    if ($gaps) { throw ('核心库的依赖凑不齐：' + ($gaps -join '；')) }
+
+    $all = @(Get-ChildItem $native -Filter *.dll)
+    Write-Host ('依赖闭包 ' + $all.Count + ' 个 DLL（本轮拷入 ' + $script:copied.Count + ' 个，按导入表追出来的）：')
+    $all | Sort-Object Name | ForEach-Object { Write-Host ('  ' + $_.Name + '  ' + [math]::Round($_.Length / 1kb) + ' KB') }
+}
+
+# 成品自己说得清自己：每个 DLL 的导入项要么在成品里，要么是 Windows 自带。这一步不看 PATH，
+# 装到干净机器上就是这一个目录，PATH 帮不上忙
+function Test-BoxSendClosure([string]$dir) {
+    Ensure-PeReader
+    $sys32 = Join-Path $env:SystemRoot 'System32'
+    $bad = New-Object System.Collections.Generic.List[string]
+    foreach ($f in @(Get-ChildItem $native -File | ForEach-Object { Join-Path $dir $_.Name }) ) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        foreach ($m in [BoxSend.Windows.Interop.PeReader]::MissingDependencies($f, @($dir, $sys32))) {
+            $bad.Add("$([IO.Path]::GetFileName $f) 缺 $m")
         }
     }
-
-    Write-Host ("核心库 + 运行时依赖共 " + (1 + $copied.Count) + " 个 DLL：")
-    Get-ChildItem $native -Filter *.dll | ForEach-Object { Write-Host ("  " + $_.Name + "  " + [math]::Round($_.Length / 1kb) + " KB") }
-    Write-Host '提示：漏依赖的权威判据是 boxsend-core.dll 的导入表，可用 dumpbin /dependents 核对。'
+    return @($bad)
 }
 
 # 版本号只有一个来源：核心库里的 BoxSendVersion
@@ -286,6 +291,10 @@ if ($leftBehind) {
 }
 $missingNative = @(Get-ChildItem $native -File | Where-Object { -not (Test-Path (Join-Path $out $_.Name)) } | ForEach-Object Name)
 if ($missingNative) { throw ('这些 native 文件没进 publish\：' + ($missingNative -join ', ')) }
+# 成品自己得说得清自己：每个 DLL 的导入项要么在成品里，要么是 Windows 自带。这一步跟 PATH
+# 无关，装到用户机器上就是这一个目录，PATH 帮不上忙
+$brokenChain = Test-BoxSendClosure $out
+if ($brokenChain) { throw ('成品里的 DLL 缺依赖：' + ($brokenChain -join '；')) }
 
 # ---------- 2.5 加载冒烟 ----------
 # 装进安装包的就是这一份：真加载 + 逐个查符号，别等用户机器上弹「核心库启动失败」才知道

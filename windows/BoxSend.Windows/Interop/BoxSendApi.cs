@@ -63,7 +63,20 @@ public sealed class BoxSendApi : IDisposable
                      Path.Combine(AppContext.BaseDirectory, "libboxsend-core.so"),
                  })
         {
-            if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var loaded)) return loaded;
+            if (!File.Exists(candidate)) continue;
+            var loaded = NativeProbe.Load(candidate);
+            if (loaded != IntPtr.Zero) return loaded;
+            // Windows 只会说「找不到指定的模块」，等于没说。把导入表里对不上的名字报出来，
+            // 用户看到的那句才知道少的是哪个文件
+            var missing = PeReader.MissingDependencies(candidate, new[]
+            {
+                AppContext.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.System),
+            });
+            throw new InvalidOperationException(missing.Length > 0
+                ? $"{Path.GetFileName(candidate)} 缺依赖：{string.Join("、", missing)}"
+                : $"{Path.GetFileName(candidate)} 加载失败（Windows 错误码 " +
+                  $"{Marshal.GetLastWin32Error()}，多半是缺 VC++ 运行库或文件不完整）");
         }
         return IntPtr.Zero;
     }
