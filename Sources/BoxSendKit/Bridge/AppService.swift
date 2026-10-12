@@ -339,9 +339,13 @@ public final class AppService {
             method = obj["method"] as? String ?? ""
             params = obj["params"] as? [String: Any] ?? [:]
         }
+        Trace.mark("invokeJSON: 解析完，动作=\(method.isEmpty ? "(没认出来)" : method)")
         do {
             let result = try invoke(method, params)
-            return Self.encode(["ok": true, "result": result])
+            Trace.mark("invokeJSON: 动作跑完，开始编码")
+            let text = Self.encode(["ok": true, "result": result])
+            Trace.mark("invokeJSON: 编码完")
+            return text
         } catch let f as Failure {
             return Self.encode(["ok": false, "error": f.message])
         } catch {

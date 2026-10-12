@@ -28,8 +28,12 @@ public func boxsend_create(_ configPath: UnsafePointer<CChar>?,
     let dir = dataDir.map { String(cString: $0) }
     do {
         let cfgPath = path ?? AppPaths.configFile
-        Trace.mark("要读的配置：\(cfgPath)")
-        let svc = try AppService(configPath: cfgPath, dataDir: dir)
+        // 数据目录以宿主给的为准：配置里可能留着历史相对值（".boxsend"），那样 state.json、
+        // cookies.json 会掉到进程工作目录里去——装在 Program Files 下就写不进去。
+        // macOS 版 GUI 也是这么做的（AppModel 里同一句注释）
+        let dataDir = dir ?? AppPaths.dir
+        Trace.mark("要读的配置：\(cfgPath)，数据目录：\(dataDir)")
+        let svc = try AppService(configPath: cfgPath, dataDir: dataDir)
         Trace.mark("服务建好了")
         return Unmanaged.passRetained(Holder(svc)).toOpaque()
     } catch {
@@ -53,7 +57,10 @@ public func boxsend_invoke(_ handle: UnsafeMutableRawPointer?,
     guard let handle else { return strdup(#"{"ok":false,"error":"句柄无效"}"#) }
     let holder = Unmanaged<Holder>.fromOpaque(handle).takeUnretainedValue()
     let req = requestJSON.map { String(cString: $0) } ?? "{}"
-    return strdup(holder.service.invokeJSON(req))
+    Trace.mark("invoke 进来：\(req.prefix(48))")
+    let answer = holder.service.invokeJSON(req)
+    Trace.mark("invoke 答了 \(answer.utf8.count) 字节")
+    return strdup(answer)
 }
 
 /// 释放 boxsend_invoke / boxsend_last_error 返回的字符串

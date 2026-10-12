@@ -105,7 +105,7 @@ winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份
 对话框。最后那条最要紧：导出表齐全、`LoadLibrary` 也过，照样可能起不来——Swift 运行时里
 有一批 DLL 是运行期按名字自己 `LoadLibrary` 的（`libcurl` 那类），导入表里看不见，闭包拷贝
 拷不到它们，而 CI 上工具链目录一直在 PATH 里，缺了也看不出来。所以真调那一步把 PATH 只留
-系统目录（模拟干净机器），并且整步跑在后台作业里：`boxsend_create` 60 秒不返回就判死，
+系统目录（模拟干净机器），并且整步跑在后台作业里：`boxsend_create` 240 秒不返回就判死，
 并把核心库自己记的进度（`Trace.mark` 那些行）打出来。核心库内部走到哪儿，界面上那行
 「核心库：正在创建」后面就是答案。这些坑 mac 上一个都看不出来。
 

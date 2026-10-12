@@ -8,18 +8,23 @@ import Foundation
 public enum Trace
 {
     private static let path: String? = ProcessInfo.processInfo.environment["BOXSEND_TRACE"]
+    private static let started = Date()
 
     public static func mark(_ what: String)
     {
         guard let path, !path.isEmpty else { return }
-        let line = "core: \(what)\n"
+        // 带上相对耗时：只有「慢」和「卡死」得区分开，光看步数看不出来
+        let ms = Int(Date().timeIntervalSince(Self.started) * 1_000)
+        let line = "core: +\(ms)ms \(what)\n"
         guard let data = line.data(using: .utf8) else { return }
+        // 界面那边也在写这个文件，所以拿不开就直接放弃：覆盖写会把前面几步抹掉，
+        // 反而把要看的线索弄丢
         if let h = FileHandle(forWritingAtPath: path) {
             h.seekToEndOfFile()
             h.write(data)
             try? h.close()
         } else {
-            try? data.write(to: URL(fileURLWithPath: path))
+            FileManager.default.createFile(atPath: path, contents: data, attributes: nil)
         }
     }
 }

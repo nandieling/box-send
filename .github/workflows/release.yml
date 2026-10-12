@@ -216,7 +216,7 @@ jobs:
           restore-keys: nuget-win-net8-
 
       - name: 打包安装包
-        timeout-minutes: 25
+        timeout-minutes: 35
         shell: pwsh
         run: .\windows\build.ps1 -Setup
 

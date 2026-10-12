@@ -332,8 +332,8 @@ Write-Host '加载成功，7 个导出符号齐全' -ForegroundColor Green
 # 导出表齐、LoadLibrary 也过，不代表能用：少一个运行期自己去 LoadLibrary 的依赖，或者初始化
 # 里卡住，界面上的表现都是「双击了没窗口也没报错」。这一步把那三下真走一遍。
 # PATH 只留系统目录 = 模拟干净机器（CI 上工具链目录一直在 PATH 里，缺依赖会被它兜住）；
-# 跑在后台作业里，卡住 60 秒判死，并把核心库自己记的进度一并打出来
-Step '真调一次核心库（PATH 只留系统目录，60 秒硬闸）'
+# 跑在后台作业里，卡住 240 秒判死（核心库自己会打每步耗时），并把进度一并打出来
+Step '真调一次核心库（PATH 只留系统目录，240 秒硬闸）'
 $trace = Join-Path ([IO.Path]::GetTempPath()) ('boxsend-trace-' + [guid]::NewGuid().ToString('N') + '.log')
 $probe = Start-Job -ArgumentList @($out, $trace, (Join-Path $proj 'Interop\PeReader.cs')) -ScriptBlock {
     param($dir, $trace, $src)
@@ -342,10 +342,14 @@ $probe = Start-Job -ArgumentList @($out, $trace, (Join-Path $proj 'Interop\PeRea
     Add-Type -Path $src
     [BoxSend.Windows.Interop.NativeProbe]::ProbeCore((Join-Path $dir 'boxsend-core.dll'))
 }
-if (-not (Wait-Job $probe -Timeout 60)) {
+$clock = [Diagnostics.Stopwatch]::StartNew()
+$done = Wait-Job $probe -Timeout 240
+$clock.Stop()
+Write-Host ('  耗时 ' + [int]$clock.Elapsed.TotalSeconds + ' 秒')
+if (-not $done) {
     Stop-Job $probe; Remove-Job $probe -Force
     if (Test-Path $trace) { Write-Host '核心库内部走到：'; Get-Content $trace | ForEach-Object { Write-Host ('  ' + $_) } }
-    throw 'boxsend_create 60 秒没返回——用户机器上的表现就是这个：没窗口，也没报错'
+    throw '核心库 240 秒还没答话（核心库自己的计时见上面 +Nms：某一步之后不再动就是卡在那儿，不是慢）'
 }
 $answered = ((Receive-Job $probe 2>&1 | ForEach-Object { [string]$_ }) -join ' ')
 Remove-Job $probe -Force
@@ -356,6 +360,7 @@ if ($answered -notmatch '"ok":\s*true') {
 }
 if ($answered.Length -gt 200) { $answered = $answered.Substring(0, 200) + ' …' }
 Write-Host ('  version 答了：' + $answered) -ForegroundColor Green
+if (Test-Path $trace) { Write-Host '  核心库内部走的步：'; Get-Content $trace | ForEach-Object { Write-Host ('    ' + $_) } }
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'

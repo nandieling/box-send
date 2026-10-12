@@ -23,8 +23,12 @@ public static class StartupLog
             lock (Gate)
             {
                 Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilePath)!);
-                File.AppendAllText(FilePath,
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {what}{Environment.NewLine}");
+                // 核心库那边也往这个文件追加（Trace.swift），所以开成读写都能共享；
+                // AppendAllText 只允许读共享，两边会抢
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {what}{Environment.NewLine}";
+                using var fs = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                using var w = new StreamWriter(fs, new System.Text.UTF8Encoding(false));
+                w.Write(line);
             }
         }
         catch
