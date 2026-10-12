@@ -1,4 +1,8 @@
 import XCTest
+#if canImport(FoundationNetworking)
+// Linux / Windows 上 URLSession、URLRequest 这些在 FoundationNetworking 里，Foundation 不带
+import FoundationNetworking
+#endif
 @testable import BoxSendKit
 
 /// 馒头 API Key 检测：走 api.m-team.cc 新网关（POST /api/member/profile + x-api-key 头）

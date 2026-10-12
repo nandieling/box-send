@@ -1,4 +1,8 @@
 import XCTest
+#if canImport(FoundationNetworking)
+// Linux / Windows 上 URLSession、URLRequest 这些在 FoundationNetworking 里，Foundation 不带
+import FoundationNetworking
+#endif
 @testable import BoxSendKit
 
 /// Windows 移植相关改动的回归：无头服务的 JSON 契约、配置编辑规则、

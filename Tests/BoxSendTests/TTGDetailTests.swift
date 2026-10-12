@@ -1,4 +1,8 @@
 import XCTest
+#if canImport(FoundationNetworking)
+// Linux / Windows 上 URLSession、URLRequest 这些在 FoundationNetworking 里，Foundation 不带
+import FoundationNetworking
+#endif
 @testable import BoxSendKit
 
 /// TTG（totheglory.im）：详情页里 .torrent 直链是 /dl/<id>/<随机号>，整页不出现 download.php；
