@@ -104,8 +104,9 @@ winget 清单（`microsoft/winget-pkgs` 里 `Swift.Toolchain/<版本>/`）那份
 三条闸门（导出表、拍平、闭包）都在打包脚本里，界面启动时也会把缺的依赖名报进对话框。
 这些坑 mac 上一个都看不出来。
 
-还剩一处要对：核心库在 Windows 上的测试结果（先用 `ALLOW_WINDOWS_TEST_FAILURE: "true"` 放行，
-跑绿之后改成 `false` 让它变成硬门禁）。
+核心库在 Windows 上的测试已经跑绿：366 条全过、16 条跳过（要真站点的 live 用例，以及要本机
+`openssl` / `zip` 造输入的那几条），`ALLOW_WINDOWS_TEST_FAILURE` 已改成 `false`，测试不过就
+不许出包。mac 端是 367 条（Windows 少一条造 JPEG 的用例，见上）。
 
 ## 目录
 

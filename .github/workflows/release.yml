@@ -27,8 +27,9 @@ env:
   SWIFT_WINDOWS_URL: ""
   # 安装包校验值，抄自 winget 清单 microsoft/winget-pkgs 里 Swift.Toolchain 那一份；换版本记得一起改
   SWIFT_WINDOWS_SHA256: "76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03"
-  # 核心库在 Windows 上还没跑过测试，先不让它挡住出包；跑绿之后改成 false
-  ALLOW_WINDOWS_TEST_FAILURE: "true"
+  # 核心库在 Windows 上的测试已经跑绿（366 条全过，16 条跳过：要本机会话的 live 用例、
+  # 以及缺 openssl / zip 的那几条），所以这里让它当硬门禁；想先看结果不要挡出包就改回 true
+  ALLOW_WINDOWS_TEST_FAILURE: "false"
 
 permissions:
   contents: write
