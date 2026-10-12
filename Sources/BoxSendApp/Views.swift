@@ -249,6 +249,13 @@ struct RunView: View {
                 Button(model.running ? "运行中…" : "开始运行") { model.run() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.running)
+                // 批次概览：本批会转哪几个分组、几站，免得勾错分组就跑
+                Text(model.runSelectionSummary)
+                    .font(.callout)
+                    .foregroundStyle(model.runTargets.isEmpty ? Color.orange : Color.secondary)
+                    .fixedSize()
+                    .help("勾选的转种分组：\(model.runSelectedGroupNames.isEmpty ? "无" : model.runSelectedGroupNames.joined(separator: "、"))\n"
+                          + "勾选的站点：\(model.runTargets.map(\.name).joined(separator: "、"))")
                 Spacer()
             }
             if model.running {

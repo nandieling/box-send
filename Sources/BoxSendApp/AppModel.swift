@@ -457,6 +457,34 @@ final class AppModel: ObservableObject {
     /// 用户已添加的站点（「站点」页展示；未添加的站只在内置名录中）
     var managedSites: [SiteConfig] { config.sourceSites.filter { $0.managed } }
 
+    /// 本次批次实际会转种的站点：勾选 + 已开启（与 run() 取目标的口径一致）
+    var runTargets: [SiteConfig] {
+        config.targetSites.compactMap { config.site($0) }
+            .filter { selectedTargets.contains($0.id) && $0.enabled }
+    }
+
+    /// 勾选覆盖到的分组名（组内至少有一个「已开启且被勾选」的站点；没归组的算「无分组」）
+    var runSelectedGroupNames: [String] {
+        var names: [String] = []
+        for gi in config.groups.indices {
+            if groupMembers(gi).contains(where: { $0.enabled && selectedTargets.contains($0.id) }) {
+                names.append(config.groups[gi].name)
+            }
+        }
+        if unassignedManagedSites.contains(where: { $0.enabled && selectedTargets.contains($0.id) }) {
+            names.append("无分组")
+        }
+        return names
+    }
+
+    /// 运行页「开始运行」旁的批次概览：选了几个分组、几个站点（防止误选分组就跑）
+    var runSelectionSummary: String {
+        let sites = runTargets.count
+        guard sites > 0 else { return "未选择站点" }
+        let groups = runSelectedGroupNames.count
+        return groups > 0 ? "已选 \(groups) 个分组 · \(sites) 个站点" : "已选 \(sites) 个站点"
+    }
+
     /// 勾选的目标站中「附加信息 / 其它信息」只放手填源站引用的站点（cmct、劳改所）
     var targetsNeedingSourceQuote: [SiteConfig] {
         config.sourceSites.filter {

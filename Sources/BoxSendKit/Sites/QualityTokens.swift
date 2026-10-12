@@ -219,6 +219,8 @@ enum QualityTokens {
         if evidence.contains("中文字幕") || evidence.contains("简体") || evidence.contains("繁体") || evidence.contains("中文") || evidence.contains("中字") || info.name.contains("中字") {
             tags.append("chinese_sub")
         }
+        // 英文字幕（龙的「英字」按这条勾）：源站标签行之外，简介与发布名里的字幕说明也算
+        if hasEnglishSubtitles(info: info) { tags.append("english_sub") }
         if n.contains("DIY") && (n.hasPrefix("DIY") || n.contains(" DIY") || n.contains("DIY ") || n.contains("DIY-")) {
             tags.append("diy")
         }
@@ -247,6 +249,22 @@ enum QualityTokens {
         // 媒介下拉已经选了 Blu-ray/DIY，再勾原盘就是自相矛盾
         if tags.contains("diy") { tags.removeAll { $0 == "disc" } }
         return tags
+    }
+
+    /// 发布是否带英文字幕（龙「英字」等标签的判据）。只认字幕语境里的「英」：
+    /// 简介「字幕：中英」「英文字幕」「中英特效字幕」「内封英字」，以及发布名里成对写的
+    /// CHS/ENG、ENG SUB。单看 ENG / 英语 多半是语种或配音，不当成字幕证据；
+    /// MediaInfo 里的 "Language : English" 同理不算，所以不拿它当依据。
+    static func hasEnglishSubtitles(info: ReleaseInfo) -> Bool {
+        let text = HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle
+        if text.range(of: #"英[^。，、；\n]{0,8}字[幕目]|英字|字[幕目][^。，、；\n]{0,10}英|中英双[字效]"#,
+                      options: .regularExpression) != nil { return true }
+        let lower = (text + " " + info.name).lowercased()
+        let flat = lower.replacingOccurrences(of: #"[._ |+~/-]"#, with: "/", options: .regularExpression)
+        if flat.range(of: #"(?:chs|cht|chi|zh|cn)/eng(?:/|$)|eng/(?:chs|cht|chi|zh|cn)(?:/|$)"#,
+                      options: .regularExpression) != nil { return true }
+        if flat.contains("engsub") { return true }
+        return lower.range(of: #"(?:eng|english)[ ._\-]subs?(?:\b|$)"#, options: .regularExpression) != nil
     }
 
     /// 源站「类别」行（如 "喜剧 / 动画"）解析成题材标签。

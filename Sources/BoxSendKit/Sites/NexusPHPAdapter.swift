@@ -520,6 +520,19 @@ class NexusPHPAdapter: SiteAdapter {
                                                   hrefPattern: detailHrefPattern, relaxed: relaxed) {
                 return hit.href
             }
+            // 结果行根本不写发布名的站（海胆的结果行是「[全集] Blu-ray / H.264 / 1080p …」这种
+            // 拼装文案，详情链接也是 details.php?group_id=…&torrent_id=…）：名称匹配无从下手。
+            // 查询词本身就是发布名，结果页只有一条种子时它就是要找的那条——按行内的
+            // download.php?id=N 认 id，回详情页复核名称后才返回，避免把无关种子推下去。
+            if relaxed, detailHrefPattern.contains("details"),
+               let only = Self.singleResultTorrentID(html) {
+                let candidate = HTMLUtil.resolveURL("details.php?id=" + only, against: URL(string: url)!)
+                if let page = try? client.fetchHTML(candidate, referer: site.url),
+                   let found = (try? parseDetail(html: page, detailURL: candidate))?.name,
+                   Self.searchNamesMatch(found, target, tokenTolerant: true) {
+                    return candidate
+                }
+            }
         }
         return nil
     }
@@ -1944,7 +1957,7 @@ class NexusPHPAdapter: SiteAdapter {
         if Self.hasExistMarker(body), Self.looksLikeRejectedPage(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
                                            detailPattern: detailHrefPattern) {
-            return dup
+            return verifiedDuplicate(dup, info: info, body: body)
         }
         // 成功特征: 跳到新种子详情页 / 发布成功提示
         if let m = HTMLUtil.firstMatch(finalURL, Self.defaultDetailHrefPattern + "|" + detailHrefPattern),
@@ -1963,6 +1976,11 @@ class NexusPHPAdapter: SiteAdapter {
             if let sole = Self.soleDetailURL(body: body, base: URL(string: uploadURL)!,
                                              hrefPattern: detailHrefPattern) {
                 return newSeedOutcome(detailURL: sole, torrentData: torrentData)
+            }
+            // 海胆这类站的详情页里没有指向自己的 details 链接，种子 id 只写在
+            // download.php?id=N / edit.php?id=N 上：不认它就找不回新种子，推送只能作罢
+            if let id = Self.pageTorrentID(body), let mine = detailURL(forID: id) {
+                return newSeedOutcome(detailURL: mine, torrentData: torrentData)
             }
             var msg = "发布成功"
             if let p = dumpDebugHTML(body) { msg += "（响应页已存 \(p)）" }
@@ -1991,7 +2009,7 @@ class NexusPHPAdapter: SiteAdapter {
         if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
                                            detailPattern: detailHrefPattern) {
-            return dup
+            return verifiedDuplicate(dup, info: info, body: body)
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
         }
@@ -2188,13 +2206,44 @@ class NexusPHPAdapter: SiteAdapter {
             || lower.contains("already upload") || lower.contains("duplicate")
     }
 
+    /// 检索结果页只有一条种子时返回它的 id：结果行不写发布名的站（海胆）只能这样认
+    static func singleResultTorrentID(_ html: String) -> String? {
+        let ids = Set(HTMLUtil.allGroups(html, #"download\.php\?id=(\d+)"#, group: 1))
+        return ids.count == 1 ? ids.first : nil
+    }
+
+    /// 响应页讲的是哪条种子：NexusPHP 详情页不放指向自己的 details 链接，
+    /// 种子 id 只写在它自己的下载/编辑链接上（实测海胆、织梦）。按可靠性依次取。
+    static func pageTorrentID(_ body: String) -> String? {
+        for pat in [#"download\.php\?id=(\d+)"#,
+                    #"torrent_info\.php\?id=(\d+)"#,
+                    #"edit\.php\?id=(\d+)"#] {
+            if let id = HTMLUtil.group(body, pat, group: 1), !id.isEmpty { return id }
+        }
+        return nil
+    }
+
+    /// 按种子 id 拼本站详情链接；本站详情链接不是 details.php?id= 这种形状时
+    /// （TTG 是 /t/<id>/）返回 nil，交给原有逻辑处理
+    private func detailURL(forID id: String) -> String? {
+        guard detailHrefPattern.contains("details") else { return nil }
+        return HTMLUtil.resolveURL("details.php?id=" + id, against: URL(string: site.url)!)
+    }
+
     /// 「已存在」提示页 -> 成功结果（尽力带上已有种子的详情链接，供后续推送下载器）。
     /// detailPattern = 本站详情链接正则（TTG 是 /t/<id>/，默认 details.php?id=）。
     static func duplicateOutcome(body: String, uploadURL: String,
                                  detailPattern: String = "(?:details|torrents)\\.php\\?id=\\d+") -> UploadOutcome? {
         let link = "(?:" + detailPattern + ")"
         var existingURL: String?
-        if let m = HTMLUtil.group(body, "href=[\"']([^\"']*?" + link + "[^\"']*)[\"']"),
+        // 站点常把「已存在」那条种子整个展开在提示页上：标题下面是它自己的下载链接
+        // download.php?id=N，而 details 链接只出现在「同剧其他种子」列表里
+        //（实测织梦 LuckPT 43834：下载链接指向真种子 382434，页面上唯一的 details 链接
+        // 却是同剧另一版本 115285 WEB-DL）。先认下载链接，认不出再刮详情链接。
+        if detailPattern.contains("details"), let id = Self.pageTorrentID(body) {
+            existingURL = HTMLUtil.resolveURL("details.php?id=" + id, against: URL(string: uploadURL)!)
+        }
+        if existingURL == nil, let m = HTMLUtil.group(body, "href=[\"']([^\"']*?" + link + "[^\"']*)[\"']"),
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: URL(string: uploadURL)!)
         }
@@ -2210,6 +2259,42 @@ class NexusPHPAdapter: SiteAdapter {
         }
         return UploadOutcome(success: true, message: "站点回「种子已存在」，本次未新发种",
                              detailURL: existingURL, alreadyExists: true)
+    }
+
+    /// 「已存在」页刮到的详情链接要验一遍：那页常并列同剧不同版本的种子。实测织梦
+    /// （LuckPT 43834 小长门有希的消失 BD Remux）页面第一条是 115285 WEB-DL，
+    /// 站内真正已有的那条是 382434 BD Remux——拿错就会把别的种子的 tracker 推给下载器。
+    /// 版本对不上就把链接丢掉（流水线会回站内按名重查），实在查不到只报「没检索到」，不瞎推。
+    func verifiedDuplicate(_ dup: UploadOutcome, info: ReleaseInfo, body: String) -> UploadOutcome {
+        guard let link = dup.detailURL, !link.isEmpty else {
+            // 认不出已有种子是哪条：存下响应页（这类页各站长得不一样，没存档只能猜）
+            var message = dup.message
+            if let dump = dumpDebugHTML(body) { message += "，响应页已存 \(dump)" }
+            return UploadOutcome(success: true, message: message, detailURL: nil, alreadyExists: true)
+        }
+        guard let page = try? client.fetchHTML(link, referer: site.url) else { return dup }
+        // 页面解析不出种子名（改版、要登录）时维持原判，别把对的链接也扔掉
+        let found = ((try? parseDetail(html: page, detailURL: link))?.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard found.count >= 8, Self.conflictingVersion(info.name, found) else { return dup }
+        var message = "站点回「种子已存在」，本次未新发种（页面给的链接指向「\(found)」，与本次版本不同）"
+        if let dump = dumpDebugHTML(body) { message += "，响应页已存 \(dump)" }
+        return UploadOutcome(success: true, message: message, detailURL: nil, alreadyExists: true)
+    }
+
+    /// 两个发布名是否明显指向不同版本：两边都声明了介质 / 分辨率 / 编码 / 音频中的某一项，
+    /// 值却对不上。有一边认不出就不下结论——宁可用站点给的链接，也不要把对的链接误判成错的。
+    static func conflictingVersion(_ ours: String, _ theirs: String) -> Bool {
+        let signals: [(String?, String?)] = [
+            (QualityTokens.medium(from: ours, kind: nil), QualityTokens.medium(from: theirs, kind: nil)),
+            (QualityTokens.standard(from: ours), QualityTokens.standard(from: theirs)),
+            (QualityTokens.codec(fromName: ours), QualityTokens.codec(fromName: theirs)),
+            (QualityTokens.audio(from: ours), QualityTokens.audio(from: theirs)),
+        ]
+        return signals.contains { a, b in
+            guard let a, let b else { return false }
+            return a != b
+        }
     }
 
     /// 站点回「必填项目缺失」这类整份 POST 疑似未送达的签名
