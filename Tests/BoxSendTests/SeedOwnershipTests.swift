@@ -1,6 +1,8 @@
 import XCTest
+#if canImport(CoreGraphics) && canImport(ImageIO)
 import CoreGraphics
 import ImageIO
+#endif
 @testable import BoxSendKit
 
 /// 站点跳回详情页 ≠ 发了新种：归属判定（本次上传 vs 站内已有）与上传页缺失表单的报错
@@ -91,7 +93,10 @@ final class ScreenshotFetchTests: XCTestCase {
         XCTAssertNil(ShotImage.jpeg(Data("not an image".utf8)), "解不动就交回原图")
     }
 
-    /// 大图（源站截图常是几 MB）压到 1920 以内并重编码
+    /// 大图（源站截图常是几 MB）压到 1920 以内并重编码。
+    /// 造 fixture 图要用 CoreGraphics / ImageIO，Windows 上没这两块，这条只在 mac 上跑；
+    /// 被测的 ShotImage.jpeg 本身跨平台，上面那条小图用例两端都跑。
+    #if canImport(CoreGraphics) && canImport(ImageIO)
     func testLargeImageIsRescaled() throws {
         let w = 2600, h = 1700
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
@@ -134,4 +139,5 @@ final class ScreenshotFetchTests: XCTestCase {
         XCTAssertLessThanOrEqual(try XCTUnwrap(props[kCGImagePropertyPixelWidth] as? Int), 1920,
                                 "长边要压到 1920 以内")
     }
+    #endif
 }
