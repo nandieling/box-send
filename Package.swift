@@ -15,51 +15,60 @@ let bridgeLinkerSettings: [LinkerSetting] = cdeclExports.map {
     .unsafeFlags(["-Xlinker", "/EXPORT:\($0)"], .when(platforms: [.windows]))
 }
 
+let products: [Product] = [
+    // 动态库：Windows 得 boxsend-core.dll、macOS 得 libboxsend-core.dylib。
+    // 名字特意带上 -core：Windows 文件名不分大小写，核心库若叫 boxsend.dll 会和 WPF
+    // 那份托管程序集 BoxSend.dll 撞成一个，界面加载到的是自己，报「Unable to find an
+    // entry point named 'boxsend_create' in DLL 'boxsend'」——还不发生在 mac 上。
+    .library(name: "boxsend-core", type: .dynamic, targets: ["BoxSendBridge"]),
+]
+
+var targets: [Target] = [
+    // 核心库：HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台（CLI 与 GUI 共用）
+    .target(
+        name: "BoxSendKit",
+        path: "Sources/BoxSendKit",
+        // 内置 HTTP 服务在 Windows 上走 Winsock，得显式链 ws2_32；其余平台不加
+        linkerSettings: [
+            .linkedLibrary("ws2_32", .when(platforms: [.windows])),
+        ]
+    ),
+    // C ABI 导出层：Windows WPF 界面进程内调用核心库（Linux/macOS 上用于验证 ABI）
+    .target(
+        name: "BoxSendBridge",
+        dependencies: ["BoxSendKit"],
+        path: "Sources/BoxSendBridge",
+        linkerSettings: bridgeLinkerSettings
+    ),
+    // 命令行（launchd/自动化）
+    .executableTarget(
+        name: "box-send",
+        dependencies: ["BoxSendKit"],
+        path: "Sources/BoxSendCLI"
+    ),
+    .testTarget(
+        name: "BoxSendTests",
+        dependencies: ["BoxSendKit"],
+        path: "Tests/BoxSendTests",
+        // 夹具按 #filePath 从源码目录读，不需要 SwiftPM 当资源拷一遍
+        exclude: ["Fixtures"]
+    ),
+]
+
+// macOS GUI 应用（主体）用 AppKit / Combine / SwiftUI，这些模块在 Windows、Linux 上根本
+// 不存在。而 swift test 会把包里所有目标都编一遍，所以它在非 mac 上连目标都不该列出来：
+// 清单本身是按宿主平台编译的，Windows runner 上 os(macOS) 就是假，这里正好用它做开关。
+#if os(macOS)
+targets.append(.executableTarget(
+    name: "BoxSendApp",
+    dependencies: ["BoxSendKit"],
+    path: "Sources/BoxSendApp"
+))
+#endif
+
 let package = Package(
     name: "BoxSend",
     platforms: [.macOS(.v13)],
-    products: [
-        // 动态库：Windows 得 boxsend-core.dll、macOS 得 libboxsend-core.dylib。
-        // 名字特意带上 -core：Windows 文件名不分大小写，核心库若叫 boxsend.dll 会和 WPF
-        // 那份托管程序集 BoxSend.dll 撞成一个，界面加载到的是自己，报「Unable to find an
-        // entry point named 'boxsend_create' in DLL 'boxsend'」——还不发生在 mac 上。
-        .library(name: "boxsend-core", type: .dynamic, targets: ["BoxSendBridge"]),
-    ],
-    targets: [
-        // 核心库：HTTP/站点/转种流水线/下载器/Gist 同步/Web 控制台（CLI 与 GUI 共用）
-        .target(
-            name: "BoxSendKit",
-            path: "Sources/BoxSendKit",
-            // 内置 HTTP 服务在 Windows 上走 Winsock，得显式链 ws2_32；其余平台不加
-            linkerSettings: [
-                .linkedLibrary("ws2_32", .when(platforms: [.windows])),
-            ]
-        ),
-        // C ABI 导出层：Windows WPF 界面进程内调用核心库（Linux/macOS 上用于验证 ABI）
-        .target(
-            name: "BoxSendBridge",
-            dependencies: ["BoxSendKit"],
-            path: "Sources/BoxSendBridge",
-            linkerSettings: bridgeLinkerSettings
-        ),
-        // 命令行（launchd/自动化）
-        .executableTarget(
-            name: "box-send",
-            dependencies: ["BoxSendKit"],
-            path: "Sources/BoxSendCLI"
-        ),
-        // macOS GUI 应用（主体）
-        .executableTarget(
-            name: "BoxSendApp",
-            dependencies: ["BoxSendKit"],
-            path: "Sources/BoxSendApp"
-        ),
-        .testTarget(
-            name: "BoxSendTests",
-            dependencies: ["BoxSendKit"],
-            path: "Tests/BoxSendTests",
-            // 夹具按 #filePath 从源码目录读，不需要 SwiftPM 当资源拷一遍
-            exclude: ["Fixtures"]
-        ),
-    ]
+    products: products,
+    targets: targets
 )
