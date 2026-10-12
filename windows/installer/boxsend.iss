@@ -1,6 +1,8 @@
-; BoxSend Windows 安装包（Inno Setup 6.3+，x64compatible 需要 6.3 起）
+; BoxSend Windows 安装包（Inno Setup 6.5+：x64compatible 要 6.3 起，简体中文语言文件要 6.5 起）
 ; 先跑 windows\build.ps1 生成 windows\publish\，再编译本脚本。
-; 想让用户向导是中文：把 ChineseSimplified.isl 放进 installer\Languages\（Inno 官网 non-official 区）。
+; 向导界面是简体中文：语言文件已随仓库带在 installer\Languages\ChineseSimplified.isl
+; （抄自 jrsoftware/issrc 标签 is-6_7_1 的 Unofficial/ChineseSimplified.isl，补了 UTF-8 BOM，
+; 没 BOM 时编译器按机器 ANSI 码页读，英文机器上中文全成问号）。Inno Setup 6.5 起可用。
 
 #define MyAppName "BoxSend"
 ; 版本由 build.ps1 从核心库 Version.swift 写进 version.inc，安装包名与界面里的版本号必然一致

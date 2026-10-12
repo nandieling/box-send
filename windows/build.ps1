@@ -134,26 +134,25 @@ function Get-ToolchainBins {
     return @($bins | Select-Object -Unique)
 }
 
-# Swift 运行时是 MSVC 编的，要 vcruntime140 / msvcp140；自包含的 .NET 只带它自己那份 _cor3。
-# 优先拷 VS 里那份官方支持随包部署的集合（连 codecvt_ids 这些卫星 DLL 一起），干净机器上
-# 没装 redistributable 也能跑
-function Copy-VcRuntime {
-    $src = $null
+# VC 运行库（vcruntime140 / msvcp140）该从哪儿拷：VS 的 redist 目录是微软认可随包部署的那一份。
+# 找不到（没装 VS）就返回空串，由调用方退回 System32。返回串而不是 $null，是为了能缓存
+function Get-VcRedistDir {
+    if ($null -ne $script:redistDir) { return $script:redistDir }
+    $script:redistDir = ''
     $vs = Get-VsInstallPath
     if ($vs) {
-        $src = Get-ChildItem (Join-Path $vs 'VC\Redist\MSVC') -Directory -ErrorAction SilentlyContinue |
-               Sort-Object Name -Descending |
-               ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -ErrorAction SilentlyContinue |
-                                Where-Object { $_.Name -like 'Microsoft.VC*.vcruntime' } } |
-               Select-Object -First 1 -ExpandProperty FullName
+        $d = Get-ChildItem (Join-Path $vs 'VC\Redist\MSVC') -Directory -ErrorAction SilentlyContinue |
+             Sort-Object Name -Descending |
+             ForEach-Object { Get-ChildItem (Join-Path $_.FullName 'x64') -Directory -ErrorAction SilentlyContinue |
+                              Where-Object { $_.Name -like 'Microsoft.VC*.vcruntime' } } |
+             Select-Object -First 1 -ExpandProperty FullName
+        if ($d) { $script:redistDir = $d }
     }
-    if (-not $src) { $src = Join-Path $env:SystemRoot 'System32' }   # 退一步：本机这份
-    foreach ($f in @(Get-ChildItem $src -Filter '*.dll' -Recurse -ErrorAction SilentlyContinue |
-                     Where-Object { $_.Name -match '^(msvcp140|vcruntime140|concrt140|vccorlib)' })) {
-        $to = Join-Path $native $f.Name
-        if (-not (Test-Path -LiteralPath $to)) { Copy-Item -LiteralPath $f.FullName $to; $script:copied += $f.Name }
-    }
+    return $script:redistDir
 }
+
+# 自包含的 .NET 只带它自己那份 _cor3 运行库，Swift 运行时是 MSVC 编的，要的是 VC 那套
+$script:RedistPattern = '^(msvcp140|vcruntime140|concrt140|vccorlib)'
 
 # 按导入表把依赖收全。Swift 运行时的 DLL 名跟着版本变（6.4 的 swift_Concurrency /
 # swift_StringProcessing / swiftDispatch 就不在旧的那串通配里），照表追才不会漏；漏拷在 CI
@@ -166,9 +165,12 @@ function Copy-CoreArtifacts([string]$built) {
 
     Copy-Item -LiteralPath (Join-Path $built 'boxsend-core.dll') (Join-Path $native 'boxsend-core.dll')
     $script:copied += 'boxsend-core.dll'
-    Copy-VcRuntime
 
-    $bins = Get-ToolchainBins
+    # 只拷「真被导入」的那几个：上一次顺手把 VS redist 整个目录扫进来，多带了一份 debug 版
+    # CRT（msvcp140d.dll 之流），白搭 4 MB
+    $sources = @(Get-ToolchainBins)
+    $redist = Get-VcRedistDir
+    if ($redist) { $sources += $redist }
     $sys32 = Join-Path $env:SystemRoot 'System32'
     $seen = @{}
     $gaps = New-Object System.Collections.Generic.List[string]
@@ -184,14 +186,20 @@ function Copy-CoreArtifacts([string]$built) {
             if ([BoxSend.Windows.Interop.PeReader]::IsDownlevelApi($imp)) { continue }
             $to = Join-Path $native $imp
             if (-not (Test-Path -LiteralPath $to)) {
-                $hit = @($bins | ForEach-Object { Join-Path $_ $imp }) |
+                $hit = @($sources | ForEach-Object { Join-Path $_ $imp }) |
                        Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
                 if ($hit) { Copy-Item -LiteralPath $hit $to; $script:copied += $imp }
             }
             if (Test-Path -LiteralPath $to) { $q.Enqueue($to); continue }
-            # VC 运行库算不算「系统自带」取决于那台机器装没装 redistributable，必须随包走
-            if ($imp -match '^(msvcp140|vcruntime140|concrt140|vccorlib)') {
-                $gaps.Add("$imp（$srcName 导入；VS 的 redist 目录里没有）")
+            # VC 运行库算不算「系统自带」取决于那台机器装没装 redistributable，必须随包走；
+            # 没装 VS 拷不到 redist 目录时，至少把本机 System32 那份带上
+            if ($imp -match $script:RedistPattern) {
+                $sys = Join-Path $sys32 $imp
+                if (Test-Path -LiteralPath $sys) {
+                    Copy-Item -LiteralPath $sys $to; $script:copied += $imp; $q.Enqueue($to)
+                } else {
+                    $gaps.Add("$imp（$srcName 导入；VS 的 redist 目录和 System32 里都没有）")
+                }
             } elseif (-not (Test-Path -LiteralPath (Join-Path $sys32 $imp))) {
                 $gaps.Add("$imp（$srcName 导入；工具链和 System32 里都没有）")
             }

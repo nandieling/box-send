@@ -37,6 +37,8 @@ public partial class MainWindow : Window
         base.OnContentRendered(e);
         _tray ??= new TrayIcon(this, $"BoxSend {_model.CoreVersion}", AppIcon.Hicon);
         _tray.ActivateRequested += ShowFromTray;
+        // 到这里窗口是真的画出来了。没这一行而进程还活着，就说明卡在绘制之前
+        StartupLog.Write(_tray != null ? "内容已绘制，托盘已挂" : "内容已绘制，但托盘没挂上");
     }
 
     public void ShowFromTray()

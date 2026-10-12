@@ -135,7 +135,8 @@ public static class PeReader
 
     private static string ReadAscii(byte[] b, int at)
     {
-        if (at < 0 || at >= b.Length) return null;
+        // 越界就回空串：两个调用点都只收非空名字，返回 null 反而要在外面多判一次
+        if (at < 0 || at >= b.Length) return "";
         int e = at;
         while (e < b.Length && b[e] != 0) e++;
         return Encoding.ASCII.GetString(b, at, e - at);

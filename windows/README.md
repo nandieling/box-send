@@ -14,7 +14,7 @@
 | --- | --- |
 | 编核心库 | Swift for Windows 工具链 <https://www.swift.org/install/windows/> |
 | 编界面 | .NET 8 SDK |
-| 打安装包 | Inno Setup 6.3 及以上（可选，不装就交付 `publish\` 目录） |
+| 打安装包 | Inno Setup 6.5 及以上（可选，不装就交付 `publish\` 目录）。6.3 起才认 `x64compatible`，简体中文向导要 6.5 |
 
 装完 Swift 工具链要**重开一个终端**再跑脚本。Windows 平台的 Swift 标准库不在工具链里，而在
 `…\Platforms\Windows.platform\Developer\SDK\Windows.sdk`，安装器是靠写用户环境变量 `SDKROOT`
@@ -38,6 +38,7 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
    （界面和脚本编同一份），VC++ 运行库取 VS 里那份官方支持随包部署的集合（连
    `msvcp140_codecvt_ids.dll` 这些卫星 DLL 一起）——Swift 运行时是 MSVC 编的，而自包含的 .NET
    只带它自己那份 `_cor3`。
+   只拷真被导入的那几个，不整目录扫——顺手扫过一次，多带了 `msvcp140d.dll` 那堆 debug 版 CRT，白搭 4 MB。
    csproj 里那份 `None Include="native\**\*"` 带 `Link` 把目录拍平：这些 DLL 之间的依赖是运行期
    动态加载的，Windows 只在「exe 所在目录 + PATH」里找，留在 `native\` 子目录里的表现是
    「装上了但起不来」。
@@ -50,9 +51,19 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
 4. `-Setup` 时调 Inno Setup，产出 `windows\installer\Output\BoxSend-<版本>-win-x64.exe`。
    版本号从核心库 `Sources\BoxSendKit\Util\Version.swift` 读（写进未入库的 `installer\version.inc`），
    安装包名、exe 属性里的版本、界面右上角显示的版本永远是同一个数，只在 `Version.swift` 里改一次。
-   想让安装向导说中文，把 `ChineseSimplified.isl` 放进 `windows/installer/Languages/`，脚本会自动改用例。
+   安装向导是简体中文：语言文件已随仓库带在 `installer/Languages/ChineseSimplified.isl`
+   （抄自 `jrsoftware/issrc` 标签 `is-6_7_1` 的 `Unofficial/`，补了 UTF-8 BOM——没 BOM 时编译器按机器
+   ANSI 码页读，英文 runner 上中文全成问号）。`.iss` 里带 `#if FileExists`，文件不在就退回英文。
 
 安装完的数据在 `%APPDATA%\BoxSend`（配置、cookies、状态），卸载时保留，重装自动接着用。
+
+## 双击没反应时看哪儿
+
+界面是双击启动的 WinExe，没有控制台，异常要是发生在弹框之前就连框都没有。每一步都往
+`%LOCALAPPDATA%\BoxSend\startup.log` 追加一行：卡在「核心库：正在创建」就是核心库没回来，
+停在「核心库：就绪」之后就是界面的事，连一行都没有就是进程压根没起来（看事件查看器的
+应用程序日志）。界面线程的未处理异常现在也会弹框并把细节写进同一个文件。
+窗口关掉是收进托盘（跟 mac 版一致），此时再双击图标会把原来那个实例的窗口叫出来，不再只弹一句「已在运行」。
 
 ## 用 GitHub Actions 出包（不用本机装工具链）
 
@@ -105,6 +116,7 @@ windows/
   BoxSend.Windows/         WPF 界面工程（六页 + 托盘 + 主题）
     native/                核心库与 Swift 运行时（脚本填入，不入库）
   installer/boxsend.iss    Inno Setup 脚本
+  installer/Languages/     安装向导的简体中文消息
   abi-probe/               C ABI 冒烟测试，可在 macOS/Linux 上跑
 ```
 
