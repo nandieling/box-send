@@ -390,19 +390,22 @@ if (Test-Path $trace) {
 }
 $answered = if (Test-Path $answer) { [IO.File]::ReadAllText($answer) } else { '' }
 Remove-Item $trace, $answer, $probePs1 -Force -ErrorAction SilentlyContinue
-if ($answered.Length -gt 200) { $answered = $answered.Substring(0, 200) + ' …' }
+# 先判断再截断：回信是 JSON 对象，键的顺序不保证，"ok" 未必排在头 200 字里
+$ok = $answered -match '"ok"\s*:\s*true'
+$brief = if ($answered.Length -gt 200) { $answered.Substring(0, 200) + ' …' } else { $answered }
+$answered = $null
 
 if (-not $exited) { throw '核心库 240 秒没答话（上面最后一条之后不再动，就是卡在那一步）' }
-if ($code -ne 0 -and $answered -notmatch '"ok":\s*true') {
+if ($code -ne 0 -and -not $ok) {
     throw ('探测进程出了状况，退出码 ' + (Format-ExitCode $code) + '；上面最后一条路标就是崩溃前走到的那步')
 }
 if ($code -ne 0) {
     Write-Host ('  答对了，但进程退出时崩了（退出码 ' + (Format-ExitCode $code) + '）：不影响开窗口，记下待查') -ForegroundColor Yellow
 }
-if ($answered -notmatch '"ok":\s*true') {
-    throw ('核心库没按契约回答：' + $(if ($answered) { $answered } else { '一个字都没回' }))
+if (-not $ok) {
+    throw ('核心库没按契约回答：' + $(if ($brief) { $brief } else { '一个字都没回' }))
 }
-Write-Host ('  version 答了：' + $answered) -ForegroundColor Green
+Write-Host ('  回信：' + $brief) -ForegroundColor Green
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'
