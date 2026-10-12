@@ -17,7 +17,7 @@ final class CookieCloudTests: XCTestCase {
 
     private func runOpenSSL(_ args: [String], stdin: Data) throws -> Data {
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
+        p.executableURL = URL(fileURLWithPath: try HostTool.path("openssl"))
         p.arguments = args
         let inPipe = Pipe(), outPipe = Pipe()
         p.standardInput = inPipe

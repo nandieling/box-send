@@ -11,7 +11,7 @@ final class SyncTests: XCTestCase {
         let cookies = #"{"cookies": {"hdsky.me": [{"name": "uid", "value": "42"}]}}"#
         try cookies.write(toFile: src + "/cookies.json", atomically: true, encoding: .utf8)
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+        p.executableURL = URL(fileURLWithPath: try HostTool.path("zip"))
         p.arguments = ["-q", dir + "/" + name, "manifest.json", "cookies.json"]
         p.currentDirectoryPath = src
         try p.run()
