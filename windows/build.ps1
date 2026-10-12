@@ -329,38 +329,80 @@ $missing = Test-BoxSendExports (Join-Path $out 'boxsend-core.dll')
 if ($missing) { throw ('导出符号缺失：' + ($missing -join ', ')) }
 Write-Host '加载成功，7 个导出符号齐全' -ForegroundColor Green
 # ---------- 2.6 真调一次 ----------
-# 导出表齐、LoadLibrary 也过，不代表能用：少一个运行期自己去 LoadLibrary 的依赖，或者初始化
-# 里卡住，界面上的表现都是「双击了没窗口也没报错」。这一步把那三下真走一遍。
-# PATH 只留系统目录 = 模拟干净机器（CI 上工具链目录一直在 PATH 里，缺依赖会被它兜住）；
-# 跑在后台作业里，卡住 240 秒判死（核心库自己会打每步耗时），并把进度一并打出来
+# 导出表齐、LoadLibrary 也过，不代表能用：少一个运行期自己去 LoadLibrary 的依赖、初始化里卡住、
+# 或者头几下就把堆写坏，界面上的表现都是「双击了没窗口也没报错」。这一步把那三下真走一遍。
+# 跑在独立的 pwsh 子进程里：Start-Job 那种作业进程要是崩了，会把错误文本一起吞掉、退出码也
+# 拿不到（我们就是这么把 0xC0000374 看成「60 秒没返回」的）。
+# PATH 只留系统目录 = 模拟干净机器：CI 上工具链目录一直在 PATH 里，缺依赖会被它兜住。
 Step '真调一次核心库（PATH 只留系统目录，240 秒硬闸）'
-$trace = Join-Path ([IO.Path]::GetTempPath()) ('boxsend-trace-' + [guid]::NewGuid().ToString('N') + '.log')
-$probe = Start-Job -ArgumentList @($out, $trace, (Join-Path $proj 'Interop\PeReader.cs')) -ScriptBlock {
-    param($dir, $trace, $src)
-    $env:PATH = (Join-Path $env:SystemRoot 'System32') + [IO.Path]::PathSeparator + $env:SystemRoot
-    $env:BOXSEND_TRACE = $trace
-    Add-Type -Path $src
-    [BoxSend.Windows.Interop.NativeProbe]::ProbeCore((Join-Path $dir 'boxsend-core.dll'))
+
+function Format-ExitCode([int]$c) {
+    if ($c -ge 0) { return "$c" }
+    $hex = '0x{0:X8}' -f ($c -band 0xFFFFFFFF)
+    $map = @{
+        '0xC0000135' = '找不到依赖的 DLL'
+        '0xC000007B' = '映像格式不对（架构或位数不匹配）'
+        '0xC0000142' = 'DLL 初始化失败'
+        '0xC0000374' = '堆损坏（STATUS_HEAP_CORRUPTION）'
+        '0xC0000005' = '访问违例'
+        '0xC0000409' = '运行时自检失败（__fastfail）'
+    }
+    if ($map.ContainsKey($hex)) { return ($hex + ' ' + $map[$hex]) }
+    return $hex
 }
+
+$noise = [guid]::NewGuid().ToString('N')
+$trace = Join-Path ([IO.Path]::GetTempPath()) ("boxsend-trace-$noise.log")
+$answer = Join-Path ([IO.Path]::GetTempPath()) ("boxsend-answer-$noise.txt")
+$probePs1 = Join-Path ([IO.Path]::GetTempPath()) ("boxsend-probe-$noise.ps1")
+@'
+param($Dir, $Src, $Trace, $Answer)
+$ErrorActionPreference = 'Stop'
+$env:PATH = (Join-Path $env:SystemRoot 'System32') + [IO.Path]::PathSeparator + $env:SystemRoot
+$env:BOXSEND_TRACE = $Trace
+Add-Type -Path $Src
+try {
+    $json = [BoxSend.Windows.Interop.NativeProbe]::ProbeCore((Join-Path $Dir 'boxsend-core.dll'), $Trace)
+    [IO.File]::WriteAllText($Answer, $json)
+    exit 0
+} catch {
+    [IO.File]::WriteAllText($Answer, ('探测抛异常：' + $_.Exception.Message))
+    exit 2
+}
+'@ | Set-Content -LiteralPath $probePs1 -Encoding utf8
+
+$probe = Start-Process pwsh -PassThru -NoNewWindow -ArgumentList @(
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $probePs1,
+    $out, (Join-Path $proj 'Interop\PeReader.cs'), $trace, $answer)
 $clock = [Diagnostics.Stopwatch]::StartNew()
-$done = Wait-Job $probe -Timeout 240
+$exited = $probe.WaitForExit(240000)
 $clock.Stop()
-Write-Host ('  耗时 ' + [int]$clock.Elapsed.TotalSeconds + ' 秒')
-if (-not $done) {
-    Stop-Job $probe; Remove-Job $probe -Force
-    if (Test-Path $trace) { Write-Host '核心库内部走到：'; Get-Content $trace | ForEach-Object { Write-Host ('  ' + $_) } }
-    throw '核心库 240 秒还没答话（核心库自己的计时见上面 +Nms：某一步之后不再动就是卡在那儿，不是慢）'
+$code = 0
+if ($exited) { $code = $probe.ExitCode }
+else { Stop-Process -Id $probe.Id -Force -ErrorAction SilentlyContinue }
+
+Write-Host ('  耗时 ' + [int]$clock.Elapsed.TotalSeconds + ' 秒，探测进程退出码 ' + $(if ($exited) { Format-ExitCode $code } else { '还没退' }))
+if (Test-Path $trace) {
+    Write-Host '  走到的步（core: = 核心库内部，probe: = 探测这一侧；行序即时间序，最后一条就是停住的地方）：'
+    Get-Content $trace | ForEach-Object { Write-Host ('    ' + $_) }
+} else {
+    Write-Host '  一行路标都没有：核心库连第一句都还没来得及说' -ForegroundColor Yellow
 }
-$answered = ((Receive-Job $probe 2>&1 | ForEach-Object { [string]$_ }) -join ' ')
-Remove-Job $probe -Force
+$answered = if (Test-Path $answer) { [IO.File]::ReadAllText($answer) } else { '' }
+Remove-Item $trace, $answer, $probePs1 -Force -ErrorAction SilentlyContinue
+if ($answered.Length -gt 200) { $answered = $answered.Substring(0, 200) + ' …' }
+
+if (-not $exited) { throw '核心库 240 秒没答话（上面最后一条之后不再动，就是卡在那一步）' }
+if ($code -ne 0 -and $answered -notmatch '"ok":\s*true') {
+    throw ('探测进程出了状况，退出码 ' + (Format-ExitCode $code) + '；上面最后一条路标就是崩溃前走到的那步')
+}
+if ($code -ne 0) {
+    Write-Host ('  答对了，但进程退出时崩了（退出码 ' + (Format-ExitCode $code) + '）：不影响开窗口，记下待查') -ForegroundColor Yellow
+}
 if ($answered -notmatch '"ok":\s*true') {
-    if (Test-Path $trace) { Write-Host '核心库内部走到：'; Get-Content $trace | ForEach-Object { Write-Host ('  ' + $_) } }
-    if ($answered.Length -gt 400) { $answered = $answered.Substring(0, 400) + ' …' }
     throw ('核心库没按契约回答：' + $(if ($answered) { $answered } else { '一个字都没回' }))
 }
-if ($answered.Length -gt 200) { $answered = $answered.Substring(0, 200) + ' …' }
 Write-Host ('  version 答了：' + $answered) -ForegroundColor Green
-if (Test-Path $trace) { Write-Host '  核心库内部走的步：'; Get-Content $trace | ForEach-Object { Write-Host ('    ' + $_) } }
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'

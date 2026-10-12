@@ -200,27 +200,66 @@ public static class NativeProbe
     [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
     private delegate IntPtr NoArgFn();
 
+    private static string _tracePath;
+    private static readonly DateTime TraceT0 = DateTime.UtcNow;
+
+    /// <summary>往核心库那份路标文件里也追加一行（前缀 probe: 区分是谁写的）。两套计时起点
+    /// 不同（core: 的零点在核心库第一次打点那刻），所以只把行序当时间序看：崩在哪一下，
+    /// 最后一行就在哪。</summary>
+    private static void Mark(string what)
+    {
+        if (string.IsNullOrEmpty(_tracePath)) return;
+        try {
+            long ms = (long)(DateTime.UtcNow - TraceT0).TotalMilliseconds;
+            File.AppendAllText(_tracePath, "probe: +" + ms + "ms " + what + Environment.NewLine);
+        } catch { }
+    }
+
     /// <summary>走一遍用户开机后的头三下，返回 version 那次的 JSON；哪儿不对直接抛。
-    /// 导出表齐全却起不来那一类毛病（少个懒加载的依赖、初始化里卡住）只有真调才看得见。</summary>
+    /// 导出表齐全却起不来那一类毛病（少个懒加载的依赖、初始化里卡住、堆写坏）只有真调才看得见。</summary>
     public static string ProbeCore(string modulePath)
     {
+        return ProbeCore(modulePath, null);
+    }
+
+    /// <summary>tracePath 传空时认环境变量 BOXSEND_TRACE，和核心库写同一份文件。</summary>
+    public static string ProbeCore(string modulePath, string tracePath)
+    {
+        _tracePath = string.IsNullOrEmpty(tracePath) ? Environment.GetEnvironmentVariable("BOXSEND_TRACE") : tracePath;
+        Mark("开始，模块 " + modulePath);
         IntPtr h = Load(modulePath);
         if (h.ToInt64() == 0)
             throw new InvalidOperationException("加载 " + modulePath + " 失败，Win32 错误码 " + Win32Error());
+        Mark("模块加载好了");
         CreateFn create = Deleg<CreateFn>(h, "boxsend_create");
         InvokeFn invoke = Deleg<InvokeFn>(h, "boxsend_invoke");
         FreeFn free = Deleg<FreeFn>(h, "boxsend_free");
         DestroyFn destroy = Deleg<DestroyFn>(h, "boxsend_destroy");
 
+        // 先调一个不碰服务的导出：这样万一是「字符串来回那套写法有毛病」，会在这儿就露出来，
+        // 不会和服务初始化的问题混在一起
+        Mark("调 boxsend_version");
+        IntPtr verPtr = Deleg<NoArgFn>(h, "boxsend_version")();
+        string ver = PtrToUtf8(verPtr);
+        free(verPtr);
+        Mark("boxsend_version 答了：" + ver);
+
+        Mark("调 boxsend_create");
         IntPtr handle = create(IntPtr.Zero, IntPtr.Zero);
         if (handle.ToInt64() == 0)
             throw new InvalidOperationException("boxsend_create 返回空句柄：" + PtrToUtf8(Deleg<NoArgFn>(h, "boxsend_last_error")()));
+        Mark("create 回来了");
 
         string request = @"{""method"":""version""}";
+        Mark("调 boxsend_invoke");
         IntPtr json = invoke(handle, request);
+        Mark("invoke 回来了");
         string text = PtrToUtf8(json);
+        Mark("回信读完了，" + text.Length + " 字");
         free(json);
+        Mark("回信释放了");
         destroy(handle);
+        Mark("服务销毁了");
         if (text.Length == 0) throw new InvalidOperationException("boxsend_invoke 没回东西");
         return text;
     }

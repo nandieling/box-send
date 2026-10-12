@@ -4,7 +4,7 @@ import BoxSendKit
 /// 给宿主界面（Windows WPF，或任何能 P/Invoke 的语言）用的 C ABI。
 ///
 /// 全部字符串走 UTF-8、NUL 结尾；返回的字符串由本模块分配，宿主必须用 `boxsend_free` 归还
-/// （由同一模块分配并释放，避免跨模块 CRT 堆不一致）。
+/// （分配和释放都走 Swift 分配器，见 `dupString`：跨 CRT 堆释放会直接搞坏堆）。
 /// 识别器回调用「宿主往给定缓冲区里写」的形式，跨边界不传所有权，少一类内存泄漏。
 ///
 /// 用法：`boxsend_create` 拿句柄 -> 反复 `boxsend_invoke` -> `boxsend_destroy`。
@@ -43,24 +43,43 @@ public func boxsend_create(_ configPath: UnsafePointer<CChar>?,
     }
 }
 
+/// 复制一份 C 字符串，交出去的所有权由 `boxsend_free` 归还。
+///
+/// 为什么不调 CRT 的复制函数：那是 CRT 的 malloc，而 `boxsend_free` 里的 `deallocate()`
+/// 走的是 Swift 分配器。macOS 上两边都是 libSystem 的同一个堆，没事；Windows 上不是
+/// 同一个堆，把 CRT 的块交给 Swift 释放（反之亦然）就是 0xC0000374 堆损坏——进程闷声
+/// 崩掉，界面上既没窗口也没报错，正是用户看到的那个现象。
+private func dupString(_ s: String) -> UnsafeMutablePointer<CChar>?
+{
+    let bytes = Array(s.utf8)
+    let buf = UnsafeMutablePointer<CChar>.allocate(capacity: bytes.count + 1)
+    if !bytes.isEmpty {
+        bytes.withUnsafeBytes { raw in
+            UnsafeMutableRawPointer(buf).copyMemory(from: raw.baseAddress!, byteCount: raw.count)
+        }
+    }
+    buf[bytes.count] = 0
+    return buf
+}
+
 private var lastError = ""
 
 @_cdecl("boxsend_last_error")
 public func boxsend_last_error() -> UnsafePointer<CChar>? {
-    UnsafePointer(strdup(lastError))
+    UnsafePointer(dupString(lastError))
 }
 
 /// 入参：`{"method":"snapshot","params":{...}}`；返回：`{"ok":true,"result":{...}}`
 @_cdecl("boxsend_invoke")
 public func boxsend_invoke(_ handle: UnsafeMutableRawPointer?,
                           _ requestJSON: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>? {
-    guard let handle else { return strdup(#"{"ok":false,"error":"句柄无效"}"#) }
+    guard let handle else { return dupString(#"{"ok":false,"error":"句柄无效"}"#) }
     let holder = Unmanaged<Holder>.fromOpaque(handle).takeUnretainedValue()
     let req = requestJSON.map { String(cString: $0) } ?? "{}"
     Trace.mark("invoke 进来：\(req.prefix(48))")
     let answer = holder.service.invokeJSON(req)
     Trace.mark("invoke 答了 \(answer.utf8.count) 字节")
-    return strdup(answer)
+    return dupString(answer)
 }
 
 /// 释放 boxsend_invoke / boxsend_last_error 返回的字符串
@@ -94,7 +113,7 @@ public func boxsend_set_ocr(_ handle: UnsafeMutableRawPointer?, _ fn: OcrCallbac
 
 @_cdecl("boxsend_version")
 public func boxsend_version() -> UnsafeMutablePointer<CChar>? {
-    strdup(BoxSendVersion.version)
+    dupString(BoxSendVersion.version)
 }
 
 @_cdecl("boxsend_destroy")
