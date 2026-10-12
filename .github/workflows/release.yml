@@ -175,15 +175,22 @@ jobs:
       # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
       - name: 测试
         shell: pwsh
+        # 核心库里有走网络的用例，Windows 上真挂住的话整步能空转到作业超时；12 分钟够全套跑完
+        timeout-minutes: 12
         continue-on-error: ${{ env.ALLOW_WINDOWS_TEST_FAILURE == 'true' }}
         run: |
           swift --version
           swift build --build-tests
           if ($LASTEXITCODE -ne 0) { throw "!! 测试目标编译就没过（退出码 $LASTEXITCODE）" }
-          # swift 失败时会打印整条前端编译命令（几十 KB），这里只留关键行并限长
-          swift test 2>&1 | Select-String -Pattern 'error|Fatal error|failed|Executed .* tests' |
-            ForEach-Object { if ($_.Line.Length -gt 300) { $_.Line.Substring(0, 300) + ' …' } else { $_.Line } } |
-            Select-Object -Last 40
+          # 逐条打「> 套件 用例」而不是等末尾汇总：swift test 挂在哪个用例上，日志最后一行就是它。
+          # 编译失败时 swift 会把整条前端命令打出来（几十 KB），所以那种行限长
+          swift test 2>&1 | ForEach-Object {
+            $l = "$_"
+            if ($l -match "Test Case '-\[([^\]]+)\]' started") { '>' + $matches[1] }
+            elseif ($l -match 'error|Fatal error|failed|Executed .* tests') {
+              if ($l.Length -gt 220) { $l.Substring(0, 220) + ' …' } else { $l }
+            }
+          }
           if ($LASTEXITCODE -ne 0) { throw "swift test 没过（退出码 $LASTEXITCODE）" }
 
       - name: 装 Inno Setup（runner 已预装则跳过）
