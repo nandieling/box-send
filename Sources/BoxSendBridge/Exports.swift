@@ -23,13 +23,18 @@ private final class Holder {
 @_cdecl("boxsend_create")
 public func boxsend_create(_ configPath: UnsafePointer<CChar>?,
                           _ dataDir: UnsafePointer<CChar>?) -> UnsafeMutableRawPointer? {
+    Trace.mark("create 进来")
     let path = configPath.map { String(cString: $0) }
     let dir = dataDir.map { String(cString: $0) }
     do {
-        let svc = try AppService(configPath: path ?? AppPaths.configFile, dataDir: dir)
+        let cfgPath = path ?? AppPaths.configFile
+        Trace.mark("要读的配置：\(cfgPath)")
+        let svc = try AppService(configPath: cfgPath, dataDir: dir)
+        Trace.mark("服务建好了")
         return Unmanaged.passRetained(Holder(svc)).toOpaque()
     } catch {
         lastError = "\(error)"
+        Trace.mark("建服务抛错：\(error)")
         return nil
     }
 }

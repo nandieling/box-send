@@ -1,5 +1,5 @@
 <#
-Windows 打包脚本（在 Windows 上运行，PowerShell 7 或 Windows PowerShell 5.1 均可）
+Windows 打包脚本（在 Windows 上运行，要 PowerShell 7：Add-Type 编的 PE 解析用到了 .NET Core 的 NativeLibrary）
 
   .\windows\build.ps1              # release：核心库 -> native\ -> WPF -> publish\
   .\windows\build.ps1 -Setup       # 再打成 installer\Output\*.exe
@@ -210,6 +210,22 @@ function Copy-CoreArtifacts([string]$built) {
     $all = @(Get-ChildItem $native -Filter *.dll)
     Write-Host ('依赖闭包 ' + $all.Count + ' 个 DLL（本轮拷入 ' + $script:copied.Count + ' 个，按导入表追出来的）：')
     $all | Sort-Object Name | ForEach-Object { Write-Host ('  ' + $_.Name + '  ' + [math]::Round($_.Length / 1kb) + ' KB') }
+
+    # 工具链里还有一类是核心库运行期自己去 LoadLibrary 的（libcurl 那批），导入表里看不见，
+    # 所以闭包拷不全它们。全列出来：出「DLL 都齐了却还是起不来」的毛病时先从这找嫌疑
+    $packed = @{}
+    foreach ($f in $all) { $packed[$f.Name.ToLowerInvariant()] = $true }
+    $loose = New-Object System.Collections.Generic.List[string]
+    foreach ($b in (Get-ToolchainBins)) {
+        foreach ($f in @(Get-ChildItem $b -Filter *.dll -ErrorAction SilentlyContinue)) {
+            if (-not $packed.ContainsKey($f.Name.ToLowerInvariant())) {
+                $loose.Add($f.Name + '  ' + [math]::Round($f.Length / 1kb) + ' KB')
+            }
+        }
+    }
+    $looseUnique = @($loose | Sort-Object -Unique)
+    Write-Host ('  工具链里另有 ' + $looseUnique.Count + ' 个 DLL 没进包（运行期按需加载那类）：')
+    $looseUnique | ForEach-Object { Write-Host ('    ' + $_) }
 }
 
 # 成品自己说得清自己：每个 DLL 的导入项要么在成品里，要么是 Windows 自带。这一步不看 PATH，
@@ -312,6 +328,34 @@ Step '加载 publish\boxsend-core.dll 冒烟测试'
 $missing = Test-BoxSendExports (Join-Path $out 'boxsend-core.dll')
 if ($missing) { throw ('导出符号缺失：' + ($missing -join ', ')) }
 Write-Host '加载成功，7 个导出符号齐全' -ForegroundColor Green
+# ---------- 2.6 真调一次 ----------
+# 导出表齐、LoadLibrary 也过，不代表能用：少一个运行期自己去 LoadLibrary 的依赖，或者初始化
+# 里卡住，界面上的表现都是「双击了没窗口也没报错」。这一步把那三下真走一遍。
+# PATH 只留系统目录 = 模拟干净机器（CI 上工具链目录一直在 PATH 里，缺依赖会被它兜住）；
+# 跑在后台作业里，卡住 60 秒判死，并把核心库自己记的进度一并打出来
+Step '真调一次核心库（PATH 只留系统目录，60 秒硬闸）'
+$trace = Join-Path ([IO.Path]::GetTempPath()) ('boxsend-trace-' + [guid]::NewGuid().ToString('N') + '.log')
+$probe = Start-Job -ArgumentList @($out, $trace, (Join-Path $proj 'Interop\PeReader.cs')) -ScriptBlock {
+    param($dir, $trace, $src)
+    $env:PATH = (Join-Path $env:SystemRoot 'System32') + [IO.Path]::PathSeparator + $env:SystemRoot
+    $env:BOXSEND_TRACE = $trace
+    Add-Type -Path $src
+    [BoxSend.Windows.Interop.NativeProbe]::ProbeCore((Join-Path $dir 'boxsend-core.dll'))
+}
+if (-not (Wait-Job $probe -Timeout 60)) {
+    Stop-Job $probe; Remove-Job $probe -Force
+    if (Test-Path $trace) { Write-Host '核心库内部走到：'; Get-Content $trace | ForEach-Object { Write-Host ('  ' + $_) } }
+    throw 'boxsend_create 60 秒没返回——用户机器上的表现就是这个：没窗口，也没报错'
+}
+$answered = ((Receive-Job $probe 2>&1 | ForEach-Object { [string]$_ }) -join ' ')
+Remove-Job $probe -Force
+if ($answered -notmatch '"ok":\s*true') {
+    if (Test-Path $trace) { Write-Host '核心库内部走到：'; Get-Content $trace | ForEach-Object { Write-Host ('  ' + $_) } }
+    if ($answered.Length -gt 400) { $answered = $answered.Substring(0, 400) + ' …' }
+    throw ('核心库没按契约回答：' + $(if ($answered) { $answered } else { '一个字都没回' }))
+}
+if ($answered.Length -gt 200) { $answered = $answered.Substring(0, 200) + ' …' }
+Write-Host ('  version 答了：' + $answered) -ForegroundColor Green
 
 # ---------- 3. 体积概览 ----------
 Step '成品体积'

@@ -70,20 +70,26 @@ public final class AppService {
     ///   - dataDir: 运行时数据目录（cookies.json / state.json / debug/），默认取配置的 dataDir
     public init(configPath: String = AppPaths.configFile, dataDir: String? = nil) throws {
         self.configPath = configPath
+        Trace.mark("init: 读配置")
         var loaded = AppConfig.load(path: configPath)
         if loaded == nil {
             loaded = AppConfig.template()
         }
+        Trace.mark("init: 配置解析\(loaded == nil ? "失败，用内置模板" : "完毕")")
         var c = loaded ?? AppConfig.template()
+        Trace.mark("init: 展开数据目录")
         let dir = Platform.expandPath(dataDir ?? c.dataDir)
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         c.dataDir = dir
         self.dataDir = dir
         self.cfg = c
+        Trace.mark("init: 状态库 \(dir)")
         self.state = StateStore(dataDir: dir)
+        Trace.mark("init: 读 cookies")
         if let data = try? Data(contentsOf: URL(fileURLWithPath: dir).appendingPathComponent("cookies.json")) {
             _ = try? cookies.replace(from: data)
         }
+        Trace.mark("init: 取日志")
         self.logs = state.recentNotes
         self.state.onNote = { [weak self] line in
             guard let self else { return }
@@ -92,12 +98,15 @@ public final class AppService {
             if self.logs.count > 400 { self.logs.removeFirst(self.logs.count - 400) }
             self.lock.unlock()
         }
+        Trace.mark("init: 套间站点表")
         lock.lock()
         for s in c.sourceSites {
             if let rec = state.cookieCheck(s.id) { checkResults[s.id] = rec }
         }
         lock.unlock()
+        Trace.mark("init: 落盘")
         save()
+        Trace.mark("init: 收工")
     }
 
     // MARK: 入口

@@ -85,7 +85,12 @@ public sealed class BoxSendApi : IDisposable
     public BoxSendApi(string? configPath = null, string? dataDir = null, OcrCallback? ocr = null)
     {
         _ocr = ocr;
+        // 让核心库把自己的进度也写进同一份启动日志：卡在核心里的时候，光有界面侧那一行
+        // 只能知道「没回来」，说不出停在哪一步（Trace.swift 认这个环境变量）
+        Environment.SetEnvironmentVariable("BOXSEND_TRACE", StartupLog.FilePath);
+        StartupLog.Write("核心库：调 boxsend_create");
         _handle = boxsend_create(configPath, dataDir);
+        StartupLog.Write(_handle == IntPtr.Zero ? "核心库：boxsend_create 返回空句柄" : "核心库：句柄拿到了");
         if (_handle == IntPtr.Zero)
         {
             var errPtr = boxsend_last_error();

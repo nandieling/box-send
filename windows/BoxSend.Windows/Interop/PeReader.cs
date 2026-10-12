@@ -179,5 +179,69 @@ public static class NativeProbe
     {
         return System.Runtime.InteropServices.Marshal.GetLastWin32Error();
     }
+
+    // ---- 真按用户那样调一次：create -> invoke(version) -> destroy ----
+
+    // 两个路径参数按指针声明：这里只传空指针（界面走的也是默认路径），
+    // 省得在可空注解上绕来绕去
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate IntPtr CreateFn(IntPtr configPath, IntPtr dataDir);
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate IntPtr InvokeFn(IntPtr handle,
+        [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPUTF8Str)] string requestJson);
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate void FreeFn(IntPtr ptr);
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate void DestroyFn(IntPtr handle);
+
+    [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
+    private delegate IntPtr NoArgFn();
+
+    /// <summary>走一遍用户开机后的头三下，返回 version 那次的 JSON；哪儿不对直接抛。
+    /// 导出表齐全却起不来那一类毛病（少个懒加载的依赖、初始化里卡住）只有真调才看得见。</summary>
+    public static string ProbeCore(string modulePath)
+    {
+        IntPtr h = Load(modulePath);
+        if (h.ToInt64() == 0)
+            throw new InvalidOperationException("加载 " + modulePath + " 失败，Win32 错误码 " + Win32Error());
+        CreateFn create = Deleg<CreateFn>(h, "boxsend_create");
+        InvokeFn invoke = Deleg<InvokeFn>(h, "boxsend_invoke");
+        FreeFn free = Deleg<FreeFn>(h, "boxsend_free");
+        DestroyFn destroy = Deleg<DestroyFn>(h, "boxsend_destroy");
+
+        IntPtr handle = create(IntPtr.Zero, IntPtr.Zero);
+        if (handle.ToInt64() == 0)
+            throw new InvalidOperationException("boxsend_create 返回空句柄：" + PtrToUtf8(Deleg<NoArgFn>(h, "boxsend_last_error")()));
+
+        string request = @"{""method"":""version""}";
+        IntPtr json = invoke(handle, request);
+        string text = PtrToUtf8(json);
+        free(json);
+        destroy(handle);
+        if (text.Length == 0) throw new InvalidOperationException("boxsend_invoke 没回东西");
+        return text;
+    }
+
+    private static T Deleg<T>(IntPtr module, string name)
+    {
+        long at = Addr(module, name);
+        if (at == 0) throw new InvalidOperationException("缺导出符号 " + name);
+        return System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<T>(new IntPtr(at));
+    }
+
+    /// <summary>核心库回的是 UTF-8 的 NUL 结尾串。不写 PtrToStringUTF8 是因为 Windows
+    /// PowerShell 5.1 的 Add-Type 跑在 .NET Framework 上，那份框架里没有这个 API。</summary>
+    private static string PtrToUtf8(IntPtr p)
+    {
+        if (p.ToInt64() == 0) return "";
+        int n = 0;
+        while (System.Runtime.InteropServices.Marshal.ReadByte(p, n) != 0) n++;
+        byte[] buf = new byte[n];
+        System.Runtime.InteropServices.Marshal.Copy(p, buf, 0, n);
+        return Encoding.UTF8.GetString(buf);
+    }
 }
 }

@@ -13,6 +13,7 @@ public partial class App : Application
 
     // 单实例：互斥量与「把窗口叫出来」的事件都得被字段持有，局部变量会被 GC 回收，
     // 句柄一关，第二个实例就以为自己是第一个
+    private readonly ManualResetEventSlim _coreReady = new(false);
     private Mutex? _singleInstance;
     private EventWaitHandle? _showRequested;
     private RegisteredWaitHandle? _showWait;
@@ -34,6 +35,8 @@ public partial class App : Application
             ev.SetObserved();
         };
 
+        WatchStartup(20);
+
         var single = new Mutex(true, "BoxSend.SingleInstance", out var isNew);
         if (!isNew)
         {
@@ -53,6 +56,7 @@ public partial class App : Application
             // 验证码识别先留空：核心库认不出时会重新取图重试，最终放弃该次发帖而不是报错
             StartupLog.Write("核心库：正在创建");
             _model = new AppModel(new BoxSendApi());
+            _coreReady.Set();
             StartupLog.Write($"核心库：就绪 v{_model.CoreVersion}（{_model.Platform}），数据目录 {_model.DataDir}");
         }
         catch (Exception ex)
@@ -90,6 +94,21 @@ public partial class App : Application
         _showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, "BoxSend.ShowRequested");
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showRequested, (_, _) =>
             Dispatcher.BeginInvoke(() => _window?.ShowFromTray()), null, Timeout.InfiniteTimeSpan, false);
+    }
+
+    /// <summary>核心库要是不返回，界面线程就钉在那儿，WPF 自己的定时器也点不亮——
+    /// 所以另开一条线程报信，免得「双击了没窗口也没提示」什么线索都没有。</summary>
+    private void WatchStartup(int seconds)
+    {
+        var t = new Thread(() =>
+        {
+            if (_coreReady.Wait(TimeSpan.FromSeconds(seconds))) return;
+            StartupLog.Write($"看门狗：{seconds} 秒了核心库还没返回");
+            MessageBox.Show($"核心库启动超过 {seconds} 秒没返回。\n\n走到哪一步写在\n{StartupLog.FilePath}\n" +
+                            "（带 core: 前缀的那些行是核心库内部的进度）",
+                            "BoxSend", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }) { IsBackground = true };
+        t.Start();
     }
 
     /// <summary>窗口在屏幕上的实际位置尺寸（设备像素）＋主屏工作区，用来判「窗口跑到屏幕外」</summary>
