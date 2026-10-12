@@ -66,6 +66,9 @@ public partial class App : Application
 
         try
         {
+            // 先把快照取到手再建窗口：主题色、背景图透明度都读自配置，视图也假定配置已在
+            StartupLog.Write("首帧快照：读取中");
+            _model.Refresh();
             ThemeManager.Apply(this, _model.CurrentTheme, BackgroundImage(), 0.45);
             _window = new MainWindow(_model);
             _window.Show();
@@ -82,7 +85,6 @@ public partial class App : Application
         }
 
         _model.Start();
-        _ = _model.RefreshAsync();
 
         // 第二个实例双击图标时走这里：托盘图标常常被折叠在溢出区，只弹一句「已在运行」等于没反应
         _showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, "BoxSend.ShowRequested");

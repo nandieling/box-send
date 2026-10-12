@@ -153,6 +153,22 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>首帧之前同步取一次快照。核心库就在本进程里，这一问一答只有几毫秒，
+    /// 换来的是六个视图构造时配置、分组、站点已经就位（不必各防一遍 Config 还是 null），
+    /// 窗口也不会先空一下再填上。</summary>
+    public void Refresh()
+    {
+        try
+        {
+            Apply(_api.Invoke("snapshot"), true);
+        }
+        catch (Exception ex)
+        {
+            CookieMessage = "读取状态失败：" + ex.Message;
+            Raise(nameof(CookieMessage), nameof(StatusText));
+        }
+    }
+
     private void Apply(JsonNode snap, bool full)
     {
         Running = Bool(snap["run"]?["running"]);
