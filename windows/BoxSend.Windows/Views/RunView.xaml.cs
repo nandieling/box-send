@@ -15,8 +15,13 @@ public partial class RunView : UserControl
     /// 页面上现有的站点勾选框（重建时一起换掉；读勾选状态直接问它们，不爬视觉树）
     private readonly List<CheckBox> _boxes = new();
 
-    /// 源站下拉里的第一项：不点名，按链接域名自动识别
-    private static readonly SiteRow AutoSource = new() { Id = "", Name = "源站：自动识别（按域名）" };
+    /// 源站下拉里的第一项：不点名，按链接域名自动识别。文字会跟着链接变
+    /// （识别出是哪一站就写成「源站：自动（某站）」），所以每次都要现造一个
+    private const string AutoId = "";
+    private string _autoLabel = "源站：自动识别";
+    private string _lastProbeUrl = "";
+
+    private SiteRow AutoSource => new() { Id = AutoId, Name = _autoLabel };
 
     public RunView(AppModel model)
     {
@@ -25,6 +30,7 @@ public partial class RunView : UserControl
         SiteEvents.ItemsSource = model.RunSites;
         PushEvents.ItemsSource = model.RunPushes;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Rebuild);
+        DetailUrl.TextChanged += (_, _) => RefreshSourceLabel();
         LoadQuote();
         Rebuild();
     }
@@ -37,12 +43,14 @@ public partial class RunView : UserControl
         var pickedSource = (SourceSitePick.SelectedItem as SiteRow)?.Id;
 
         LoadQuote();
+        ProbeSourceLabel();
 
         SourceSitePick.Items.Clear();
         SourceSitePick.Items.Add(AutoSource);
         foreach (var s in _model.Sites.Where(s => s.Managed)) SourceSitePick.Items.Add(s);
         SourceSitePick.SelectedItem =
             SourceSitePick.Items.Cast<SiteRow>().FirstOrDefault(s => s.Id == pickedSource) ?? AutoSource;
+        ShowSourceChip();
 
         if (!_seeded)
         {
@@ -56,6 +64,53 @@ public partial class RunView : UserControl
         BtnRun.IsEnabled = !_model.Running;
         BtnRun.Content = _model.Running ? "运行中…" : "开始运行";
         RunStep.Text = _model.Running ? _model.RunningStep : "";
+    }
+
+    // MARK: 源站（下拉点名 + 按域名自动识别）
+
+    /// 链接一改就去核心库问一次「这条链接像哪个站」，只换下拉第一项的文字，
+    /// 不动用户已经点名的那个选择
+    private void RefreshSourceLabel()
+    {
+        ProbeSourceLabel();
+        if (SourceSitePick.Items.Count == 0) return;
+        SourceSitePick.Items[0] = AutoSource;
+        if (SourceSitePick.SelectedItem is SiteRow cur && cur.Id == AutoId)
+            SourceSitePick.SelectedItem = AutoSource;
+    }
+
+    private void ProbeSourceLabel()
+    {
+        var url = DetailUrl.Text.Trim();
+        if (url == _lastProbeUrl) return;
+        _lastProbeUrl = url;
+        var name = "";
+        if (url.StartsWith("http"))
+        {
+            var hit = _model.Api.TryInvoke("sites.matchURL", out _, new { url })?["name"];
+            name = hit is JsonValue v && v.TryGetValue<string>(out var n) ? n : "";
+        }
+        _autoLabel = name.Length > 0 ? $"源站：自动（{name}）" : "源站：自动识别";
+    }
+
+    /// 源站种子的获取状态（「源站种子获取中… / 已获取 / 获取失败」），与 mac 版那颗胶囊对应
+    private void ShowSourceChip()
+    {
+        var e = _model.SourcePush;
+        if (e == null || e.Text.Length == 0)
+        {
+            SourceChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+        SourceChipText.Text = e.Text;
+        SourceChipText.Foreground = (Brush)FindResource(e.Phase switch
+        {
+            "done" => "Success",
+            "failed" => "Warning",
+            _ => "TextMuted",
+        });
+        SourceChip.ToolTip = string.IsNullOrEmpty(e.Detail) ? e.Text : e.Detail;
+        SourceChip.Visibility = Visibility.Visible;
     }
 
     /// 每个分组一块：组名 + 整组全选 + 组内站点勾选框（只列已开启的站点）
@@ -260,17 +315,14 @@ public partial class RunView : UserControl
         var r = await _model.TestSSHAsync();
         RunStep.Text = "";
         BtnRun.IsEnabled = true;
+        // 文案由核心给（一句测速信息），这里只决定按钮：继续转种 / 先不转种
         var win = Window.GetWindow(this)!;
         if (!r.Ok)
-        {
-            return MessageBox.Show(win,
-                $"服务器测速失败：{r.Text}\n可以先跳过这次检查直接转种，或到「下载器」页检查 SSH 设置。",
-                "服务器测速没做成", MessageBoxButton.OKCancel, MessageBoxImage.Warning)
-                == MessageBoxResult.OK;
-        }
-        var hint = r.Low ? "\n速度掉到 20 MB/s 这个量级，多半是 24 小时上传流量到 2T 后被限速了。" : "";
-        return MessageBox.Show(win, $"{r.Text}{hint}\n是否开始转种？",
-            "服务器上传实测", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+            return MessageBox.Show(win, r.Text, "服务器测速没做成",
+                                   MessageBoxButton.OKCancel, MessageBoxImage.Warning)
+                   == MessageBoxResult.OK;
+        return MessageBox.Show(win, r.Text, $"服务器上传实测 {r.MBps:0.#} MB/s",
+                               MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
     }
 
     private void Start(string url, string[] targets)

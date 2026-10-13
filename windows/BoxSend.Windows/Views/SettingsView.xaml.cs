@@ -28,22 +28,38 @@ public partial class SettingsView : UserControl
         foreach (var t in _model.Themes)
         {
             var picked = t.Id == _model.CurrentTheme.Id;
+            // 渐变色块只作预览，名字写在色块下方的卡片底上：
+            // 写在色块上时，「云端白」这类浅色主题在当前深色主题下就是白字配白底，看不清
+            var preview = new Border
+            {
+                Height = 34,
+                CornerRadius = new CornerRadius(4),
+                Background = Gradient(t.Colors),
+            };
+            var caption = new TextBlock
+            {
+                Text = t.Name,
+                Margin = new Thickness(3, 5, 3, 0),
+                FontSize = 12,
+                TextAlignment = TextAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = (Brush)FindResource(picked ? "TextPrimary" : "TextMuted"),
+            };
+            var body = new StackPanel();
+            body.Children.Add(preview);
+            body.Children.Add(caption);
             var swatch = new Border
             {
                 Width = 150,
-                Height = 56,
+                Height = 82,
                 Margin = new Thickness(0, 0, 10, 10),
                 CornerRadius = new CornerRadius(6),
                 BorderBrush = (Brush)FindResource(picked ? "Accent" : "Line"),
-                BorderThickness = new Thickness(picked ? 2 : 1),
-                Background = Gradient(t.Colors),
-                Child = new TextBlock
-                {
-                    Text = t.Name,
-                    Margin = new Thickness(8),
-                    Foreground = (Brush)FindResource("TextPrimary"),
-                    VerticalAlignment = VerticalAlignment.Bottom,
-                },
+                BorderThickness = new Thickness(picked ? 2.5 : 1),
+                Background = (Brush)FindResource("BlockSurface"),
+                Padding = new Thickness(5),
+                Child = body,
+                ToolTip = $"切换到「{t.Name}」主题",
             };
             var id = t.Id;
             swatch.MouseLeftButtonUp += (_, _) =>

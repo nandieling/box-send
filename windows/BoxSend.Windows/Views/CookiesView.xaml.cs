@@ -3,7 +3,8 @@ using System.Windows.Controls;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>Cookie 页：Gist / CookieCloud 两路同步、PT-depiler 备份目录监控、本地 cookie 管理。</summary>
+/// <summary>Cookie 页：Gist / CookieCloud 两路同步与 PT-depiler 备份导入。
+/// 本地 cookie 的查看与检测在「站点分组」页做（每站一张卡片），这里不再重复一块列表。</summary>
 public partial class CookiesView : UserControl
 {
     private readonly AppModel _model;
@@ -13,7 +14,6 @@ public partial class CookiesView : UserControl
     {
         _model = model;
         InitializeComponent();
-        Hosts.ItemsSource = model.CookieHosts;
         // 「显示」按钮旁边放一个明文框，按下时才亮出来（PasswordBox 不支持绑定，只能两个控件切）
         GistPeeker.Visibility = Visibility.Collapsed;
         GistTokenDock.Children.Insert(0, GistPeeker);
@@ -26,7 +26,6 @@ public partial class CookiesView : UserControl
         _loading = true;
         GistState.Text = $"上次同步：{_model.LastGistSync}";
         CookieMessage.Text = _model.CookieMessage;
-        CookieTotal.Text = $"本地 {_model.CookieHosts.Count} 个站点、{_model.CookieTotal} 条 cookie";
 
         GistId.Text = _model.SectionText("gistSync", "gistID");
         GistToken.Password = _model.SectionText("gistSync", "token");
@@ -120,27 +119,11 @@ public partial class CookiesView : UserControl
         _ = _model.RefreshAsync();
     }
 
-    private void OnTrim(object sender, RoutedEventArgs e) => _model.Call("cookies.trim");
-
     private void OnClear(object sender, RoutedEventArgs e)
     {
         if (MessageBox.Show(Window.GetWindow(this)!, "确定清空本地全部 cookie？同步后可重新拉取。", "BoxSend",
                             MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
         _model.Call("cookies.clear");
-    }
-
-    private void OnCheckAll(object sender, RoutedEventArgs e) =>
-        _model.Call("cookies.check", new { ids = Array.Empty<string>(), force = true });
-
-    private void OnManualCookie(object sender, RoutedEventArgs e)
-    {
-        var sites = _model.Sites.Where(s => s.Enabled).ToList();
-        if (sites.Count == 0)
-        {
-            MessageBox.Show(Window.GetWindow(this)!, "还没有启用的站点。", "BoxSend");
-            return;
-        }
-        new Dialogs.ManualCookieWindow(_model, sites) { Owner = Window.GetWindow(this) }.ShowDialog();
     }
 
     /// 口令显示切换：PasswordBox 没有 Text 绑定，换成同位置的 TextBox 太啰嗦，直接切可见性

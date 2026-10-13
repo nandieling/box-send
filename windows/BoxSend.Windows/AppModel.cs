@@ -13,7 +13,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private readonly BoxSendApi _api;
     private readonly System.Windows.Threading.DispatcherTimer _timer;
     private bool _refreshing;
-    private bool _fullWhilePartial;
+    private bool _pendingFull;
 
     private readonly AutoTask _gistTask;
     private readonly AutoTask _ccTask;
@@ -143,15 +143,19 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     {
         if (_refreshing)
         {
-            if (full) _fullWhilePartial = true;
+            if (full) _pendingFull = true;
             return;
         }
         _refreshing = true;
+        // 要全量刷就按「取快照之前」的意图算：这一轮跑起来之后才发生的配置改动
+        // 记进 _pendingFull，等这轮结束补一轮。只看这一轮的快照会拿到改动前的数据，
+        // 表现就是「加了站点但卡片没出现」——定时刷新只做局部刷，永远等不到跟进。
+        var wantFull = full || _pendingFull;
+        _pendingFull = false;
         try
         {
             var snap = await Task.Run(() => _api.Invoke("snapshot"));
-            Apply(snap, full || _fullWhilePartial);
-            _fullWhilePartial = false;
+            Apply(snap, wantFull);
         }
         catch (Exception ex)
         {
@@ -162,6 +166,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         {
             _refreshing = false;
         }
+        if (_pendingFull) await RefreshAsync(full: true);
     }
 
     /// <summary>首帧之前同步取一次快照。核心库就在本进程里，这一问一答只有几毫秒，
@@ -169,6 +174,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 窗口也不会先空一下再填上。</summary>
     public void Refresh()
     {
+        _pendingFull = false;
         try
         {
             Apply(_api.Invoke("snapshot"), true);
@@ -445,6 +451,10 @@ public sealed class SiteRow
     public string CheckText => CheckOk == null ? "未检测" : CheckOk == true ? "有效" : CheckMessage;
     public string CookieText => UsesApiKey ? (HasApiKey ? "已填 Key" : "缺 Key")
         : HasCookie ? $"{CookieCount} 条 cookie" : "无 cookie";
+
+    /// 下拉框直接把行对象当项用（源站选择、手动填 cookie），没有这句会显示类名
+    public override string ToString() => Name;
+
     public bool CanMoveUp => IndexInBlock > 0;
     public bool CanMoveDown => IndexInBlock >= 0 && IndexInBlock < BlockSize - 1;
 

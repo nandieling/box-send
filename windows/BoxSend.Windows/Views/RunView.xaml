@@ -13,9 +13,15 @@
                 <DockPanel>
                     <TextBlock Text="种子链接" FontWeight="SemiBold" VerticalAlignment="Center"
                                Margin="0,0,10,0" />
-                    <ComboBox x:Name="SourceSitePick" DockPanel.Dock="Right" Width="190" MinHeight="32"
+                    <!-- 源站种子的获取状态（转种时源站种子也一起推下载器）-->
+                    <Border x:Name="SourceChip" DockPanel.Dock="Right" CornerRadius="9"
+                            Padding="7,2" Margin="0,0,8,0" VerticalAlignment="Center"
+                            Background="{DynamicResource TextSurface}" Visibility="Collapsed">
+                        <TextBlock x:Name="SourceChipText" FontSize="12" TextWrapping="NoWrap" />
+                    </Border>
+                    <ComboBox x:Name="SourceSitePick" DockPanel.Dock="Right" Width="200" MinHeight="32"
                               VerticalAlignment="Center"
-                              ToolTip="默认按链接域名识别源站；已添加的站点都能点名作源站" />
+                              ToolTip="默认按链接域名识别源站；已添加的站点都能点名作源站（站点换过域名、或同一站点有多个入口时用得上）" />
                     <Border DockPanel.Dock="Right" Width="10" Background="Transparent" />
                     <TextBox x:Name="DetailUrl" MinHeight="34" FontSize="13"
                              VerticalContentAlignment="Center"

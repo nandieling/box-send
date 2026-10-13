@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
@@ -9,6 +10,10 @@ namespace BoxSend.Windows.Views;
 public partial class SitesView : UserControl
 {
     private readonly AppModel _model;
+    /// 组内拖拽排序：拖把手的那张卡片（半透明）+ 现有卡片与序号框，供拖放与序号排序回查
+    private string? _dragging;
+    private readonly Dictionary<string, Border> _cards = new();
+    private readonly Dictionary<string, TextBox> _nums = new();
 
     public SitesView(AppModel model)
     {
@@ -21,6 +26,8 @@ public partial class SitesView : UserControl
     private void Reload()
     {
         Blocks.Children.Clear();
+        _cards.Clear();
+        _nums.Clear();
         foreach (var g in _model.Groups) Blocks.Children.Add(BlockFor(g));
         var unassigned = _model.Sites.Where(s => s.Managed && s.Group < 0).ToList();
         // 只有真有没归组的站点才出现这一块，否则页面上会有一个去不掉的空「未分组」
@@ -46,7 +53,7 @@ public partial class SitesView : UserControl
         var sites = overrideSites ?? _model.Sites.Where(s => s.Group == group!.Index).ToList();
         var panel = new StackPanel();
 
-        // ---- 标题行：分组名 + 重命名 / 添加站点 / 排序 / 移除 + 组默认限速 ----
+        // ---- 标题行：分组名 + 组默认限速 + 重命名 / 移除分组 / 添加站点 ----
         var header = new WrapPanel();
         header.Children.Add(new TextBlock
         {
@@ -60,7 +67,7 @@ public partial class SitesView : UserControl
         {
             var limit = new TextBox
             {
-                Width = 58,
+                Width = 116,
                 Text = group.UpLimitMB.ToString(),
                 TextAlignment = TextAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -80,15 +87,12 @@ public partial class SitesView : UserControl
                     _model.Call("groups.setLimit", new { index = group.Index, upLimitMB = mb });
             };
             header.Children.Add(SmallButton("重命名", () => Rename(group)));
-            header.Children.Add(SmallButton("上移", () => MoveGroup(group, -1), group.Index > 0));
-            header.Children.Add(SmallButton("下移", () => MoveGroup(group, 1),
-                group.Index < _model.Groups.Count - 1));
             header.Children.Add(SmallButton("移除分组", () => RemoveGroup(group), danger: true));
         }
         header.Children.Add(SmallButton("添加站点", () => AddSitesTo(group?.Index ?? -1)));
         panel.Children.Add(header);
 
-        // ---- 工具行：N 站 / 全选 / 手动 cookie / 移除站点 / 检测本组 ----
+        // ---- 工具行：N 站 / 全选 / 手动 cookie / 移除站点（cookie 检测只在顶部做全量）----
         var toolbar = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
         toolbar.Children.Add(new TextBlock
         {
@@ -106,16 +110,14 @@ public partial class SitesView : UserControl
             () => new Dialogs.ManualCookieWindow(_model, on) { Owner = Window.GetWindow(this) }.ShowDialog(),
             on.Count > 0));
         toolbar.Children.Add(TinyButton("移除站点", () => RemoveSites(group, on), on.Count > 0, danger: true));
-        toolbar.Children.Add(TinyButton("检测本组",
-            () => _model.Call("cookies.check",
-                new { ids = sites.Select(s => s.Id).ToArray(), force = true }), sites.Count > 0));
         if (group == null)
             toolbar.Children.Add(TinyButton("全部移出纳管", () => RemoveSites(null, sites),
                 sites.Count > 0, danger: true));
         panel.Children.Add(toolbar);
 
         var cards = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        foreach (var s in sites) cards.Children.Add(CardFor(s));
+        var block = group?.Index ?? -1;
+        foreach (var s in sites) cards.Children.Add(CardFor(s, block));
         panel.Children.Add(cards);
         if (sites.Count == 0)
             panel.Children.Add(new TextBlock
@@ -137,11 +139,11 @@ public partial class SitesView : UserControl
     }
 
     /// <summary>站点卡片：名称 / 地址 / cookie 状态 / 上传限速（+「发种后免费一天」单独一行，
-    /// 免得卡片窄时被压成竖排）；点名称区开启或停用该站。</summary>
-    private UIElement CardFor(SiteRow s)
+    /// 免得卡片窄时被压成竖排）。点名称区开启或停用该站；组内排序靠拖右侧把手或在把手左边
+    /// 输入序号回车（与 mac 版同一套），所以卡上不再放上下移与移组 / 移除按钮。</summary>
+    private UIElement CardFor(SiteRow s, int block)
     {
-        var head = new DockPanel { Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };
-        var title = new StackPanel();
+        var title = new StackPanel { Cursor = Cursors.Hand, Background = Brushes.Transparent };
         title.Children.Add(new TextBlock
         {
             Text = s.Name,
@@ -156,11 +158,62 @@ public partial class SitesView : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = (Brush)FindResource("TextMuted"),
         });
-        DockPanel.SetDock(title, Dock.Left);
-        head.Children.Add(title);
-        head.MouseLeftButtonUp += (_, _) =>
+        title.MouseLeftButtonUp += (_, _) =>
             _model.Call("sites.setEnabled", new { ids = new[] { s.Id }, enabled = !s.Enabled });
-        head.ToolTip = s.Enabled ? "已开启，点击停用" : "未开启，点击开启";
+        title.ToolTip = s.Enabled ? "已开启，点击停用" : "未开启，点击开启";
+
+        // 序号框：占位显示组内当前位置，输入数字回车即排到该位置
+        var num = new TextBox
+        {
+            Width = 34,
+            MinHeight = 24,
+            FontSize = 12,
+            Padding = new Thickness(3, 2, 3, 2),
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Tag = s.Id,
+            ToolTip = $"组内第 {s.IndexInBlock + 1} 位；输入新序号回车排到该位置",
+        };
+        num.PreviewTextInput += (_, e) =>
+        {
+            if (!e.Text.All(char.IsDigit)) e.Handled = true;
+        };
+        num.PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+            ApplySiteSort(block);
+        };
+        _nums[s.Id] = num;
+
+        var grip = new TextBlock
+        {
+            Text = "≡",
+            FontSize = 15,
+            Width = 14,
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = Cursors.SizeNS,
+            ToolTip = "按住拖拽调整组内位置",
+            Foreground = (Brush)FindResource("TextMuted"),
+        };
+        var self = s.Id;
+        grip.MouseLeftButtonDown += (_, _) =>
+        {
+            _dragging = self;
+            if (_cards.TryGetValue(self, out var me)) me.Opacity = 0.45;
+            DragDrop.DoDragDrop(grip, new DataObject(DataFormats.Text, self), DragDropEffects.Move);
+            // DoDragDrop 到放手才返回，这里恢复透明度并清状态
+            if (_cards.TryGetValue(self, out me)) me.Opacity = 1;
+            _dragging = null;
+        };
+
+        var head = new DockPanel();
+        DockPanel.SetDock(grip, Dock.Right);
+        DockPanel.SetDock(num, Dock.Right);
+        head.Children.Add(grip);
+        head.Children.Add(num);
+        head.Children.Add(title);
 
         var body = new StackPanel();
         body.Children.Add(head);
@@ -214,13 +267,6 @@ public partial class SitesView : UserControl
             Margin = new Thickness(3, 0, 0, 0),
             Foreground = (Brush)FindResource("TextMuted"),
         });
-        row.Children.Add(TinyButton("↑", () => _model.Call("sites.move", new { id = s.Id, delta = -1 }),
-            s.CanMoveUp));
-        row.Children.Add(TinyButton("↓", () => _model.Call("sites.move", new { id = s.Id, delta = 1 }),
-            s.CanMoveDown));
-        row.Children.Add(TinyButton("移组", () => MoveToGroup(s)));
-        row.Children.Add(TinyButton("移除", () => _model.Call("sites.remove", new { ids = new[] { s.Id } }),
-            danger: true));
         body.Children.Add(row);
 
         // 只有站内真有「帖子免费1天」按钮的站点才出现这一行
@@ -244,7 +290,7 @@ public partial class SitesView : UserControl
             body.Children.Add(free);
         }
 
-        return new Border
+        var card = new Border
         {
             BorderBrush = (Brush)FindResource(s.Enabled ? "Accent" : "Line"),
             BorderThickness = new Thickness(s.Enabled ? 1.5 : 1),
@@ -253,43 +299,37 @@ public partial class SitesView : UserControl
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 8, 8),
             Width = 208,
+            AllowDrop = true,
             Child = body,
         };
+        card.PreviewDrop += (_, e) =>
+        {
+            e.Handled = true;   // 卡里有输入框，不截下来会被输入框当成「拖入文本」
+            var from = e.Data.GetData(DataFormats.Text) as string;
+            if (from != null && from != s.Id)
+                _model.Call("sites.moveBefore", new { id = from, before = s.Id });
+        };
+        card.DragOver += (_, e) =>
+        {
+            e.Effects = _dragging != null && _dragging != s.Id
+                ? DragDropEffects.Move : DragDropEffects.None;
+            e.Handled = true;
+        };
+        _cards[s.Id] = card;
+        return card;
+    }
+
+    /// 序号 = 组内目标位置：填 N 的排到第 N 位，序号相同的按原顺序，没填的留在后面（同 mac 版）
+    private void ApplySiteSort(int block)
+    {
+        var order = new Dictionary<string, int>();
+        foreach (var kv in _nums)
+            if (int.TryParse(kv.Value.Text.Trim(), out var n) && n > 0) order[kv.Key] = n;
+        if (order.Count == 0) return;
+        _model.Call("groups.sortSites", new { group = block, order });
     }
 
     // MARK: 动作
-
-    /// 分组上下移：核心库按「把 dragged 放到 before 之前」挪，往下挪就是让后一个分组挪到自己前面
-    private void MoveGroup(GroupRow g, int delta)
-    {
-        if (delta < 0)
-        {
-            var prev = _model.Groups.FirstOrDefault(x => x.Index == g.Index - 1);
-            if (prev != null) _model.Call("groups.move", new { dragged = g.Name, before = prev.Name });
-            return;
-        }
-        var next = _model.Groups.FirstOrDefault(x => x.Index == g.Index + 1);
-        if (next != null) _model.Call("groups.move", new { dragged = next.Name, before = g.Name });
-    }
-
-    private void MoveToGroup(SiteRow s)
-    {
-        var menu = new ContextMenu();
-        foreach (var g in _model.Groups)
-        {
-            var item = new MenuItem { Header = g.Name };
-            var gi = g.Index;
-            item.Click += (_, _) => _model.Call("sites.setGroup", new { id = s.Id, index = gi });
-            menu.Items.Add(item);
-        }
-        if (_model.Groups.Count > 0) menu.Items.Add(new Separator());
-        var outItem = new MenuItem { Header = "移出分组（未分组）" };
-        outItem.Click += (_, _) => _model.Call("sites.setGroup", new { id = s.Id, index = -1 });
-        menu.Items.Add(outItem);
-        menu.PlacementTarget = this;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        menu.IsOpen = true;
-    }
 
     /// 移除分组：与 mac 版一样要两次确认，第一次说清后果，第二次才真删
     private void RemoveGroup(GroupRow g)

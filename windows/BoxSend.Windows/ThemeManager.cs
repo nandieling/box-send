@@ -26,6 +26,8 @@ public static class ThemeManager
         res["DialogBackground"] = Brush(theme.Dark ? "#1E252E" : "#F3F7FC");
         res["Warning"] = Brush(theme.Dark ? "#FFC46B" : "#B45309");
         res["Success"] = Brush(theme.Dark ? "#7BD88F" : "#15803D");
+        // 下拉框选中项、批量添加站点里「已选中」卡片用的淡强调色
+        res["AccentSoft"] = Tint(theme.Accent, 0.28);
         ApplyMetrics(app, _maximized);
 
         if (backgroundImageFile != null && File.Exists(backgroundImageFile))
@@ -64,6 +66,16 @@ public static class ThemeManager
     private static SolidColorBrush Brush(string hex)
     {
         var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        b.Freeze();
+        return b;
+    }
+
+    /// 主题强调色的半透明版（选中态背景：既要看得出选中，又不能压住文字）
+    private static SolidColorBrush Tint(string hex, double opacity)
+    {
+        var c = (Color)ColorConverter.ConvertFromString(hex);
+        c.A = (byte)Math.Round(Math.Clamp(opacity, 0, 1) * 255);
+        var b = new SolidColorBrush(c);
         b.Freeze();
         return b;
     }

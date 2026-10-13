@@ -7,7 +7,7 @@
                 <Label Content="分组名" VerticalAlignment="Center" />
                 <TextBox x:Name="NewGroupName" Width="190" VerticalAlignment="Center" />
                 <Label Content="上传限速" Margin="10,0,4,0" VerticalAlignment="Center" />
-                <TextBox x:Name="NewGroupMB" Width="58" Text="10" VerticalAlignment="Center"
+                <TextBox x:Name="NewGroupMB" Width="116" Text="10" VerticalAlignment="Center"
                          TextAlignment="Center"
                          ToolTip="组内新增站点的默认上传限速 MB/s，0 = 不限速" />
                 <Label Content="MB/s" VerticalAlignment="Center" />

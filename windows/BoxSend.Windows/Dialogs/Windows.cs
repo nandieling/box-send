@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace BoxSend.Windows.Dialogs;
 
@@ -22,17 +23,37 @@ public static class PromptWindow
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize,
-            Background = PromptWindow.Themed("DialogBackground", "#1F2530"),
-            Content = Stack(new object[]
-            {
-                box,
-                Row(new object[] { ok, Space(8), cancel }),
-            }, 10),
         };
+        win.Content = Backdrop(win, Stack(new object[]
+        {
+            box,
+            Row(new object[] { ok, Space(8), cancel }),
+        }, 10));
         ok.Click += (_, _) => { result = box.Text; win.DialogResult = true; };
         box.SelectAll();
         box.Focus();
         return win.ShowDialog() == true ? result : null;
+    }
+
+    /// <summary>弹窗背景：主题渐变 + 背景图片（用设置里的透明度）+ 内容。
+    /// Window.Background 只放得下一个纯色刷子，渐变与壁纸会整个丢掉，
+    /// 所以这里像主窗口那样铺三层；底色留着当「没设壁纸」时的兜底。</summary>
+    internal static FrameworkElement Backdrop(Window win, UIElement content)
+    {
+        win.Background = Themed("DialogBackground", "#1F2530");
+        var grid = new Grid();
+        grid.Children.Add(new Rectangle { Fill = Themed("GradientBackground", "#1F2530") });
+        if (Application.Current.Resources["BackgroundImage"] is ImageSource img)
+            grid.Children.Add(new Image
+            {
+                Source = img,
+                Stretch = Stretch.UniformToFill,
+                Opacity = Application.Current.Resources["BackgroundImageOpacity"] is double d
+                    ? Math.Clamp(d, 0, 1)
+                    : 0,
+            });
+        grid.Children.Add(content);
+        return grid;
     }
 
     /// <summary>取主题色（没定义时退回深色底）：弹窗底色必须跟着主题走，
@@ -109,7 +130,6 @@ public sealed class AddSitesWindow : Window
         Width = 760;
         Height = 600;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = PromptWindow.Themed("DialogBackground", "#1F2530");
 
         LoadCandidates();
 
@@ -198,7 +218,7 @@ public sealed class AddSitesWindow : Window
         layout.Children.Add(top);
         layout.Children.Add(scroll);
         layout.Children.Add(footer);
-        Content = layout;
+        Content = PromptWindow.Backdrop(this, layout);
 
         Rebuild();
     }
@@ -337,8 +357,9 @@ public sealed class AddSitesWindow : Window
         };
         card.MouseEnter += (_, _) => { if (_dragging == null) card.BorderBrush = AccentBrush(); };
         card.MouseLeave += (_, _) => RefreshCard(id);
-        card.Drop += (_, e) =>
+        card.PreviewDrop += (_, e) =>
         {
+            e.Handled = true;   // 卡里有输入框，不截下来会被输入框当成「拖入文本」
             var from = e.Data.GetData(DataFormats.Text) as string;
             if (from != null && from != id) MoveBefore(from, id);
         };
@@ -497,7 +518,6 @@ public sealed class ManualCookieWindow : Window
         Width = 620;
         Height = 400;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = PromptWindow.Themed("DialogBackground", "#1F2530");
 
         foreach (var s in sites) _site.Items.Add(s);
         _site.SelectedIndex = 0;
@@ -509,7 +529,7 @@ public sealed class ManualCookieWindow : Window
         var clear = new Button { Content = "清空本站 cookie", Padding = new Thickness(14, 5, 14, 5) };
         clear.Click += (_, _) => { _raw.Clear(); OnSave(save, new RoutedEventArgs()); };
 
-        Content = PromptWindow.Stack(new object[]
+        Content = PromptWindow.Backdrop(this, PromptWindow.Stack(new object[]
         {
             new TextBlock { Text = "站点" },
             _site,
@@ -517,7 +537,7 @@ public sealed class ManualCookieWindow : Window
             _raw,
             _status,
             PromptWindow.Row(new object[] { save, PromptWindow.Space(8), clear, PromptWindow.Space(8), close }),
-        }, 0);
+        }, 0));
         Load();
     }
 

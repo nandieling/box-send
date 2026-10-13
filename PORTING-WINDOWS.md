@@ -41,6 +41,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 `snapshot / events / logs.clear`、`config.get|set|patch / appearance.set`、
 `groups.add|rename|remove|move|setLimit|sortSites`、
 `sites.add|remove|setEnabled|move|moveBefore|setGroup|setApiKey|setUpLimit|setAutoFree`、
+`sites.candidates`（批量添加站点弹窗的候选与顺序）、`sites.matchURL`（按链接认源站）、
 `targets.set / sourceQuote.set`、
 `cookies.getRaw|setRaw|remove|clear|trim|sync|check|stopCheck|importZip`、
 `zip.set / zip.scan`、`downloader.test`、`ssh.test`、`run.start / run.status`、
@@ -65,7 +66,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 398 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+- 回归测试从 337 个加到 401 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
   只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
   连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
@@ -85,6 +86,25 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - 转种页改为按分成分块勾选，「开始运行」旁给出「已选 N 个分组 · M 个站点」，
   并按 mac 的行为在开跑前先测服务器速度
 
+界面这一轮再对齐（WPF 端，Windows 上待验）：
+
+- 分组块：去掉组名的「上移 / 下移」与工具行的「检测本组」（顶部「检测全部 cookie」已覆盖）；
+  两处「默认限速」输入框加宽到 116，不再挤掉数字
+- 站点卡片：去掉「↑ / ↓ / 移组 / 移除」四个小按钮，改成 mac 那套——拖卡片右侧把手到另一张卡片上
+  排序，或在把手左边输入序号回车排到第几位（走 `sites.moveBefore` / `groups.sortSites`）
+- 批量添加站点弹窗：卡片式多选、搜索、全选、拖把手与序号排序，分组由入口锁定（不再有下拉选框）；
+  候选顺序改由核心 `sites.candidates` 给，C# 不再自己抄一份拼音序
+- 下拉框整套重画（`App.xaml`）：框体、下拉面板、条目高亮全走主题色，深色主题上不再是白底白字；
+  `SiteRow` 补了 `ToString()`，源站选择与手动填 cookie 的下拉里不再显示类名
+- 转种页源站下拉对齐 mac：未点名时按域名识别，标签写成「源站：自动（某站）」，
+  旁边给出「源站种子获取中… / 已获取 / 获取失败」那颗状态徽标（认站规则由 `sites.matchURL` 给）
+- Cookie 页去掉「本地 cookie」整块（与站点分组页重复），只把「清空本地 cookie」留在备份卡片里
+- 设置页主题选择：主题名写在色块下方的卡片底上，浅色主题名在深色主题下不再看不清
+- 弹窗（文本输入 / 批量添加站点 / 手动填 cookie）背景补上主题渐变与背景图片，透明度跟设置里一致
+- 修掉一处刷新竞态：全量刷新撞上正在跑的局部刷新时，那一轮拿的是改动前的快照，
+  表现为「加了站点但卡片没立刻出现」；现在把待办记下来，那一轮结束后补一轮
+- 测速弹窗只报测速信息一行（两端共用 `SSHSpeedTest.gateText`），不再附一段限速说明
+
 ## 两端有意不同
 
 1. **验证码识别**（唯一功能缺口）。mac 用 Vision 现认 Discuz 发帖验证码；Windows 侧识别器还没接，
@@ -98,8 +118,8 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 4. **关窗**：Windows 关窗收进托盘继续跑（mac 是窗口关了进程还在），托盘双击回界面。
 5. **SSH 测速只用密钥登录**。Windows 自带的 OpenSSH 客户端不读 `SSH_ASKPASS`，密码没地方代填，
    核心在 Windows 上遇到密码登录直接给一句「请用密钥登录」；mac 两种都支持。
-6. **组内排序**：mac 支持拖拽把手与输入序号排序，Windows 用「上移 / 下移」按钮，
-   组顺序同样是按钮（核心 `groups.move` 按「把 A 放到 B 之前」实现，两端共用）。
+6. **分组之间的顺序**：两端都不能在界面上调，配置里的先后就是执行与显示的先后
+   （核心 `groups.move` 留着，谁要做拖拽排序直接能用）。组内排序两端一致：拖把手 + 输入序号。
 
 ## 到 Windows 机器上要做的事
 
