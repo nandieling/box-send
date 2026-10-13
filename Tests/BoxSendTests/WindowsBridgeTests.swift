@@ -88,6 +88,20 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertEqual(again.prefix(2).map { $0 }, Array(pick.reversed()), "手动排序要顶到最前面")
     }
 
+    /// 转种页那行「源站：自动（某站）」靠它，匹配规则必须留在核心（界面不自己抄一份）
+    func testMatchURLIdentifiesSourceSite() throws {
+        let (svc, _) = try makeService()
+        let rows = try svc.invoke("sites.candidates")["sites"] as! [[String: Any]]
+        guard let row = rows.first(where: { (($0["url"] as? String) ?? "").contains("//") })
+        else { return XCTFail("候选站应该带网址") }
+        let url = row["url"] as! String
+        guard let host = URL(string: url)?.host else { return XCTFail("候选站网址该能解析：\(url)") }
+        let hit = try svc.invoke("sites.matchURL", ["url": "https://\(host)/details.php?id=1"])
+        XCTAssertEqual(hit["name"] as? String, row["name"] as? String)
+        let miss = try svc.invoke("sites.matchURL", ["url": "https://example.invalid/x"])
+        XCTAssertEqual(miss["name"] as? String, "", "认不出时给空名，界面回落「自动识别」")
+    }
+
     func testAutoFreeFlagAndSSHTestContract() throws {
         let (svc, _) = try makeService()
         let sites = svc.snapshot()["sites"] as! [[String: Any]]

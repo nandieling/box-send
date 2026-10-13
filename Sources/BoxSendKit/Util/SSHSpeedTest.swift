@@ -170,20 +170,15 @@ public enum SSHSpeedTest {
 
     // MARK: - 测速后给用户看的文案
 
-    /// 测速完的弹窗文案：不设判定线，只把速度报出来，由用户决定这一批转不转
+    /// 测速完的弹窗文案：只报测速信息本身，不写说明段——转不转由人看一眼速度就决定
     public static func gateText(_ r: Result, loginTarget: String) -> (title: String, message: String) {
-        let who = r.serverInfo.isEmpty ? loginTarget : r.serverInfo
-        return ("服务器上传实测 \(speedText(r.peakMBps)) MB/s",
-                "\(who)：\(r.summaryLine)。\n"
-                + "部分服务器 24 小时上传流量到 2T 后会把上行压到 \(Int(SSHConfig.throttlingHintMBps)) MB/s 左右，"
-                + "速度掉到这个量级及以下时批量转种会整体变慢。是否开始转种？")
+        let line = r.serverInfo.isEmpty ? "\(r.summaryLine)（\(loginTarget)）" : r.summaryLine
+        return ("服务器上传实测 \(speedText(r.peakMBps)) MB/s", line)
     }
 
-    /// 测速本身失败（连不上、服务器没 curl 等）的弹窗文案
+    /// 测速本身失败（连不上、服务器没 curl 等）的弹窗文案：一句原因，不带教程
     public static func gateFailure(_ why: String, loginTarget: String) -> (title: String, message: String) {
-        ("服务器测速没做成",
-         "\(loginTarget) 测速失败：\(why)\n"
-         + "可以到「下载器」页的「转种服务器」卡片里检查 SSH 设置，也可以先跳过这次检查直接转种。")
+        ("服务器测速没做成", "\(loginTarget)：\(why)")
     }
 
     // MARK: - 远程脚本

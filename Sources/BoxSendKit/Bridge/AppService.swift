@@ -202,6 +202,10 @@ public final class AppService {
             }
             save()
             return groupsAndSites()
+        case "sites.matchURL":
+            // 源站自动识别：转种页那行「源站：自动（某站）」的标签用，匹配规则只在核心一处
+            let matched = cfg.site(forURL: params["url"] as? String ?? "")
+            return ["id": matched?.id ?? "", "name": matched?.name ?? ""]
         case "sites.candidates":
             // 批量添加站点弹窗：待添加的站点连同显示顺序一起由核心排好（含名称拼音默认序）
             let rows: [[String: Any]] = cfg.unmanagedDisplayOrder().compactMap { id in

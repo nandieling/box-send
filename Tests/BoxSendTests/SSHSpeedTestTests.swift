@@ -90,6 +90,21 @@ final class SSHSpeedTestTests: XCTestCase {
         XCTAssertTrue(r.summaryLine.contains("vps-1"))
     }
 
+    /// 弹窗只要一行测速信息：以前那段「2T 后压到 20 MB/s」的说明看两遍就没人看了
+    func testGatePopupIsOneLineSpeedInfo() throws {
+        let r = SSHSpeedTest.Result(peakMBps: 19.4, rounds: [18.1, 19.4],
+                                    probeURL: SSHConfig.defaultProbeURL, serverInfo: "vps-1")
+        let g = SSHSpeedTest.gateText(r, loginTarget: "seed@10.0.0.5")
+        XCTAssertEqual(g.title, "服务器上传实测 19.4 MB/s")
+        XCTAssertFalse(g.message.contains("\n"), "正文不该再拖一段说明")
+        XCTAssertTrue(g.message.contains("上传速度 19.4 MB/s"), g.message)
+
+        let f = SSHSpeedTest.gateFailure("端口没有监听", loginTarget: "seed@10.0.0.5")
+        XCTAssertEqual(f.title, "服务器测速没做成")
+        XCTAssertFalse(f.message.contains("\n"), f.message)
+        XCTAssertTrue(f.message.contains("端口没有监听"), f.message)
+    }
+
     // MARK: - 远程脚本
 
     func testSpeedScriptShape() {
