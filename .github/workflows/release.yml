@@ -27,10 +27,10 @@ env:
   SWIFT_WINDOWS_URL: ""
   # 安装包校验值，抄自 winget 清单 microsoft/winget-pkgs 里 Swift.Toolchain 那一份；换版本记得一起改
   SWIFT_WINDOWS_SHA256: "76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03"
-  # 核心库在 Windows 上的测试已经跑绿（398 条全过，二十来条跳过：要本机会话的 live 用例、
+  # 核心库在 Windows 上的测试已经跑绿（三百多条全过，二十来条跳过：要本机会话的 live 用例、
   # 缺 openssl / zip 的那几条，以及只能在类 UNIX 上跑的桩（SSH 桩是 sh 脚本，
   # Windows 侧另有一条用系统真 ssh 覆盖起进程与报错映射）），所以这里让它当硬门禁；
-  # 想先看结果不要挡出包就改回 true
+  # 门禁现在只拦「发版」与作业颜色，不再拦出包（见「测试」那步末尾那段）
   ALLOW_WINDOWS_TEST_FAILURE: "false"
 
 permissions:
@@ -44,14 +44,23 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: 测试
+        id: test
         run: |
           sw_vers
           swift --version
           # 先单独编译测试目标：编译错误与运行崩溃能一眼分开
           swift build --build-tests || { echo "!! 测试目标编译就没过"; exit 1; }
           swift test 2>&1 | grep -E "error:|Fatal error|failed|Executed .* tests" | tail -40
-          # 过滤日志会让退出码变成 tail 的，这里取回 swift test 自己的
-          exit "${PIPESTATUS[0]}"
+          # 过滤日志会让退出码变成 tail 的，这里取回 swift test 自己的。
+          # 用例红不在这里判：这一步红会把「打包 .app」一起跳过，连个产物都不留；
+          # 状态记进 outputs.gate，红叉挪到作业最后那步亮，包照打（与 Windows 那侧一致）
+          code="${PIPESTATUS[0]}"
+          gate=false
+          if [ "$code" -ne 0 ]; then
+            gate=true
+            echo "::error::swift test 没过（退出码 ${code}）：.app 照打，红叉在作业最后一步亮"
+          fi
+          echo "gate=$gate" >> "$GITHUB_OUTPUT"
 
       - name: 打包 .app
         run: |
@@ -65,7 +74,8 @@ jobs:
           path: BoxSend-*-macos.zip
 
       - name: 发版时传上 Release
-        if: startsWith(github.ref, 'refs/tags/')
+        # 测试红的时候包照打，但不让它进 Release：那份产物留在 artifact 里查
+        if: ${{ startsWith(github.ref, 'refs/tags/') && steps.test.outputs.gate != 'true' }}
         run: |
           tag="${GITHUB_REF_NAME}"
           file=$(ls BoxSend-*-macos.zip)
@@ -73,6 +83,13 @@ jobs:
             gh release upload "$tag" "$file" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # 硬门禁在这里落地：那时 .app 已经留在产物里了，红叉不会再连包一起吞掉
+      - name: 核心库测试没过
+        if: ${{ !cancelled() && steps.test.outputs.gate == 'true' }}
+        run: |
+          echo 'swift test 没过：.app 已经在产物里，先看上面「测试」那步'
+          exit 1
 
   Windows:
     if: github.event_name != 'workflow_dispatch' || inputs.platform != 'macos'
@@ -177,10 +194,10 @@ jobs:
 
       # PATH 是下一步才生效，所以 swift --version 与测试放到下一步里做
       - name: 测试
+        id: test
         shell: pwsh
         # 核心库里有走网络的用例，Windows 上真挂住的话整步能空转到作业超时；12 分钟够全套跑完
         timeout-minutes: 12
-        continue-on-error: ${{ env.ALLOW_WINDOWS_TEST_FAILURE == 'true' }}
         run: |
           swift --version
           swift build --build-tests
@@ -194,7 +211,17 @@ jobs:
               if ($l.Length -gt 220) { $l.Substring(0, 220) + ' …' } else { $l }
             }
           }
-          if ($LASTEXITCODE -ne 0) { throw "swift test 没过（退出码 $LASTEXITCODE）" }
+          # 用例没过不在这里 throw：这一步一红，后面的 Inno 与打包几步全被跳过，
+          # 「某个用例红」就长得跟「打包本身报错」一样，还连一个能查的包都没剩下。
+          # 这里只把状态记进 outputs.gate，红叉挪到作业最后那步亮，包照打。
+          $code = $LASTEXITCODE
+          $gate = 'false'
+          if ($code -ne 0) {
+            $gate = if ($env:ALLOW_WINDOWS_TEST_FAILURE -eq 'true') { 'false' } else { 'true' }
+            if ($gate -eq 'true') { "::error::swift test 没过（退出码 ${code}）：安装包照打，红叉在作业最后一步亮" }
+            else { "swift test 没过（退出码 ${code}），ALLOW_WINDOWS_TEST_FAILURE 开着，不拦" }
+          }
+          "gate=$gate" | Add-Content -Path $env:GITHUB_OUTPUT
 
       - name: 装 Inno Setup（runner 已预装则跳过）
         shell: pwsh
@@ -240,7 +267,8 @@ jobs:
           path: windows/publish/**
 
       - name: 发版时传上 Release
-        if: startsWith(github.ref, 'refs/tags/')
+        # 测试红的时候包照打，但不让它进 Release：那份产物留在 artifact 里查
+        if: ${{ startsWith(github.ref, 'refs/tags/') && steps.test.outputs.gate != 'true' }}
         shell: pwsh
         run: |
           $exe = (Get-ChildItem windows/installer/Output -Filter *.exe | Select-Object -First 1).FullName
@@ -249,3 +277,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { gh release upload "$env:GITHUB_REF_NAME" "$exe" --clobber }
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # 硬门禁在这里落地：那时安装包已经留在产物里了，红叉不会再连包一起吞掉
+      - name: 核心库测试没过
+        if: ${{ !cancelled() && steps.test.outputs.gate == 'true' }}
+        shell: pwsh
+        run: throw 'swift test 没过：安装包已经在产物里，先看上面「测试」那步最后几条用例名'
