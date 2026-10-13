@@ -22,6 +22,18 @@ public extension AppConfig {
         groups.append(GroupConfig(name: name, sites: ids))
     }
 
+    /// 「批量添加站点」弹窗的显示顺序：先按用户手动排过的那份，剩下的按名称默认序（拼音）追加。
+    /// 排序规则放核心，界面两端只管显示与回写，不会出现 mac 排完 Windows 又排歪。
+    public func unmanagedDisplayOrder() -> [String] {
+        let unmanaged = sourceSites.filter { !$0.managed }
+        let ids = Set(unmanaged.map(\.id))
+        let saved = unmanagedSiteOrder.filter { ids.contains($0) }
+        let placed = Set(saved)
+        let rest = unmanaged.map(\.id).filter { !placed.contains($0) }
+            .sorted { NameSort.isBefore(site($0)?.name ?? $0, site($1)?.name ?? $1) }
+        return saved + rest
+    }
+
     func groupIndex(of siteID: String) -> Int {
         groups.firstIndex { $0.sites.contains(siteID) } ?? -1
     }

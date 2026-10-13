@@ -13,11 +13,11 @@
                 <DockPanel>
                     <TextBlock Text="种子链接" FontWeight="SemiBold" VerticalAlignment="Center"
                                Margin="0,0,10,0" />
-                    <ComboBox x:Name="SourceSitePick" DockPanel.Dock="Right" Width="190" Height="28"
+                    <ComboBox x:Name="SourceSitePick" DockPanel.Dock="Right" Width="190" MinHeight="32"
                               VerticalAlignment="Center"
                               ToolTip="默认按链接域名识别源站；已添加的站点都能点名作源站" />
                     <Border DockPanel.Dock="Right" Width="10" Background="Transparent" />
-                    <TextBox x:Name="DetailUrl" Height="30" FontSize="13"
+                    <TextBox x:Name="DetailUrl" MinHeight="34" FontSize="13"
                              VerticalContentAlignment="Center"
                              ToolTip="粘贴种子详情页链接（如 https://…/details.php?id=…）" />
                 </DockPanel>
@@ -26,7 +26,7 @@
                               Click="OnQuoteToggled"
                               ToolTip="源站简介自带引用时不用勾选；勾选后这段文字会加在每个目标站简介最上面，并用引用块包起来" />
                     <Border Width="8" Background="Transparent" />
-                    <TextBox x:Name="QuoteText" Width="440" Height="28" VerticalContentAlignment="Center"
+                    <TextBox x:Name="QuoteText" Width="440" MinHeight="32" VerticalContentAlignment="Center"
                              ToolTip="加在简介最上面的引用文本（如：转载自LuckPT，感谢发布者）" />
                 </WrapPanel>
                 <TextBlock x:Name="QuoteHint" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"

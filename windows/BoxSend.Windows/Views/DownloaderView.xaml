@@ -18,7 +18,7 @@
                     </Grid.RowDefinitions>
                     <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
                         <Label Content="类型" />
-                        <ComboBox x:Name="Type" Height="28">
+                        <ComboBox x:Name="Type" MinHeight="32">
                             <ComboBoxItem Content="qBittorrent" Tag="qbittorrent" />
                             <ComboBoxItem Content="Transmission" Tag="transmission" />
                         </ComboBox>
@@ -54,7 +54,7 @@
                     <Label Content="默认上传限速 MB/s" VerticalAlignment="Center" />
                     <TextBox x:Name="DefaultLimit" Width="60" VerticalAlignment="Center" />
                     <Label Content="推送时机" VerticalAlignment="Center" Margin="16,0,0,0" />
-                    <ComboBox x:Name="PushPolicy" Width="150" Height="28" VerticalAlignment="Center">
+                    <ComboBox x:Name="PushPolicy" Width="150" MinHeight="32" VerticalAlignment="Center">
                         <ComboBoxItem Content="转种成功就推" Tag="onSuccess" />
                         <ComboBoxItem Content="总是推" Tag="always" />
                     </ComboBox>
@@ -65,7 +65,7 @@
                     <Label Content="VPS 剩余空间（GB，留空不检查）" VerticalAlignment="Center" />
                     <TextBox x:Name="VpsFree" Width="60" VerticalAlignment="Center" />
                     <Label Content="不足时" VerticalAlignment="Center" Margin="12,0,0,0" />
-                    <ComboBox x:Name="GuardMode" Width="110" Height="28" VerticalAlignment="Center">
+                    <ComboBox x:Name="GuardMode" Width="110" MinHeight="32" VerticalAlignment="Center">
                         <ComboBoxItem Content="只提示" Tag="warn" />
                         <ComboBoxItem Content="跳过推送" Tag="skip" />
                     </ComboBox>

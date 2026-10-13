@@ -60,8 +60,10 @@ public partial class SitesView : UserControl
         {
             var limit = new TextBox
             {
-                Width = 46,
+                Width = 58,
                 Text = group.UpLimitMB.ToString(),
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = "组内新增站点的默认限速 MB/s，0 = 用 10",
             };
             header.Children.Add(new TextBlock
@@ -181,8 +183,12 @@ public partial class SitesView : UserControl
         var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         var limit = new TextBox
         {
-            Width = 40,
+            Width = 52,
             Text = s.UpLimitMB.ToString(),
+            TextAlignment = TextAlignment.Center,
+            FontSize = 12,
+            Padding = new Thickness(4, 2, 4, 2),
+            MinHeight = 24,
             ToolTip = "上传限速 MB/s，0 = 不限速",
         };
         var savedLimit = s.UpLimitMB;
@@ -354,8 +360,6 @@ public partial class SitesView : UserControl
         _model.Call("groups.add", new { name, upLimitMB = mb });
         NewGroupName.Text = "";
     }
-
-    private void OnAddSites(object sender, RoutedEventArgs e) => AddSitesTo(-1);
 
     private void AddSitesTo(int groupIndex)
     {

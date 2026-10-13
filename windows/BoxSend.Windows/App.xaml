@@ -19,8 +19,8 @@
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Padding" Value="7,5" />
-            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Background" Value="{DynamicResource TextSurface}" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
@@ -51,8 +51,8 @@
         </Style>
 
         <Style TargetType="PasswordBox">
-            <Setter Property="Padding" Value="7,5" />
-            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
             <Setter Property="Background" Value="{DynamicResource TextSurface}" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
@@ -83,8 +83,8 @@
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Padding" Value="7,4" />
-            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="7,5" />
+            <Setter Property="MinHeight" Value="32" />
             <Setter Property="Background" Value="{DynamicResource TextSurface}" />
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
             <Setter Property="BorderBrush" Value="{DynamicResource Line}" />

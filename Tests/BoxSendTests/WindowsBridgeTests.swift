@@ -71,6 +71,23 @@ final class WindowsBridgeTests: XCTestCase {
 
     // MARK: 分组与站点排序
 
+    func testSiteCandidatesOrderAndPatch() throws {
+        let (svc, _) = try makeService()
+        let rows = try svc.invoke("sites.candidates")["sites"] as! [[String: Any]]
+        let managed = Set((svc.snapshot()["sites"] as! [[String: Any]])
+            .filter { ($0["managed"] as? Bool) == true }.map { $0["id"] as! String })
+        XCTAssertFalse(rows.isEmpty, "模板之外应该还有很多内置站待添加")
+        XCTAssertTrue(rows.allSatisfy { !managed.contains($0["id"] as! String) }, "已纳管的站不该出现在待添加列表")
+
+        // 手动排序（unmanagedSiteOrder）里排过的，弹窗要按那份顺序放前面
+        let ids = rows.map { $0["id"] as! String }
+        let pick = Array(ids.suffix(2))
+        _ = try svc.invoke("config.patch", ["patch": ["unmanagedSiteOrder": Array(pick.reversed())]])
+        let again = (try svc.invoke("sites.candidates")["sites"] as! [[String: Any]])
+            .map { $0["id"] as! String }
+        XCTAssertEqual(again.prefix(2).map { $0 }, Array(pick.reversed()), "手动排序要顶到最前面")
+    }
+
     func testAutoFreeFlagAndSSHTestContract() throws {
         let (svc, _) = try makeService()
         let sites = svc.snapshot()["sites"] as! [[String: Any]]

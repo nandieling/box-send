@@ -202,6 +202,13 @@ public final class AppService {
             }
             save()
             return groupsAndSites()
+        case "sites.candidates":
+            // 批量添加站点弹窗：待添加的站点连同显示顺序一起由核心排好（含名称拼音默认序）
+            let rows: [[String: Any]] = cfg.unmanagedDisplayOrder().compactMap { id in
+                guard let s = cfg.site(id) else { return nil }
+                return ["id": s.id, "name": s.name, "url": s.url]
+            }
+            return ["sites": rows]
         case "sites.remove":
             let ids = (params["ids"] as? [String]) ?? []
             mutate { for id in ids { self.cfg.removeManagedSite(id, unselect: { _ in }) } }

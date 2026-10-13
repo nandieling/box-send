@@ -1,9 +1,0 @@
-2026-10-13T00:27:07.9640000Z Job is about to start running on the hosted runner: GitHub Actions 1000000209
-2026-10-13T00:27:07.9590000Z Requested labels: macos-latest
-2026-10-13T00:27:07.9590000Z Job defined at: nandieling/box-send/.github/workflows/release.yml@refs/heads/main
-2026-10-13T00:27:07.9590000Z Waiting for a runner to pick up this job...
-2026-10-13T00:27:07.9580000Z Evaluating macOS.if
-2026-10-13T00:27:07.9580000Z Evaluating: (success() && (((github.event_name != 'workflow_dispatch') || (inputs.platform != 'windows'))))
-2026-10-13T00:27:07.9580000Z Expanded: (true && (('push' != 'workflow_dispatch') || (inputs.platform != 'windows')))
-2026-10-13T00:27:07.9580000Z Result: true
-2026-10-13T00:27:07.9640000Z Job is waiting for a hosted runner to come online.

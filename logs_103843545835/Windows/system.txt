@@ -1,9 +1,0 @@
-2026-10-13T00:27:07.7980000Z Evaluating Windows.if
-2026-10-13T00:27:07.7980000Z Evaluating: (success() && (((github.event_name != 'workflow_dispatch') || (inputs.platform != 'macos'))))
-2026-10-13T00:27:07.7980000Z Expanded: (true && (('push' != 'workflow_dispatch') || (inputs.platform != 'macos')))
-2026-10-13T00:27:07.7980000Z Result: true
-2026-10-13T00:27:07.9570000Z Requested labels: windows-2022
-2026-10-13T00:27:07.9570000Z Job defined at: nandieling/box-send/.github/workflows/release.yml@refs/heads/main
-2026-10-13T00:27:07.9570000Z Waiting for a runner to pick up this job...
-2026-10-13T00:27:07.9610000Z Job is about to start running on the hosted runner: GitHub Actions 1000000208
-2026-10-13T00:27:07.9600000Z Job is waiting for a hosted runner to come online.
