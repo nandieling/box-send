@@ -20,6 +20,13 @@ public static class ThemeManager
         res["TextMuted"] = Brush(theme.Dark ? "#9AA6B2" : "#5C6673");
         res["Line"] = Brush(theme.Dark ? "#33FFFFFF" : "#1F000000");
         res["IsDark"] = theme.Dark;
+        // 悬停态、页签条底板、弹窗底色：不跟着主题走的话，深色主题上「云端白」以外全都看不清
+        res["Hover"] = Brush(theme.Dark ? "#2EFFFFFF" : "#14000000");
+        res["Chrome"] = Brush(theme.Dark ? "#4A000000" : "#8FFFFFFF");
+        res["DialogBackground"] = Brush(theme.Dark ? "#1E252E" : "#F3F7FC");
+        res["Warning"] = Brush(theme.Dark ? "#FFC46B" : "#B45309");
+        res["Success"] = Brush(theme.Dark ? "#7BD88F" : "#15803D");
+        ApplyMetrics(app, _maximized);
 
         if (backgroundImageFile != null && File.Exists(backgroundImageFile))
         {
@@ -37,6 +44,21 @@ public static class ThemeManager
             res["BackgroundImage"] = null;
             res["BackgroundImageOpacity"] = 0.0;
         }
+    }
+
+    private static bool _maximized;
+
+    /// <summary>页签尺寸：全屏（最大化）时窗口大、离得远，页签整体放大一档。
+    /// 界面上的字号/图标尺寸都走 DynamicResource，改这里就能立刻生效。</summary>
+    public static void ApplyMetrics(Application app, bool maximized)
+    {
+        _maximized = maximized;
+        var res = app.Resources;
+        res["TabFontSize"] = maximized ? 16.0 : 14.0;
+        res["TabIconSize"] = maximized ? 24.0 : 19.0;
+        res["TabPadding"] = maximized
+            ? new Thickness(20, 10, 20, 10)
+            : new Thickness(14, 7, 14, 7);
     }
 
     private static SolidColorBrush Brush(string hex)

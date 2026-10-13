@@ -62,6 +62,14 @@ final class AppModel: ObservableObject {
     @Published var testingTMDB = false
     @Published var tmdbTestResult: String? = nil
 
+    // MARK: 服务器 SSH 测速
+    @Published var testingSSH = false
+    @Published var sshTestResult: String? = nil
+    /// 批量转种前正在测速（按钮显示「测速中…」）
+    @Published var speedChecking = false
+    /// 非空时弹出「服务器可能被限速，还转不转」的确认框
+    @Published var speedGate: SpeedGate? = nil
+
     // MARK: 软件更新
     @Published var checkingUpdate = false
     @Published var updateResult: String? = nil
@@ -1287,6 +1295,76 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: 服务器 SSH 测速
+
+    /// SSH 配置（用户没配过时给一份默认值，界面上直接改）
+    var sshConfig: SSHConfig { config.ssh ?? SSHConfig() }
+
+    func updateSSH(_ mutate: (inout SSHConfig) -> Void) {
+        var c = config.ssh ?? SSHConfig()
+        mutate(&c)
+        config.ssh = c
+        saveConfig()
+    }
+
+    /// 这一批转种前要不要先跑限速检查
+    var speedPrecheckWanted: Bool { config.ssh?.precheckActive == true }
+
+    /// 选私钥文件：只记路径，不拷进数据目录（ssh 要用原文件本身与它的权限）
+    func chooseSSHKey() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
+        panel.message = "选择 SSH 私钥（id_ed25519、id_rsa 这类，不带 .pub）"
+        let dir = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".ssh")
+        if FileManager.default.fileExists(atPath: dir.path) { panel.directoryURL = dir }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        updateSSH { $0.keyPath = url.path }
+    }
+
+    /// 设置页「测试连接并测速」
+    func testSSH() {
+        saveConfig()
+        let cfg = sshConfig
+        guard cfg.isConfigured else {
+            sshTestResult = "失败: 请先填写服务器地址与用户名"
+            return
+        }
+        testingSSH = true
+        sshTestResult = nil
+        Task.detached(priority: .utility) {
+            let text: String
+            do {
+                let r = try SSHSpeedTest.runTest(cfg)
+                // 不设判定线：只把速度报出来，顺带给一句 2T 限速的经验参考
+                let hint = r.peakMBps < SSHConfig.throttlingHintMBps
+                    ? "（接近被限速的量级）" : ""
+                text = "成功: \(r.summaryLine)\(hint)"
+            } catch {
+                text = "失败: \(error.localizedDescription)"
+            }
+            await MainActor.run {
+                self.testingSSH = false
+                self.sshTestResult = text
+            }
+        }
+    }
+
+    /// 转种前测速：不论快慢都弹窗把速度报给用户，由人决定这一批转不转；
+    /// 测速本身失败也弹窗说明，免得用户以为已经开转了。
+    /// nonisolated：这段要 ssh 几秒，得跑在后台线程上，不占界面线程。
+    nonisolated private func speedGate(for cfg: SSHConfig) -> SpeedGate {
+        do {
+            let g = SSHSpeedTest.gateText(try SSHSpeedTest.runTest(cfg), loginTarget: cfg.loginTarget)
+            return SpeedGate(title: g.title, message: g.message)
+        } catch {
+            let g = SSHSpeedTest.gateFailure(error.localizedDescription,
+                                             loginTarget: cfg.loginTarget)
+            return SpeedGate(title: g.title, message: g.message)
+        }
+    }
+
     // MARK: 运行
 
     /// 检查 GitHub Releases 的最新版本。silent = 启动时自动查：没有新版本就什么都不显示。
@@ -1327,7 +1405,9 @@ final class AppModel: ObservableObject {
         NSWorkspace.shared.open(u)
     }
 
-    func run() {
+    /// 开始一批转种。开了「转种前先测上传速度」时先测一次再弹窗报速度，由人决定转不转；
+    /// 点「继续转种」会带着 skipSpeedCheck 再进来，直接开跑。
+    func run(skipSpeedCheck: Bool = false) {
         let url = detailURL.trimmingCharacters(in: .whitespaces)
         guard url.hasPrefix("http") else {
             configError = "请先粘贴一个种子详情页链接（如 https://…/details.php?id=…）"
@@ -1335,6 +1415,23 @@ final class AppModel: ObservableObject {
         }
         saveConfig()
         guard !running else { return }
+        if skipSpeedCheck { speedGate = nil }
+        if !skipSpeedCheck, speedPrecheckWanted {
+            let cfg = sshConfig
+            speedChecking = true
+            Task.detached(priority: .utility) {
+                let gate = self.speedGate(for: cfg)
+                await MainActor.run {
+                    self.speedChecking = false
+                    self.speedGate = gate
+                }
+            }
+            return
+        }
+        startRun(url: url)
+    }
+
+    private func startRun(url: String) {
         running = true
         runningStep = "解析源站详情…"
         let targets = config.targetSites.filter { selectedTargets.contains($0) && config.site($0)?.enabled == true }
@@ -1394,6 +1491,12 @@ final class AppModel: ObservableObject {
     }
 
     func clearNotes() { notes = [] }
+}
+
+/// 批量转种前的限速提醒弹窗内容
+struct SpeedGate: Equatable {
+    var title: String
+    var message: String
 }
 
 extension CookieStore {

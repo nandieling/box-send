@@ -19,6 +19,13 @@ final class WindowsBridgeTests: XCTestCase {
         return (svc, dir.path)
     }
 
+    /// 模板会预置一个「默认分组」，分组用例要从空分组开始
+    private func clearGroups(_ svc: AppService) throws {
+        while !((svc.snapshot()["groups"] as! [[String: Any]]).isEmpty) {
+            _ = try svc.invoke("groups.remove", ["index": 0])
+        }
+    }
+
     private func json(_ v: Any) -> Data {
         try! JSONSerialization.data(withJSONObject: v)
     }
@@ -64,8 +71,63 @@ final class WindowsBridgeTests: XCTestCase {
 
     // MARK: 分组与站点排序
 
+    func testAutoFreeFlagAndSSHTestContract() throws {
+        let (svc, _) = try makeService()
+        let sites = svc.snapshot()["sites"] as! [[String: Any]]
+        XCTAssertTrue(sites.allSatisfy { ($0["supportsAutoFree"] as? Bool) != nil
+                                     && ($0["autoFree"] as? Bool) != nil },
+                      "快照要带上「站内有没有免费入口」，卡片才知道放不放开关")
+        guard let cat = sites.first(where: { ($0["supportsAutoFree"] as? Bool) == true })
+        else { return XCTFail("内置表里应该有支持自动免费的站点") }
+        let id = cat["id"] as! String
+        _ = try svc.invoke("sites.add", ["ids": [id], "group": -1])
+        let out = try svc.invoke("sites.setAutoFree", ["id": id, "on": true])
+        let row = (out["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == id }!
+        XCTAssertEqual(row["autoFree"] as? Bool, true, "开关要落进配置")
+        let off = try svc.invoke("sites.setAutoFree", ["id": id, "on": false])
+        let row2 = (off["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == id }!
+        XCTAssertEqual(row2["autoFree"] as? Bool, false)
+
+        // 没配 SSH 服务器：测速要给一句人话，不能崩
+        XCTAssertThrowsError(try svc.invoke("ssh.test"), "没填服务器时应该给一句报错")
+        // 版本接口要给测速默认值，界面两端不必各抄一份
+        let v = try svc.invoke("version")
+        let d = v["sshDefaults"] as? [String: Any]
+        XCTAssertNotNil(d?["keyPath"], "ssh 默认私钥路径要随版本接口给出")
+        XCTAssertNotNil(d?["testMB"])
+    }
+
+    func testLegacyConfigWithoutGroupsGetsOne() throws {
+        // 旧配置：站点都纳管了却一个分组都没有 → 读进来要补一个默认分组，别悬着「未分组」
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("boxsend-legacy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("boxsend.json")
+        var cfg = AppConfig.template()
+        cfg.groups = []
+        try JSONEncoder().encode(cfg).write(to: file)
+
+        let loaded = try XCTUnwrap(AppConfig.load(path: file.path))
+        XCTAssertEqual(loaded.groups.count, 1)
+        XCTAssertEqual(loaded.groups[0].name, "默认分组")
+        XCTAssertTrue(loaded.unassignedManagedSites.isEmpty, "补组后不该还有未分组站点")
+    }
+
+    func testTemplateSeedsDefaultGroup() throws {
+        // 首次安装：优先站要落在预置分组里，界面上不该冒出「未分组」
+        let cfg = AppConfig.template()
+        XCTAssertEqual(cfg.groups.count, 1)
+        XCTAssertEqual(cfg.groups[0].name, "默认分组")
+        XCTAssertEqual(Set(cfg.groups[0].sites),
+                       Set(cfg.sourceSites.filter { $0.managed }.map(\.id)),
+                   "模板里所有已纳管站点都要有归属分组")
+        XCTAssertTrue(cfg.unassignedManagedSites.isEmpty, "不该出现未分组站点")
+    }
+
     func testGroupAddRenameRemove() throws {
         let (svc, _) = try makeService()
+        try clearGroups(svc)
         _ = try svc.invoke("groups.add", ["name": "转种源", "upLimitMB": 8])
         var groups = svc.snapshot()["groups"] as! [[String: Any]]
         XCTAssertEqual(groups.count, 1, "同名分组允许共存（与 mac 版一致）")
@@ -86,6 +148,7 @@ final class WindowsBridgeTests: XCTestCase {
 
     func testAddSitesInheritsGroupLimit() throws {
         let (svc, _) = try makeService()
+        try clearGroups(svc)
         _ = try svc.invoke("groups.add", ["name": "限速组", "upLimitMB": 3])
         let out = try svc.invoke("sites.add", ["ids": ["hdsky"], "group": 0])
         let site = (out["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "hdsky" }!
@@ -99,6 +162,7 @@ final class WindowsBridgeTests: XCTestCase {
 
     func testSortAndMoveWithinBlock() throws {
         let (svc, _) = try makeService()
+        try clearGroups(svc)
         _ = try svc.invoke("groups.add", ["name": "g", "upLimitMB": 0])
         _ = try svc.invoke("sites.add", ["ids": ["hdsky", "chdbits", "cmct"], "group": 0])
         let out = try svc.invoke("groups.sortSites",

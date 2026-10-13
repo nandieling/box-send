@@ -30,6 +30,12 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         DataDir = version["dataDir"]?.GetValue<string>() ?? "";
         foreach (var t in version["themes"]?.AsArray() ?? new JsonArray())
             Themes.Add(ThemeRow.From(t!));
+        if (version["sshDefaults"] is { } d)
+            SSHDefaults = new SshDefaults(
+                d["keyPath"]?.GetValue<string>() ?? "~/.ssh/id_ed25519",
+                d["testMB"]?.GetValue<int>() ?? 64,
+                d["probeURL"]?.GetValue<string>() ?? "https://speed.cloudflare.com/__up",
+                d["throttlingMBps"] is JsonValue tv && tv.TryGetValue<double>(out var mb) ? mb : 20);
         foreach (var g in Groups) Groups.Remove(g);
 
         _timer = new System.Windows.Threading.DispatcherTimer
@@ -87,6 +93,10 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public string DataDir { get; }
 
     public ObservableCollection<ThemeRow> Themes { get; } = new();
+
+    /// <summary>SSH 测速的默认值（核心库给的，界面只当占位值用）</summary>
+    public SshDefaults SSHDefaults { get; } = new("~/.ssh/id_ed25519", 64,
+        "https://speed.cloudflare.com/__up", 20);
     public ObservableCollection<GroupRow> Groups { get; } = new();
     public ObservableCollection<SiteRow> Sites { get; } = new();
     public ObservableCollection<CookieHostRow> CookieHosts { get; } = new();
@@ -117,6 +127,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public bool BusyCookieCheck { get; private set; }
     public bool BusyDownloader { get; private set; }
     public bool BusyUpdate { get; private set; }
+    public bool BusySSH { get; private set; }
     public int CookieTotal { get; private set; }
     public int EventCursor { get; private set; }
 
@@ -179,6 +190,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         BusyCookieCheck = Bool(busy?["cookieCheck"]);
         BusyDownloader = Bool(busy?["downloaderTest"]);
         BusyUpdate = Bool(busy?["update"]);
+        BusySSH = Bool(busy?["sshTest"]);
         var msg = snap["messages"]?.AsObject();
         CookieMessage = Str(msg?["cookie"]);
         DownloaderMessage = Str(msg?["downloader"]);
@@ -222,6 +234,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
               nameof(LastGistSync), nameof(HasUpdate), nameof(UpdateVersion), nameof(UpdateUrl),
               nameof(UpdateDownloadUrl), nameof(StatusText), nameof(CookieTotal),
               nameof(BusyCookieSync), nameof(BusyCookieCheck), nameof(BusyDownloader), nameof(BusyUpdate),
+              nameof(BusySSH),
               nameof(CurrentTheme));
     }
 
@@ -322,6 +335,26 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         _ = RefreshAsync(full: false);
     }
 
+    /// <summary>SSH 上传测速：核心库跑几十秒，丢给线程池；结果原样交给界面弹窗，不做判定。
+    /// 返回 null 表示调用本身没成（没填服务器之类），Text 是给用户看的那句原因。</summary>
+    public async Task<SshTestOutcome> TestSSHAsync()
+    {
+        var node = await Task.Run(() => _api.TryInvoke("ssh.test", out var error, null)
+                                       ?? new JsonObject { ["ok"] = false, ["text"] = error ?? "测速没能启动" });
+        if (node == null) return new SshTestOutcome(false, "测速没能启动，请检查 SSH 设置。", 0, false);
+        return new SshTestOutcome(
+            Bool(node["ok"]),
+            Str(node["text"]),
+            node["mbps"] is JsonValue mv && mv.TryGetValue<double>(out var d) ? d : 0,
+            Bool(node["low"]));
+    }
+
+    /// 测速结果（速度、是否偏低、给用户看的一句话）
+    public sealed record SshTestOutcome(bool Ok, string Text, double MBps, bool Low);
+
+    /// 测速默认值（私钥路径、每轮数据量、测速地址、限速参考线）
+    public sealed record SshDefaults(string KeyPath, int TestMB, string ProbeURL, double ThrottlingMBps);
+
     public void Raise(params string[] names)
     {
         foreach (var n in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
@@ -402,6 +435,9 @@ public sealed class SiteRow
     public int UpLimitMB { get; init; }
     public string Warning { get; init; } = "";
     public bool NeedsSourceQuote { get; init; }
+    /// <summary>站内有「帖子免费1天」按钮，卡片上才出现「发种后免费一天」开关</summary>
+    public bool SupportsAutoFree { get; init; }
+    public bool AutoFree { get; init; }
     public string CheckMessage { get; init; } = "";
     public bool? CheckOk { get; init; }
 
@@ -435,6 +471,8 @@ public sealed class SiteRow
             UpLimitMB = n["upLimitMB"]?.GetValue<int>() ?? 0,
             Warning = n["warning"]?.GetValue<string>() ?? "",
             NeedsSourceQuote = n["needsSourceQuote"]?.GetValue<bool>() ?? false,
+            SupportsAutoFree = n["supportsAutoFree"]?.GetValue<bool>() ?? false,
+            AutoFree = n["autoFree"]?.GetValue<bool>() ?? false,
             CheckMessage = n["check"]?["message"]?.GetValue<string>() ?? "",
             CheckOk = ok,
         };

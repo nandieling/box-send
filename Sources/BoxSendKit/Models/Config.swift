@@ -459,11 +459,13 @@ public struct AppConfig: Codable {
     public var sourceQuoteText: String
     /// TMDB 反查（豆瓣/IMDb -> TMDB 条目链接）：杜比这类把 TMDB 链接设为必填的站用
     public var tmdb: TMDBConfig?
+    /// 转种服务器 SSH：批量转种前先测一次服务器公网上传速度，弹窗报速度，由人决定这批改不转
+    public var ssh: SSHConfig?
     /// 启动时自动检查新版本（GitHub Releases）：关掉后只在「设置 → 软件更新」里手动点
     public var autoUpdateCheck: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -484,6 +486,7 @@ public struct AppConfig: Codable {
         sourceQuoteEnabled = try c.decodeIfPresent(Bool.self, forKey: .sourceQuoteEnabled) ?? false
         sourceQuoteText = try c.decodeIfPresent(String.self, forKey: .sourceQuoteText) ?? ""
         tmdb = try c.decodeIfPresent(TMDBConfig.self, forKey: .tmdb)
+        ssh = try c.decodeIfPresent(SSHConfig.self, forKey: .ssh)
         autoUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .autoUpdateCheck) ?? true
     }
 
@@ -494,7 +497,7 @@ public struct AppConfig: Codable {
                 zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
                 unmanagedSiteOrder: [String] = [],
                 sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "",
-                tmdb: TMDBConfig? = nil, autoUpdateCheck: Bool = true) {
+                tmdb: TMDBConfig? = nil, ssh: SSHConfig? = nil, autoUpdateCheck: Bool = true) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -510,6 +513,7 @@ public struct AppConfig: Codable {
         self.sourceQuoteEnabled = sourceQuoteEnabled
         self.sourceQuoteText = sourceQuoteText
         self.tmdb = tmdb
+        self.ssh = ssh
         self.autoUpdateCheck = autoUpdateCheck
     }
 
@@ -583,7 +587,9 @@ public struct AppConfig: Codable {
         for p in candidates {
             guard FileManager.default.fileExists(atPath: p) else { continue }
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: p)) else { continue }
-            guard var cfg = try? JSONDecoder().decode(AppConfig.self, from: data) else { continue }
+            guard let decoded = try? JSONDecoder().decode(AppConfig.self, from: data) else { continue }
+            var cfg = decoded
+            cfg.seedDefaultGroupIfNeeded()
             return cfg.mergedWithRoster()
         }
         return nil
@@ -632,7 +638,9 @@ public struct AppConfig: Codable {
             gistSync: nil,
             userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             webToken: nil,
-            groups: [],
+            // 默认建一个分组装下预置的优先站，避免界面上一上来就出现「未分组」
+            groups: [GroupConfig(name: "默认分组",
+                                 sites: SiteRegistry.prioritySites.filter { $0.enabled }.map { $0.id })],
             zipWatch: ZipWatchConfig(enabled: false, dir: "~/Downloads", pollMinutes: 5, password: "")
         )
     }

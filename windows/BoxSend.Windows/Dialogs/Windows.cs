@@ -21,7 +21,7 @@ public static class PromptWindow
             SizeToContent = SizeToContent.WidthAndHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ResizeMode = ResizeMode.NoResize,
-            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1F2530")),
+            Background = PromptWindow.Themed("DialogBackground", "#1F2530"),
             Content = Stack(new object[]
             {
                 box,
@@ -33,6 +33,13 @@ public static class PromptWindow
         box.Focus();
         return win.ShowDialog() == true ? result : null;
     }
+
+    /// <summary>取主题色（没定义时退回深色底）：弹窗底色必须跟着主题走，
+    /// 否则「云端白」上会浮一块近黑的板子。</summary>
+    internal static Brush Themed(string key, string fallbackHex) =>
+        Application.Current.Resources[key] is Brush b
+            ? b
+            : new SolidColorBrush((Color)ColorConverter.ConvertFromString(fallbackHex));
 
     internal static StackPanel Stack(IEnumerable<object> items, double spacing)
     {
@@ -63,6 +70,7 @@ public sealed class AddSitesWindow : Window
     private readonly TextBox _search = new() { MinWidth = 200 };
     private readonly ItemsControl _list = new();
     private readonly ComboBox _group = new() { Width = 180 };
+    private readonly Dictionary<string, TextBox> _nums = new();
 
     public AddSitesWindow(AppModel model, int fixedGroup)
     {
@@ -73,7 +81,7 @@ public sealed class AddSitesWindow : Window
         Width = 720;
         Height = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1F2530"));
+        Background = PromptWindow.Themed("DialogBackground", "#1F2530");
 
         foreach (var g in model.Groups) _group.Items.Add(g);
         _group.Items.Add(new GroupRow { Index = -1, Name = "不分组" });
@@ -117,19 +125,37 @@ public sealed class AddSitesWindow : Window
     {
         var filter = _search.Text.Trim();
         _list.Items.Clear();
+        _nums.Clear();   // 每次重建都换新一批输入框，旧引用直接丢掉就行
         foreach (var s in _model.Sites)
         {
             if (s.Managed) continue;
             if (filter.Length > 0 && !s.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
                                  && !s.Id.Contains(filter, StringComparison.OrdinalIgnoreCase)) continue;
+            var row = new WrapPanel();
             var box = new CheckBox
             {
                 Content = $"{s.Name}  {s.Id}",
                 Tag = s.Id,
-                Margin = new Thickness(0, 3, 14, 3),
+                Margin = new Thickness(0, 3, 10, 3),
+                VerticalAlignment = VerticalAlignment.Center,
                 Foreground = (Brush)Application.Current.Resources["TextPrimary"],
             };
-            _list.Items.Add(box);
+            // 序号 = 排到组内第几位，留空的按勾选先后追加到末尾
+            var num = new TextBox
+            {
+                Width = 42,
+                FontSize = 12,
+                Margin = new Thickness(0, 1, 0, 1),
+                ToolTip = $"把 {s.Name} 放到第几位（留空 = 按勾选顺序追加）",
+            };
+            num.PreviewTextInput += (_, e) =>
+            {
+                if (!e.Text.All(char.IsDigit)) e.Handled = true;
+            };
+            _nums[s.Id] = num;
+            row.Children.Add(box);
+            row.Children.Add(num);
+            _list.Items.Add(row);
         }
         if (_list.Items.Count == 0)
             _list.Items.Add(new TextBlock { Text = "没有可添加的站点", Margin = new Thickness(0, 6, 0, 0) });
@@ -137,11 +163,17 @@ public sealed class AddSitesWindow : Window
 
     private void OnAdd(object sender, RoutedEventArgs e)
     {
-        var ids = _list.Items.OfType<CheckBox>().Where(c => c.IsChecked == true)
+        var ids = _list.Items.OfType<WrapPanel>()
+                      .Select(r => r.Children.OfType<CheckBox>().First())
+                      .Where(c => c.IsChecked == true)
                       .Select(c => (string)c.Tag!).ToArray();
         if (ids.Length == 0) return;
         var gi = (_group.SelectedItem as GroupRow)?.Index ?? -1;
-        _model.Call("sites.add", new { ids, group = gi });
+        // 序号只对所选站点生效；重复的序号由核心按「先出现先占位」稳定排序
+        var order = _nums.Where(kv => ids.Contains(kv.Key)
+                                       && int.TryParse(kv.Value.Text.Trim(), out var n) && n > 0)
+                         .ToDictionary(kv => kv.Key, kv => int.Parse(kv.Value.Text.Trim()));
+        _model.Call("sites.add", new { ids, group = gi, order });
         Close();
     }
 }
@@ -168,7 +200,7 @@ public sealed class ManualCookieWindow : Window
         Width = 620;
         Height = 400;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1F2530"));
+        Background = PromptWindow.Themed("DialogBackground", "#1F2530");
 
         foreach (var s in sites) _site.Items.Add(s);
         _site.SelectedIndex = 0;

@@ -28,6 +28,48 @@
                     </StackPanel>
                 </GroupBox>
 
+                <GroupBox Header="使用教程">
+                    <StackPanel>
+                        <WrapPanel>
+                            <Button Content="打开使用教程" Click="OnTutorial" />
+                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                       TextWrapping="Wrap" MaxWidth="520"
+                                       Text="站点分组、Cookie 同步、批量转种、下载器推送、服务器测速、TMDB 反查、软件更新与外观，一页说明。"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="TMDB 链接（豆瓣 / IMDb 反查）">
+                    <StackPanel>
+                        <CheckBox x:Name="TmdbOn" Content="发种时自动补 TMDB 链接" Click="OnTmdbToggled" />
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <Label Content="API 代理网关地址（留空走官方接口）" />
+                                <TextBox x:Name="TmdbBase" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <Label Content="API Key（网关代填时留空）" />
+                                <TextBox x:Name="TmdbKey" />
+                            </StackPanel>
+                        </Grid>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="BtnTmdb" Content="测试查询" Style="{StaticResource Primary}"
+                                    Click="OnTestTMDB" />
+                            <TextBlock x:Name="TmdbState" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       FontSize="12" TextWrapping="Wrap" MaxWidth="480"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Text="有的站点（如杜比）把 TMDB 链接设为必填，源站简介里没有时用种子的 IMDb 号或豆瓣号去查条目号。国内直连 api.themoviedb.org 常不通：填自己的网关地址即可绕开，地址要写到版本号那一层（末尾带 /3）。" />
+                    </StackPanel>
+                </GroupBox>
+
                 <GroupBox Header="软件更新">
                     <StackPanel>
                         <WrapPanel>

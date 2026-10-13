@@ -34,6 +34,16 @@ public enum Platform {
         #endif
     }
 
+    /// 系统自带的 OpenSSH 客户端路径（Windows 10 / Server 1809 起内置在 System32\OpenSSH）
+    public static var defaultSSHPath: String {
+        #if os(Windows)
+        let windir = ProcessInfo.processInfo.environment["WINDIR"] ?? "C:\\Windows"
+        return windir + "\\System32\\OpenSSH\\ssh.exe"
+        #else
+        return "/usr/bin/ssh"
+        #endif
+    }
+
     /// 配置与运行时数据的默认目录
     /// （macOS: ~/Library/Application Support/BoxSend，Windows: %APPDATA%\BoxSend）
     public static var defaultDataDir: String {

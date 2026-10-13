@@ -1,70 +1,233 @@
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>批量转种页：源站链接、可选项、分组与目标站勾选、逐站实时状态。</summary>
+/// <summary>批量转种页：源站链接、可选项、按分组的勾选目标站、逐站转种与推送结果。
+/// 目标站按分组成块（与 mac 版一致），「开始运行」旁给出本批概览，避免勾错分组就跑。</summary>
 public partial class RunView : UserControl
 {
     private readonly AppModel _model;
+    private HashSet<string> _targets = new();
+    private bool _seeded;
+    /// 页面上现有的站点勾选框（重建时一起换掉；读勾选状态直接问它们，不爬视觉树）
+    private readonly List<CheckBox> _boxes = new();
+
+    /// 源站下拉里的第一项：不点名，按链接域名自动识别
+    private static readonly SiteRow AutoSource = new() { Id = "", Name = "源站：自动识别（按域名）" };
 
     public RunView(AppModel model)
     {
         _model = model;
         InitializeComponent();
         SiteEvents.ItemsSource = model.RunSites;
-        _model.FullRefreshed += (_, _) => Dispatcher.Invoke(RebuildPickers);
-        RebuildPickers();
+        PushEvents.ItemsSource = model.RunPushes;
+        _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Rebuild);
+        LoadQuote();
+        Rebuild();
     }
 
-    private void RebuildPickers()
-    {
-        var pickedGroup = (GroupPick.SelectedItem as GroupRow)?.Name;
-        var pickedSource = (SourceSitePick.SelectedItem as SiteRow)?.Id;
-        var checkedTargets = CheckedTargets();
+    // MARK: 重建（刷新时要保住用户勾选）
 
-        GroupPick.Items.Clear();
-        foreach (var g in _model.Groups) GroupPick.Items.Add(g);
-        GroupPick.SelectedItem = GroupPick.Items.Cast<GroupRow>().FirstOrDefault(g => g.Name == pickedGroup)
-                                 ?? GroupPick.Items.Cast<GroupRow>().FirstOrDefault();
+    private void Rebuild()
+    {
+        if (_boxes.Count > 0) _targets = CheckedTargets();
+        var pickedSource = (SourceSitePick.SelectedItem as SiteRow)?.Id;
+
+        LoadQuote();
 
         SourceSitePick.Items.Clear();
-        foreach (var s in _model.Sites.Where(s => s.Enabled)) SourceSitePick.Items.Add(s);
-        SourceSitePick.SelectedItem = SourceSitePick.Items.Cast<SiteRow>().FirstOrDefault(s => s.Id == pickedSource);
+        SourceSitePick.Items.Add(AutoSource);
+        foreach (var s in _model.Sites.Where(s => s.Managed)) SourceSitePick.Items.Add(s);
+        SourceSitePick.SelectedItem =
+            SourceSitePick.Items.Cast<SiteRow>().FirstOrDefault(s => s.Id == pickedSource) ?? AutoSource;
 
-        RebuildTargets(checkedTargets);
+        if (!_seeded)
+        {
+            // 第一次进页面：默认勾上已开启的站点（与 mac 版一致）
+            _targets = _model.Sites.Where(s => s.Enabled).Select(s => s.Id).ToHashSet();
+            _seeded = true;
+        }
+
+        RebuildTargetBlocks();
+        UpdateSummary();
+        BtnRun.IsEnabled = !_model.Running;
+        BtnRun.Content = _model.Running ? "运行中…" : "开始运行";
+        RunStep.Text = _model.Running ? _model.RunningStep : "";
     }
 
-    /// 目标站勾选框：重建时保留已勾选状态（刷新不能把用户勾的清空）
-    private void RebuildTargets(HashSet<string> previouslyChecked)
+    /// 每个分组一块：组名 + 整组全选 + 组内站点勾选框（只列已开启的站点）
+    private void RebuildTargetBlocks()
     {
-        var picked = previouslyChecked.Count > 0 ? previouslyChecked : _targets;
-        TargetsList.Items.Clear();
-        foreach (var s in _model.Sites.Where(s => s.Managed || s.Enabled))
+        TargetBlocks.Children.Clear();
+        _boxes.Clear();
+        foreach (var g in _model.Groups)
+            TargetBlocks.Children.Add(GroupBlock(g.Name, Members(g.Index)));
+        var unassigned = _model.Sites.Where(s => s.Enabled && s.Managed && s.Group < 0).ToList();
+        if (unassigned.Count > 0) TargetBlocks.Children.Add(GroupBlock("未分组", unassigned));
+        if (TargetBlocks.Children.Count == 0)
+            TargetBlocks.Children.Add(new TextBlock
+            {
+                Text = "还没有开启的站点：到「站点分组」页添加并开启。",
+                FontSize = 12,
+                Foreground = (Brush)FindResource("TextMuted"),
+            });
+    }
+
+    private List<SiteRow> Members(int groupIndex) =>
+        _model.Sites.Where(s => s.Enabled && s.Managed && s.Group == groupIndex).ToList();
+
+    private UIElement GroupBlock(string name, List<SiteRow> sites)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var header = new WrapPanel();
+        var allOn = sites.Count > 0 && sites.All(s => _targets.Contains(s.Id));   // 整组是否都已选中
+        var groupAll = new CheckBox
+        {
+            Content = allOn ? "全不选" : "全选",
+            IsChecked = allOn,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = allOn ? "取消该分组全部站点" : "选中该分组全部站点作为转种目标",
+        };
+        groupAll.Click += (_, _) =>
+        {
+            foreach (var s in sites)
+            {
+                if (groupAll.IsChecked == true) _targets.Add(s.Id);
+                else _targets.Remove(s.Id);
+            }
+            _targets = CheckedTargets();
+            RebuildTargetBlocks();
+            UpdateSummary();
+        };
+        header.Children.Add(groupAll);
+        header.Children.Add(new TextBlock
+        {
+            Text = name,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        header.Children.Add(new TextBlock
+        {
+            Text = $"{sites.Count} 站",
+            FontSize = 12,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource("TextMuted"),
+        });
+        panel.Children.Add(header);
+
+        var cards = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var s in sites)
         {
             var box = new CheckBox
             {
                 Content = s.Name,
                 Tag = s.Id,
+                IsChecked = _targets.Contains(s.Id),
                 Margin = new Thickness(0, 2, 14, 2),
-                IsChecked = picked.Count > 0 ? picked.Contains(s.Id) : s.Enabled,
+                ToolTip = $"{s.Url}\n上传限速 {s.UpLimitMB} MB/s",
             };
-            TargetsList.Items.Add(box);
+            box.Click += (_, _) =>
+            {
+                if (box.IsChecked == true) _targets.Add(s.Id);
+                else _targets.Remove(s.Id);
+                UpdateSummary();
+            };
+            cards.Children.Add(box);
+            _boxes.Add(box);
         }
-        _targets = CheckedTargets();
-    }
+        panel.Children.Add(cards);
 
-    private HashSet<string> _targets = new();
+        return new Border
+        {
+            BorderBrush = (Brush)FindResource("Line"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(8),
+            Child = panel,
+        };
+    }
 
     private HashSet<string> CheckedTargets()
     {
         var set = new HashSet<string>();
-        foreach (var obj in TargetsList.Items)
-            if (obj is CheckBox { IsChecked: true, Tag: string id }) set.Add(id);
+        foreach (var box in _boxes)
+            if (box.IsChecked == true && box.Tag is string id) set.Add(id);
         return set;
     }
 
-    private void OnRun(object sender, RoutedEventArgs e)
+    // MARK: 批次概览
+
+    /// 本批实际会转的站点：勾了且已开启（与「开始运行」取目标的口径一致）
+    private List<SiteRow> RunTargets() =>
+        _model.Sites.Where(s => s.Enabled && _targets.Contains(s.Id)).ToList();
+
+    private List<string> SelectedGroupNames()
+    {
+        var picked = RunTargets().Select(s => s.Id).ToHashSet();
+        var names = new List<string>();
+        foreach (var g in _model.Groups)
+            if (_model.Sites.Any(s => s.Enabled && s.Group == g.Index && picked.Contains(s.Id)))
+                names.Add(g.Name);
+        if (_model.Sites.Any(s => s.Enabled && s.Managed && s.Group < 0 && picked.Contains(s.Id)))
+            names.Add("未分组");
+        return names;
+    }
+
+    private void UpdateSummary()
+    {
+        var sites = RunTargets();
+        var groups = SelectedGroupNames();
+        BatchSummary.Text = sites.Count == 0
+            ? "未选择站点"
+            : groups.Count > 0 ? $"已选 {groups.Count} 个分组 · {sites.Count} 个站点"
+                               : $"已选 {sites.Count} 个站点";
+        BatchSummary.Foreground = (Brush)FindResource(sites.Count == 0 ? "Warning" : "TextMuted");
+        BatchSummary.ToolTip = "勾选的转种分组：" + (groups.Count > 0 ? string.Join("、", groups) : "无")
+            + "\n勾选的站点：" + string.Join("、", sites.Select(s => s.Name));
+        UpdateQuoteHint(sites);
+    }
+
+    /// cmct、劳改所的「附加信息」只用源站引用：两处都没有内容时该区块留空，可能被站方打回
+    private void UpdateQuoteHint(List<SiteRow> sites)
+    {
+        var filled = UseQuote.IsChecked == true && QuoteText.Text.Trim().Length > 0;
+        var names = filled
+            ? sites.Where(s => s.NeedsSourceQuote).Select(s => s.Name).ToList()
+            : new List<string>();
+        if (names.Count == 0)
+        {
+            QuoteHint.Visibility = Visibility.Collapsed;
+            return;
+        }
+        QuoteHint.Text = string.Join("、", names)
+            + " 的「附加信息」= 源站引用 + 源简介自带引用块：两处都没有内容时该区块留空，可能被站方打回。";
+        QuoteHint.Visibility = Visibility.Visible;
+    }
+
+    private void OnQuoteToggled(object sender, RoutedEventArgs e) => SaveQuote();
+
+    /// 源站引用是配置里的一对顶层字段（sourceQuoteEnabled / sourceQuoteText），
+    /// 正在输入的时候不要被刷新打断
+    private void LoadQuote()
+    {
+        var on = _model.Config?["sourceQuoteEnabled"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+        var text = _model.Config?["sourceQuoteText"] is JsonValue t && t.TryGetValue<string>(out var s2) ? s2 : "";
+        if (!UseQuote.IsKeyboardFocusWithin) UseQuote.IsChecked = on;
+        if (!QuoteText.IsKeyboardFocusWithin) QuoteText.Text = text;
+    }
+
+    private void SaveQuote() =>
+        _model.Call("sourceQuote.set", new { enabled = UseQuote.IsChecked == true, text = QuoteText.Text });
+
+    // MARK: 运行
+
+    private async void OnRun(object sender, RoutedEventArgs e)
     {
         var url = DetailUrl.Text.Trim();
         if (url.Length == 0)
@@ -73,19 +236,51 @@ public partial class RunView : UserControl
             return;
         }
         _targets = CheckedTargets();
-        var group = GroupPick.SelectedItem as GroupRow;
-        var targets = group != null
-            ? group.SiteIds.Where(_targets.Contains).ToArray()
-            : _targets.ToArray();
+        var targets = RunTargets().Select(s => s.Id).ToArray();
         if (targets.Length == 0)
         {
             MessageBox.Show(Window.GetWindow(this)!, "没有勾选目标站。", "BoxSend");
             return;
         }
+        SaveQuote();
+
+        // 服务器可能被限速：先测一次，把速度报出来，由人决定这一批转不转
+        if (!_model.SectionFlag("ssh", "enabled")
+            || _model.SectionText("ssh", "host").Trim().Length == 0
+            || _model.SectionText("ssh", "user").Trim().Length == 0
+            || await SpeedGateAsync())
+            Start(url, targets);
+    }
+
+    /// 返回 false = 用户看了测速结果后决定先不转
+    private async Task<bool> SpeedGateAsync()
+    {
+        BtnRun.IsEnabled = false;
+        RunStep.Text = "正在测试服务器上传速度…";
+        var r = await _model.TestSSHAsync();
+        RunStep.Text = "";
+        BtnRun.IsEnabled = true;
+        var win = Window.GetWindow(this)!;
+        if (!r.Ok)
+        {
+            return MessageBox.Show(win,
+                $"服务器测速失败：{r.Text}\n可以先跳过这次检查直接转种，或到「下载器」页检查 SSH 设置。",
+                "服务器测速没做成", MessageBoxButton.OKCancel, MessageBoxImage.Warning)
+                == MessageBoxResult.OK;
+        }
+        var hint = r.Low ? "\n速度掉到 20 MB/s 这个量级，多半是 24 小时上传流量到 2T 后被限速了。" : "";
+        return MessageBox.Show(win, $"{r.Text}{hint}\n是否开始转种？",
+            "服务器上传实测", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+    }
+
+    private void Start(string url, string[] targets)
+    {
         _model.StartRun(url, targets,
                         skipReseed: DoReseed.IsChecked != true,
                         skipPush: DoPush.IsChecked != true,
                         sourceQuote: UseQuote.IsChecked == true ? QuoteText.Text : "",
-                        sourceSiteId: (SourceSitePick.SelectedItem as SiteRow)?.Id);
+                        sourceSiteId: string.IsNullOrEmpty((SourceSitePick.SelectedItem as SiteRow)?.Id)
+                            ? null : (SourceSitePick.SelectedItem as SiteRow)!.Id);
+        UpdateSummary();
     }
 }

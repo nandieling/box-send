@@ -246,9 +246,12 @@ struct RunView: View {
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
-                Button(model.running ? "运行中…" : "开始运行") { model.run() }
+                Button(model.running ? "运行中…" : (model.speedChecking ? "测速中…" : "开始运行")) { model.run() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.running)
+                    .disabled(model.running || model.speedChecking)
+                    .help(model.speedPrecheckWanted
+                          ? "运行前先测服务器上传速度并弹窗报告（「下载器」页「转种服务器」卡片里开关）"
+                          : "")
                 // 批次概览：本批会转哪几个分组、几站，免得勾错分组就跑
                 Text(model.runSelectionSummary)
                     .font(.callout)
@@ -260,9 +263,22 @@ struct RunView: View {
             }
             if model.running {
                 Text(model.runningStep).font(.caption).foregroundStyle(.secondary)
+            } else if model.speedChecking {
+                Text("正在测试服务器上传速度…").font(.caption).foregroundStyle(.secondary)
             }
         }
         .runCard()
+        // 服务器限速检查：测出低速（或测速本身失败）时由人决定这一批转不转
+        .alert(model.speedGate?.title ?? "服务器可能被限速",
+               isPresented: Binding(get: { model.speedGate != nil },
+                                    set: { if !$0 { model.speedGate = nil } }),
+               presenting: model.speedGate) { gate in
+            Button("继续转种") { model.run(skipSpeedCheck: true) }
+                .keyboardShortcut(.defaultAction)
+            Button("先不转种", role: .cancel) { }
+        } message: { gate in
+            Text(gate.message)
+        }
     }
 
     /// 源站菜单：默认按链接域名自动识别；站点分组里添加过的站点都能指定为源站
@@ -1494,6 +1510,96 @@ struct DownloaderView: View {
                             .textSelection(.enabled)
                     }
                 }
+                CardSection("转种服务器（SSH 上传测速）") {
+                    Toggle("批量转种前先测服务器上传速度", isOn: Binding(
+                        get: { model.sshConfig.enabled },
+                        set: { on in model.updateSSH { $0.enabled = on } }))
+                    HStack(alignment: .top, spacing: 12) {
+                        LabeledRow("服务器地址") {
+                            TextField("如 1.2.3.4 或 vps.example.com", text: Binding(
+                                get: { model.sshConfig.host },
+                                set: { v in model.updateSSH { $0.host = v } }))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        LabeledRow("SSH 端口") {
+                            IntLimitField(initial: model.sshConfig.port, center: true) { v in
+                                model.updateSSH { $0.port = v ?? 22 }
+                            }
+                            .frame(width: 70)
+                        }
+                        .fixedSize()
+                    }
+                    HStack(alignment: .top, spacing: 12) {
+                        LabeledRow("用户名") {
+                            TextField("root", text: Binding(
+                                get: { model.sshConfig.user },
+                                set: { v in model.updateSSH { $0.user = v } }))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        LabeledRow("登录方式") {
+                            Picker("", selection: Binding(
+                                get: { model.sshConfig.auth },
+                                set: { v in model.updateSSH { $0.auth = v } })) {
+                                Text("密钥").tag(SSHConfig.Auth.key)
+                                Text("密码").tag(SSHConfig.Auth.password)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
+                        .fixedSize()
+                    }
+                    if model.sshConfig.auth == .key {
+                        HStack(alignment: .bottom, spacing: 8) {
+                            LabeledRow("私钥路径（留空 = 用默认密钥 / ssh-agent）") {
+                                TextField("~/.ssh/id_ed25519", text: Binding(
+                                    get: { model.sshConfig.keyPath },
+                                    set: { v in model.updateSSH { $0.keyPath = v } }))
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            Button("选择…") { model.chooseSSHKey() }
+                                .controlSize(.small)
+                                .fixedSize()
+                        }
+                    } else {
+                        LabeledRow("密码") {
+                            RevealField(text: Binding(
+                                get: { model.sshConfig.password },
+                                set: { v in model.updateSSH { $0.password = v } }))
+                        }
+                    }
+                    HStack(alignment: .top, spacing: 12) {
+                        LabeledRow("每轮测试数据量（MB）") {
+                            IntLimitField(initial: model.sshConfig.testMB, center: true) { v in
+                                model.updateSSH { $0.testMB = v ?? 64 }
+                            }
+                            .frame(width: 70)
+                        }
+                        .fixedSize()
+                        LabeledRow("测速地址（服务器往这里 POST）") {
+                            TextField(SSHConfig.defaultProbeURL, text: Binding(
+                                get: { model.sshConfig.probeURL },
+                                set: { v in model.updateSSH { $0.probeURL = v } }))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    HStack(spacing: 12) {
+                        Button(model.testingSSH ? "测速中…" : "测试连接并测速") { model.testSSH() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.testingSSH || !model.sshConfig.isConfigured)
+                        if model.testingSSH { ProgressView() }
+                    }
+                    if let r = model.sshTestResult {
+                        Text(r)
+                            .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
+                            .textSelection(.enabled)
+                    }
+                    Text("部分服务器 24 小时上传流量到 2T 后会把上行压到 20 MB/s 左右，批量转种时整批都慢。"
+                         + "打开开关后，每次点「开始运行」会先用 SSH 连上这台服务器，往公网推两轮测试数据量，"
+                         + "然后弹窗把实测上传速度报给你，由你决定这一批转不转。"
+                         + "测速在服务器上进行，每轮只多花一份测试流量的上行（默认 64 MB），不占用本机。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 CardSection("种子大小检测") {
                     LabeledRow("VPS 剩余空间（GB，空 = 不做大小检测）") {
                         IntLimitField(initial: model.config.downloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }.frame(width: 60)
@@ -1743,20 +1849,27 @@ struct TutorialSheet: View {
                         "「检验连接」验证可用性；勾选「跳过检验」后推送时不再校验。",
                         "转种成功的种子会自动推送到下载器开始下载。",
                     ])
-                    section("5. TMDB 链接自动反查", image: nil, steps: [
+                    section("5. 转种服务器测速（SSH）", image: nil, steps: [
+                        "部分服务器 24 小时上传流量到 2T 后，会把上行悄悄压到 20 MB/s 左右：站点照样能发种，但整批下载都变慢。",
+                        "「下载器」页「转种服务器」卡片填写服务器地址、端口、用户名，选密钥或密码登录（密钥默认 ~/.ssh/id_ed25519，点「选择…」挑）。",
+                        "「测试连接并测速」立刻连一次：显示服务器主机名、每轮实测速度。",
+                        "勾选「批量转种前先测服务器上传速度」后，每次点「开始运行」会先测速再弹窗把速度报给你：觉得可以就点「继续转种」，觉得被限速了就点「先不转种」等一等，不设自动判定线。",
+                        "测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行；测速地址可换成自己的接收端。",
+                    ])
+                    section("6. TMDB 链接自动反查", image: nil, steps: [
                         "部分站点（如杜比）把 TMDB 链接设为必填，源站简介里没有 TMDB 时发种会被拒。",
                         "「设置」页「TMDB 链接」卡片勾选「发种时自动补 TMDB 链接」：发种前用种子的 IMDb 号或豆瓣号去 TMDB 查条目号，填进目标站的 TMDB 输入框；查不到时留空，由你手动填写。",
                         "国内直连 api.themoviedb.org 常不通：在「API 代理网关地址」填自己的网关，留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写会先按你填的试、404 再自动补 /3 重试。",
                         "网关只是转发时仍要填 TMDB 的 API Key；只有网关自己代填 Key 时才留空。",
                         "「测试查询」用一条固定片例验证网关是否可用。",
                     ])
-                    section("6. 软件更新", image: nil, steps: [
+                    section("7. 软件更新", image: nil, steps: [
                         "更新地址就是项目仓库 https://github.com/nandieling/box-send，「设置」页「软件更新」卡片能看到当前版本并检查新版本。",
                         "默认每次启动在后台查一次（只读 GitHub 的发布接口，不上传任何本机数据）；不想自动查就关掉「启动时自动检查新版本」，改成手动点「检查更新」。",
                         "发现新版本点「下载安装包」，双击 dmg 替换旧版本即可：站点、Cookie、限速与主题设置都存在本机，升级不会被动到。",
                         "直连 GitHub 不通时会提示连不上，此时点「打开发布页」自己下载最新 dmg。",
                     ])
-                    section("7. 外观设置", image: "settings", steps: [
+                    section("8. 外观设置", image: "settings", steps: [
                         "「设置」页选择渐变主题；主题渐变、强调色与明暗模式覆盖所有窗口与区块。",
                         "可添加背景图片（PNG/JPG/HEIC）并用滑块调整透明度，不改变窗口与各弹窗的大小比例。",
                         "「使用教程」按钮可随时查看本图文教程。",

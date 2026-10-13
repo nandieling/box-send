@@ -96,6 +96,8 @@ do {
                                     为 API 站点（如馒头 mteam）配置 API Key 并验证
               remove-cookie --site <id>     删除单个站点的本地 cookie
               template              生成模板配置 Config/boxsend.json
+              speedtest [--connect-only] [--print-script]
+                                    SSH 连上转种服务器测公网上传速度（只报速度，不做判定）
               notes                 查看最近运行日志
 
             全局:
@@ -370,6 +372,25 @@ do {
                 }
                 print(String(format: "    %-20@ = %@  created=%@ expires=%@",
                              name as NSString, String(val), t(ct) as NSString, t(exp) as NSString))
+            }
+        }
+
+    case "speedtest":
+        // 转种前的服务器限速检查：--print-script 只看要在服务器上跑什么，--connect-only 只连不测
+        let scfg = config.ssh ?? SSHConfig()
+        if has("--print-script") {
+            print(SSHSpeedTest.speedScript(probeURL: scfg.resolvedProbeURL, testMB: scfg.resolvedTestMB))
+        } else if has("--connect-only") {
+            print("已连接 " + (try SSHSpeedTest.checkConnection(scfg)))
+        } else {
+            let r = try SSHSpeedTest.runTest(scfg)
+            if !r.serverInfo.isEmpty { print("服务器: \(r.serverInfo)") }
+            for (i, v) in r.rounds.enumerated() {
+                print("  第\(i + 1)轮 \(SSHSpeedTest.speedText(v)) MB/s")
+            }
+            print(r.summaryLine)
+            if r.peakMBps < SSHConfig.throttlingHintMBps {
+                print("提示：低于 \(Int(SSHConfig.throttlingHintMBps)) MB/s 多半是被限速了（24 小时流量到 2T 后常见）")
             }
         }
 

@@ -13,6 +13,15 @@ public extension AppConfig {
         managedSites.filter { groupIndex(of: $0.id) < 0 }
     }
 
+    /// 老配置里只有一堆已纳管站点、一个分组都没有时，补一个「默认分组」把它们接住。
+    /// 否则界面上永远悬着一块去不掉的「未分组」：它没有组名，也就没有「移除分组」按钮。
+    mutating func seedDefaultGroupIfNeeded(name: String = "默认分组") {
+        guard groups.isEmpty else { return }
+        let ids = sourceSites.filter { $0.managed }.map(\.id)
+        guard !ids.isEmpty else { return }
+        groups.append(GroupConfig(name: name, sites: ids))
+    }
+
     func groupIndex(of siteID: String) -> Int {
         groups.firstIndex { $0.sites.contains(siteID) } ?? -1
     }

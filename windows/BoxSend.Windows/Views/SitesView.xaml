@@ -4,11 +4,20 @@
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <DockPanel>
             <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                <Label Content="分组名" VerticalAlignment="Center" />
                 <TextBox x:Name="NewGroupName" Width="150" Height="28" />
-                <Button x:Name="BtnAddGroup" Content="添加分组" Margin="6,0,0,0" Click="OnAddGroup" />
-                <Button x:Name="BtnAddSites" Content="批量添加站点" Margin="16,0,0,0"
+                <Label Content="上传限速" Margin="10,0,4,0" VerticalAlignment="Center" />
+                <TextBox x:Name="NewGroupMB" Width="42" Height="28" Text="10"
+                         ToolTip="组内新增站点的默认上传限速 MB/s，0 = 不限速" />
+                <Label Content="MB/s" VerticalAlignment="Center" />
+                <Button x:Name="BtnAddGroup" Content="添加分组" Margin="8,0,0,0" Click="OnAddGroup" />
+                <Button x:Name="BtnAddSites" Content="批量添加站点" Margin="12,0,0,0"
                         Style="{StaticResource Primary}" Click="OnAddSites" />
-                <Button x:Name="BtnCheckAll" Content="检测全部 cookie" Margin="16,0,0,0" Click="OnCheckAll" />
+                <Button x:Name="BtnSync" Content="同步 Cookie" Margin="12,0,0,0" Click="OnSyncCookies"
+                        ToolTip="同时同步 PT-depiler Gist 与 CookieCloud 两路 cookie 备份" />
+                <Button x:Name="BtnCheckAll" Content="检测全部 cookie" Margin="12,0,0,0" Click="OnCheckAll" />
+                <Button x:Name="BtnStopCheck" Content="停止检测" Margin="8,0,0,0" Visibility="Collapsed"
+                        Click="OnStopCheck" />
                 <TextBlock x:Name="Hint" Margin="16,0,0,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextMuted}" FontSize="12" />
             </WrapPanel>

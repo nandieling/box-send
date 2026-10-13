@@ -4,6 +4,8 @@
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+                <GroupBox Header="下载器（VPS 上的 qBittorrent / Transmission）">
+                  <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -70,6 +72,64 @@
                     <Label Content="余量 GB" VerticalAlignment="Center" Margin="12,0,0,0" />
                     <TextBox x:Name="GuardMargin" Width="50" VerticalAlignment="Center" />
                 </WrapPanel>
+
+                  </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="转种服务器（SSH 上传测速）">
+                    <StackPanel>
+                        <CheckBox x:Name="SshPrecheck"
+                                  Content="批量转种前先测服务器上传速度，测完弹窗报速度，由我决定这批发不批发" />
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <Label Content="服务器地址" />
+                                <TextBox x:Name="SshHost" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                <Label Content="SSH 端口" />
+                                <TextBox x:Name="SshPort" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Label Content="用户名" />
+                                <TextBox x:Name="SshUser" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="90" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <Label Content="私钥路径（~ = 当前用户目录）" />
+                                <TextBox x:Name="SshKeyPath" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                <Label Content="每轮 MB" />
+                                <TextBox x:Name="SshTestMB" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Label Content="测速地址（换成自己的接收端）" />
+                                <TextBox x:Name="SshProbe" />
+                            </StackPanel>
+                        </Grid>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="BtnSshTest" Content="测试连接并测速"
+                                    Style="{StaticResource Primary}" Click="OnTestSSH" />
+                            <TextBlock x:Name="SshState" Margin="12,0,0,0" VerticalAlignment="Center"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Text="Windows 版走密钥登录：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
+                    </StackPanel>
+                </GroupBox>
 
                 <WrapPanel Margin="0,16,0,0">
                     <Button Content="保存" Style="{StaticResource Primary}" Click="OnSave" />

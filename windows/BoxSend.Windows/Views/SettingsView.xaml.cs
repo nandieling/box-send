@@ -65,6 +65,10 @@ public partial class SettingsView : UserControl
             ? Visibility.Visible
             : Visibility.Collapsed;
         AutoUpdate.IsChecked = _model.Config?["autoUpdateCheck"] is not JsonValue v || v.GetValue<bool>();
+        if (!TmdbBase.IsKeyboardFocusWithin)
+            TmdbBase.Text = _model.SectionText("tmdb", "apiBase");
+        if (!TmdbKey.IsKeyboardFocusWithin) TmdbKey.Text = _model.SectionText("tmdb", "apiKey");
+        TmdbOn.IsChecked = _model.SectionFlag("tmdb", "enabled");
         About.Text = $"BoxSend {_model.CoreVersion} · 核心库 {_model.CoreVersion} · 平台 {_model.Platform}";
         ConfigPath.Text = $"配置：{_model.ConfigPath}\n数据：{_model.DataDir}";
         _loading = false;
@@ -124,6 +128,34 @@ public partial class SettingsView : UserControl
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch (Exception ex) { MessageBox.Show(Window.GetWindow(this)!, ex.Message, "BoxSend"); }
+    }
+
+    private void OnTutorial(object sender, RoutedEventArgs e) =>
+        new Dialogs.TutorialWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+
+    private void OnTmdbToggled(object sender, RoutedEventArgs e) => SaveTMDB();
+
+    private void SaveTMDB() => _model.PatchSection("tmdb", s =>
+    {
+        s["enabled"] = TmdbOn.IsChecked == true;
+        s["apiBase"] = TmdbBase.Text.Trim();
+        s["apiKey"] = TmdbKey.Text;
+    });
+
+    /// 用一条固定片例（银魂剧场版）验一次网关通不通：核心库拿 IMDb 号与豆瓣号各试一遍
+    private async void OnTestTMDB(object sender, RoutedEventArgs e)
+    {
+        SaveTMDB();
+        BtnTmdb.IsEnabled = false;
+        TmdbState.Text = "查询中…";
+        var node = await Task.Run(() => _model.Api.TryInvoke("tmdb.test", out var error)
+                                       ?? new JsonObject { ["error"] = error ?? "查询失败" });
+        await _model.RefreshAsync(full: false);
+        BtnTmdb.IsEnabled = true;
+        var link = node?["link"]?.GetValue<string>();
+        TmdbState.Text = string.IsNullOrEmpty(link)
+            ? "失败: " + (node?["error"]?.GetValue<string>() ?? "TMDB 没有匹配条目")
+            : "成功: " + link;
     }
 
     private void OnAutoUpdate(object sender, RoutedEventArgs e) =>

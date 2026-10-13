@@ -40,10 +40,14 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 服务侧实现在 `Sources/BoxSendKit/Bridge/AppService.swift`，方法按界面分区：
 `snapshot / events / logs.clear`、`config.get|set|patch / appearance.set`、
 `groups.add|rename|remove|move|setLimit|sortSites`、
-`sites.add|remove|setEnabled|move|moveBefore|setGroup|setApiKey|setUpLimit`、
+`sites.add|remove|setEnabled|move|moveBefore|setGroup|setApiKey|setUpLimit|setAutoFree`、
 `targets.set / sourceQuote.set`、
 `cookies.getRaw|setRaw|remove|clear|trim|sync|check|stopCheck|importZip`、
-`zip.set / zip.scan`、`downloader.test`、`run.start / run.status`、`tmdb.test`、`update.check`。
+`zip.set / zip.scan`、`downloader.test`、`ssh.test`、`run.start / run.status`、
+`tmdb.test`、`update.check`。快照的 `busy` 多一个 `sshTest`，站点行多一对
+`supportsAutoFree` / `autoFree`（卡片上要不要放「发种后免费一天」开关）；
+`version` 顺带给 `sshDefaults`（私钥路径、每轮数据量、测速地址、限速参考线），
+界面两端不必各抄一份默认值。
 
 分组和站点的规则（改名撞号加序号、入组自动启用并继承组限速、删组退回未分组……）从 mac 的
 `AppModel` 抽到 `Sources/BoxSendKit/Models/ConfigEdits.swift`，两套界面共用一套规则，
@@ -61,7 +65,23 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 354 个，全绿
+- 回归测试从 337 个加到 396 个，全绿
+
+界面这一轮补齐（WPF 端，Windows 上待验）：
+
+- 顶部页签：六个页签居中成一条「分段控件」，图标改为随主题描边的矢量图形，
+  最大化时页签整体放大一档（`ThemeManager.ApplyMetrics`，字号/图标/内边距全走 DynamicResource）
+- 控件模板全部主题化（按钮 / 输入框 / 下拉 / 勾选 / 分组卡片 / 页签），
+  深色主题下不再是系统默认的白底黑字；弹窗底色改用 `DialogBackground`
+- 站点分组页对齐 mac：组内站点成块、整组全选、手动填 cookie / Key、上下移、
+  移除分组与移除站点都要两次确认；未分组的站点才出现「未分组站点」这一块，
+  并给出「全部移出纳管」；支持自动免费的站点卡片上有「发种后免费一天」
+- 不再有个去不掉的「未分组」：新配置由核心 `template()` 预置「默认分组」，
+  老配置（站点都纳管了却一个分组没有）在 `AppConfig.load` 里补一个同名分组接住它们；
+  真要出现没归组的站点（比如内置表新增了站），那块会显示成「未分组站点（N）」并给「全部移出纳管」
+- 设置页补 TMDB 反查卡片与使用教程窗口；下载器页补 SSH 上传测速卡片
+- 转种页改为按分成分块勾选，「开始运行」旁给出「已选 N 个分组 · M 个站点」，
+  并按 mac 的行为在开跑前先测服务器速度
 
 ## 两端有意不同
 
@@ -74,6 +94,10 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
    界面能看到失效站点，手动再点一次另一来源即可。
 3. **更新**：两端都是「检查版本 + 打开安装包直链/发布页」，都不做静默安装。
 4. **关窗**：Windows 关窗收进托盘继续跑（mac 是窗口关了进程还在），托盘双击回界面。
+5. **SSH 测速只用密钥登录**。Windows 自带的 OpenSSH 客户端不读 `SSH_ASKPASS`，密码没地方代填，
+   核心在 Windows 上遇到密码登录直接给一句「请用密钥登录」；mac 两种都支持。
+6. **组内排序**：mac 支持拖拽把手与输入序号排序，Windows 用「上移 / 下移」按钮，
+   组顺序同样是按钮（核心 `groups.move` 按「把 A 放到 B 之前」实现，两端共用）。
 
 ## 到 Windows 机器上要做的事
 

@@ -44,6 +44,7 @@ public final class AppService {
     private var busyDownloader = false
     private var busyZip = false
     private var busyUpdate = false
+    private var busySSH = false
     private var checkGeneration = 0
     private var running = false
     private var runningStep = ""
@@ -118,7 +119,12 @@ public final class AppService {
         case "version":
             return ["version": BoxSendVersion.version, "platform": Platform.osName,
                     "configPath": configPath, "dataDir": dataDir,
-                    "themes": ThemeCatalog.allJSON]
+                    "themes": ThemeCatalog.allJSON,
+                    // 界面拿这些当占位值，免得两端各写一份默认值写歪
+                    "sshDefaults": ["keyPath": "~/.ssh/id_ed25519",
+                                    "testMB": SSHConfig().testMB,
+                                    "probeURL": SSHConfig.defaultProbeURL,
+                                    "throttlingMBps": SSHConfig.throttlingHintMBps]]
         case "snapshot":
             return snapshot()
         case "events":
@@ -239,6 +245,12 @@ public final class AppService {
             mutate { cfg.setSiteUpLimitMB(int(params["upLimitMB"]), siteID: id) }
             save()
             return groupsAndSites()
+        case "sites.setAutoFree":
+            // 「发种后免费一天」：只有站内有免费链接特征的站点能开
+            let id = params["id"] as? String ?? ""
+            mutate { cfg.setSiteAutoFree(params["on"] as? Bool ?? false, siteID: id) }
+            save()
+            return groupsAndSites()
 
         case "targets.set":
             let ids = (params["ids"] as? [String]) ?? []
@@ -321,6 +333,8 @@ public final class AppService {
         case "run.status":
             return runState()
 
+        case "ssh.test":
+            return try testSSHSpeed()
         case "tmdb.test":
             return try testTMDB()
         case "update.check":
@@ -363,6 +377,7 @@ public final class AppService {
         let busy = [
             "cookieSync": busyCookieSync, "cookieCheck": busyCookieCheck,
             "downloaderTest": busyDownloader, "zipScan": busyZip, "update": busyUpdate,
+            "sshTest": busySSH,
         ]
         let run = runStateLocked()
         let messages: [String: Any] = [
@@ -792,6 +807,28 @@ public final class AppService {
         }
     }
 
+    /// SSH 上传测速：核心层跑一遍，mac 与 Windows 界面都能点（调用方自己丢后台线程，会等几十秒）
+    private func testSSHSpeed() throws -> [String: Any] {
+        guard let scfg = cfg.ssh, scfg.isConfigured else {
+            throw Failure("没填服务器地址和用户名")
+        }
+        mutate { self.busySSH = true }
+        defer { mutate { self.busySSH = false } }
+        do {
+            let r = try SSHSpeedTest.runTest(scfg)
+            emit("info", nil, "服务器测速：" + r.summaryLine, "", phase: nil, ok: true)
+            return ["ok": true, "mbps": r.peakMBps, "text": r.summaryLine,
+                    "rounds": r.roundsText, "probeURL": r.probeURL,
+                    "serverInfo": r.serverInfo,
+                    "low": r.peakMBps < SSHConfig.throttlingHintMBps]
+        } catch {
+            let why = error.localizedDescription
+            emit("error", nil, "服务器测速失败", why, phase: nil, ok: false)
+            return ["ok": false, "mbps": 0.0, "text": why, "rounds": "",
+                    "probeURL": scfg.resolvedProbeURL, "serverInfo": "", "low": false]
+        }
+    }
+
     /// 拿一条站内已知条目试查（银魂剧场版 tt2374144 / 豆瓣 11615927），验证网关与 key 通不通
     private func testTMDB() throws -> [String: Any] {
         guard var t = cfg.tmdb else { throw Failure("未配置 TMDB") }
@@ -959,6 +996,8 @@ public final class AppService {
                 "upLimitMB": c.downloader.siteUpLimits[s.id].map { Int($0 / 1_048_576) } ?? 0,
                 "warning": siteWarnings[s.id] ?? "",
                 "needsSourceQuote": SiteRegistry.needsSourceQuoteField(s),
+                "supportsAutoFree": c.siteSupportsAutoFree(s.id),
+                "autoFree": c.siteAutoFree(s.id),
             ])
         }
         return out
