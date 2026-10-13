@@ -1,0 +1,27 @@
+﻿2026-10-13T00:31:39.7361080Z ##[group]Run actions/upload-artifact@v7
+2026-10-13T00:31:39.7361570Z with:
+2026-10-13T00:31:39.7361790Z   name: macos-app
+2026-10-13T00:31:39.7362100Z   path: BoxSend-*-macos.zip
+2026-10-13T00:31:39.7362370Z   if-no-files-found: warn
+2026-10-13T00:31:39.7362590Z   compression-level: 6
+2026-10-13T00:31:39.7362860Z   overwrite: false
+2026-10-13T00:31:39.7363080Z   include-hidden-files: false
+2026-10-13T00:31:39.7363340Z   archive: true
+2026-10-13T00:31:39.7363510Z env:
+2026-10-13T00:31:39.7363740Z   SWIFT_WINDOWS: 6.4.0
+2026-10-13T00:31:39.7363940Z   SWIFT_WINDOWS_URL: 
+2026-10-13T00:31:39.7364340Z   SWIFT_WINDOWS_SHA256: 76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03
+2026-10-13T00:31:39.7364770Z   ALLOW_WINDOWS_TEST_FAILURE: false
+2026-10-13T00:31:39.7365080Z ##[endgroup]
+2026-10-13T00:31:40.1759910Z With the provided path, there will be 1 file uploaded
+2026-10-13T00:31:40.1767700Z Artifact name is valid!
+2026-10-13T00:31:40.1769140Z Root directory input is valid!
+2026-10-13T00:31:40.5893510Z Uploading artifact: macos-app.zip
+2026-10-13T00:31:40.5935660Z Beginning upload of artifact content to blob storage
+2026-10-13T00:31:41.7659300Z Uploaded bytes 4148896
+2026-10-13T00:31:41.8510430Z Finished uploading artifact content to blob storage!
+2026-10-13T00:31:41.8511850Z SHA256 digest of uploaded artifact is 0cbe6a66a5da661a5c86defa9beb05826e965e467a85b3b676303ab1a6481837
+2026-10-13T00:31:41.8513390Z Finalizing artifact upload
+2026-10-13T00:31:42.2626540Z Artifact macos-app successfully finalized. Artifact ID 11782075427
+2026-10-13T00:31:42.2628220Z Artifact macos-app has been successfully uploaded! Final size is 4148896 bytes. Artifact ID is 11782075427
+2026-10-13T00:31:42.2636760Z Artifact download URL: https://github.com/nandieling/box-send/actions/runs/38327297622/artifacts/11782075427

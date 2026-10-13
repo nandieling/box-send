@@ -1,0 +1,92 @@
+﻿2026-10-13T00:27:22.1580590Z ##[group]Run actions/checkout@v7
+2026-10-13T00:27:22.1581670Z with:
+2026-10-13T00:27:22.1582170Z   repository: nandieling/box-send
+2026-10-13T00:27:22.1586060Z   token: ***
+2026-10-13T00:27:22.1586490Z   ssh-strict: true
+2026-10-13T00:27:22.1586920Z   ssh-user: git
+2026-10-13T00:27:22.1587380Z   persist-credentials: true
+2026-10-13T00:27:22.1587840Z   clean: true
+2026-10-13T00:27:22.1588280Z   sparse-checkout-cone-mode: true
+2026-10-13T00:27:22.1588800Z   fetch-depth: 1
+2026-10-13T00:27:22.1589250Z   fetch-tags: false
+2026-10-13T00:27:22.1589690Z   show-progress: true
+2026-10-13T00:27:22.1590150Z   lfs: false
+2026-10-13T00:27:22.1590620Z   submodules: false
+2026-10-13T00:27:22.1591080Z   set-safe-directory: true
+2026-10-13T00:27:22.1591610Z   allow-unsafe-pr-checkout: false
+2026-10-13T00:27:22.1594080Z env:
+2026-10-13T00:27:22.1594550Z   SWIFT_WINDOWS: 6.4.0
+2026-10-13T00:27:22.1594940Z   SWIFT_WINDOWS_URL: 
+2026-10-13T00:27:22.1595520Z   SWIFT_WINDOWS_SHA256: 76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03
+2026-10-13T00:27:22.1596360Z   ALLOW_WINDOWS_TEST_FAILURE: false
+2026-10-13T00:27:22.1596800Z ##[endgroup]
+2026-10-13T00:27:23.0082180Z Syncing repository: nandieling/box-send
+2026-10-13T00:27:23.0086860Z ##[group]Getting Git version info
+2026-10-13T00:27:23.0088360Z Working directory is '/Users/runner/work/box-send/box-send'
+2026-10-13T00:27:23.0090570Z [command]/opt/homebrew/bin/git version
+2026-10-13T00:27:23.0692280Z git version 2.55.0
+2026-10-13T00:27:23.0705500Z ##[endgroup]
+2026-10-13T00:27:23.0720490Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/fd12fa59-1173-40e7-a1ee-9d2f5dd30578/.gitconfig'
+2026-10-13T00:27:23.0731590Z Temporarily overriding HOME='/Users/runner/work/_temp/fd12fa59-1173-40e7-a1ee-9d2f5dd30578' before making global git config changes
+2026-10-13T00:27:23.0735120Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-13T00:27:23.0740290Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/box-send/box-send
+2026-10-13T00:27:23.0943070Z Deleting the contents of '/Users/runner/work/box-send/box-send'
+2026-10-13T00:27:23.0946630Z ##[group]Determining repository object format
+2026-10-13T00:27:23.0948970Z ##[endgroup]
+2026-10-13T00:27:23.0951050Z ##[group]Initializing the repository
+2026-10-13T00:27:23.0952410Z [command]/opt/homebrew/bin/git init /Users/runner/work/box-send/box-send
+2026-10-13T00:27:23.1341420Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-13T00:27:23.1344560Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-13T00:27:23.1346740Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-13T00:27:23.1348790Z hint: call:
+2026-10-13T00:27:23.1349960Z hint:
+2026-10-13T00:27:23.1351280Z hint: 	git config --global init.defaultBranch <name>
+2026-10-13T00:27:23.1352930Z hint:
+2026-10-13T00:27:23.1353810Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-13T00:27:23.1354720Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-13T00:27:23.1355460Z hint:
+2026-10-13T00:27:23.1355980Z hint: 	git branch -m <name>
+2026-10-13T00:27:23.1356450Z hint:
+2026-10-13T00:27:23.1357360Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-13T00:27:23.1359820Z Initialized empty Git repository in /Users/runner/work/box-send/box-send/.git/
+2026-10-13T00:27:23.1363860Z [command]/opt/homebrew/bin/git remote add origin https://github.com/nandieling/box-send
+2026-10-13T00:27:23.1540420Z ##[endgroup]
+2026-10-13T00:27:23.1542760Z ##[group]Disabling automatic garbage collection
+2026-10-13T00:27:23.1549470Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-10-13T00:27:23.1690560Z ##[endgroup]
+2026-10-13T00:27:23.1692670Z ##[group]Setting up auth
+2026-10-13T00:27:23.1694110Z Removing SSH command configuration
+2026-10-13T00:27:23.1695770Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-13T00:27:23.1840730Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-13T00:27:23.3994830Z Removing HTTP extra header
+2026-10-13T00:27:23.3997400Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-13T00:27:23.4094840Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-13T00:27:23.6365560Z Removing includeIf entries pointing to credentials config files
+2026-10-13T00:27:23.6469330Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-13T00:27:23.6779410Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-13T00:27:23.9007900Z [command]/opt/homebrew/bin/git config --file /Users/runner/work/_temp/git-credentials-191e59d5-970b-4e39-8b92-33e42a2a5cba.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-13T00:27:23.9231940Z [command]/opt/homebrew/bin/git config --local includeIf.gitdir:/Users/runner/work/box-send/box-send/.git.path /Users/runner/work/_temp/git-credentials-191e59d5-970b-4e39-8b92-33e42a2a5cba.config
+2026-10-13T00:27:23.9293370Z [command]/opt/homebrew/bin/git config --local includeIf.gitdir:/Users/runner/work/box-send/box-send/.git/worktrees/*.path /Users/runner/work/_temp/git-credentials-191e59d5-970b-4e39-8b92-33e42a2a5cba.config
+2026-10-13T00:27:23.9344620Z [command]/opt/homebrew/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-191e59d5-970b-4e39-8b92-33e42a2a5cba.config
+2026-10-13T00:27:23.9512660Z [command]/opt/homebrew/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-191e59d5-970b-4e39-8b92-33e42a2a5cba.config
+2026-10-13T00:27:23.9655420Z ##[endgroup]
+2026-10-13T00:27:23.9660040Z ##[group]Fetching the repository
+2026-10-13T00:27:23.9669400Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +1757c30dfd21b3f826dd865660c694f7cac5eb7f:refs/remotes/origin/main
+2026-10-13T00:27:24.7217430Z From https://github.com/nandieling/box-send
+2026-10-13T00:27:24.7305030Z  * [new ref]         1757c30dfd21b3f826dd865660c694f7cac5eb7f -> origin/main
+2026-10-13T00:27:24.7309630Z [command]/opt/homebrew/bin/git branch --list --remote origin/main
+2026-10-13T00:27:24.7400800Z   origin/main
+2026-10-13T00:27:24.7416580Z [command]/opt/homebrew/bin/git rev-parse refs/remotes/origin/main
+2026-10-13T00:27:24.7496210Z 1757c30dfd21b3f826dd865660c694f7cac5eb7f
+2026-10-13T00:27:24.7502990Z ##[endgroup]
+2026-10-13T00:27:24.7506130Z ##[group]Determining the checkout info
+2026-10-13T00:27:24.7510060Z ##[endgroup]
+2026-10-13T00:27:24.7515480Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-10-13T00:27:24.7635810Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-13T00:27:24.7767760Z ##[group]Checking out the ref
+2026-10-13T00:27:24.7773030Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-13T00:27:24.8463690Z Switched to a new branch 'main'
+2026-10-13T00:27:24.8504190Z branch 'main' set up to track 'origin/main'.
+2026-10-13T00:27:24.8579330Z ##[endgroup]
+2026-10-13T00:27:24.8667610Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-10-13T00:27:24.8829940Z 1757c30dfd21b3f826dd865660c694f7cac5eb7f

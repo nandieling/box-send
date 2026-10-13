@@ -1,0 +1,178 @@
+﻿2026-10-13T00:29:36.6002270Z ##[group]Run bash scripts/make-app.sh
+2026-10-13T00:29:36.6002710Z [36;1mbash scripts/make-app.sh[0m
+2026-10-13T00:29:36.6003310Z [36;1mditto -c -k --keepParent dist/BoxSend.app "BoxSend-$(sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/BoxSendKit/Util/Version.swift | head -1)-macos.zip"[0m
+2026-10-13T00:29:36.6312840Z shell: /bin/bash -e {0}
+2026-10-13T00:29:36.6313210Z env:
+2026-10-13T00:29:36.6313550Z   SWIFT_WINDOWS: 6.4.0
+2026-10-13T00:29:36.6313760Z   SWIFT_WINDOWS_URL: 
+2026-10-13T00:29:36.6314200Z   SWIFT_WINDOWS_SHA256: 76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03
+2026-10-13T00:29:36.6315460Z   ALLOW_WINDOWS_TEST_FAILURE: false
+2026-10-13T00:29:36.6315800Z ##[endgroup]
+2026-10-13T00:29:38.4916880Z Building for production...
+2026-10-13T00:29:38.4999650Z [0/11] Write sources
+2026-10-13T00:29:38.7065870Z [4/11] Write swift-version-7974D3F7F03D5E95.txt
+2026-10-13T00:31:12.5496640Z [6/12] Compiling BoxSendKit AppService.swift
+2026-10-13T00:31:12.5500890Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Bridge/AppService.swift:241:31: warning: result of call to 'checkCookiesAsync(_:force:)' is unused [#no-usage]
+2026-10-13T00:31:12.5503570Z  239 |             }
+2026-10-13T00:31:12.5503830Z  240 |             save()
+2026-10-13T00:31:12.5508030Z  241 |             if !raw.isEmpty { checkCookiesAsync([id], force: true) }
+2026-10-13T00:31:12.5508590Z      |                               `- warning: result of call to 'checkCookiesAsync(_:force:)' is unused [#no-usage]
+2026-10-13T00:31:12.5510280Z  242 |             return groupsAndSites()
+2026-10-13T00:31:12.5510690Z  243 |         case "sites.setUpLimit":
+2026-10-13T00:31:12.5511000Z 
+2026-10-13T00:31:12.5511530Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Bridge/AppService.swift:647:9: warning: result of call to 'checkCookiesAsync(_:force:)' is unused [#no-usage]
+2026-10-13T00:31:12.5512300Z  645 |         }
+2026-10-13T00:31:12.5512720Z  646 |         persistCookies()
+2026-10-13T00:31:12.5513080Z  647 |         checkCookiesAsync([siteID], force: true)
+2026-10-13T00:31:12.5513580Z      |         `- warning: result of call to 'checkCookiesAsync(_:force:)' is unused [#no-usage]
+2026-10-13T00:31:12.5513980Z  648 |         return ["message": message]
+2026-10-13T00:31:12.5514300Z  649 |     }
+2026-10-13T00:31:12.5514450Z 
+2026-10-13T00:31:12.5514960Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Bridge/AppService.swift:930:35: warning: conditional cast from 'Any' to 'Any' always succeeds
+2026-10-13T00:31:12.5515630Z  928 |         if let enc = value as? Encodable {
+2026-10-13T00:31:12.5516410Z  929 |             data = try JSONEncoder().encode(AnyEncodable(enc))
+2026-10-13T00:31:12.5516940Z  930 |         } else if let any = value as? Any {
+2026-10-13T00:31:12.5517800Z      |                                   `- warning: conditional cast from 'Any' to 'Any' always succeeds
+2026-10-13T00:31:12.5522760Z  931 |             data = try JSONSerialization.data(withJSONObject: any, options: [.fragmentsAllowed])
+2026-10-13T00:31:12.5524030Z  932 |         } else {
+2026-10-13T00:31:12.5524530Z 
+2026-10-13T00:31:12.5524980Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Models/Release.swift:125:53: warning: variable 'items' was never mutated; consider changing to 'let' constant
+2026-10-13T00:31:12.5540070Z 123 |     /// 避免同一页面因 URL 带/不带参数产生两个不同的去重键
+2026-10-13T00:31:12.5545490Z 124 |     static func normalizeKeyURL(_ s: String) -> String {
+2026-10-13T00:31:12.5549310Z 125 |         guard var c = URLComponents(string: s), var items = c.queryItems else { return s }
+2026-10-13T00:31:12.5554180Z     |                                                     `- warning: variable 'items' was never mutated; consider changing to 'let' constant
+2026-10-13T00:31:12.5554720Z 126 |         let filtered = items.filter { $0.name != "hit" }
+2026-10-13T00:31:12.5555170Z 127 |         guard filtered.count != items.count else { return s }
+2026-10-13T00:31:12.5555510Z 
+2026-10-13T00:31:12.5556270Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Sites/NexusPHPAdapter.swift:386:21: warning: no calls to throwing functions occur within 'try' expression
+2026-10-13T00:31:12.5559240Z  384 |                            options: [.dotMatchesLineSeparators, .caseInsensitive]) { _ in "" }
+2026-10-13T00:31:12.5564440Z  385 |         // 源站内部链接转文本
+2026-10-13T00:31:12.5567580Z  386 |         let host = (try? URL(string: sourceHost)?.host()) ?? sourceHost
+2026-10-13T00:31:12.5569140Z      |                     `- warning: no calls to throwing functions occur within 'try' expression
+2026-10-13T00:31:12.5569750Z  387 |         let hostPat = NSRegularExpression.escapedPattern(for: host.split(separator: ".").joined(separator: "\\.?"))
+2026-10-13T00:31:12.5570640Z  388 |         let re = try! NSRegularExpression(pattern: "<a\\s[^>]*href=[\"'](?:https?://)?(?:www\\.)?\(hostPat)(?:/[^\"']*)?[\"'][^>]*>(.*?)</a>", options: [.dotMatchesLineSeparators, .caseInsensitive])
+2026-10-13T00:31:12.5572180Z 
+2026-10-13T00:31:12.5572640Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Sites/Unit3DAdapter.swift:401:23: warning: no calls to throwing functions occur within 'try' expression
+2026-10-13T00:31:12.5576200Z 399 |         s = HTMLUtil.replaceMatches(s, "<(script|style)[^>]*>.*?</\\1>",
+2026-10-13T00:31:12.5578600Z 400 |                            options: [.dotMatchesLineSeparators, .caseInsensitive]) { _ in "" }
+2026-10-13T00:31:12.5579110Z 401 |         if let host = try? URL(string: sourceHost)?.host() {
+2026-10-13T00:31:12.5580430Z     |                       `- warning: no calls to throwing functions occur within 'try' expression
+2026-10-13T00:31:12.5581080Z 402 |             let hostPat = NSRegularExpression.escapedPattern(for: host.split(separator: ".").joined(separator: "\\.?"))
+2026-10-13T00:31:12.5582040Z 403 |             let re = try! NSRegularExpression(pattern: "<a\\s[^>]*href=[\"'](?:https?://)?(?:www\\.)?\(hostPat)(?:/[^\"']*)?[\"'][^>]*>(.*?)</a>", options: [.dotMatchesLineSeparators, .caseInsensitive])
+2026-10-13T00:31:12.5582640Z 
+2026-10-13T00:31:12.5583030Z /Users/runner/work/box-send/box-send/Sources/BoxSendKit/Sites/SiteRegistry.swift:35:9: warning: default will never be executed
+2026-10-13T00:31:12.5584980Z  33 |             // 长尾站（M3）：暂无专属适配器，回退 NexusPHP 通用逻辑（源站解析尽力而为）
+2026-10-13T00:31:12.5585530Z  34 |             return NexusPHPAdapter(site: es, client: client, debugDir: debugDir)
+2026-10-13T00:31:12.5586090Z  35 |         default:
+2026-10-13T00:31:12.5590130Z     |         `- warning: default will never be executed
+2026-10-13T00:31:12.5590550Z  36 |             fatalError("框架 \(site.framework.rawValue) 尚未实现适配器")
+2026-10-13T00:31:12.5599240Z  37 |         }
+2026-10-13T00:31:16.3839780Z [7/15] Compiling BoxSendBridge Exports.swift
+2026-10-13T00:31:16.3977500Z /Users/runner/work/box-send/box-send/Sources/BoxSendBridge/Exports.swift:96:9: warning: initialization of immutable value 'holder' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+2026-10-13T00:31:16.3980400Z  94 | public func boxsend_set_ocr(_ handle: UnsafeMutableRawPointer?, _ fn: OcrCallback?) {
+2026-10-13T00:31:16.4112190Z  95 |     guard let handle else { return }
+2026-10-13T00:31:16.4228130Z  96 |     let holder = Unmanaged<Holder>.fromOpaque(handle).takeUnretainedValue()
+2026-10-13T00:31:16.4330990Z     |         `- warning: initialization of immutable value 'holder' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+2026-10-13T00:31:16.4475200Z  97 |     guard let fn else {
+2026-10-13T00:31:16.4614420Z  98 |         Platform.hooks.ocr = nil
+2026-10-13T00:31:16.4732570Z [7/15] Write Objects.LinkFileList
+2026-10-13T00:31:19.1863190Z [8/15] Linking libboxsend-core.dylib
+2026-10-13T00:31:21.8638000Z [10/15] Compiling box_send main.swift
+2026-10-13T00:31:21.8744690Z [10/15] Write Objects.LinkFileList
+2026-10-13T00:31:22.7765600Z [11/15] Linking box-send
+2026-10-13T00:31:36.1445130Z [13/15] Compiling BoxSendApp AppModel.swift
+2026-10-13T00:31:36.1452970Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:659:21: warning: mutation of captured var 'stopped' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1462840Z  657 |                 var stopped = false
+2026-10-13T00:31:36.1473670Z  658 |                 await MainActor.run {
+2026-10-13T00:31:36.1538210Z  659 |                     stopped = self.checkGeneration != gen
+2026-10-13T00:31:36.1541640Z      |                     `- warning: mutation of captured var 'stopped' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1542720Z  660 |                     for (id, res) in r {
+2026-10-13T00:31:36.1546770Z  661 |                         self.siteCheckResults[id] = res
+2026-10-13T00:31:36.1562680Z 
+2026-10-13T00:31:36.1565120Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:665:34: warning: reference to captured var 'stopped' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1569270Z  663 |                     }
+2026-10-13T00:31:36.1570110Z  664 |                     self.siteChecking.subtract(r.keys)
+2026-10-13T00:31:36.1571220Z  665 |                     if isLast || stopped {
+2026-10-13T00:31:36.1573160Z      |                                  `- warning: reference to captured var 'stopped' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1579360Z  666 |                         // 停止检测：清掉本轮全部待检站的「检测中」状态（已完成批次的结果保留），并照常回调 onDone
+2026-10-13T00:31:36.1580780Z  667 |                         self.siteChecking.subtract(ids)
+2026-10-13T00:31:36.1581570Z 
+2026-10-13T00:31:36.1583340Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:858:25: warning: reference to captured var 'failedNotes' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1586260Z  856 |                     if !timeText.isEmpty { msg += "（\(timeText)）" }
+2026-10-13T00:31:36.1587950Z  857 |                     if removed > 0 { msg += "；已清理 \(removed) 个未启用站点的 cookie" }
+2026-10-13T00:31:36.1589780Z  858 |                     if !failedNotes.isEmpty { msg += "；部分来源未成功：\(failedNotes.joined(separator: "；"))" }
+2026-10-13T00:31:36.1592190Z      |                         `- warning: reference to captured var 'failedNotes' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1594260Z  859 |                     self.cookieMessage = msg
+2026-10-13T00:31:36.1595510Z  860 |                     self.checkSitesCookies(self.managedSites, force: true) {
+2026-10-13T00:31:36.1596240Z 
+2026-10-13T00:31:36.1598110Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:858:84: warning: reference to captured var 'failedNotes' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1601040Z  856 |                     if !timeText.isEmpty { msg += "（\(timeText)）" }
+2026-10-13T00:31:36.1602330Z  857 |                     if removed > 0 { msg += "；已清理 \(removed) 个未启用站点的 cookie" }
+2026-10-13T00:31:36.1604430Z  858 |                     if !failedNotes.isEmpty { msg += "；部分来源未成功：\(failedNotes.joined(separator: "；"))" }
+2026-10-13T00:31:36.1607070Z      |                                                                  `- warning: reference to captured var 'failedNotes' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1609470Z  859 |                     self.cookieMessage = msg
+2026-10-13T00:31:36.1610600Z  860 |                     self.checkSitesCookies(self.managedSites, force: true) {
+2026-10-13T00:31:36.1611570Z 
+2026-10-13T00:31:36.1613550Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:864:65: warning: reference to captured var 'alternates' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1618920Z  862 |                             // 两个来源都导入完了，但同名 cookie 只能留一份：
+2026-10-13T00:31:36.1620820Z  863 |                             // 检测仍失败的站点用另一来源那份重试，谁被站点认可就用谁
+2026-10-13T00:31:36.1622210Z  864 |                             self.rescueInvalidSites(alternates: alternates, label: alternateLabel, cfg: cfg) { ids in
+2026-10-13T00:31:36.1624990Z      |                                                                 `- warning: reference to captured var 'alternates' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1626990Z  865 |                                 Task { @MainActor in
+2026-10-13T00:31:36.1628030Z  866 |                                     self.cookieSyncBusy = false
+2026-10-13T00:31:36.1628700Z 
+2026-10-13T00:31:36.1632370Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:864:84: warning: reference to captured var 'alternateLabel' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1635310Z  862 |                             // 两个来源都导入完了，但同名 cookie 只能留一份：
+2026-10-13T00:31:36.1636400Z  863 |                             // 检测仍失败的站点用另一来源那份重试，谁被站点认可就用谁
+2026-10-13T00:31:36.1638050Z  864 |                             self.rescueInvalidSites(alternates: alternates, label: alternateLabel, cfg: cfg) { ids in
+2026-10-13T00:31:36.1640590Z      |                                                                                    `- warning: reference to captured var 'alternateLabel' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1646600Z  865 |                                 Task { @MainActor in
+2026-10-13T00:31:36.1647550Z  866 |                                     self.cookieSyncBusy = false
+2026-10-13T00:31:36.1647910Z 
+2026-10-13T00:31:36.1651990Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:871:105: warning: reference to captured var 'alternateLabel' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1655090Z  869 |                                     self.refreshCookieStats()
+2026-10-13T00:31:36.1656790Z  870 |                                     let names = ids.compactMap { cfg.site($0)?.name }.joined(separator: "、")
+2026-10-13T00:31:36.1659130Z  871 |                                     self.cookieMessage = msg + "；\(ids.count) 个失效站点改用 \(alternateLabel) 的 cookie 后通过：\(names)"
+2026-10-13T00:31:36.1725040Z      |                                                                                         `- warning: reference to captured var 'alternateLabel' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1726300Z  872 |                                     self.checkSitesCookies(self.managedSites.filter { ids.contains($0.id) }, force: true)
+2026-10-13T00:31:36.1726920Z  873 |                                 }
+2026-10-13T00:31:36.1727070Z 
+2026-10-13T00:31:36.1727770Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:1029:42: warning: reference to captured var 'rescued' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1728590Z 1027 |                 }
+2026-10-13T00:31:36.1728910Z 1028 |             }
+2026-10-13T00:31:36.1729220Z 1029 |             await MainActor.run { onDone(rescued) }
+2026-10-13T00:31:36.1729820Z      |                                          `- warning: reference to captured var 'rescued' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1730600Z 1030 |         }
+2026-10-13T00:31:36.1730830Z 1031 |     }
+2026-10-13T00:31:36.1731010Z 
+2026-10-13T00:31:36.1731670Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:1156:41: warning: reference to captured var 'lines' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1733270Z 1154 |             }
+2026-10-13T00:31:36.1733570Z 1155 |             await MainActor.run {
+2026-10-13T00:31:36.1733910Z 1156 |                 self.cookieCheckLines = lines
+2026-10-13T00:31:36.1734630Z      |                                         `- warning: reference to captured var 'lines' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1735420Z 1157 |                 self.siteCheckResults.merge(results) { _, new in new }
+2026-10-13T00:31:36.1735800Z 1158 |                 for (id, res) in results {
+2026-10-13T00:31:36.1736130Z 
+2026-10-13T00:31:36.1736970Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:1157:45: warning: reference to captured var 'results' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1738520Z 1155 |             await MainActor.run {
+2026-10-13T00:31:36.1739050Z 1156 |                 self.cookieCheckLines = lines
+2026-10-13T00:31:36.1739390Z 1157 |                 self.siteCheckResults.merge(results) { _, new in new }
+2026-10-13T00:31:36.1740130Z      |                                             `- warning: reference to captured var 'results' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1740910Z 1158 |                 for (id, res) in results {
+2026-10-13T00:31:36.1741400Z 1159 |                     self.state.setCookieCheck(siteID: id, ok: res.ok, message: res.message)
+2026-10-13T00:31:36.1741750Z 
+2026-10-13T00:31:36.1742500Z /Users/runner/work/box-send/box-send/Sources/BoxSendApp/AppModel.swift:1158:34: warning: reference to captured var 'results' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1743520Z 1156 |                 self.cookieCheckLines = lines
+2026-10-13T00:31:36.1744070Z 1157 |                 self.siteCheckResults.merge(results) { _, new in new }
+2026-10-13T00:31:36.1744550Z 1158 |                 for (id, res) in results {
+2026-10-13T00:31:36.1745430Z      |                                  `- warning: reference to captured var 'results' in concurrently-executing code; this is an error in the Swift 6 language mode [#SendableClosureCaptures]
+2026-10-13T00:31:36.1746350Z 1159 |                     self.state.setCookieCheck(siteID: id, ok: res.ok, message: res.message)
+2026-10-13T00:31:36.1746750Z 1160 |                 }
+2026-10-13T00:31:36.1746940Z 
+2026-10-13T00:31:36.1747250Z [#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+2026-10-13T00:31:37.3766480Z [13/15] Write Objects.LinkFileList
+2026-10-13T00:31:37.4607050Z [14/15] Linking BoxSendApp
+2026-10-13T00:31:37.4693030Z Build complete! (119.10s)
+2026-10-13T00:31:39.4508550Z dist/BoxSend.app: replacing existing signature
+2026-10-13T00:31:39.4809680Z 构建完成: dist/BoxSend.app
+2026-10-13T00:31:39.4810790Z 运行: open dist/BoxSend.app

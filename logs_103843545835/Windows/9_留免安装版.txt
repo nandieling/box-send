@@ -1,0 +1,17 @@
+﻿2026-10-13T00:31:37.7441860Z ##[group]Run actions/upload-artifact@v7
+2026-10-13T00:31:37.7442205Z with:
+2026-10-13T00:31:37.7442399Z   name: windows-portable
+2026-10-13T00:31:37.7442624Z   path: windows/publish/**
+2026-10-13T00:31:37.7442852Z   if-no-files-found: warn
+2026-10-13T00:31:37.7443066Z   compression-level: 6
+2026-10-13T00:31:37.7443301Z   overwrite: false
+2026-10-13T00:31:37.7443496Z   include-hidden-files: false
+2026-10-13T00:31:37.7443711Z   archive: true
+2026-10-13T00:31:37.7443883Z env:
+2026-10-13T00:31:37.7444041Z   SWIFT_WINDOWS: 6.4.0
+2026-10-13T00:31:37.7444234Z   SWIFT_WINDOWS_URL: 
+2026-10-13T00:31:37.7444581Z   SWIFT_WINDOWS_SHA256: 76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03
+2026-10-13T00:31:37.7445079Z   ALLOW_WINDOWS_TEST_FAILURE: false
+2026-10-13T00:31:37.7445611Z   SDKROOT: C:\Users\runneradmin\AppData\Local\Programs\Swift\Platforms\6.4.0\Windows.platform\Developer\SDKs\Windows.sdk\
+2026-10-13T00:31:37.7446157Z ##[endgroup]
+2026-10-13T00:31:37.9048717Z ##[warning]No files were found with the provided path: windows/publish/**. No artifacts will be uploaded.

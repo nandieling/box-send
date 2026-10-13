@@ -1,0 +1,102 @@
+﻿2026-10-13T00:27:17.1900986Z ##[group]Run $ErrorActionPreference = 'Continue'
+2026-10-13T00:27:17.1901554Z [36;1m$ErrorActionPreference = 'Continue'[0m
+2026-10-13T00:27:17.1901968Z [36;1m# 安装位置随安装器版本变，装完按目录扫出来再写进 PATH（Toolchains 与 Runtimes 都要）[0m
+2026-10-13T00:27:17.1902311Z [36;1mfunction Find-SwiftBins {[0m
+2026-10-13T00:27:17.1902557Z [36;1m  $bins = @()[0m
+2026-10-13T00:27:17.1902937Z [36;1m  $roots = @("$env:LOCALAPPDATA\Programs\Swift", 'C:\Library\Developer\Toolchains',[0m
+2026-10-13T00:27:17.1903491Z [36;1m             'C:\Program Files\Swift', 'C:\Swift') | Where-Object { Test-Path $_ }[0m
+2026-10-13T00:27:17.1903885Z [36;1m  foreach ($r in $roots) {[0m
+2026-10-13T00:27:17.1904250Z [36;1m    # 6.x 是分开的两份：Toolchains\<版本+Asserts>\usr\bin 与 Runtimes\<版本>\usr\bin[0m
+2026-10-13T00:27:17.1904672Z [36;1m    foreach ($sub in 'Toolchains', 'Runtimes') {[0m
+2026-10-13T00:27:17.1905180Z [36;1m      $bins += (Get-Item (Join-Path (Join-Path $r $sub) '*\usr\bin') -ErrorAction SilentlyContinue).FullName[0m
+2026-10-13T00:27:17.1905750Z [36;1m    }[0m
+2026-10-13T00:27:17.1905951Z [36;1m  }[0m
+2026-10-13T00:27:17.1906135Z [36;1m  if (-not $bins) {   # 布局又变了就递归兜底[0m
+2026-10-13T00:27:17.1906390Z [36;1m    foreach ($r in $roots) {[0m
+2026-10-13T00:27:17.1906827Z [36;1m      $bins += Get-ChildItem $r -Recurse -Filter swiftCore.dll -ErrorAction SilentlyContinue |[0m
+2026-10-13T00:27:17.1907318Z [36;1m        ForEach-Object { $_.DirectoryName }[0m
+2026-10-13T00:27:17.1907582Z [36;1m    }[0m
+2026-10-13T00:27:17.1907747Z [36;1m  }[0m
+2026-10-13T00:27:17.1908006Z [36;1m  return $bins | Where-Object { $_ } | Select-Object -Unique[0m
+2026-10-13T00:27:17.1908323Z [36;1m}[0m
+2026-10-13T00:27:17.1908581Z [36;1mif (Get-Command swift.exe -ErrorAction SilentlyContinue) {[0m
+2026-10-13T00:27:17.1908992Z [36;1m  "runner 上已有 swift：" + (Get-Command swift.exe).Source[0m
+2026-10-13T00:27:17.1909316Z [36;1m  exit 0[0m
+2026-10-13T00:27:17.1909515Z [36;1m}[0m
+2026-10-13T00:27:17.1909693Z [36;1m$v = $env:SWIFT_WINDOWS[0m
+2026-10-13T00:27:17.1910039Z [36;1m$url = if ($env:SWIFT_WINDOWS_URL) { $env:SWIFT_WINDOWS_URL } else {[0m
+2026-10-13T00:27:17.1910688Z [36;1m  "https://download.swift.org/swift-$v-release/windows10/swift-$v-RELEASE/swift-$v-RELEASE-windows10.exe"[0m
+2026-10-13T00:27:17.1911247Z [36;1m}[0m
+2026-10-13T00:27:17.1911514Z [36;1m# Windows runner 是 Server 镜像，里面没有 winget，只能直连安装器（近 2GB）。[0m
+2026-10-13T00:27:17.1911915Z [36;1m# 用镜像自带的 curl：别用 Invoke-WebRequest，它先收完整响应再落盘、还要画进度条，[0m
+2026-10-13T00:27:17.1912229Z [36;1m# 两 GB 下来看着就跟卡死一样，还容易吃满内存。[0m
+2026-10-13T00:27:17.1912529Z [36;1m$exe = Join-Path $env:RUNNER_TEMP 'swift-installer.exe'[0m
+2026-10-13T00:27:17.1912852Z [36;1m"下载安装器（约 2GB）$url"[0m
+2026-10-13T00:27:17.1913137Z [36;1mforeach ($d in 'C', (($env:RUNNER_TEMP -split ':')[0])) {[0m
+2026-10-13T00:27:17.1913525Z [36;1m  $g = Get-PSDrive $d -ErrorAction SilentlyContinue[0m
+2026-10-13T00:27:17.1914110Z [36;1m  if ($g) { "盘 ${d}: 剩余 $([math]::Round($g.Free / 1GB, 1)) GB" }[0m
+2026-10-13T00:27:17.1914435Z [36;1m}[0m
+2026-10-13T00:27:17.1914640Z [36;1m$t = [Diagnostics.Stopwatch]::StartNew()[0m
+2026-10-13T00:27:17.1915109Z [36;1m& curl.exe --silent --show-error --fail --location --retry 3 --retry-delay 5 -o $exe $url[0m
+2026-10-13T00:27:17.1915639Z [36;1mif ($LASTEXITCODE -ne 0) { throw "下载失败，curl 退出码 $LASTEXITCODE" }[0m
+2026-10-13T00:27:17.1916172Z [36;1m"下载完成 $([math]::Round((Get-Item $exe).Length / 1MB)) MB，用时 $([int]$t.Elapsed.TotalSeconds) 秒"[0m
+2026-10-13T00:27:17.1916662Z [36;1mif ($env:SWIFT_WINDOWS_SHA256) {   # 两 GB 的包，先验一下再装[0m
+2026-10-13T00:27:17.1917032Z [36;1m  $want = $env:SWIFT_WINDOWS_SHA256.Replace('-', '')[0m
+2026-10-13T00:27:17.1917381Z [36;1m  $got = (Get-FileHash $exe -Algorithm SHA256).Hash[0m
+2026-10-13T00:27:17.1917789Z [36;1m  if ($got -ne $want) { throw "安装包 SHA256 对不上（预期 $want，实际 $got），换个版本记得同步这里的值" }[0m
+2026-10-13T00:27:17.1918186Z [36;1m  "SHA256 校验通过"[0m
+2026-10-13T00:27:17.1918377Z [36;1m}[0m
+2026-10-13T00:27:17.1920018Z [36;1m$t.Restart()[0m
+2026-10-13T00:27:17.1920377Z [36;1m# 官方安装器是 WiX Burn bundle（winget 清单里 InstallerType: burn），只认 burn 那套参数。[0m
+2026-10-13T00:27:17.1920840Z [36;1m# 传 Inno 的 /VERYSILENT 等于什么参数都没传，它会弹向导等人在界面上点，CI 上就是死等。[0m
+2026-10-13T00:27:17.1921227Z [36;1m# 清单里 Scope: user，装在 %LOCALAPPDATA% 下，不需要提权，不会有 UAC 弹窗卡住。[0m
+2026-10-13T00:27:17.1921626Z [36;1m$log = Join-Path $env:RUNNER_TEMP 'swift-burn.log'[0m
+2026-10-13T00:27:17.1922109Z [36;1m$p = Start-Process $exe -ArgumentList '/quiet', '/norestart', '/log', $log -PassThru[0m
+2026-10-13T00:27:17.1922640Z [36;1mif (-not $p.WaitForExit(1500000)) {   # 25 分钟硬闸，别让作业干等；日志留在下面这步之前打出来[0m
+2026-10-13T00:27:17.1923149Z [36;1m  @($p) + @(Get-Process burn -ErrorAction SilentlyContinue) | ForEach-Object {[0m
+2026-10-13T00:27:17.1923553Z [36;1m    try { $_.Kill() } catch {}[0m
+2026-10-13T00:27:17.1923788Z [36;1m  }[0m
+2026-10-13T00:27:17.1924118Z [36;1m  if (Test-Path $log) { "卡住时 burn 日志最后 40 行："; Get-Content $log -Tail 40 }[0m
+2026-10-13T00:27:17.1924506Z [36;1m  throw "安装超过 25 分钟没结束"[0m
+2026-10-13T00:27:17.1924721Z [36;1m}[0m
+2026-10-13T00:27:17.1924895Z [36;1m$p.WaitForExit()[0m
+2026-10-13T00:27:17.1925149Z [36;1m# 退出码不当硬门禁（3010 是「装好了但要重启」），下面按找不找得到 swift 判定装没装上[0m
+2026-10-13T00:27:17.1925520Z [36;1m"安装器退出码 $($p.ExitCode)，用时 $([int]$t.Elapsed.TotalSeconds) 秒"[0m
+2026-10-13T00:27:17.1925873Z [36;1m$bins = Find-SwiftBins[0m
+2026-10-13T00:27:17.1926114Z [36;1mif (-not $bins) {[0m
+2026-10-13T00:27:17.1926324Z [36;1m  "找不到，列一下可能的安装位置："[0m
+2026-10-13T00:27:17.1926820Z [36;1m  Get-ChildItem 'C:\', 'C:\Program Files', "$env:LOCALAPPDATA\Programs" -Directory -ErrorAction SilentlyContinue |[0m
+2026-10-13T00:27:17.1927469Z [36;1m    Where-Object { $_.Name -match 'swift' } | ForEach-Object { $_.FullName }[0m
+2026-10-13T00:27:17.1927952Z [36;1m  if (Test-Path $log) { "burn 日志最后 60 行："; Get-Content $log -Tail 60 }[0m
+2026-10-13T00:27:17.1928393Z [36;1m  throw "装完了却没找到 swift.exe / swiftCore.dll：安装目录可能又变了"[0m
+2026-10-13T00:27:17.1928713Z [36;1m}[0m
+2026-10-13T00:27:17.1929058Z [36;1m$bins | ForEach-Object { "加进 PATH：" + $_; Add-Content -Path $env:GITHUB_PATH -Value $_ }[0m
+2026-10-13T00:27:17.1929655Z [36;1m# Windows 平台的 Swift 标准库不在工具链里，而在 …\Platforms\Windows.platform\Developer\SDK\Windows.sdk，[0m
+2026-10-13T00:27:17.1930177Z [36;1m# 安装器是靠写「用户环境变量 SDKROOT」把这条路告诉 swiftc 的（swift-installer-scripts 里[0m
+2026-10-13T00:27:17.1930639Z [36;1m# windows.wxs 的 <Environment Name="SDKROOT">）。runner 进程比安装动作早启动，读不到注册表里[0m
+2026-10-13T00:27:17.1931160Z [36;1m# 新写的值，编译就会报 unable to load standard library for target 'x86_64-unknown-windows-msvc'。[0m
+2026-10-13T00:27:17.1931568Z [36;1m# 本机开发不会遇到：装完重开一个终端就有值了。[0m
+2026-10-13T00:27:17.1931888Z [36;1m$sdk = [Environment]::GetEnvironmentVariable('SDKROOT', 'User')[0m
+2026-10-13T00:27:17.1932465Z [36;1mif (-not $sdk -or -not (Test-Path $sdk)) { $sdk = [Environment]::GetEnvironmentVariable('SDKROOT', 'Machine') }[0m
+2026-10-13T00:27:17.1933166Z [36;1mif (-not $sdk -or -not (Test-Path $sdk)) {   # 注册表那条没写成就按布局找[0m
+2026-10-13T00:27:17.1933780Z [36;1m  $guess = Join-Path $env:LOCALAPPDATA 'Programs\Swift\Platforms\Windows.platform\Developer\SDK\Windows.sdk'[0m
+2026-10-13T00:27:17.1934382Z [36;1m  $sdk = (Get-Item $guess -ErrorAction SilentlyContinue).FullName[0m
+2026-10-13T00:27:17.1934715Z [36;1m}[0m
+2026-10-13T00:27:17.1935046Z [36;1mif ($sdk) { "SDKROOT=$sdk（写进后续步骤环境）"; "SDKROOT=$sdk" | Add-Content -Path $env:GITHUB_ENV }[0m
+2026-10-13T00:27:17.1935542Z [36;1melse { "警告：没找到 Windows.platform 下的 Windows.sdk，编译可能仍说缺少标准库" }[0m
+2026-10-13T00:27:17.2060000Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-10-13T00:27:17.2060385Z env:
+2026-10-13T00:27:17.2060560Z   SWIFT_WINDOWS: 6.4.0
+2026-10-13T00:27:17.2060759Z   SWIFT_WINDOWS_URL: 
+2026-10-13T00:27:17.2061113Z   SWIFT_WINDOWS_SHA256: 76169A85BCBA82854A0CD8F9655FFB74B3758D60C35A245457510095F2823C03
+2026-10-13T00:27:17.2061586Z   ALLOW_WINDOWS_TEST_FAILURE: false
+2026-10-13T00:27:17.2062554Z ##[endgroup]
+2026-10-13T00:27:17.7865019Z 下载安装器（约 2GB）https://download.swift.org/swift-6.4.0-release/windows10/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-windows10.exe
+2026-10-13T00:27:17.9018905Z 盘 C: 剩余 82.4 GB
+2026-10-13T00:27:17.9046186Z 盘 D: 剩余 147 GB
+2026-10-13T00:27:22.5700255Z 下载完成 2001 MB，用时 5 秒
+2026-10-13T00:27:25.0383862Z SHA256 校验通过
+2026-10-13T00:28:27.0797144Z 安装器退出码 0，用时 62 秒
+2026-10-13T00:28:27.1156910Z 加进 PATH：C:\Users\runneradmin\AppData\Local\Programs\Swift\Toolchains\6.4.0+Asserts\usr\bin
+2026-10-13T00:28:27.1194638Z 加进 PATH：C:\Users\runneradmin\AppData\Local\Programs\Swift\Runtimes\6.4.0\usr\bin
+2026-10-13T00:28:27.1254607Z SDKROOT=C:\Users\runneradmin\AppData\Local\Programs\Swift\Platforms\6.4.0\Windows.platform\Developer\SDKs\Windows.sdk\（写进后续步骤环境）
