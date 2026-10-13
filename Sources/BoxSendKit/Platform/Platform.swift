@@ -37,7 +37,11 @@ public enum Platform {
     /// 系统自带的 OpenSSH 客户端路径（Windows 10 / Server 1809 起内置在 System32\OpenSSH）
     public static var defaultSSHPath: String {
         #if os(Windows)
-        let windir = ProcessInfo.processInfo.environment["WINDIR"] ?? "C:\\Windows"
+        // Windows 的环境变量名不区分大小写，但读出来的键原样保留（系统给的是小写 windir），
+        // 而这里查的是普通字典：多试几种写法，别因为大小写就对不上
+        let env = ProcessInfo.processInfo.environment
+        let windir = ["WINDIR", "windir", "SystemRoot"].compactMap { env[$0] }
+            .first { !$0.isEmpty } ?? "C:\\Windows"
         return windir + "\\System32\\OpenSSH\\ssh.exe"
         #else
         return "/usr/bin/ssh"

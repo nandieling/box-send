@@ -65,7 +65,9 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 396 个，全绿
+- 回归测试从 337 个加到 398 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+  只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
+  连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
 界面这一轮补齐（WPF 端，Windows 上待验）：
 

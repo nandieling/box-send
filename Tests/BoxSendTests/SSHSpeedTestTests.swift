@@ -15,6 +15,29 @@ final class SSHSpeedTestTests: XCTestCase {
         super.tearDown()
     }
 
+    /// Windows 自带的 OpenSSH 客户端不读 `SSH_ASKPASS`，核心在 Windows 上直接拒绝密码登录。
+    /// 这三条验的是 askpass 那条路，Windows 上改成验「拒得干脆」然后跳过。
+    private func requireAskPassSupport() throws {
+        #if os(Windows)
+        XCTAssertThrowsError(try SSHSpeedTest.launch(config(auth: .password), script: "x")) {
+            XCTAssertTrue($0.localizedDescription.contains("密钥登录"), $0.localizedDescription)
+        }
+        throw XCTSkip("Windows 上密码登录由核心直接拒绝（系统 OpenSSH 不读 SSH_ASKPASS）")
+        #else
+        return
+        #endif
+    }
+
+    /// 桩 ssh 是个 /bin/sh 脚本，Windows 上没有能直接执行的 sh，这几条只在类 UNIX 上跑；
+    /// Windows 侧另有一条用真 ssh 的用例覆盖「起进程 + 报错成人话」
+    private func requireShellStub() throws {
+        #if os(Windows)
+        throw XCTSkip("桩 ssh 是 sh 脚本，Windows 上起不来")
+        #else
+        return
+        #endif
+    }
+
     private func config(auth: SSHConfig.Auth = .key, key: String? = nil) -> SSHConfig {
         var c = SSHConfig(host: "10.0.0.5", port: 22022, user: "seed", auth: auth,
                           keyPath: key ?? keyPath!, password: "sekr3t")
@@ -105,6 +128,7 @@ final class SSHSpeedTestTests: XCTestCase {
 
     /// ssh 客户端只认 ssh_config 里的键：传了 sshd 专用的（MaxAuthTries）会整条命令直接失败
     func testOnlyClientSideSSHOptionsArePassed() throws {
+        try requireAskPassSupport()
         for cfg in [config(), config(auth: .password)] {
             let launch = try SSHSpeedTest.launch(cfg, script: "x")
             for bad in ["MaxAuthTries", "LoginGraceTime", "PermitRootLogin"] {
@@ -121,6 +145,7 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     func testPasswordAuthUsesAskPassAndKeepsSecretOutOfArgv() throws {
+        try requireAskPassSupport()
         let launch = try SSHSpeedTest.launch(config(auth: .password), script: "echo hi")
         XCTAssertTrue(launch.arguments.contains("BatchMode=no"))
         XCTAssertFalse(launch.arguments.contains(where: { $0.contains("sekr3t") }))   // 密码不进命令行
@@ -136,6 +161,7 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     func testPasswordAskPassFileIsRemovedAfterCleanup() throws {
+        try requireAskPassSupport()
         let launch = try SSHSpeedTest.launch(config(auth: .password), script: "x")
         let dir = try XCTUnwrap(launch.temporaryDirectory)
         launch.cleanup()
@@ -233,6 +259,7 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     func testRunTestThroughRealProcess() throws {
+        try requireShellStub()
         let saved = SSHSpeedTest.sshPath
         SSHSpeedTest.sshPath = try stubSSH(body: "BS_HOST=stub-vps\nBS_UNAME=Linux 6.6 x86_64\n20971520\n26214400\n")
         defer { SSHSpeedTest.sshPath = saved }
@@ -243,6 +270,7 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     func testSSHExitCodeBecomesReadableErrorThroughRealProcess() throws {
+        try requireShellStub()
         let saved = SSHSpeedTest.sshPath
         SSHSpeedTest.sshPath = try stubSSH(body: "seed@10.0.0.5: Permission denied (publickey).\n", status: 255)
         defer { SSHSpeedTest.sshPath = saved }
@@ -252,10 +280,36 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     func testCheckConnectionOnlyNeedsTheOKMarker() throws {
+        try requireShellStub()
         let saved = SSHSpeedTest.sshPath
         SSHSpeedTest.sshPath = try stubSSH(body: "BS_HOST=stub-vps\nBS_UNAME=Linux 6.6 x86_64\nBS_OK\n")
         defer { SSHSpeedTest.sshPath = saved }
         XCTAssertTrue(try SSHSpeedTest.checkConnection(config()).hasPrefix("stub-vps"))
+    }
+
+    /// Windows 覆盖：拿系统自带的真 ssh 连一个必然没人监听的端口，
+    /// 把「起进程、合流收输出、把 ssh 的抱怨翻成人话」这段在 Windows 上真跑一遍
+    func testRealSSHClientReportsRefusedPort() throws {
+        #if os(Windows)
+        guard FileManager.default.isExecutableFile(atPath: Platform.defaultSSHPath) else {
+            throw XCTSkip("这台机器上没有系统 OpenSSH 客户端")
+        }
+        let saved = SSHSpeedTest.sshPath
+        SSHSpeedTest.sshPath = Platform.defaultSSHPath
+        defer { SSHSpeedTest.sshPath = saved }
+        var cfg = SSHConfig(host: "127.0.0.1", port: 1, user: "nobody")
+        cfg.timeoutSeconds = 5
+        cfg.keyPath = ""   // 空 = 让 ssh 自己挑密钥：CI 机器上可不一定有 ~/.ssh/id_ed25519
+        XCTAssertThrowsError(try SSHSpeedTest.checkConnection(cfg)) { e in
+            // 通常是「端口没有监听：SSH 没开或端口填错」；万一机器上有别的东西占着 1 端口，
+            // 也会翻成认证/超时那类人话，不该是「测速没取到数据」这种没头没尾的
+            let why = e.localizedDescription
+            XCTAssertTrue(["端口", "超时", "不可达", "认证", "断开", "登录被拒"]
+                              .contains(where: { why.contains($0) }), why)
+        }
+        #else
+        throw XCTSkip("mac / Linux 侧由 sh 桩覆盖")
+        #endif
     }
 
     // MARK: - 配置读写
