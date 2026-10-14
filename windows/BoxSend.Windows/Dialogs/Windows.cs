@@ -509,7 +509,9 @@ public sealed class ManualCookieWindow : Window
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         FontFamily = new FontFamily("Consolas, Microsoft YaHei"),
     };
+    private readonly TextBlock _kind = new() { Margin = new Thickness(0, 8, 0, 2) };
     private readonly TextBlock _status = new() { Margin = new Thickness(0, 6, 0, 0) };
+    private readonly Button _clear = new() { Content = "清空本站 cookie", Padding = new Thickness(14, 5, 14, 5) };
 
     public ManualCookieWindow(AppModel model, IReadOnlyList<SiteRow> sites)
     {
@@ -526,17 +528,16 @@ public sealed class ManualCookieWindow : Window
         var save = new Button { Content = "保存", Style = (Style)Application.Current.Resources["Primary"], Padding = new Thickness(14, 5, 14, 5) };
         save.Click += OnSave;
         var close = new Button { Content = "关闭", IsCancel = true, Padding = new Thickness(14, 5, 14, 5) };
-        var clear = new Button { Content = "清空本站 cookie", Padding = new Thickness(14, 5, 14, 5) };
-        clear.Click += (_, _) => { _raw.Clear(); OnSave(save, new RoutedEventArgs()); };
+        _clear.Click += (_, _) => { _raw.Clear(); OnSave(save, new RoutedEventArgs()); };
 
         Content = PromptWindow.Backdrop(this, PromptWindow.Stack(new object[]
         {
             new TextBlock { Text = "站点" },
             _site,
-            new TextBlock { Text = "cookie 原文（浏览器请求头里那一串，或 API Key）", Margin = new Thickness(0, 8, 0, 2) },
+            _kind,
             _raw,
             _status,
-            PromptWindow.Row(new object[] { save, PromptWindow.Space(8), clear, PromptWindow.Space(8), close }),
+            PromptWindow.Row(new object[] { save, PromptWindow.Space(8), _clear, PromptWindow.Space(8), close }),
         }, 0));
         Load();
     }
@@ -544,16 +545,24 @@ public sealed class ManualCookieWindow : Window
     private void Load()
     {
         if (_site.SelectedItem is not SiteRow s) return;
-        _status.Text = s.UsesApiKey ? "该站走 API Key" : $"当前状态：{s.CookieText}";
+        // API 站（馒头、肉丝）不走 cookie 同步，输入框里那串是 API Key
+        _kind.Text = s.UsesApiKey
+            ? "站点 API Key（站点页「个人主页 → 设置 → API」里获取，整段粘贴）"
+            : "cookie 原文（浏览器 Cookie 头，形如 name1=value1; name2=value2，整段粘贴）";
+        _clear.Content = s.UsesApiKey ? "清空本站 API Key" : "清空本站 cookie";
+        _status.Text = $"当前{s.CookieText}；保存即覆盖该站原有"
+                       + (s.UsesApiKey ? " API Key" : " cookie") + "，并自动开启该站";
         var result = _model.Api.Invoke("cookies.getRaw", new { id = s.Id });
-        _raw.Text = result["raw"]?.GetValue<string>() ?? "";
+        _raw.Text = result["raw"] is JsonValue rv && rv.TryGetValue<string>(out var t) ? t : "";
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
         if (_site.SelectedItem is not SiteRow s) return;
-        var error = _model.Try("cookies.setRaw", new { id = s.Id, raw = _raw.Text });
-        _status.Text = error ?? "已保存，正在检测…";
+        var result = _model.Api.TryInvoke("cookies.setRaw", out var error,
+                                          new { id = s.Id, raw = _raw.Text });
+        _status.Text = error ?? (result?["message"] is JsonValue mv && mv.TryGetValue<string>(out var msg)
+            ? msg + "，正在检测…" : "已保存，正在检测…");
         _ = _model.RefreshAsync();
     }
 }

@@ -40,7 +40,8 @@ public partial class SitesView : UserControl
                 Margin = new Thickness(0, 4, 0, 0),
                 Foreground = (Brush)FindResource("TextMuted"),
             });
-        Hint.Text = $"共 {_model.Sites.Count(s => s.Managed)} 个已纳管站点，{_model.CookieTotal} 条 cookie";
+        Hint.Text = $"共 {_model.Sites.Count(s => s.Managed)} 个已纳管站点"
+            + $"（本地 cookie 记录 {_model.CookieTotal} 条）";
         BtnStopCheck.Visibility = _model.BusyCookieCheck ? Visibility.Visible : Visibility.Collapsed;
         BtnCheckAll.Content = _model.BusyCookieCheck ? "检测中…" : "检测全部 cookie";
         BtnCheckAll.IsEnabled = !_model.BusyCookieCheck;
@@ -217,13 +218,16 @@ public partial class SitesView : UserControl
 
         var body = new StackPanel();
         body.Children.Add(head);
-        body.Children.Add(new TextBlock
+        // 状态只说结论，检测原因放鼠标提示（跟 mac 版一致）
+        var status = new TextBlock
         {
-            Text = $"{(s.UsesApiKey ? (s.HasApiKey ? "已填 Key" : "缺 Key") : s.CookieCount + " 条 cookie")} · {s.CheckText}",
+            Text = s.Enabled ? s.CredentialText : "未开启",
             FontSize = 11,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = (Brush)FindResource(s.CheckOk == true ? "Accent" : "TextMuted"),
-        });
+        };
+        if (s.CheckMessage.Length > 0) status.ToolTip = s.CheckMessage;
+        body.Children.Add(status);
         if (s.Warning.Length > 0)
             body.Children.Add(new TextBlock
             {

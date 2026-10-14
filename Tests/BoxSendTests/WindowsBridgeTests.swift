@@ -128,6 +128,32 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertNotNil(d?["testMB"])
     }
 
+    /// 手动填凭据弹窗的读写要对得上：API 站存站点 apiKey，cookie 站存 cookie 罐
+    /// （以前只看 cookie 罐，馒头这类站「保存成功，再点开输入框是空的」）
+    func testManualCredentialRoundTripBySiteKind() throws {
+        let (svc, _) = try makeService()
+        _ = try svc.invoke("sites.add", ["ids": ["mteam", "hdsky"], "group": -1])
+
+        let saved = try svc.invoke("cookies.setRaw", ["id": "mteam", "raw": "  key-abc123 \n"])
+        XCTAssertTrue((saved["message"] as? String)?.contains("API Key") == true,
+                      "API 站的回话要说清存的是 API Key，不是 cookie")
+        let read = try svc.invoke("cookies.getRaw", ["id": "mteam"])
+        XCTAssertEqual(read["raw"] as? String, "key-abc123", "回读要拿到刚存进去的 Key")
+        XCTAssertEqual(read["usesAPIKey"] as? Bool, true)
+        let row = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "mteam" }!
+        XCTAssertEqual(row["hasAPIKey"] as? Bool, true)
+        XCTAssertEqual(row["enabled"] as? Bool, true, "填了 Key 要顺手启用该站")
+
+        _ = try svc.invoke("cookies.setRaw", ["id": "mteam", "raw": "   "])
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "mteam"])["raw"] as? String, "",
+                       "清空按钮要真的清掉 Key")
+
+        _ = try svc.invoke("cookies.setRaw", ["id": "hdsky", "raw": "uid=1; pass=hash"])
+        let raw = try svc.invoke("cookies.getRaw", ["id": "hdsky"])["raw"] as? String ?? ""
+        XCTAssertTrue(raw.contains("uid=1"), "cookie 站照旧读写 cookie 罐")
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "hdsky"])["usesAPIKey"] as? Bool, false)
+    }
+
     func testLegacyConfigWithoutGroupsGetsOne() throws {
         // 旧配置：站点都纳管了却一个分组都没有 → 读进来要补一个默认分组，别悬着「未分组」
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())

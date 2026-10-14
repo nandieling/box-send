@@ -43,7 +43,8 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 `sites.add|remove|setEnabled|move|moveBefore|setGroup|setApiKey|setUpLimit|setAutoFree`、
 `sites.candidates`（批量添加站点弹窗的候选与顺序）、`sites.matchURL`（按链接认源站）、
 `targets.set / sourceQuote.set`、
-`cookies.getRaw|setRaw|remove|clear|trim|sync|check|stopCheck|importZip`、
+`cookies.getRaw|setRaw|remove|clear|trim|sync|check|stopCheck|importZip`
+（`getRaw`/`setRaw` 按站点类型分流：API 站读写 `site.apiKey` 并回一个 `usesAPIKey`，其余读写 cookie 罐）、
 `zip.set / zip.scan`、`downloader.test`、`ssh.test`、`run.start / run.status`、
 `tmdb.test`、`update.check`。快照的 `busy` 多一个 `sshTest`，站点行多一对
 `supportsAutoFree` / `autoFree`（卡片上要不要放「发种后免费一天」开关）；
@@ -66,7 +67,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 401 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+- 回归测试从 337 个加到 402 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
   只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
   连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
@@ -104,6 +105,11 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - 修掉一处刷新竞态：全量刷新撞上正在跑的局部刷新时，那一轮拿的是改动前的快照，
   表现为「加了站点但卡片没立刻出现」；现在把待办记下来，那一轮结束后补一轮
 - 测速弹窗只报测速信息一行（两端共用 `SSHSpeedTest.gateText`），不再附一段限速说明
+- 手动填凭据弹窗按站点类型分流（核心 `cookies.getRaw|setRaw`）：馒头这类 API 站读写 `site.apiKey`，
+  标题、输入框说明、「清空」按钮文案跟着站点类型走——之前只读写 cookie 罐，API 站是
+  「保存成功、再点开输入框是空的」
+- 站点卡片状态行去掉 cookie 条数，改用 mac 那套结论词（无 cookie / 未检测 / 已登录 /
+  cookie 失效 / API 已连接 / API Key 失效 / 未配置 API Key / 未开启），检测原因放进鼠标提示
 
 ## 两端有意不同
 

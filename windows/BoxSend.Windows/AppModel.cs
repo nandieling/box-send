@@ -447,10 +447,20 @@ public sealed class SiteRow
     public string CheckMessage { get; init; } = "";
     public bool? CheckOk { get; init; }
 
-    /// 状态徽标文字（与 mac 版一致：未检测 / 有效 / 失效 + 原因）
+    /// 检测结论单独一句（弹窗状态行用，失效时带上原因）
     public string CheckText => CheckOk == null ? "未检测" : CheckOk == true ? "有效" : CheckMessage;
-    public string CookieText => UsesApiKey ? (HasApiKey ? "已填 Key" : "缺 Key")
-        : HasCookie ? $"{CookieCount} 条 cookie" : "无 cookie";
+
+    /// 卡片状态行：与 mac 版同一套说法，不写 cookie 条数（条数容易被读成站点数）
+    public string CredentialText => UsesApiKey
+        ? HasApiKey
+            ? CheckOk == null ? "API Key 已配置（未检测）" : CheckOk == true ? "API 已连接" : "API Key 失效"
+            : "未配置 API Key"
+        : !HasCookie ? "无 cookie"
+            : CheckOk == null ? "未检测" : CheckOk == true ? "已登录" : "cookie 失效";
+
+    /// 弹窗里对当前凭据的一句说明
+    public string CookieText => UsesApiKey ? (HasApiKey ? "已填 API Key" : "未填 API Key")
+        : HasCookie ? "已有 cookie" : "无 cookie";
 
     /// 下拉框直接把行对象当项用（源站选择、手动填 cookie），没有这句会显示类名
     public override string ToString() => Name;

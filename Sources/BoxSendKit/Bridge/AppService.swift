@@ -240,16 +240,8 @@ public final class AppService {
             save()
             return groupsAndSites()
         case "sites.setApiKey":
-            let id = params["id"] as? String ?? ""
-            let raw = (params["apiKey"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-            mutate {
-                guard let i = cfg.sourceSites.firstIndex(where: { $0.id == id }) else { return }
-                cfg.sourceSites[i].apiKey = raw.isEmpty ? nil : raw
-                if !raw.isEmpty { cfg.sourceSites[i].enabled = true }
-                self.note("api: 单站 \(id) key 已更新")
-            }
-            save()
-            if !raw.isEmpty { checkCookiesAsync([id], force: true) }
+            _ = try setSiteAPIKey(siteID: params["id"] as? String ?? "",
+                                  raw: params["apiKey"] as? String ?? "")
             return groupsAndSites()
         case "sites.setUpLimit":
             let id = params["id"] as? String ?? ""
@@ -277,12 +269,14 @@ public final class AppService {
             return [:]
 
         case "cookies.getRaw":
+            // 弹窗预填：API 站回填 apiKey，其余回填 cookie 罐，界面不用关心差别
             let id = params["id"] as? String ?? ""
-            return ["raw": existingCookieHeader(forID: id)]
+            return ["raw": existingCredential(forID: id),
+                    "usesAPIKey": cfg.site(id).map { Self.usesAPIKey($0) } ?? false]
         case "cookies.setRaw":
             let id = params["id"] as? String ?? ""
             let raw = params["raw"] as? String ?? ""
-            return try setSiteCookie(siteID: id, raw: raw)
+            return try setSiteCredential(siteID: id, raw: raw)
         case "cookies.remove":
             let id = params["id"] as? String ?? ""
             var removed = false
@@ -639,6 +633,33 @@ public final class AppService {
         return sites.first { CookieRawMerge.norm(Self.host(of: $0)) == want }
     }
 
+    /// 手动填写弹窗的写入口：按站点凭据类型分流。
+    /// 只看 cookie 罐的话，馒头这类 API 站会「保存成功，再打开输入框是空的」
+    private func setSiteCredential(siteID: String, raw: String) throws -> [String: Any] {
+        guard let site = cfg.site(siteID) else { throw Failure("未配置的站点 id: \(siteID)") }
+        return Self.usesAPIKey(site) ? try setSiteAPIKey(siteID: siteID, raw: raw)
+                                     : try setSiteCookie(siteID: siteID, raw: raw)
+    }
+
+    /// 手动填 API Key：覆盖旧值，非空就启用该站并当场复检
+    private func setSiteAPIKey(siteID: String, raw: String) throws -> [String: Any] {
+        guard let site = cfg.site(siteID) else { throw Failure("未配置的站点 id: \(siteID)") }
+        let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var message = ""
+        mutate {
+            guard let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) else { return }
+            cfg.sourceSites[i].apiKey = v.isEmpty ? nil : v
+            if !v.isEmpty { cfg.sourceSites[i].enabled = true }
+            message = v.isEmpty ? "已清空 \(site.name) 的 API Key"
+                                : "已保存 \(site.name) 的 API Key，并启用该站"
+            self.cookieMessage = message
+            self.note("api: 单站 \(siteID) key 已更新")
+        }
+        save()
+        if !v.isEmpty { checkCookiesAsync([siteID], force: true) }
+        return ["message": message]
+    }
+
     private func setSiteCookie(siteID: String, raw: String) throws -> [String: Any] {
         guard let site = cfg.site(siteID) else { throw Failure("未配置的站点 id: \(siteID)") }
         let h = Self.host(of: site)
@@ -786,8 +807,10 @@ public final class AppService {
         return cookies.cookieHeader(forHost: Self.host(of: site)) != nil
     }
 
-    private func existingCookieHeader(forID siteID: String) -> String {
+    /// 弹窗预填用的凭据原文：API 站取站点 apiKey，其余取 cookie 罐里的请求头
+    private func existingCredential(forID siteID: String) -> String {
         guard let site = cfg.site(siteID) else { return "" }
+        if Self.usesAPIKey(site) { return site.apiKey ?? "" }
         return cookies.cookieHeader(forHost: Self.host(of: site)) ?? ""
     }
 
