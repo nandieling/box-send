@@ -85,6 +85,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? FullRefreshed;
+    /// 每一轮快照落地（含只更新运行状态的局部刷新）：转种页的卡片状态靠它跟上进度
+    public event EventHandler? Refreshed;
 
     public BoxSendApi Api => _api;
     public string Platform { get; }
@@ -104,6 +106,10 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<RunRow> RunSites { get; } = new();
     public ObservableCollection<RunRow> RunPushes { get; } = new();
     public RunRow? SourcePush { get; private set; }
+
+    /// <summary>这一站最新的转种 / 推送状态（核心只留每站最后一条，卡片照它画）</summary>
+    public RunRow? ReseedEvent(string siteID) => RunSites.FirstOrDefault(r => r.SiteId == siteID);
+    public RunRow? PushEvent(string siteID) => RunPushes.FirstOrDefault(r => r.SiteId == siteID);
 
     public JsonObject? Config { get; private set; }
     public ThemeRow CurrentTheme =>
@@ -235,6 +241,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
             ResyncZipTimer();
             FullRefreshed?.Invoke(this, EventArgs.Empty);
         }
+        Refreshed?.Invoke(this, EventArgs.Empty);
         Raise(nameof(Running), nameof(RunningStep), nameof(LastReport), nameof(CookieMessage),
               nameof(DownloaderMessage), nameof(ZipMessage), nameof(UpdateMessage), nameof(ConfigError),
               nameof(LastGistSync), nameof(HasUpdate), nameof(UpdateVersion), nameof(UpdateUrl),

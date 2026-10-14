@@ -43,8 +43,9 @@ public partial class DownloaderView : UserControl
     /// SSH 测速卡片：配置里没这一段时用默认值显示（密钥登录、每轮 64 MB、Cloudflare 接收端）
     private void LoadSSH()
     {
-        SshPrecheck.IsChecked = _model.SectionFlag("ssh", "enabled");
         SshHost.Text = _model.SectionText("ssh", "host");
+        Select(SshAuth, _model.SectionText("ssh", "auth", "key"));
+        SshPass.Password = _model.SectionText("ssh", "password");
         SshPort.Text = _model.SectionInt("ssh", "port", 22).ToString();
         SshUser.Text = _model.SectionText("ssh", "user");
         SshKeyPath.Text = _model.SectionText("ssh", "keyPath", _model.SSHDefaults.KeyPath);
@@ -104,6 +105,11 @@ public partial class DownloaderView : UserControl
             SshState.Text = "先填服务器地址与用户名";
             return;
         }
+        if (SelectedTag(SshAuth) == "password" && SshPass.Password.Length == 0)
+        {
+            SshState.Text = "登录方式选了密码，还没填密码";
+            return;
+        }
         BtnSshTest.IsEnabled = false;
         BtnSshTest.Content = "测速中…";
         SshState.Text = "正在连接服务器并上传测试数据…";
@@ -119,13 +125,14 @@ public partial class DownloaderView : UserControl
     private void SaveSSH()
     {
         if (_loading) return;
+        // enabled 归「批量转种」页那个勾选项管，这里不碰（补丁只合并一层，没写的字段原样留着）
         _model.PatchSection("ssh", s =>
         {
-            s["enabled"] = SshPrecheck.IsChecked == true;
             s["host"] = SshHost.Text.Trim();
             s["port"] = Num(SshPort, 22);
             s["user"] = SshUser.Text.Trim();
-            s["auth"] = "key";
+            s["auth"] = SelectedTag(SshAuth) == "password" ? "password" : "key";
+            s["password"] = SshPass.Password;
             s["keyPath"] = Or(SshKeyPath.Text, _model.SSHDefaults.KeyPath);
             s["testMB"] = Num(SshTestMB, _model.SSHDefaults.TestMB);
             s["probeURL"] = Or(SshProbe.Text, _model.SSHDefaults.ProbeURL);

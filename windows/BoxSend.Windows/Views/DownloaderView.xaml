@@ -78,8 +78,24 @@
 
                 <GroupBox Header="转种服务器（SSH 上传测速）">
                     <StackPanel>
-                        <CheckBox x:Name="SshPrecheck"
-                                  Content="批量转种前先测服务器上传速度，测完弹窗报速度，由我决定这批发不批发" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <Label Content="登录方式" />
+                                <ComboBox x:Name="SshAuth">
+                                    <ComboBoxItem Content="密钥（用系统 ssh）" Tag="key" />
+                                    <ComboBoxItem Content="密码（用内置 SSH 客户端）" Tag="password" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <Label Content="密码（只在登录方式选「密码」时用）" />
+                                <PasswordBox x:Name="SshPass" />
+                            </StackPanel>
+                        </Grid>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="2*" />
@@ -127,7 +143,7 @@
                         </WrapPanel>
                         <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextMuted}"
-                                   Text="Windows 版走密钥登录：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
+                                   Text="「转种前先测上传速度」的开关在「批量转种」页「开始运行」旁边。密钥登录用系统自带的 ssh：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。密码登录走软件内置的 SSH 客户端，不需要系统 ssh。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
                     </StackPanel>
                 </GroupBox>
 

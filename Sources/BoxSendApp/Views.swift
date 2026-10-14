@@ -581,6 +581,15 @@ struct SitesView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 8) {
                             Text("分组：\(gname)").font(.headline)
+                            // 顺序：先加站点，再改名，最后才是那个要两次确认的移除
+                            Button {
+                                addSheetReq = AddSitesRequest(group: gi)
+                            } label: {
+                                Label("添加站点", systemImage: "plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("为此分组添加站点（弹窗中无需再选分组）")
                             Button {
                                 renameIndex = gi
                                 renameName = gname
@@ -590,14 +599,6 @@ struct SitesView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                             .help("重命名该分组（组内站点与排序不受影响；重名自动加数字后缀）")
-                            Button {
-                                addSheetReq = AddSitesRequest(group: gi)
-                            } label: {
-                                Label("添加站点", systemImage: "plus")
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .help("为此分组添加站点（弹窗中无需再选分组）")
                             Button {
                                 confirmReq = ConfirmRequest(kind: .removeGroup, index: gi,
                                                             name: gname,

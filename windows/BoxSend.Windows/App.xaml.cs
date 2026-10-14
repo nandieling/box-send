@@ -55,7 +55,8 @@ public partial class App : Application
         {
             // 验证码识别先留空：核心库认不出时会重新取图重试，最终放弃该次发帖而不是报错
             StartupLog.Write("核心库：正在创建");
-            _model = new AppModel(new BoxSendApi());
+            // SSH 执行器要注入：Windows 自带的 ssh 不读 SSH_ASKPASS，密码登录得靠它代跑
+            _model = new AppModel(new BoxSendApi(sshExec: SshExec.Callback));
             _coreReady.Set();
             StartupLog.Write($"核心库：就绪 v{_model.CoreVersion}（{_model.Platform}），数据目录 {_model.DataDir}");
         }

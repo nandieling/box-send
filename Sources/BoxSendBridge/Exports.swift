@@ -43,6 +43,15 @@ public func boxsend_create(_ configPath: UnsafePointer<CChar>?,
     }
 }
 
+/// 宿主注入的 SSH 执行器（Windows 的密码登录用）。约定：返回 0 = 连上并跑完了，
+/// 缓冲区里是命令输出（stdout+stderr 合流）；返回负数 = `SSHSpeedTest.HostFailure` 的类别码，
+/// 缓冲区里是原始报错，翻成人话由核心做。实现方最多写 capacity 字节，
+/// 缓冲区调用前已整块清零，所以不必自己补结尾 NUL。
+public typealias SSHExecCallback = @convention(c) (
+    UnsafePointer<CChar>?, Int32, UnsafePointer<CChar>?, UnsafePointer<CChar>?,
+    UnsafePointer<CChar>?, UnsafePointer<CChar>?, Int32,
+    UnsafeMutablePointer<CChar>?, Int32) -> Int32
+
 /// 复制一份 C 字符串，交出去的所有权由 `boxsend_free` 归还。
 ///
 /// 为什么不调 CRT 的复制函数：那是 CRT 的 malloc，而 `boxsend_free` 里的 `deallocate()`
@@ -108,6 +117,37 @@ public func boxsend_set_ocr(_ handle: UnsafeMutableRawPointer?, _ fn: OcrCallbac
         guard n > 0 else { return [] }
         buf[Int(min(n, Int32(outCap - 1)))] = 0
         return String(cString: buf).split(separator: "\n").map(String.init)
+    }
+}
+
+/// 注入宿主的 SSH 执行器（Windows 用 SSH.NET 做密码登录）。传 null 撤销注入。
+@_cdecl("boxsend_set_ssh_exec")
+public func boxsend_set_ssh_exec(_ handle: UnsafeMutableRawPointer?, _ fn: SSHExecCallback?) {
+    guard let handle else { return }
+    let holder = Unmanaged<Holder>.fromOpaque(handle).takeUnretainedValue()
+    guard let fn else {
+        Platform.hooks.sshExec = nil
+        return
+    }
+    Platform.hooks.sshExec = { req in
+        let cap = 16_384
+        var buf = [CChar](repeating: 0, count: cap)
+        let code = req.host.withCString { h in
+            req.user.withCString { u in
+                req.password.withCString { pw in
+                    req.keyPath.withCString { key in
+                        req.script.withCString { script in
+                            fn(h, Int32(req.port), u, pw, key, script,
+                               Int32(req.timeoutSeconds), &buf, Int32(cap - 1))
+                        }
+                    }
+                }
+            }
+        }
+        let text = String(cString: buf)
+        guard code != 0 else { return text }
+        throw BoxSendError.badInput(
+            (SSHSpeedTest.HostFailure(rawValue: Int(code)) ?? .other).message(text))
     }
 }
 

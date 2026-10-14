@@ -31,5 +31,8 @@
     <!-- 运行时按文件读图标（任务栏/托盘），exe 里那份是文件管理器看的 -->
     <Content Include="boxsend.ico" CopyToOutputDirectory="PreserveNewest" Condition="Exists('boxsend.ico')" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
 
 </Project>

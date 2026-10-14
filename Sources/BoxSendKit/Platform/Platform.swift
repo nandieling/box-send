@@ -17,6 +17,10 @@ public enum Platform {
         public var ocr: ((Data) -> [String])?
         /// zip 解压：返回「归档内路径 -> 内容」，路径用 `/` 分隔
         public var unzip: ((URL) throws -> [String: Data])?
+        /// SSH 执行：宿主用自己的 SSH 实现把脚本在服务器上跑一遍，返回 stdout+stderr 合流。
+        /// 密码登录在 Windows 上走这里（系统自带 ssh 不读 SSH_ASKPASS，密码没法代填）；
+        /// 失败请抛 BoxSendError.badInput(一句人话)，措辞照 SSHSpeedTest.HostFailure.text
+        public var sshExec: ((SSHSpeedTest.ExecRequest) throws -> String)?
         public init() {}
     }
     public static var hooks = Hooks()

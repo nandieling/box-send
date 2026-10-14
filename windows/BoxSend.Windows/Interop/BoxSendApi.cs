@@ -35,6 +35,9 @@ public sealed class BoxSendApi : IDisposable
     private static extern void boxsend_set_ocr(IntPtr handle, OcrCallback? callback);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+    private static extern void boxsend_set_ssh_exec(IntPtr handle, SshExecCallback? callback);
+
+    [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
     private static extern void boxsend_destroy(IntPtr handle);
 
     [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
@@ -44,8 +47,21 @@ public sealed class BoxSendApi : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int OcrCallback(IntPtr image, int imageLength, IntPtr outBuffer, int outCapacity);
 
+    /// <summary>宿主代跑 SSH（Windows 的密码登录）：0 = 成功，缓冲区是命令输出；
+    /// 负数 = 失败类别（核心那侧 SSHSpeedTest.HostFailure），缓冲区是原始报错。
+    /// 最多写 outCapacity 字节——核心调用前把缓冲区清零过，不必自己补结尾</summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate int SshExecCallback(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string host, int port,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string user,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string password,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string keyPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string script,
+        int timeoutSeconds, IntPtr outBuffer, int outCapacity);
+
     private IntPtr _handle;
     private readonly OcrCallback? _ocr;
+    private readonly SshExecCallback? _sshExec;
 
     /// macOS 上验证 ABI 时用绝对路径加载；Windows 从程序目录按常规解析核心库
     static BoxSendApi()
@@ -82,9 +98,12 @@ public sealed class BoxSendApi : IDisposable
     }
 
     /// <param name="ocr">注入验证码识别器（Windows 用 Windows.Media.Ocr）；null = 不做自动识别</param>
-    public BoxSendApi(string? configPath = null, string? dataDir = null, OcrCallback? ocr = null)
+    /// <param name="sshExec">注入 SSH 执行器（密码登录用）；null = 密码登录只报「请改用密钥」</param>
+    public BoxSendApi(string? configPath = null, string? dataDir = null, OcrCallback? ocr = null,
+                      SshExecCallback? sshExec = null)
     {
         _ocr = ocr;
+        _sshExec = sshExec;
         // 让核心库把自己的进度也写进同一份启动日志：卡在核心里的时候，光有界面侧那一行
         // 只能知道「没回来」，说不出停在哪一步（Trace.swift 认这个环境变量）
         Environment.SetEnvironmentVariable("BOXSEND_TRACE", StartupLog.FilePath);
@@ -99,6 +118,7 @@ public sealed class BoxSendApi : IDisposable
             throw new InvalidOperationException($"核心库启动失败：{why}");
         }
         if (_ocr != null) boxsend_set_ocr(_handle, _ocr);
+        if (_sshExec != null) boxsend_set_ssh_exec(_handle, _sshExec);
     }
 
     /// 调一个动作；失败抛异常（消息就是核心库给的那句人话）

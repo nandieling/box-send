@@ -1,19 +1,32 @@
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>批量转种页：源站链接、可选项、按分组的勾选目标站、逐站转种与推送结果。
-/// 目标站按分组成块（与 mac 版一致），「开始运行」旁给出本批概览，避免勾错分组就跑。</summary>
+/// <summary>批量转种页：源站链接、可选项、按分组的站点卡片（点卡片选为转种目标）。
+/// 卡片上直接给出上传限速与转种 / 推送的实时状态，不再另开「转种结果」「下载器推送」两块；
+/// 整批汇总收在可展开的「运行记录」里。布局与 mac 版一一对应。</summary>
 public partial class RunView : UserControl
 {
     private readonly AppModel _model;
     private HashSet<string> _targets = new();
     private bool _seeded;
-    /// 页面上现有的站点勾选框（重建时一起换掉；读勾选状态直接问它们，不爬视觉树）
-    private readonly List<CheckBox> _boxes = new();
+
+    /// <summary>卡片上会随运行状态变的几处（结构只在整份刷新时重建，平时只改文字与底色）</summary>
+    private sealed class CardRefs
+    {
+        public required TextBlock Name { get; init; }
+        public required Border Reseed { get; init; }
+        public required TextBlock ReseedText { get; init; }
+        public required Border Push { get; init; }
+        public required TextBlock PushText { get; init; }
+        public required TextBlock Detail { get; init; }
+    }
+
+    private readonly Dictionary<string, CardRefs> _cards = new();
 
     /// 源站下拉里的第一项：不点名，按链接域名自动识别。文字会跟着链接变
     /// （识别出是哪一站就写成「源站：自动（某站）」），所以每次都要现造一个
@@ -27,9 +40,8 @@ public partial class RunView : UserControl
     {
         _model = model;
         InitializeComponent();
-        SiteEvents.ItemsSource = model.RunSites;
-        PushEvents.ItemsSource = model.RunPushes;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Rebuild);
+        _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateRunStatus);
         DetailUrl.TextChanged += (_, _) => RefreshSourceLabel();
         LoadQuote();
         Rebuild();
@@ -39,18 +51,17 @@ public partial class RunView : UserControl
 
     private void Rebuild()
     {
-        if (_boxes.Count > 0) _targets = CheckedTargets();
         var pickedSource = (SourceSitePick.SelectedItem as SiteRow)?.Id;
 
         LoadQuote();
         ProbeSourceLabel();
+        LoadPrecheck();
 
         SourceSitePick.Items.Clear();
         SourceSitePick.Items.Add(AutoSource);
         foreach (var s in _model.Sites.Where(s => s.Managed)) SourceSitePick.Items.Add(s);
         SourceSitePick.SelectedItem =
             SourceSitePick.Items.Cast<SiteRow>().FirstOrDefault(s => s.Id == pickedSource) ?? AutoSource;
-        ShowSourceChip();
 
         if (!_seeded)
         {
@@ -60,10 +71,7 @@ public partial class RunView : UserControl
         }
 
         RebuildTargetBlocks();
-        UpdateSummary();
-        BtnRun.IsEnabled = !_model.Running;
-        BtnRun.Content = _model.Running ? "运行中…" : "开始运行";
-        RunStep.Text = _model.Running ? _model.RunningStep : "";
+        UpdateRunStatus();
     }
 
     // MARK: 源站（下拉点名 + 按域名自动识别）
@@ -113,15 +121,17 @@ public partial class RunView : UserControl
         SourceChip.Visibility = Visibility.Visible;
     }
 
-    /// 每个分组一块：组名 + 整组全选 + 组内站点勾选框（只列已开启的站点）
+    // MARK: 分组卡片
+
+    /// 每个分组一块：组名 + 整组全选 / 全不选 + 站点卡片（只列已开启的站点）
     private void RebuildTargetBlocks()
     {
         TargetBlocks.Children.Clear();
-        _boxes.Clear();
+        _cards.Clear();
         foreach (var g in _model.Groups)
-            TargetBlocks.Children.Add(GroupBlock(g.Name, Members(g.Index)));
+            TargetBlocks.Children.Add(GroupCard(g.Name, Members(g.Index)));
         var unassigned = _model.Sites.Where(s => s.Enabled && s.Managed && s.Group < 0).ToList();
-        if (unassigned.Count > 0) TargetBlocks.Children.Add(GroupBlock("未分组", unassigned));
+        if (unassigned.Count > 0) TargetBlocks.Children.Add(GroupCard("未分组", unassigned));
         if (TargetBlocks.Children.Count == 0)
             TargetBlocks.Children.Add(new TextBlock
             {
@@ -134,16 +144,16 @@ public partial class RunView : UserControl
     private List<SiteRow> Members(int groupIndex) =>
         _model.Sites.Where(s => s.Enabled && s.Managed && s.Group == groupIndex).ToList();
 
-    private UIElement GroupBlock(string name, List<SiteRow> sites)
+    private UIElement GroupCard(string name, List<SiteRow> sites)
     {
-        var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var panel = new StackPanel();
         var header = new WrapPanel();
-        var allOn = sites.Count > 0 && sites.All(s => _targets.Contains(s.Id));   // 整组是否都已选中
-        var groupAll = new CheckBox
+        var allOn = sites.Count > 0 && sites.All(s => _targets.Contains(s.Id));
+        var groupAll = new Button
         {
             Content = allOn ? "全不选" : "全选",
-            IsChecked = allOn,
             FontSize = 12,
+            Padding = new Thickness(9, 3, 9, 3),
             VerticalAlignment = VerticalAlignment.Center,
             ToolTip = allOn ? "取消该分组全部站点" : "选中该分组全部站点作为转种目标",
         };
@@ -151,12 +161,11 @@ public partial class RunView : UserControl
         {
             foreach (var s in sites)
             {
-                if (groupAll.IsChecked == true) _targets.Add(s.Id);
-                else _targets.Remove(s.Id);
+                if (allOn) _targets.Remove(s.Id);
+                else _targets.Add(s.Id);
             }
-            _targets = CheckedTargets();
             RebuildTargetBlocks();
-            UpdateSummary();
+            UpdateRunStatus();
         };
         header.Children.Add(groupAll);
         header.Children.Add(new TextBlock
@@ -176,44 +185,181 @@ public partial class RunView : UserControl
         });
         panel.Children.Add(header);
 
-        var cards = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        foreach (var s in sites)
-        {
-            var box = new CheckBox
-            {
-                Content = s.Name,
-                Tag = s.Id,
-                IsChecked = _targets.Contains(s.Id),
-                Margin = new Thickness(0, 2, 14, 2),
-                ToolTip = $"{s.Url}\n上传限速 {s.UpLimitMB} MB/s",
-            };
-            box.Click += (_, _) =>
-            {
-                if (box.IsChecked == true) _targets.Add(s.Id);
-                else _targets.Remove(s.Id);
-                UpdateSummary();
-            };
-            cards.Children.Add(box);
-            _boxes.Add(box);
-        }
+        var cards = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        foreach (var s in sites) cards.Children.Add(SiteCard(s));
         panel.Children.Add(cards);
+        if (sites.Count == 0)
+            panel.Children.Add(new TextBlock
+            {
+                Text = "该分组里没有已开启的站点。",
+                FontSize = 12,
+                Margin = new Thickness(0, 2, 0, 0),
+                Foreground = (Brush)FindResource("TextMuted"),
+            });
 
         return new Border
         {
+            Background = (Brush)FindResource("BlockSurface"),
             BorderBrush = (Brush)FindResource("Line"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(8),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 0, 0, 10),
             Child = panel,
         };
     }
 
-    private HashSet<string> CheckedTargets()
+    /// 站点卡片：名称 + 上传限速 + 转种 / 推送状态 + 一行说明。点一下选为目标，再点取消
+    private UIElement SiteCard(SiteRow s)
     {
-        var set = new HashSet<string>();
-        foreach (var box in _boxes)
-            if (box.IsChecked == true && box.Tag is string id) set.Add(id);
-        return set;
+        var selected = _targets.Contains(s.Id);
+        var name = new TextBlock
+        {
+            Text = s.Name,
+            FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = (Brush)FindResource("TextPrimary"),
+        };
+        var (reseed, reseedText) = Chip();
+        var (push, pushText) = Chip();
+        var detail = new TextBlock
+        {
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            MaxHeight = 56,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Visibility = Visibility.Collapsed,
+        };
+        var body = new StackPanel();
+        body.Children.Add(name);
+        body.Children.Add(new TextBlock
+        {
+            Text = s.UpLimitMB > 0 ? $"上传限速 {s.UpLimitMB} MB/s" : "上传限速 不限速",
+            FontSize = 11,
+            Foreground = (Brush)FindResource("TextMuted"),
+        });
+        body.Children.Add(reseed);
+        body.Children.Add(push);
+        body.Children.Add(detail);
+
+        var card = new Border
+        {
+            Width = 172,
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(0, 0, 8, 8),
+            CornerRadius = new CornerRadius(8),
+            Background = (Brush)FindResource(selected ? "AccentSoft" : "TextSurface"),
+            BorderBrush = (Brush)FindResource(selected ? "Accent" : "Line"),
+            BorderThickness = new Thickness(selected ? 1.5 : 1),
+            Cursor = Cursors.Hand,
+            Child = body,
+            ToolTip = (selected ? "已选为转种目标，点击取消" : "点击选为转种目标") + "\n" + s.Url,
+        };
+        card.MouseLeftButtonUp += (_, _) => Toggle(s.Id);
+        _cards[s.Id] = new CardRefs
+        {
+            Name = name, Reseed = reseed, ReseedText = reseedText,
+            Push = push, PushText = pushText, Detail = detail,
+        };
+        return card;
+    }
+
+    private void Toggle(string id)
+    {
+        if (!_targets.Remove(id)) _targets.Add(id);
+        RebuildTargetBlocks();
+        UpdateRunStatus();
+    }
+
+    /// 状态胶囊：先建好放着，运行时才填字（重建整张卡片代价大，改文字便宜）
+    private static (Border, TextBlock) Chip()
+    {
+        var text = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap };
+        var box = new Border
+        {
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(6, 2, 6, 2),
+            Margin = new Thickness(0, 4, 0, 0),
+            Visibility = Visibility.Collapsed,
+            Child = text,
+        };
+        return (box, text);
+    }
+
+    // MARK: 运行状态
+
+    /// 每轮快照都要跑一遍：卡片上的胶囊、批次概览、按钮与运行记录
+    private void UpdateRunStatus()
+    {
+        foreach (var (id, refs) in _cards) PaintCard(id, refs);
+        ShowSourceChip();
+        UpdateSummary();
+        BtnRun.IsEnabled = !_model.Running;
+        BtnRun.Content = _model.Running ? "运行中…" : "开始运行";
+        RunStep.Text = _model.Running ? _model.RunningStep : "";
+        HistoryText.Text = _model.LastReport.Length == 0 ? "（还没有运行记录）" : _model.LastReport;
+    }
+
+    private void PaintCard(string id, CardRefs r)
+    {
+        var reseed = _model.ReseedEvent(id);
+        var push = _model.PushEvent(id);
+        SetChip(r.Reseed, r.ReseedText, reseed);
+        SetChip(r.Push, r.PushText, push);
+        var warning = _model.Sites.FirstOrDefault(s => s.Id == id)?.Warning ?? "";
+        var (text, key) = CardDetail(reseed, push, warning);
+        r.Detail.Text = text;
+        r.Detail.Foreground = (Brush)FindResource(key);
+        r.Detail.ToolTip = text;
+        r.Detail.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void SetChip(Border box, TextBlock text, RunRow? e)
+    {
+        if (e == null || e.Text.Length == 0)
+        {
+            box.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var (icon, key) = Phase(e.Phase);
+        text.Text = icon + " " + e.Text;
+        text.Foreground = (Brush)FindResource(key);
+        box.Background = Tinted(key, 0.16);
+        box.ToolTip = string.IsNullOrEmpty(e.Detail) ? e.Text : e.Detail;
+        box.Visibility = Visibility.Visible;
+    }
+
+    private static (string Icon, string Brush) Phase(string phase) => phase switch
+    {
+        "done" => ("✓", "Success"),
+        "exists" => ("↓", "Accent"),
+        "failed" => ("✕", "Warning"),
+        _ => ("…", "TextMuted"),
+    };
+
+    /// 卡片下那行说明：失败原因 > 该站提醒 > 「已存在」的详情（与 mac 版同一优先级）
+    private static (string Text, string Brush) CardDetail(RunRow? reseed, RunRow? push, string warning)
+    {
+        foreach (var e in new[] { reseed, push })
+            if (e?.Phase == "failed" && e.Detail.Length > 0) return (Short(e.Detail), "Warning");
+        if (warning.Length > 0) return (warning, "Warning");
+        if (reseed?.Phase == "exists" && reseed.Detail.Length > 0) return (Short(reseed.Detail), "TextMuted");
+        return ("", "TextMuted");
+    }
+
+    /// 卡片窄：调试页路径那类长尾巴收进鼠标提示
+    private static string Short(string s)
+    {
+        var i = s.IndexOf("（页面已存", StringComparison.Ordinal);
+        if (i > 0) return s[..i];
+        return s.Length > 80 ? s[..80] + "…" : s;
+    }
+
+    /// 主题色加层薄底（胶囊背景）：主题刷是共享的，不能直接改它的透明度
+    private Brush Tinted(string key, double alpha)
+    {
+        var c = ((SolidColorBrush)FindResource(key)).Color;
+        return new SolidColorBrush(Color.FromArgb((byte)(alpha * 255), c.R, c.G, c.B));
     }
 
     // MARK: 批次概览
@@ -265,6 +411,8 @@ public partial class RunView : UserControl
         QuoteHint.Visibility = Visibility.Visible;
     }
 
+    // MARK: 几个开关
+
     private void OnQuoteToggled(object sender, RoutedEventArgs e) => SaveQuote();
 
     /// 源站引用是配置里的一对顶层字段（sourceQuoteEnabled / sourceQuoteText），
@@ -280,6 +428,29 @@ public partial class RunView : UserControl
     private void SaveQuote() =>
         _model.Call("sourceQuote.set", new { enabled = UseQuote.IsChecked == true, text = QuoteText.Text });
 
+    /// 「转种前先测上传速度」= 配置里 ssh.enabled。服务器没填全时勾了也测不成，直接禁掉并说明去哪儿填
+    private void LoadPrecheck()
+    {
+        var configured = _model.SectionText("ssh", "host").Trim().Length > 0
+                         && _model.SectionText("ssh", "user").Trim().Length > 0;
+        SpeedPrecheck.IsEnabled = configured;
+        SpeedPrecheck.IsChecked = configured && _model.SectionFlag("ssh", "enabled");
+        SpeedPrecheck.ToolTip = configured
+            ? "点「开始运行」前先到服务器上量一次公网上行，弹窗把速度报给你，转不转由你定；"
+              + "服务器信息填在「下载器」页的「转种服务器」卡片里"
+            : "先到「下载器」页的「转种服务器」卡片填服务器地址与用户名，才能测速";
+    }
+
+    private void OnPrecheckToggled(object sender, RoutedEventArgs e) =>
+        _model.PatchSection("ssh", s => s["enabled"] = SpeedPrecheck.IsChecked == true);
+
+    private void OnHistory(object sender, RoutedEventArgs e)
+    {
+        HistoryBox.Visibility = HistoryBox.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+        BtnHistory.Content = HistoryBox.Visibility == Visibility.Visible ? "收起运行记录" : "运行记录";
+    }
+
     // MARK: 运行
 
     private async void OnRun(object sender, RoutedEventArgs e)
@@ -290,7 +461,6 @@ public partial class RunView : UserControl
             MessageBox.Show(Window.GetWindow(this)!, "请先填写源站种子链接。", "BoxSend");
             return;
         }
-        _targets = CheckedTargets();
         var targets = RunTargets().Select(s => s.Id).ToArray();
         if (targets.Length == 0)
         {
@@ -300,11 +470,7 @@ public partial class RunView : UserControl
         SaveQuote();
 
         // 服务器可能被限速：先测一次，把速度报出来，由人决定这一批转不转
-        if (!_model.SectionFlag("ssh", "enabled")
-            || _model.SectionText("ssh", "host").Trim().Length == 0
-            || _model.SectionText("ssh", "user").Trim().Length == 0
-            || await SpeedGateAsync())
-            Start(url, targets);
+        if (SpeedPrecheck.IsChecked != true || await SpeedGateAsync()) Start(url, targets);
     }
 
     /// 返回 false = 用户看了测速结果后决定先不转

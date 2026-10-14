@@ -87,10 +87,15 @@ public partial class SitesView : UserControl
                 if (int.TryParse(limit.Text, out var mb) && mb != saved)
                     _model.Call("groups.setLimit", new { index = group.Index, upLimitMB = mb });
             };
+            // 顺序与 mac 一致：先加站点，再改名，最后才是那个要两次确认的移除
+            header.Children.Add(SmallButton("添加站点", () => AddSitesTo(group.Index)));
             header.Children.Add(SmallButton("重命名", () => Rename(group)));
             header.Children.Add(SmallButton("移除分组", () => RemoveGroup(group), danger: true));
         }
-        header.Children.Add(SmallButton("添加站点", () => AddSitesTo(group?.Index ?? -1)));
+        else
+        {
+            header.Children.Add(SmallButton("添加站点", () => AddSitesTo(-1)));
+        }
         panel.Children.Add(header);
 
         // ---- 工具行：N 站 / 全选 / 手动 cookie / 移除站点（cookie 检测只在顶部做全量）----

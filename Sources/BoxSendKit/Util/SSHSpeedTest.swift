@@ -86,8 +86,8 @@ public struct SSHConfig: Codable, Equatable {
         try c.encode(timeoutSeconds, forKey: .timeoutSeconds)
     }
 
-    private var trimmedHost: String { host.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var trimmedUser: String { user.trimmingCharacters(in: .whitespacesAndNewlines) }
+    public var trimmedHost: String { host.trimmingCharacters(in: .whitespacesAndNewlines) }
+    public var trimmedUser: String { user.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     /// 地址与用户名都填了才算配好
     public var isConfigured: Bool { !trimmedHost.isEmpty && !trimmedUser.isEmpty }
@@ -123,12 +123,55 @@ public struct SSHConfig: Codable, Equatable {
     public static let throttlingHintMBps: Double = 20
 }
 
-/// 用系统自带的 ssh 客户端连一次转种服务器，在服务器上量一次公网上传速度。
+/// 连一次转种服务器，在服务器上量一次公网上传速度。
 ///
-/// 不引第三方 SSH 库：`/usr/bin/ssh` 到处都在，密钥登录走 `BatchMode=yes`，
+/// 默认用系统自带的 ssh 客户端：`/usr/bin/ssh` 到处都在，密钥登录走 `BatchMode=yes`，
 /// 密码登录临时造一个 askpass 脚本代填密码（密码只进子进程的环境变量与 0600 临时文件，
 /// 不进命令行参数，免得同机别的用户 `ps` 一下就看见）。
+/// Windows 自带的 ssh 不读 SSH_ASKPASS，密码那一半改由宿主注入实现代跑
+/// （见 `Platform.hooks.sshExec`），密钥登录仍走系统客户端。
 public enum SSHSpeedTest {
+
+    /// 宿主自己连 SSH 时要拿到的参数（Windows 密码登录：系统 ssh 没法代填密码）
+    public struct ExecRequest {
+        public var host: String
+        public var port: Int
+        public var user: String
+        public var password: String
+        public var keyPath: String
+        /// 要在服务器上跑的脚本（原样交给远端 shell）
+        public var script: String
+        /// 连接 + 执行的总上限
+        public var timeoutSeconds: Int
+    }
+
+    /// 宿主 SSH 实现报回来的失败类别 -> 人话。类别跨 C ABI 只传一个整数，措辞留在这儿，
+    /// 免得上下两套报错各说各话
+    public enum HostFailure: Int {
+        case auth = -1, refused = -2, timeout = -3, dns = -4, disconnected = -5
+        case algorithm = -6, other = -7
+
+        public var text: String {
+            switch self {
+            case .auth: return "登录被拒：用户名或密码不对"
+            case .refused: return "端口没有监听：SSH 没开或端口填错"
+            case .timeout: return "连接超时：地址或防火墙问题"
+            case .dns: return "域名解析失败：地址填错了"
+            case .disconnected: return "连接被服务器断开：多半认证没过"
+            case .algorithm: return "算法协商失败：服务器 SSH 版本太老"
+            case .other: return "连不上服务器"
+            }
+        }
+
+        /// 给人看的一句：类别 + 原文第一行（原文留着定位到底是哪一步没成）
+        public func message(_ detail: String) -> String {
+            let first = detail.split(whereSeparator: { $0 == "\n" || $0 == "\r" })
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty } ?? ""
+            return first.isEmpty ? text : "\(text)（\(String(first.prefix(120)))）"
+        }
+    }
+
     /// ssh 可执行文件路径（按平台取系统自带的客户端；单测换成桩脚本验证起进程那段）
     public static var sshPath = Platform.defaultSSHPath
 
@@ -206,6 +249,25 @@ public enum SSHSpeedTest {
         """
     }
 
+    // MARK: - 这一趟怎么跑
+
+    /// 密码登录且宿主肯代跑时走宿主（Windows 内置客户端），否则拼命令行跑系统 ssh。
+    /// exec 只给用例注桩用，不影响真机路径。
+    static func perform(_ cfg: SSHConfig, script: String, timeout: TimeInterval,
+                        exec: Exec? = nil) throws -> String {
+        if cfg.auth == .password, let hook = Platform.hooks.sshExec {
+            guard cfg.isConfigured else { throw BoxSendError.badInput("SSH 没填服务器地址或用户名") }
+            return try hook(ExecRequest(host: cfg.trimmedHost, port: cfg.resolvedPort,
+                                        user: cfg.trimmedUser, password: cfg.password,
+                                        keyPath: cfg.expandedKeyPath, script: script,
+                                        timeoutSeconds: Int(max(5, timeout))))
+        }
+        let launch = try launch(cfg, script: script)
+        defer { launch.cleanup() }
+        let run = exec ?? { try execute($0, timeout: $1) }
+        return try run(launch, timeout)
+    }
+
     // MARK: - 拼 ssh 参数
 
     /// 组装 ssh 命令行与环境变量（密码登录会留下临时 askpass 目录，调用方负责 cleanup）
@@ -214,8 +276,9 @@ public enum SSHSpeedTest {
         #if os(Windows)
         // Windows 自带的 OpenSSH 客户端不读 SSH_ASKPASS，密码只能用户自己敲，改成密钥登录
         if cfg.auth == .password {
-            throw BoxSendError.badInput("Windows 上请用密钥登录（先在 C:\\Windows\\System32\\OpenSSH 下"
-                + " ssh-keygen 生成密钥，再把公钥放到服务器 ~/.ssh/authorized_keys）")
+            throw BoxSendError.badInput("这一端不支持密码登录，请改用密钥登录（先在 "
+                + "C:\\Windows\\System32\\OpenSSH 下 ssh-keygen 生成密钥，"
+                + "再把公钥放到服务器 ~/.ssh/authorized_keys）")
         }
         #endif
         var args = [
@@ -314,11 +377,10 @@ public enum SSHSpeedTest {
         let perRound = min(600, max(45, cfg.resolvedTestMB * 2 + 20))
         let script = speedScript(probeURL: probe, testMB: cfg.resolvedTestMB,
                                  rounds: rounds, maxSecondsPerRound: perRound)
-        let launch = try launch(cfg, script: script)
-        defer { launch.cleanup() }
-        let run = exec ?? { try execute($0, timeout: $1) }
         let rounds_ = min(max(rounds, 1), 5)
-        let out = try run(launch, Double(min(420, cfg.resolvedTimeout + perRound * rounds_ + 20)))
+        let out = try perform(cfg, script: script,
+                              timeout: Double(min(420, cfg.resolvedTimeout + perRound * rounds_ + 20)),
+                              exec: exec)
         let speeds = parseSpeedMBps(out).filter { $0 > 0 }
         // 有一轮测到数就用：curl 撞到 --max-time 时也会把已达成的速度打出来，
         // 那种「慢到传完前就超时」正是我们要抓的限速，不能只因为带了 BS_ERR_UPLOAD 就报失败
@@ -333,10 +395,8 @@ public enum SSHSpeedTest {
     public static func checkConnection(_ cfg: SSHConfig, exec: Exec? = nil) throws -> String {
         let script = "echo BS_HOST=$(hostname 2>/dev/null || uname -n 2>/dev/null); "
             + "echo BS_UNAME=$(uname -srm 2>/dev/null); echo BS_OK"
-        let launch = try launch(cfg, script: script)
-        defer { launch.cleanup() }
-        let run = exec ?? { try execute($0, timeout: $1) }
-        let out = try run(launch, Double(cfg.resolvedTimeout + 15))
+        let out = try perform(cfg, script: script,
+                              timeout: Double(cfg.resolvedTimeout + 15), exec: exec)
         guard out.contains("BS_OK") else { throw BoxSendError.badInput("服务器返回异常：" + String(out.prefix(120))) }
         return parseServerInfo(out)
     }

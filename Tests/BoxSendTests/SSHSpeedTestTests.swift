@@ -11,6 +11,7 @@ final class SSHSpeedTestTests: XCTestCase {
     }
 
     override func tearDown() {
+        Platform.hooks.sshExec = nil
         try? FileManager.default.removeItem(atPath: keyPath)
         super.tearDown()
     }
@@ -235,6 +236,62 @@ final class SSHSpeedTestTests: XCTestCase {
     func testNoSpeedDataIsAnError() {
         let stub: SSHSpeedTest.Exec = { _, _ in "BS_HOST=vps\n0\n" }
         XCTAssertThrowsError(try SSHSpeedTest.runTest(config(), exec: stub))
+    }
+
+    // MARK: - 宿主代跑（Windows 的密码登录）
+
+    /// 密码登录且宿主注入了 SSH 实现时，不再拼 ssh 命令行：参数原样交给宿主，输出照旧解析
+    func testPasswordAuthUsesHostSSH() throws {
+        var seen: SSHSpeedTest.ExecRequest?
+        Platform.hooks.sshExec = { req in
+            seen = req
+            return "BS_HOST=vps\nBS_UNAME=Linux x86_64\nBS_OK"
+        }
+        XCTAssertEqual(try SSHSpeedTest.checkConnection(config(auth: .password)),
+                       "vps（Linux x86_64）")
+        let r = try XCTUnwrap(seen)
+        XCTAssertEqual([r.host, r.user, r.password], ["10.0.0.5", "seed", "sekr3t"])
+        XCTAssertEqual(r.port, 22022)
+        XCTAssertTrue(r.script.contains("BS_OK"), "脚本要原样交出去")
+        XCTAssertGreaterThan(r.timeoutSeconds, 0)
+    }
+
+    /// 宿主报回来的失败类别 -> 那句人话（措辞与系统 ssh 那套对齐）
+    func testHostSSHFailureMapsToReadableReason() throws {
+        Platform.hooks.sshExec = { _ in
+            throw BoxSendError.badInput(SSHSpeedTest.HostFailure.auth
+                .message("SshAuthenticationException: Authentication methods failed."))
+        }
+        XCTAssertThrowsError(try SSHSpeedTest.checkConnection(config(auth: .password))) {
+            let why = $0.localizedDescription
+            XCTAssertTrue(why.contains("登录被拒"), why)
+            XCTAssertTrue(why.contains("Authentication methods failed"), why)
+        }
+    }
+
+    /// 测速照旧走宿主：两轮速度取峰值
+    func testHostSSHSpeedTestTakesPeak() throws {
+        Platform.hooks.sshExec = { _ in "BS_HOST=vps\n104857600\n52428800\n" }
+        let r = try SSHSpeedTest.runTest(config(auth: .password), rounds: 2)
+        XCTAssertEqual(r.peakMBps, 100, accuracy: 0.01)
+    }
+
+    /// 密钥登录不碰宿主：那条路系统 ssh 本来就跑得通，换实现只会多一份不确定性
+    func testKeyAuthIgnoresHostSSH() throws {
+        var hits = 0
+        Platform.hooks.sshExec = { _ in hits += 1; return "BS_OK" }
+        let stub: SSHSpeedTest.Exec = { _, _ in "BS_HOST=vps\nBS_OK" }
+        XCTAssertEqual(try SSHSpeedTest.checkConnection(config(), exec: stub), "vps")
+        XCTAssertEqual(hits, 0)
+    }
+
+    /// 没注入宿主的机器（比如 mac 上没装内置客户端）仍然该拒得干脆
+    func testHostFailureTextHasKnownKinds() {
+        for kind in [SSHSpeedTest.HostFailure.auth, .refused, .timeout, .dns,
+                     .disconnected, .algorithm, .other] {
+            XCTAssertFalse(kind.text.isEmpty)
+            XCTAssertTrue(kind.message("boom").hasPrefix(kind.text))
+        }
     }
 
     func testSSHFailureStringsMapped() {
