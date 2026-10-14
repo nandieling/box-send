@@ -246,11 +246,21 @@ struct RunView: View {
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
+                // 开关放在批次入口上：这一批要不要先测速，就在按「开始运行」的手边上定
+                Toggle("转种前先测上传速度", isOn: Binding(
+                        get: { model.sshConfig.precheckActive },
+                        set: { on in model.updateSSH { $0.enabled = on } }))
+                    .fixedSize()
+                    .disabled(!model.sshConfig.isConfigured)
+                    .help(model.sshConfig.isConfigured
+                          ? "点「开始运行」前先到服务器上量一次公网上行，弹窗把速度报给你；"
+                            + "服务器信息填在「下载器」页「转种服务器」卡片里"
+                          : "先到「下载器」页的「转种服务器」卡片填服务器地址与用户名，才能测速")
                 Button(model.running ? "运行中…" : (model.speedChecking ? "测速中…" : "开始运行")) { model.run() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.running || model.speedChecking)
                     .help(model.speedPrecheckWanted
-                          ? "运行前先测服务器上传速度并弹窗报告（「下载器」页「转种服务器」卡片里开关）"
+                          ? "运行前先测服务器上传速度并弹窗报告，转不转由你看速度决定（不设自动判定线）"
                           : "")
                 // 批次概览：本批会转哪几个分组、几站，免得勾错分组就跑
                 Text(model.runSelectionSummary)
@@ -1512,9 +1522,8 @@ struct DownloaderView: View {
                     }
                 }
                 CardSection("转种服务器（SSH 上传测速）") {
-                    Toggle("批量转种前先测服务器上传速度", isOn: Binding(
-                        get: { model.sshConfig.enabled },
-                        set: { on in model.updateSSH { $0.enabled = on } }))
+                    Text("「转种前先测上传速度」的开关在「批量转种」页「开始运行」左边")
+                        .font(.caption).foregroundStyle(.secondary)
                     HStack(alignment: .top, spacing: 12) {
                         LabeledRow("服务器地址") {
                             TextField("如 1.2.3.4 或 vps.example.com", text: Binding(
@@ -1854,7 +1863,7 @@ struct TutorialSheet: View {
                         "部分服务器 24 小时上传流量到 2T 后，会把上行悄悄压到 20 MB/s 左右：站点照样能发种，但整批下载都变慢。",
                         "「下载器」页「转种服务器」卡片填写服务器地址、端口、用户名，选密钥或密码登录（密钥默认 ~/.ssh/id_ed25519，点「选择…」挑）。",
                         "「测试连接并测速」立刻连一次：显示服务器主机名、每轮实测速度。",
-                        "勾选「批量转种前先测服务器上传速度」后，每次点「开始运行」会先测速再弹窗把速度报给你：觉得可以就点「继续转种」，觉得被限速了就点「先不转种」等一等，不设自动判定线。",
+                        "勾上「批量转种」页「开始运行」左边的「转种前先测上传速度」后，每次点「开始运行」会先测速再弹窗把速度报给你：觉得可以就点「继续转种」，觉得被限速了就点「先不转种」等一等，不设自动判定线。",
                         "测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行；测速地址可换成自己的接收端。",
                     ])
                     section("6. TMDB 链接自动反查", image: nil, steps: [
