@@ -56,6 +56,33 @@ final class ReseedFieldTests: XCTestCase {
         XCTAssertEqual(first(f, "pt_gen"), "https://movie.douban.com/subject/26339249/")
     }
 
+    // MARK: 1.1 HDVideo：地区是必填项，简介没写产地也要填
+
+    func testHDVideoRegionNeverLeftEmpty() throws {
+        var anime = try sourceRelease()
+        anime.region = ""
+        XCTAssertEqual(first(try fields("hdvideo", info: anime), "region_sel[4]"), "7",
+                       "动画按日系发布填日本（实站表单 7=日本）")
+
+        var movie = anime
+        movie.kind = .movie
+        movie.name = "Food Inc 2009 1080p BluRay DTS-HD MA 5.1-x"
+        XCTAssertEqual(first(try fields("hdvideo", info: movie), "region_sel[4]"), "28",
+                       "认不出产地时退到「其他地区」，否则服务端报「请选择地区」")
+    }
+
+    /// 用户实跑那张上传页（2026-10-14 抓）：那条源种简介没写产地，地区也必须填上
+    func testHDVideoRegionOnLiveForm() throws {
+        var anime = try sourceRelease()
+        anime.region = ""
+        anime.name = "Code Geass: Hangyaku no Lelouch II - Handou 2018 1080p Blu-ray AVC TrueHD 5.1-LuckAni"
+        let live = NexusPHPAdapter(site: SiteRegistry.prioritySites.first { $0.id == "hdvideo" }!,
+                                  client: HTTPClient(cookies: CookieStore(), userAgent: "t"))
+        let f = try live.buildUploadFields(anime, page: try fixture("hdvideo-upload-live.html"))
+            .map { ($0.name, $0.value) }
+        XCTAssertEqual(first(f, "region_sel[4]"), "7", "7=日本：动画按日系发布填，不能空着让服务端报「请选择地区」")
+    }
+
     // MARK: 2 PTtime：ACG 分类、不勾"原盘或ISO"
 
     func testPTTimeCategoryIsACG() throws {

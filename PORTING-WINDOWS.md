@@ -68,7 +68,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 407 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+- 回归测试从 337 个加到 411 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
   只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
   连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
@@ -123,6 +123,17 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - 分组标题右侧按钮顺序统一为「添加站点 / 重命名 / 移除分组」（两端同改）
 - Windows 支持密码登录：下载器页那张卡片多了「登录方式」与密码框，密码那一趟走内置 SSH.NET，
   失败按六类翻成人话（登录被拒 / 端口没监听 / 超时 / 域名解析失败 / 连接被断开 / 算法协商失败）
+
+## 这一轮（核心：HDVideo 必填「地区」）
+
+- 源站简介的产地行从只认「产　　地」扩到豆瓣「制片国家/地区」、英文「Production Country/Country」，
+  取到的值先归一成表内规范产地（Japan/JPN/日本 都算日本），认不出的残句不当产地
+- 目标站地区类下拉（`region_sel` / 实为地区表的 `source_sel`、`processing_sel`）填值改成一条兜底链：
+  简介产地 -> 发布名国家词元（JPN/USA/HK…）-> 动画按日系发布算日本（国漫/国创带中文标记时不猜）
+  -> 地区表里的「其他/其他地区」；后两步只在选项确实是地区表时启用，媒介、来源那类下拉不受影响
+- 影响：HDVideo 把地区设成必填，源站简介空着时以前直接不发（服务端回「上传失败！请选择地区」），
+  现在按这条链填上；回归测试 `testHDVideoRegionNeverLeftEmpty`、`testRegionSelectAlwaysFilled`、
+  `testRegionLabelVariants`
 
 ## 两端有意不同
 

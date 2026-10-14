@@ -45,6 +45,40 @@ final class NewThemeTests: XCTestCase {
         XCTAssertEqual(f["team_sel[4]"], "4", "转种没有本站制作组，选 Other")
     }
 
+    /// 地区下拉（HDVideo 必填）：产地 -> 推断 -> 「其他地区」，不能留在「请选择」
+    func testRegionSelectAlwaysFilled() {
+        var anime = info
+        anime.region = ""
+        XCTAssertEqual(fields("hdvideo", anime, hdvPage)["region_sel[4]"], "7", "动画没写产地按日系发布填")
+
+        var cn = anime
+        cn.name = "Renen Lang 国创 2015 1080p BluRay-x"
+        XCTAssertEqual(fields("hdvideo", cn, hdvPage)["region_sel[4]"], "28", "国创不猜日本，退到地区表里的「其他地区」")
+
+        var movie = anime
+        movie.kind = .movie
+        movie.name = "The Matrix 1999 1080p BluRay DTS-HD MA 5.1-x"
+        XCTAssertEqual(fields("hdvideo", movie, hdvPage)["region_sel[4]"], "28", "认不出产地也必填「其他地区」")
+
+        var usa = anime
+        usa.region = ""
+        usa.kind = .movie
+        usa.name = "Friends F.R.I.E.N.D.S S01 2004 1080p USA Blu-ray AC3 5.1-x"
+        XCTAssertEqual(fields("hdvideo", usa, hdvPage)["region_sel[4]"], "2", "发布名里的国家词元 USA 算美国")
+    }
+
+    /// 产地行的常见写法都要认（豆瓣/NTB 模板、NexusPHP、IMDb），归一化后仍认不出的残句不算产地
+    func testRegionLabelVariants() {
+        // 简介纯文本：stripTags 已把 <br> 换成换行，标签里的空格是 U+3000
+        XCTAssertEqual(NexusPHPAdapter.regionValue(fromPlain: "❇ 制片国家/地区:　日本\n❇ 类　　别:　动画"),
+                       "日本", "豆瓣式「制片国家/地区」")
+        XCTAssertEqual(NexusPHPAdapter.regionValue(fromPlain: "◎ 产　　地　　美国"),
+                       "美国", "全角空格撑开的「产地」")
+        XCTAssertEqual(NexusPHPAdapter.regionValue(fromPlain: "Production Country: France"),
+                       "法国", "英文标签")
+        XCTAssertNil(NexusPHPAdapter.regionValue(fromPlain: "本片没有地区性片源说明"), "残句不能当产地")
+    }
+
     /// 来源引用以「批量转种」页的源站引用可选项为准，官种不再自动加致谢
     func testSourceQuoteFollowsManualOptionOnly() {
         var manual = self.info

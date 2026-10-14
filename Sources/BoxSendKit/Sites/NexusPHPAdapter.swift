@@ -179,7 +179,7 @@ class NexusPHPAdapter: SiteAdapter {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !t.isEmpty { genre = t }
         }
-        let region = Self.lineValue(plain, prefix: "产", suffix: "地") ?? ""
+        let region = Self.regionValue(fromPlain: plain) ?? ""
         let sourceTags = Self.sourceTags(fromHTML: html)
 
         // 外链信息
@@ -336,6 +336,30 @@ class NexusPHPAdapter: SiteAdapter {
         let v = text[Range(m.range(at: 1), in: text)!]
             .trimmingCharacters(in: CharacterSet(charactersIn: " \u{3000}：:"))
         return v.isEmpty ? nil : String(v)
+    }
+
+    /// 简介纯文本里产地行的写法（豆瓣「制片国家/地区」、NexusPHP「产　　地: 日本」、IMDb「Country: Japan」）
+    static let regionLabels = ["制片国家/地区", "制作国家/地区", "出品国家/地区", "国家/地区", "国家地区",
+                               "制片国家", "出产国家", "出品地", "产地区", "产地", "来源地", "所属地区",
+                               "国家", "地区", "production country", "country of origin", "country"]
+
+    /// 从简介纯文本取产地：先把中文标签内部的空格压掉（"产　　地"），再逐个标签找值。
+    /// 只收能归一成已知产地的值，免得把「地区性片源」这类残句当成产地填进下拉。
+    static func regionValue(fromPlain plain: String) -> String? {
+        let flat = plain.replacingOccurrences(
+            of: "(?<=[一-鿿])[ 　]+(?=[一-鿿])", with: "", options: .regularExpression)
+        for label in regionLabels {
+            let p = NSRegularExpression.escapedPattern(for: label)
+            guard let re = try? NSRegularExpression(
+                pattern: "(?:^|\\n)[^\\n]{0,12}\(p)[\\s　]{0,4}[:：]?[\\s　]{0,4}([^\\n]{1,60})",
+                options: [.caseInsensitive]) else { continue }
+            let range = NSRange(flat.startIndex..., in: flat)
+            guard let m = re.firstMatch(in: flat, options: [], range: range), m.numberOfRanges > 1 else { continue }
+            let v = String(flat[Range(m.range(at: 1), in: flat)!])
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \u{3000}：:/、|·（）()"))
+            if let want = RegionMatch.canonical(v) { return want }
+        }
+        return nil
     }
 
     /// 详情页表格行取值：<tr><td>标签</td><td>值</td></tr>（如 副标题 行，值可能含 | 分隔的完整副标题）
@@ -969,9 +993,15 @@ class NexusPHPAdapter: SiteAdapter {
                 var groups = HTMLUtil.selectGroups(page, name: name)
                 guard !groups.isEmpty else { continue }
                 var done = false
-                // 不少站的来源/处理/地区下拉其实是地区表（熊猫/优堡/麒麟/咖啡/蟹黄堡/HDVideo）：先按产地取
-                if ["source_sel", "processing_sel", "region_sel"].contains(d.base), !info.region.isEmpty,
-                   let v = RegionMatch.option(forRegion: info.region, in: groups[0].options) {
+                // 不少站的来源/处理/地区下拉其实是地区表（熊猫/优堡/麒麟/咖啡/蟹黄堡/HDVideo）：先按产地取。
+                // 简介没写产地时，只在确实是地区表的下拉里用推断值，别把国家名塞进媒介/来源那类下拉。
+                let regionBase = ["source_sel", "processing_sel", "region_sel"].contains(d.base)
+                let regionTable = regionBase && RegionMatch.looksLikeRegionTable(groups[0].options)
+                let wantRegion = info.region.isEmpty
+                    ? (regionTable ? RegionMatch.guess(info: info) : nil) ?? ""
+                    : info.region
+                if regionBase, !wantRegion.isEmpty,
+                   let v = RegionMatch.option(forRegion: wantRegion, in: groups[0].options) {
                     set(name, v)
                     done = true
                 }
@@ -1015,6 +1045,11 @@ class NexusPHPAdapter: SiteAdapter {
                 if !done, d.attr == "codec",
                    let year = QualityTokens.year(from: info.name),
                    let v = QualityMatcher.matchYear(year, options: groups[0].options) {
+                    set(name, v)
+                    done = true
+                }
+                // 服务端把地区设成必填（HDVideo「上传失败！请选择地区」）：退到地区表里的「其他地区」
+                if !done, regionTable, let v = RegionMatch.otherOption(groups[0].options) {
                     set(name, v)
                     done = true
                 }
