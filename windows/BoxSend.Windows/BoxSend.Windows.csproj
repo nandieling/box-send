@@ -4,6 +4,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <!-- 托盘用 WinForms 的 NotifyIcon：自己拿 Shell_NotifyIcon 塞位图，折叠区里会渲染成黑方块，
+         菜单也得手写。自包含包里 WinForms 本来就在，不额外占体积 -->
+    <UseWindowsForms>true</UseWindowsForms>
                 <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -33,6 +36,13 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
+
+  <!-- WinForms 的隐式 using 会把 TextBox / Button / Application 这些名字在 WPF 侧搞成二义，
+       托盘那一个文件自己写全名就够了 -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
   </ItemGroup>
 
 </Project>

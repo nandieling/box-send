@@ -86,7 +86,7 @@ public static class PromptWindow
 
 /// <summary>
 /// 批量添加站点：卡片式多选（点卡片 = 选中，加深色边框 = 已选），支持搜索、全选、
-/// 拖把手排序、输入序号回车排到第 N 位（序号重复会提示）。
+/// 整卡拖拽排序、输入序号回车排到第 N 位（序号重复会提示）。
 /// 候选顺序与排序规则都由核心给（sites.candidates / unmanagedSiteOrder），与 mac 版一致。
 /// </summary>
 public sealed class AddSitesWindow : Window
@@ -117,7 +117,6 @@ public sealed class AddSitesWindow : Window
         IsDefault = true,
     };
     private readonly WrapPanel _grid = new();
-    private string? _dragging;
 
     public AddSitesWindow(AppModel model, int fixedGroup)
     {
@@ -292,7 +291,11 @@ public sealed class AddSitesWindow : Window
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         texts.Children.Add(title);
         texts.Children.Add(url);
-        texts.MouseLeftButtonUp += (_, _) => Toggle(id);
+        texts.MouseLeftButtonUp += (_, _) =>
+        {
+            if (CardDrag.JustDragged) return;   // 刚从这张卡上拖起来，不算「点击选中」
+            Toggle(id);
+        };
 
         // 序号框：占位显示当前位置，输入数字回车即排到该位置
         var num = new TextBox
@@ -315,6 +318,11 @@ public sealed class AddSitesWindow : Window
             e.Handled = true;      // 「添加」是默认按钮，不截下来会在排序前先关窗
             ApplySortNumbers();
         };
+        // 只填了数字没敲回车（点到别处）也照样排，别让人以为没生效
+        num.LostFocus += (_, _) =>
+        {
+            if (num.Text.Trim().Length > 0) ApplySortNumbers();
+        };
 
         var grip = new TextBlock
         {
@@ -324,15 +332,10 @@ public sealed class AddSitesWindow : Window
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = System.Windows.Input.Cursors.SizeNS,
-            ToolTip = "按住拖拽调整顺序",
+            ToolTip = "按住卡片拖到另一张卡上，排到它前面",
             Foreground = (Brush)Application.Current.Resources["TextMuted"],
-        };
-        grip.MouseLeftButtonDown += (_, _) =>
-        {
-            _dragging = id;
-            DragDrop.DoDragDrop(grip, new DataObject(DataFormats.Text, id), DragDropEffects.Move);
-            _dragging = null;
-            RefreshVisuals();
+            // 把手只当视觉提示：接拖拽的是整张卡片
+            IsHitTestVisible = false,
         };
 
         var row = new DockPanel();
@@ -351,19 +354,12 @@ public sealed class AddSitesWindow : Window
             Background = PromptWindow.Themed("BlockSurface", "#61000000"),
             BorderThickness = new Thickness(1),
             BorderBrush = (Brush)Application.Current.Resources["Line"],
-            AllowDrop = true,
             Child = row,
             ToolTip = $"{r.Name}\n{r.Url}",
         };
-        card.MouseEnter += (_, _) => { if (_dragging == null) card.BorderBrush = AccentBrush(); };
+        card.MouseEnter += (_, _) => { if (CardDrag.DraggingId == null) card.BorderBrush = AccentBrush(); };
         card.MouseLeave += (_, _) => RefreshCard(id);
-        card.PreviewDrop += (_, e) =>
-        {
-            e.Handled = true;   // 卡里有输入框，不截下来会被输入框当成「拖入文本」
-            var from = e.Data.GetData(DataFormats.Text) as string;
-            if (from != null && from != id) MoveBefore(from, id);
-        };
-        card.DragOver += (_, e) => { e.Effects = _dragging != null ? DragDropEffects.Move : DragDropEffects.None; };
+        CardDrag.MakeSortable(card, id, MoveBefore, _ => RefreshVisuals());
 
         _cards[id] = new CardRefs(card, title, num);
         return card;
@@ -385,7 +381,7 @@ public sealed class AddSitesWindow : Window
     {
         if (!_cards.TryGetValue(id, out var refs)) return;
         var on = _selected.Contains(id);
-        refs.Card.BorderBrush = on || _dragging == id ? AccentBrush()
+        refs.Card.BorderBrush = on || CardDrag.DraggingId == id ? AccentBrush()
             : (Brush)Application.Current.Resources["Line"];
         refs.Card.BorderThickness = new Thickness(on ? 1.5 : 1);
         refs.Card.Background = on ? TintedAccent() : PromptWindow.Themed("BlockSurface", "#61000000");

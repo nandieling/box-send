@@ -65,8 +65,9 @@ public partial class RunView : UserControl
 
         if (!_seeded)
         {
-            // 第一次进页面：默认勾上已开启的站点（与 mac 版一致）
-            _targets = _model.Sites.Where(s => s.Enabled).Select(s => s.Id).ToHashSet();
+            // 默认只勾配置里存着的转种目标（与 mac 版同一份 targetSites）：第一次用就是全不选。
+            // 以前是「把所有已开启的站点都勾上」，连没纳管的源站也算进去，数字比卡片多一个
+            _targets = SavedTargets();
             _seeded = true;
         }
 
@@ -141,8 +142,19 @@ public partial class RunView : UserControl
             });
     }
 
-    private List<SiteRow> Members(int groupIndex) =>
-        _model.Sites.Where(s => s.Enabled && s.Managed && s.Group == groupIndex).ToList();
+    /// 组内已开启的站点，按 group.sites 的顺序（扁平站点列表是站点表顺序，不能拿来显示）
+    private List<SiteRow> Members(int groupIndex)
+    {
+        var g = _model.Groups.FirstOrDefault(x => x.Index == groupIndex);
+        var live = _model.Sites.Where(x => x.Enabled && x.Managed && x.Group == groupIndex)
+            .ToDictionary(x => x.Id, x => x);
+        var outList = new List<SiteRow>();
+        if (g != null)
+            foreach (var id in g.SiteIds)
+                if (live.TryGetValue(id, out var row)) outList.Add(row);
+        outList.AddRange(live.Values.Where(x => !outList.Contains(x)));
+        return outList;
+    }
 
     private UIElement GroupCard(string name, List<SiteRow> sites)
     {
@@ -164,6 +176,7 @@ public partial class RunView : UserControl
                 if (allOn) _targets.Remove(s.Id);
                 else _targets.Add(s.Id);
             }
+            SaveTargets();
             RebuildTargetBlocks();
             UpdateRunStatus();
         };
@@ -248,7 +261,7 @@ public partial class RunView : UserControl
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 8, 8),
             CornerRadius = new CornerRadius(8),
-            Background = (Brush)FindResource(selected ? "AccentSoft" : "TextSurface"),
+            Background = (Brush)FindResource(selected ? "AccentFaint" : "TextSurface"),
             BorderBrush = (Brush)FindResource(selected ? "Accent" : "Line"),
             BorderThickness = new Thickness(selected ? 1.5 : 1),
             Cursor = Cursors.Hand,
@@ -267,9 +280,23 @@ public partial class RunView : UserControl
     private void Toggle(string id)
     {
         if (!_targets.Remove(id)) _targets.Add(id);
+        SaveTargets();
         RebuildTargetBlocks();
         UpdateRunStatus();
     }
+
+    /// 配置里的转种目标（界面勾选的初始值）
+    private HashSet<string> SavedTargets()
+    {
+        var ids = _model.Config?["targetSites"]?.AsArray() ?? new JsonArray();
+        return ids.Select(n => n?.GetValue<string>() ?? "")
+            .Where(id => _model.Sites.Any(s => s.Id == id && s.Enabled && s.Managed))
+            .ToHashSet();
+    }
+
+    /// 勾选写回 core（targetSites）：下次打开还是这批，与 mac 版一致
+    private void SaveTargets() =>
+        _model.Call("targets.set", new { ids = RunTargets().Select(x => x.Id).ToArray() });
 
     /// 状态胶囊：先建好放着，运行时才填字（重建整张卡片代价大，改文字便宜）
     private static (Border, TextBlock) Chip()
@@ -364,16 +391,16 @@ public partial class RunView : UserControl
 
     // MARK: 批次概览
 
-    /// 本批实际会转的站点：勾了且已开启（与「开始运行」取目标的口径一致）
+    /// 本批实际会转的站点：纳管 + 已开启 + 已勾选（与「开始运行」取目标的口径一致）
     private List<SiteRow> RunTargets() =>
-        _model.Sites.Where(s => s.Enabled && _targets.Contains(s.Id)).ToList();
+        _model.Sites.Where(s => s.Enabled && s.Managed && _targets.Contains(s.Id)).ToList();
 
     private List<string> SelectedGroupNames()
     {
         var picked = RunTargets().Select(s => s.Id).ToHashSet();
         var names = new List<string>();
         foreach (var g in _model.Groups)
-            if (_model.Sites.Any(s => s.Enabled && s.Group == g.Index && picked.Contains(s.Id)))
+            if (_model.Sites.Any(s => s.Enabled && s.Managed && s.Group == g.Index && picked.Contains(s.Id)))
                 names.Add(g.Name);
         if (_model.Sites.Any(s => s.Enabled && s.Managed && s.Group < 0 && picked.Contains(s.Id)))
             names.Add("未分组");

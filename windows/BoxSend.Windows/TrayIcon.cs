@@ -1,81 +1,69 @@
-using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Interop;
-
 namespace BoxSend.Windows;
 
-/// <summary>托盘图标（直接用 Shell_NotifyIcon，不引第三方库）。
-/// 关窗后转种继续跑，靠托盘回到界面——与 macOS 版行为一致。</summary>
+/// <summary>托盘图标（WinForms 的 NotifyIcon）。关窗后转种继续跑，靠托盘回到界面——
+/// 与 macOS 版行为一致。右键给「打开 / 退出」菜单：以前右键只是叫窗口，想退出只能回窗口里关，
+/// 而关窗又是收托盘，等于没有退出口。</summary>
 public sealed class TrayIcon : IDisposable
 {
-    private const int WM_USER = 0x0400;
-    private const int NIM_ADD = 0x00;
-    private const int NIM_DELETE = 0x02;
-    private const int WM_LBUTTONDBLCLK = 0x0203;
-    private const int WM_RBUTTONUP = 0x0205;
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct NOTIFYICONDATA
-    {
-        public int cbSize;
-        public IntPtr hWnd;
-        public int uID;
-        public int uFlags;
-        public int uMessage;
-        public IntPtr hIcon;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
-        public int dwState;
-        public int dwStateMask;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
-        public int uTimeoutOrVersion;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
-        public int dwInfoFlags;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int Shell_NotifyIcon(int dwMessage, ref NOTIFYICONDATA data);
-
-    // 没有 boxsend.ico 时用系统默认应用图标兜底
-    [DllImport("user32.dll")]
-    private static extern IntPtr LoadIcon(IntPtr hInstance, IntPtr lpIconName);
-
-    private static readonly IntPtr IDI_APPLICATION = new(32512);
-
-    private NOTIFYICONDATA _data;
-    private readonly HwndSource _source;
+    private readonly System.Windows.Forms.NotifyIcon _icon;
 
     public event Action? ActivateRequested;
+    public event Action? ExitRequested;
 
-    public TrayIcon(Window window, string tip, IntPtr hicon = default)
+    public TrayIcon(string tip)
     {
-        _data = new NOTIFYICONDATA
+        _icon = new System.Windows.Forms.NotifyIcon
         {
-            cbSize = Marshal.SizeOf<NOTIFYICONDATA>(),
-            hWnd = new WindowInteropHelper(window).Handle,
-            uID = 1,
-            uFlags = 0x1 | 0x2 | 0x4,       // NIF_MESSAGE | NIF_ICON | NIF_TIP
-            uMessage = WM_USER + 1,
-            hIcon = hicon != IntPtr.Zero ? hicon : LoadIcon(IntPtr.Zero, IDI_APPLICATION),
-            szTip = tip,
+            Text = tip.Length > 127 ? tip[..127] : tip,
+            Icon = LoadTrayIcon(),
+            Visible = true,
+            ContextMenuStrip = BuildMenu(),
         };
-        _source = HwndSource.FromHwnd(_data.hWnd)!;
-        _source.AddHook(WndProc);
-        Shell_NotifyIcon(NIM_ADD, ref _data);
+        // 左键单击与双击都叫窗口：托盘图标小，没人记得「要双击」
+        _icon.MouseClick += (_, e) =>
+        {
+            if (e.Button == System.Windows.Forms.MouseButtons.Left) ActivateRequested?.Invoke();
+        };
+        _icon.DoubleClick += (_, _) => ActivateRequested?.Invoke();
     }
 
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private System.Windows.Forms.ContextMenuStrip BuildMenu()
     {
-        if (msg == WM_USER + 1 && (lParam.ToInt32() == WM_LBUTTONDBLCLK || lParam.ToInt32() == WM_RBUTTONUP))
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        var open = new System.Windows.Forms.ToolStripMenuItem("打开 BoxSend");
+        open.Click += (_, _) => ActivateRequested?.Invoke();
+        var quit = new System.Windows.Forms.ToolStripMenuItem("退出 BoxSend");
+        quit.Click += (_, _) => ExitRequested?.Invoke();
+        menu.Items.AddRange(new System.Windows.Forms.ToolStripItem[]
         {
-            ActivateRequested?.Invoke();
-            handled = true;
+            open, new System.Windows.Forms.ToolStripSeparator(), quit,
+        });
+        return menu;
+    }
+
+    /// <summary>图标优先用随包那份 boxsend.ico（GDI+ 自己按系统小图标尺寸挑一帧，
+    /// 折叠区里也是真图标）；退化顺序：exe 里嵌的那份 -> 系统应用图标。</summary>
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        var ico = System.IO.Path.Combine(AppContext.BaseDirectory, "boxsend.ico");
+        try
+        {
+            if (System.IO.File.Exists(ico)) return new System.Drawing.Icon(ico);
         }
-        return IntPtr.Zero;
+        catch { /* 图标读不出来不影响功能，往下退 */ }
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (exe != null && System.IO.File.Exists(exe))
+                return System.Drawing.Icon.ExtractAssociatedIcon(exe);
+        }
+        catch { }
+        return System.Drawing.SystemIcons.Application;
     }
 
     public void Dispose()
     {
-        Shell_NotifyIcon(NIM_DELETE, ref _data);
-        _source.RemoveHook(WndProc);
+        _icon.Visible = false;
+        _icon.Dispose();
     }
 }

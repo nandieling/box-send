@@ -10,10 +10,8 @@ namespace BoxSend.Windows.Views;
 public partial class SitesView : UserControl
 {
     private readonly AppModel _model;
-    /// 组内拖拽排序：拖把手的那张卡片（半透明）+ 现有卡片与序号框，供拖放与序号排序回查
-    private string? _dragging;
+    /// 现有卡片（拖拽时要把被拖那张压淡）
     private readonly Dictionary<string, Border> _cards = new();
-    private readonly Dictionary<string, TextBox> _nums = new();
 
     public SitesView(AppModel model)
     {
@@ -27,7 +25,6 @@ public partial class SitesView : UserControl
     {
         Blocks.Children.Clear();
         _cards.Clear();
-        _nums.Clear();
         foreach (var g in _model.Groups) Blocks.Children.Add(BlockFor(g));
         var unassigned = _model.Sites.Where(s => s.Managed && s.Group < 0).ToList();
         // 只有真有没归组的站点才出现这一块，否则页面上会有一个去不掉的空「未分组」
@@ -51,7 +48,7 @@ public partial class SitesView : UserControl
 
     private UIElement BlockFor(GroupRow? group, List<SiteRow>? overrideSites = null)
     {
-        var sites = overrideSites ?? _model.Sites.Where(s => s.Group == group!.Index).ToList();
+        var sites = overrideSites ?? GroupMembers(group!.Index);
         var panel = new StackPanel();
 
         // ---- 标题行：分组名 + 组默认限速 + 重命名 / 移除分组 / 添加站点 ----
@@ -123,7 +120,9 @@ public partial class SitesView : UserControl
 
         var cards = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         var block = group?.Index ?? -1;
-        foreach (var s in sites) cards.Children.Add(CardFor(s, block));
+        // 序号框一个分组一沓：排序只按本组填的数字算，别的分组里填了啥不牵连
+        var nums = new List<TextBox>();
+        foreach (var s in sites) cards.Children.Add(CardFor(s, block, nums));
         panel.Children.Add(cards);
         if (sites.Count == 0)
             panel.Children.Add(new TextBlock
@@ -147,7 +146,7 @@ public partial class SitesView : UserControl
     /// <summary>站点卡片：名称 / 地址 / cookie 状态 / 上传限速（+「发种后免费一天」单独一行，
     /// 免得卡片窄时被压成竖排）。点名称区开启或停用该站；组内排序靠拖右侧把手或在把手左边
     /// 输入序号回车（与 mac 版同一套），所以卡上不再放上下移与移组 / 移除按钮。</summary>
-    private UIElement CardFor(SiteRow s, int block)
+    private UIElement CardFor(SiteRow s, int block, List<TextBox> nums)
     {
         var title = new StackPanel { Cursor = Cursors.Hand, Background = Brushes.Transparent };
         title.Children.Add(new TextBlock
@@ -165,7 +164,10 @@ public partial class SitesView : UserControl
             Foreground = (Brush)FindResource("TextMuted"),
         });
         title.MouseLeftButtonUp += (_, _) =>
+        {
+            if (CardDrag.JustDragged) return;
             _model.Call("sites.setEnabled", new { ids = new[] { s.Id }, enabled = !s.Enabled });
+        };
         title.ToolTip = s.Enabled ? "已开启，点击停用" : "未开启，点击开启";
 
         // 序号框：占位显示组内当前位置，输入数字回车即排到该位置
@@ -188,9 +190,14 @@ public partial class SitesView : UserControl
         {
             if (e.Key != Key.Enter) return;
             e.Handled = true;
-            ApplySiteSort(block);
+            ApplySiteSort(block, nums);
         };
-        _nums[s.Id] = num;
+        // 只填了数字没敲回车（数字框被点到别处）也照样排，别让人以为没生效
+        num.LostFocus += (_, _) =>
+        {
+            if (num.Text.Trim().Length > 0) ApplySiteSort(block, nums);
+        };
+        nums.Add(num);
 
         var grip = new TextBlock
         {
@@ -200,18 +207,10 @@ public partial class SitesView : UserControl
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = Cursors.SizeNS,
-            ToolTip = "按住拖拽调整组内位置",
+            ToolTip = "按住卡片拖到另一张卡上，排到它前面",
             Foreground = (Brush)FindResource("TextMuted"),
-        };
-        var self = s.Id;
-        grip.MouseLeftButtonDown += (_, _) =>
-        {
-            _dragging = self;
-            if (_cards.TryGetValue(self, out var me)) me.Opacity = 0.45;
-            DragDrop.DoDragDrop(grip, new DataObject(DataFormats.Text, self), DragDropEffects.Move);
-            // DoDragDrop 到放手才返回，这里恢复透明度并清状态
-            if (_cards.TryGetValue(self, out me)) me.Opacity = 1;
-            _dragging = null;
+            // 把手只当视觉提示：真正接拖拽的是整张卡片（见 CardDrag）
+            IsHitTestVisible = false,
         };
 
         var head = new DockPanel();
@@ -308,32 +307,48 @@ public partial class SitesView : UserControl
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 8, 8),
             Width = 208,
-            AllowDrop = true,
             Child = body,
         };
-        card.PreviewDrop += (_, e) =>
-        {
-            e.Handled = true;   // 卡里有输入框，不截下来会被输入框当成「拖入文本」
-            var from = e.Data.GetData(DataFormats.Text) as string;
-            if (from != null && from != s.Id)
-                _model.Call("sites.moveBefore", new { id = from, before = s.Id });
-        };
-        card.DragOver += (_, e) =>
-        {
-            e.Effects = _dragging != null && _dragging != s.Id
-                ? DragDropEffects.Move : DragDropEffects.None;
-            e.Handled = true;
-        };
         _cards[s.Id] = card;
+        CardDrag.MakeSortable(card, s.Id,
+            (from, to) => MoveSite(from, to, block),
+            _ =>
+            {
+                foreach (var (id, c) in _cards) c.Opacity = CardDrag.DraggingId == id ? 0.45 : 1;
+            });
         return card;
     }
 
+    /// 拖到某张卡上 = 排到它前面。跨组拖（把站点从 A 组拖进 B 组的卡片里）顺带改分组：
+    /// 核心的 moveBefore 只在同组内挪位置，不先挪组就会什么也没发生。
+    private void MoveSite(string from, string to, int targetBlock)
+    {
+        var row = _model.Sites.FirstOrDefault(x => x.Id == from);
+        if (row != null && row.Group != targetBlock)
+            _model.Call("sites.setGroup", new { index = targetBlock, id = from });
+        _model.Call("sites.moveBefore", new { id = from, before = to });
+    }
+
+    /// 组内站点按 group.sites 的顺序（核心存的就是这个顺序）。扁平的站点列表是站点表顺序，
+    /// 拿它显示的话，拖完、按序号排完都看不出变化。
+    private List<SiteRow> GroupMembers(int gi)
+    {
+        var g = _model.Groups.FirstOrDefault(x => x.Index == gi);
+        var byId = _model.Sites.Where(x => x.Managed).ToDictionary(x => x.Id, x => x);
+        var outList = new List<SiteRow>();
+        if (g != null)
+            foreach (var id in g.SiteIds)
+                if (byId.TryGetValue(id, out var row) && row.Group == gi) outList.Add(row);
+        outList.AddRange(_model.Sites.Where(x => x.Managed && x.Group == gi && !outList.Contains(x)));
+        return outList;
+    }
+
     /// 序号 = 组内目标位置：填 N 的排到第 N 位，序号相同的按原顺序，没填的留在后面（同 mac 版）
-    private void ApplySiteSort(int block)
+    private void ApplySiteSort(int block, List<TextBox> nums)
     {
         var order = new Dictionary<string, int>();
-        foreach (var kv in _nums)
-            if (int.TryParse(kv.Value.Text.Trim(), out var n) && n > 0) order[kv.Key] = n;
+        foreach (var box in nums)
+            if (box.Tag is string id && int.TryParse(box.Text.Trim(), out var n) && n > 0) order[id] = n;
         if (order.Count == 0) return;
         _model.Call("groups.sortSites", new { group = block, order });
     }

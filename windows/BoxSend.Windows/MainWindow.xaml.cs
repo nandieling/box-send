@@ -43,8 +43,9 @@ public partial class MainWindow : Window
     protected override void OnContentRendered(EventArgs e)
     {
         base.OnContentRendered(e);
-        _tray ??= new TrayIcon(this, $"BoxSend {_model.CoreVersion}", AppIcon.Hicon);
+        _tray ??= new TrayIcon($"BoxSend {_model.CoreVersion}");
         _tray.ActivateRequested += ShowFromTray;
+        _tray.ExitRequested += ExitApplication;
         // 到这里窗口是真的画出来了。没这一行而进程还活着，就说明卡在绘制之前
         StartupLog.Write(_tray != null ? "内容已绘制，托盘已挂" : "内容已绘制，但托盘没挂上");
     }

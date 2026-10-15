@@ -28,6 +28,8 @@ public static class ThemeManager
         res["Success"] = Brush(theme.Dark ? "#7BD88F" : "#15803D");
         // 下拉框选中项、批量添加站点里「已选中」卡片用的淡强调色
         res["AccentSoft"] = Tint(theme.Accent, 0.28);
+        // 选中卡片的底色：比 AccentSoft 更淡一层，压住站点名就看不清了
+        res["AccentFaint"] = Tint(theme.Accent, 0.15);
         ApplyMetrics(app, _maximized);
 
         if (backgroundImageFile != null && File.Exists(backgroundImageFile))
