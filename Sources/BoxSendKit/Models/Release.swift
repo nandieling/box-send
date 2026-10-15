@@ -25,6 +25,18 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     /// 源站简介自带引用的可以不填，所以做成可选项（空串 = 不加）。
     public var extraQuote: String
 
+    /// 源站信息完整性检查：详情正文几乎为空、又没带出豆瓣/IMDb 链接时给出提示。
+    /// 新主题站点只取到「壳页」时就会出现这种情况：目标站发出去的种子简介里
+    /// 只剩一段转载引用，产地/类别/截图/制作引用全都没有，必须让用户看见。
+    public var sourceCompletenessWarning: String? {
+        let body = HTMLUtil.stripTags(descr)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard body.count < 60, douban == nil, imdb == nil else { return nil }
+        return "源站详情只取到壳页：简介为空、没有豆瓣/IMDb 链接，目标站简介将只有转载引用"
+            + "（截图/产地/类别/制作引用也会一起缺）"
+    }
+
     /// 去掉首尾空白后的源站引用文本
     public var extraQuoteText: String { extraQuote.trimmingCharacters(in: .whitespacesAndNewlines) }
 

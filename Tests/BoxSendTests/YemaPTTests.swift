@@ -101,7 +101,7 @@ final class YemaPTTests: XCTestCase {
         XCTAssertEqual(field(fields, "audiocodec"), "4")           // DTS-HD MA
         XCTAssertEqual(fieldsAll(fields, "regionList"), ["4"])     // US(美国)
         XCTAssertEqual(field(fields, "team"), "999")               // Other
-        XCTAssertEqual(fieldsAll(fields, "tagList"), ["6"])        // 中字
+        XCTAssertEqual(Set(fieldsAll(fields, "tagList")), Set(["6", "4"]))  // 中字 + DIY（美国片带中字 = 加工盘）
         XCTAssertEqual(field(fields, "imdb"), "1286537")
         XCTAssertEqual(field(fields, "douban"), "3564499")
         XCTAssertEqual(field(fields, "mediaInfo"), "Format : Matroska")

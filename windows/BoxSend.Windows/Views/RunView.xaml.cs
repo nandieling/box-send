@@ -33,6 +33,9 @@ public partial class RunView : UserControl
     private const string AutoId = "";
     private string _autoLabel = "源站：自动识别";
     private string _lastProbeUrl = "";
+    /// 下拉里点名的源站（AutoId = 不点名，按链接域名自动识别）。
+    /// 记在字段里而不是问 ComboBox：换项时 Items 会整体重置，选中项会被清空
+    private string _pickedSourceId = AutoId;
 
     private SiteRow AutoSource => new() { Id = AutoId, Name = _autoLabel };
 
@@ -43,6 +46,10 @@ public partial class RunView : UserControl
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Rebuild);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateRunStatus);
         DetailUrl.TextChanged += (_, _) => RefreshSourceLabel();
+        SourceSitePick.SelectionChanged += (_, _) =>
+        {
+            if (SourceSitePick.SelectedItem is SiteRow r) _pickedSourceId = r.Id;
+        };
         LoadQuote();
         Rebuild();
     }
@@ -51,17 +58,10 @@ public partial class RunView : UserControl
 
     private void Rebuild()
     {
-        var pickedSource = (SourceSitePick.SelectedItem as SiteRow)?.Id;
-
         LoadQuote();
         ProbeSourceLabel();
         LoadPrecheck();
-
-        SourceSitePick.Items.Clear();
-        SourceSitePick.Items.Add(AutoSource);
-        foreach (var s in _model.Sites.Where(s => s.Managed)) SourceSitePick.Items.Add(s);
-        SourceSitePick.SelectedItem =
-            SourceSitePick.Items.Cast<SiteRow>().FirstOrDefault(s => s.Id == pickedSource) ?? AutoSource;
+        RebuildSourcePick();
 
         if (!_seeded)
         {
@@ -77,15 +77,25 @@ public partial class RunView : UserControl
 
     // MARK: 源站（下拉点名 + 按域名自动识别）
 
-    /// 链接一改就去核心库问一次「这条链接像哪个站」，只换下拉第一项的文字，
-    /// 不动用户已经点名的那个选择
+    /// 链接一改就去核心库问一次「这条链接像哪个站」，把识别结果写进下拉第一项的文案
+    /// （不动用户点名的那一项）。整组重建：只换 Items[0] 会让 ComboBox 丢掉选中项，
+    /// 结果就是链接已经识别出站点、框里却还是「自动识别」
     private void RefreshSourceLabel()
     {
         ProbeSourceLabel();
-        if (SourceSitePick.Items.Count == 0) return;
-        SourceSitePick.Items[0] = AutoSource;
-        if (SourceSitePick.SelectedItem is SiteRow cur && cur.Id == AutoId)
-            SourceSitePick.SelectedItem = AutoSource;
+        RebuildSourcePick();
+    }
+
+    /// 重建源站下拉：第一项永远是「源站：自动（某站）」，其余是已添加的站点
+    private void RebuildSourcePick()
+    {
+        if (_pickedSourceId != AutoId && _model.Sites.All(s => s.Id != _pickedSourceId))
+            _pickedSourceId = AutoId;
+        SourceSitePick.Items.Clear();
+        SourceSitePick.Items.Add(AutoSource);
+        foreach (var s in _model.Sites.Where(s => s.Managed)) SourceSitePick.Items.Add(s);
+        SourceSitePick.SelectedItem =
+            SourceSitePick.Items.Cast<SiteRow>().First(s => s.Id == _pickedSourceId);
     }
 
     private void ProbeSourceLabel()
@@ -111,6 +121,9 @@ public partial class RunView : UserControl
             SourceChip.Visibility = Visibility.Collapsed;
             return;
         }
+        // 源站种子取到之后，下拉里要看得见这次用的到底是哪一站（与 mac 版同一显示）
+        if (_autoLabel == "源站：自动识别" && DetailUrl.Text.Trim().StartsWith("http"))
+            RefreshSourceLabel();
         SourceChipText.Text = e.Text;
         SourceChipText.Foreground = (Brush)FindResource(e.Phase switch
         {
@@ -235,12 +248,13 @@ public partial class RunView : UserControl
         };
         var (reseed, reseedText) = Chip();
         var (push, pushText) = Chip();
+        // 说明行不设 MaxHeight：转种失败原因、站内已有种子链接这类文案本来就长，
+        // 限高会把后半句裁掉（卡片窄，靠换行撑高，不做省略号）
         var detail = new TextBlock
         {
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
-            MaxHeight = 56,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 4, 0, 0),
             Visibility = Visibility.Collapsed,
         };
         var body = new StackPanel();
@@ -524,8 +538,7 @@ public partial class RunView : UserControl
                         skipReseed: DoReseed.IsChecked != true,
                         skipPush: DoPush.IsChecked != true,
                         sourceQuote: UseQuote.IsChecked == true ? QuoteText.Text : "",
-                        sourceSiteId: string.IsNullOrEmpty((SourceSitePick.SelectedItem as SiteRow)?.Id)
-                            ? null : (SourceSitePick.SelectedItem as SiteRow)!.Id);
+                        sourceSiteId: _pickedSourceId == AutoId ? null : _pickedSourceId);
         UpdateSummary();
     }
 }

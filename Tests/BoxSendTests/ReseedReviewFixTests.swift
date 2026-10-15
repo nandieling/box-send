@@ -270,11 +270,19 @@ final class ReseedReviewFixTests: XCTestCase {
         XCTAssertEqual(value(fields, "diy"), "yes")
     }
 
-    /// 源站没打 DIY 就不要乱勾（-LuckDIY 只是发布组名）。
-    func testDIYNotInventedWithoutSourceTag() throws {
+    /// 源站没打 DIY 标签不算错：碟片发布带中文字幕证据仍是 DIY（-LuckDIY 只是发布组名）。
+    /// 真正不该勾的是「没有碟片、又没有字幕证据」的发布。
+    func testDIYInferredFromSubtitlesButNotFromThinAir() throws {
         var info = try sourceRelease()
         info.sourceTags = []
-        XCTAssertFalse(QualityTokens.canonicalTags(info).contains("diy"))
+        XCTAssertTrue(QualityTokens.canonicalTags(info).contains("diy"),
+                      "原盘/REMUX + 中字证据 = DIY")
+        var web = info
+        web.name = "Yuru Yuri S03 2015 1080p WEB-DL AAC-LuckAni"
+        web.subtitle = ""
+        web.descr = web.descr.replacingOccurrences(of: "中字", with: "")
+        XCTAssertFalse(QualityTokens.canonicalTags(web).contains("diy"), "流媒体源码不该打 DIY")
+        info = web
         let fields = adapter("hdhome").buildUploadFields(info, page: try fixture("hdhome-upload.html"))
         XCTAssertFalse(values(fields, "tags[]").contains("diy"))
     }

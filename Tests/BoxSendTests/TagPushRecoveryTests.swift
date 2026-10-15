@@ -185,7 +185,9 @@ final class TagPushRecoveryTests: XCTestCase {
                        "站内回查补到链接后必须照常推送")
         XCTAssertTrue(events.contains("haidan/已推送"), "\(events)")
         XCTAssertTrue(report.outcomes.contains { $0.site == "haidan" && $0.ok })
-        XCTAssertTrue(warnings.isEmpty, "\(warnings)")
+        // 源站壳页信息不全会提示一次，站点本身不该再有别的提醒
+        XCTAssertEqual(warnings, ["src/源站详情只取到壳页：简介为空、没有豆瓣/IMDb 链接，目标站简介将只有转载引用"
+                                 + "（截图/产地/类别/制作引用也会一起缺）"], "\(warnings)")
     }
 
     func testUnrecoverableDetailURLWarnsInsteadOfStayingSilent() throws {
@@ -206,7 +208,7 @@ final class TagPushRecoveryTests: XCTestCase {
 
         _ = try pipe.run(detailURL: "https://src.invalid/details.php?id=1", sourceSiteID: "src", opts: o)
         XCTAssertEqual(dl.items, ["push:src.torrent"], "找不到链接就不该假装推过")
-        XCTAssertEqual(warnings, ["haidan"], "没推送必须给出可见提醒")
+        XCTAssertEqual(warnings, ["src", "haidan"], "没推送必须给出可见提醒（源站信息不全会另提示一次）")
     }
 
     // MARK: - 海胆：站点只回「发布成功」时别把用户主页当新种子链接

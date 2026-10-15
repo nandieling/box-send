@@ -87,7 +87,7 @@ final class SiteCoverageTests: XCTestCase {
         let fields = a.buildUploadFields(info, page: page)
         func v(_ n: String) -> String? { fields.first { $0.name == n }?.value }
         XCTAssertEqual(v("category_id"), "8")   // anime -> monika 8 (Anime TV)
-        XCTAssertEqual(v("type_id"), "1")       // bluray(1080 disc) -> monika 1 (Full Disc)
+        XCTAssertEqual(v("type_id"), "3")       // 1080p BluRay x265 是压制 -> monika 3 (Encode)
         XCTAssertEqual(v("resolution_id"), "3") // 1080p -> monika 3
         XCTAssertEqual(v("season_number"), "1")
         XCTAssertEqual(v("episode_number"), "2")

@@ -88,7 +88,7 @@ final class ReseedFieldTests: XCTestCase {
     func testPTTimeCategoryIsACG() throws {
         let f = try fields("ptt")
         XCTAssertEqual(first(f, "type"), "406", "ACG，不是 401 Movies（其选项文案含「不含动漫」）")
-        XCTAssertEqual(values(f, "tags[]"), ["zz"], "只勾中字，不勾原盘或ISO(dwj)")
+        XCTAssertEqual(Set(values(f, "tags[]")), Set(["zz", "diy"]), "中字 + DIY；不勾原盘或ISO(dwj)")
         XCTAssertEqual(first(f, "dburl"), "https://movie.douban.com/subject/26339249/")
     }
 
@@ -130,7 +130,8 @@ final class ReseedFieldTests: XCTestCase {
         XCTAssertEqual(first(f, "medium_sel[4]"), "6", "1080p 发布要选 Remux，不是 UHD Remux")
         let tags = values(f, "tags[4][]")
         // 15=高码高帧：1080p Remux 实测码率远超 9 Mbps，按「高码」规则该勾
-        XCTAssertEqual(Set(tags), Set(["9", "3", "15"]), "中字+完结+高码；官方是源站概念，目标站不打")
+        // 13=DIY：碟片发布带中字 = 外发加工盘
+        XCTAssertEqual(Set(tags), Set(["9", "3", "15", "13"]), "中字+完结+高码+DIY；官方是源站概念，目标站不打")
     }
 
     func testWrappedLabelWithIconParses() throws {
@@ -157,7 +158,8 @@ final class ReseedFieldTests: XCTestCase {
     func testQingwaTagsRemuxAndCompleted() throws {
         let f = try fields("qingwa")
         let tags = values(f, "tags[4][]")
-        XCTAssertEqual(Set(tags), Set(["6", "14", "15"]), "中字+完结+Remux")
+        // 4=DIY：带中字的 Remux 是加工盘，不能按「原生原盘」发
+        XCTAssertEqual(Set(tags), Set(["6", "14", "15", "4"]), "中字+完结+Remux+DIY")
         XCTAssertEqual(first(f, "source_sel[4]"), "9", "青蛙的 source_sel 实为媒介：Remux")
     }
 

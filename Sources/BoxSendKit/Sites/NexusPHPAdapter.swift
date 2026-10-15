@@ -50,11 +50,13 @@ class NexusPHPAdapter: SiteAdapter {
 
     func fetchDetail(detailURL: String) throws -> ReleaseInfo {
         var html = try client.fetchHTML(detailURL, referer: site.url)
-        // 新版 NexusPHP 主题（LuckPT 等）：details.php 默认返回列表页，
-        // 需追加 ajax=1 才返回经典详情页（含 kdescr/副标题/mediainfo）
-        if !Self.looksLikeDetailPage(html), let alt = Self.detailURLWithAjax(detailURL),
+        // 新版 NexusPHP 主题（LuckPT 等）：details.php 默认只回一张"壳"页（有标题、没有简介容器），
+        // 追加 ajax=1 才返回带 kdescr/副标题/MediaInfo 的经典详情页。
+        // 壳页里同样有 id="top" 这类锚点，所以不能只看 looksLikeDetailPage，
+        // 要看有没有「简介」容器——否则豆瓣/IMDb/产地/截图全带不过去。
+        if let alt = Self.detailURLWithAjax(detailURL), Self.shouldRetryWithAjax(html),
            let again = try? client.fetchHTML(alt, referer: site.url),
-           Self.looksLikeDetailPage(again) {
+           Self.looksLikeDetailPage(again), Self.detailRichness(again) > Self.detailRichness(html) {
             html = again
         }
         return try parseDetail(html: html, detailURL: detailURL)
@@ -69,6 +71,24 @@ class NexusPHPAdapter: SiteAdapter {
         }
         return false
     }
+
+    /// 详情页里的「简介」容器（各主题写法）。没有这些容器 = 只拿到壳页。
+    static let descriptionIDs = ["kdescr", "largedescribe", "descr", "description", "kt_d"]
+
+    static func hasDescriptionBlock(_ html: String) -> Bool {
+        for id in descriptionIDs {
+            if html.contains("id=\"\(id)\"") || html.contains("id='\(id)'") { return true }
+        }
+        return false
+    }
+
+    /// 要不要再用 ajax=1 取一次：页面不像详情页，或像详情页但没有简介容器（新主题壳页）
+    static func shouldRetryWithAjax(_ html: String) -> Bool {
+        !Self.looksLikeDetailPage(html) || !Self.hasDescriptionBlock(html)
+    }
+
+    /// 页面信息量（比较两个 URL 谁更值）：只有带简介容器的页面才计数
+    static func detailRichness(_ html: String) -> Int { Self.hasDescriptionBlock(html) ? html.count : 0 }
 
     /// 为详情 URL 追加 ajax=1（details.php / torrents.php 且尚无 ajax 参数）
     static func detailURLWithAjax(_ url: String) -> String? {
@@ -757,6 +777,7 @@ class NexusPHPAdapter: SiteAdapter {
             }
             return CategoryHit(value: v, mode: groups.first?.mode)
         }
+        let shapeWords = Self.categoryShapeWords(info)
         // 动态关键词（跨全部 type 下拉）：文案与关键词都归一（小写/去空白/繁转简）后比较；
         // 本分类没命中时退回"其他/Misc"，别让 type 停在占位值 0（服务端报 Invalid category）
         func matchKeywords(_ kws: [String]) -> CategoryHit? {
@@ -766,13 +787,17 @@ class NexusPHPAdapter: SiteAdapter {
                     let nkw = QualityTokens.normLabel(kw)
                     guard !nkw.isEmpty else { continue }
                     let cands = opts.filter { $0.label.contains(nkw) }
-                    if let hit = Self.bestCategoryOption(cands, keyword: nkw) {
+                    if let hit = Self.bestCategoryOption(cands, keyword: nkw, prefer: shapeWords.prefer,
+                                                         avoid: shapeWords.avoid, bonus: shapeWords.bonus) {
                         return CategoryHit(value: hit, mode: g.mode)
                     }
                 }
             }
             return nil
         }
+        // 动漫站点把剧场版/OVA 单列（蝴蝶 428=剧场OVA）：单片先按这些词找，再回到通用动漫词
+        if kind == "anime", shape != "series",
+           let hit = matchKeywords(["剧场版", "剧场", "ova", "电影版"]) { return hit }
         if let hit = matchKeywords(Self.kindKeywords.first { $0.0 == kind }?.1 ?? []) { return hit }
         // 站点没有动漫分区（观众这类只有电影/剧集/纪录片的站）：动画按本身形态落进剧集/电影，
         // 不退到「其他」——动画是标签，不该决定分区
@@ -811,9 +836,28 @@ class NexusPHPAdapter: SiteAdapter {
         return nil
     }
 
+    /// 站点把同一体裁再按形态细分（冬樱：动漫电影 / 动漫剧集分集 / 动漫剧集合集；
+    /// 蝴蝶：完结动漫 / 连载动漫 / 剧场OVA）时的加分、减分词：单片落进「电影/剧场」，
+    /// 连载落进「剧集/分集」，整季完结的偏向「合集/完结」而不是「连载」。
+    /// 不能按选项先后碰运气（动画剧场版曾被选成「动漫剧集(分集)」）。
+    static func categoryShapeWords(_ info: ReleaseInfo)
+        -> (prefer: [String], avoid: [String], bonus: [String]) {
+        let filmWords = ["电影", "影片", "剧场", "ova", "movie", "film"]
+        let seriesWords = ["剧集", "电视剧", "连载", "分集", "series"]
+        guard QualityTokens.releaseShape(from: info.name) == "series" else {
+            return (filmWords, seriesWords, [])
+        }
+        let completed = QualityTokens.isCompletedRelease(info)
+        return (seriesWords + ["合集"] + (completed ? ["完结", "完結"] : []),
+                filmWords + (completed ? ["连载"] : []),
+                completed ? ["合集"] : ["分集"])
+    }
+
     /// 分类选项打分：关键词越靠前、选项越短，越像"就是这个分类"；
     /// 关键词前有否定词（"电影…(不含动漫)"）直接判负。PTtime 的 Movies 选项曾因此抢走动漫。
-    static func bestCategoryOption(_ options: [(value: String, label: String)], keyword: String) -> String? {
+    static func bestCategoryOption(_ options: [(value: String, label: String)], keyword: String,
+                                   prefer: [String] = [], avoid: [String] = [],
+                                   bonus: [String] = []) -> String? {
         var best: (score: Int, value: String)?
         for (i, o) in options.enumerated() {
             let l = o.label.lowercased()
@@ -827,6 +871,9 @@ class NexusPHPAdapter: SiteAdapter {
             }
             score -= min(l.count / 4, 6)
             if l == keyword.lowercased() { score += 6 }
+            if prefer.contains(where: { l.contains($0) }) { score += 6 }
+            if avoid.contains(where: { l.contains($0) }) { score -= 8 }
+            if bonus.contains(where: { l.contains($0) }) { score += 3 }
             if best == nil || score > best!.score { best = (score, o.value) }
         }
         return best?.value
@@ -913,11 +960,22 @@ class NexusPHPAdapter: SiteAdapter {
 
     private func applyQualitySelects(_ info: ReleaseInfo, page: String, mode: String?, _ set: (String, String) -> Void) {
         let tokens: [String: String?] = [
-            "medium": QualityTokens.medium(from: info.name, kind: info.kind),
+            "medium": QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo),
             "codec": QualityTokens.codec(from: info.name, mediainfo: info.mediainfo),
             "audiocodec": QualityTokens.audio(from: info.name),
             "standard": QualityTokens.standard(from: info.name),
         ]
+        // 动态填充：标准字段名（新版 NexusPHP 为 xxx_sel[mode] 数组式，旧版为裸 xxx_sel）
+        func tok(_ k: String) -> String? { tokens[k].flatMap { $0 } }
+        let standardToken = tok("standard")
+        let mediumToken = tok("medium")
+        let ctx = QualityMatcher.Context(
+            isUHD: ["2160p", "8k"].contains(standardToken ?? ""),
+            isDIY: QualityTokens.isDIYRelease(info),
+            // 碟片发布（含 DVD/REMUX）：媒介下拉不许退到「压制/HDTV」
+            isDisc: ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(mediumToken ?? ""),
+            kindKeywords: Self.kindKeywords.first { $0.0 == (info.kind?.rawValue ?? "other") }?.1 ?? [],
+            completed: QualityTokens.isCompletedRelease(info))
         // 显式表优先（个别站字段名/值特殊）
         if let selects = override?.qualitySelects {
             for (field, attr) in selects {
@@ -932,22 +990,19 @@ class NexusPHPAdapter: SiteAdapter {
                    let opts = HTMLUtil.selectGroups(page, name: field).first?.options,
                    let better = Self.codecFormatOption(opts, token: token, value: mapped) {
                     set(field, better)
+                // 值表写死了「Blu-ray」，而本站另有「Blu-ray/DIY」选项、这份发布又是 DIY：
+                // 用动态匹配换到 DIY 那项（天空的 medium 表只有 1=Blu-ray）
+                } else if attr == "medium", ctx.isDIY,
+                          let opts = HTMLUtil.selectGroups(page, name: field).first?.options,
+                          let v = QualityMatcher.match(token: token, attr: "medium", options: opts, ctx: ctx),
+                          opts.first(where: { $0.value == v }).map({ QualityMatcher.normalize($0.label) })?
+                              .contains("diy") == true {
+                    set(field, v)
                 } else {
                     set(field, mapped)
                 }
             }
         }
-        // 动态填充：标准字段名（新版 NexusPHP 为 xxx_sel[mode] 数组式，旧版为裸 xxx_sel）
-        func tok(_ k: String) -> String? { tokens[k].flatMap { $0 } }
-        let standardToken = tok("standard")
-        let mediumToken = tok("medium")
-        let ctx = QualityMatcher.Context(
-            isUHD: ["2160p", "8k"].contains(standardToken ?? ""),
-            isDIY: canonicalTags(info).contains("diy"),
-            // 碟片发布（含 DVD/REMUX）：媒介下拉不许退到「压制/HDTV」
-            isDisc: ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(mediumToken ?? ""),
-            kindKeywords: Self.kindKeywords.first { $0.0 == (info.kind?.rawValue ?? "other") }?.1 ?? [],
-            completed: QualityTokens.isCompletedRelease(info))
         let dyn: [(base: String, attr: String, token: String?)] = [
             ("medium_sel", "medium", tok("medium")),
             ("codec_sel", "codec", tok("codec")),

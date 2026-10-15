@@ -290,6 +290,13 @@ public final class ReseedPipeline {
         release.size = Bencode.totalLength(torrentData) ?? release.size
         report.release = release
         state.note("release: \(release.summary) torrent \(filename)")
+        // 源站信息完整性检查：简介/豆瓣/IMDb 都没取到时必须提醒，
+        // 否则用户只会看到目标站简介里孤零零一段转载引用，不知道是源站没抓全
+        if let w = release.sourceCompletenessWarning {
+            state.note("release WARN \(site.id): \(w)")
+            report.warnings.append((site.id, w))
+            opts.onSiteWarning?(site.id, w)
+        }
 
         // 3.5 大小检测：种子大小 vs VPS 剩余空间（含安全边际）
         if case .over(let msg) = SizeGuard.evaluate(sizeBytes: release.size ?? 0,

@@ -40,6 +40,11 @@ final class SiteMediumTagFixTests: XCTestCase {
         copy.name = info.name.replacingOccurrences(of: "-LuckDIY", with: "-U2")
             .replacingOccurrences(of: "LuckDIY", with: "U2")
         copy.sourceTags = info.sourceTags.filter { !$0.lowercased().contains("diy") }
+        // 中文字幕是 DIY 的碟片证据，一起抹掉才是「原生原盘」
+        copy.sourceTags = copy.sourceTags.filter { !$0.contains("中字") }
+        copy.subtitle = copy.subtitle.replacingOccurrences(of: "中字", with: "")
+        copy.descr = copy.descr.replacingOccurrences(of: "中文字幕", with: "")
+            .replacingOccurrences(of: "中字", with: "").replacingOccurrences(of: "字幕来自", with: "")
         return copy
     }
 

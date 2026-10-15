@@ -3,14 +3,18 @@ import Foundation
 /// 从发布名称解析质量标记。
 /// 用途：1) 质量型分类（HDHome/TTG 按分辨率分区）；2) 各站 medium/codec/audiocodec/standard 下拉自动填充。
 enum QualityTokens {
-    /// 媒介/源介质 token
-    static func medium(from name: String, kind: ReleaseKind?) -> String? {
+    /// 媒介/源介质 token。mediainfo 传入源页 MediaInfo/BDInfo 原文：
+    /// 里面出现 x264/x265（软件编码器）说明这份「蓝光盘」是压制出来的，应选压制媒介。
+    static func medium(from name: String, kind: ReleaseKind?, mediainfo: String = "") -> String? {
         let n = name.lowercased()
         if n.contains("remux") { return "remux" }
         if kind == .music || n.contains("flac") || n.contains("ape") || n.contains("m4a") { return "track" }
         if n.contains("hdtv") { return "hdtv" }
         let isDisc = n.contains("bluray") || n.contains("blu-ray") || n.contains("bdrip") || n.contains("brrip") || n.contains("bdiso")
         let isWeb = n.contains("web-dl") || n.contains("webdl") || n.contains("web rip") || n.contains("webrip")
+        // BDMV / ISO 是原盘目录与镜像：即便轨里写着编码器也不算压制盘
+        let isRawDisc = n.contains("bdmv") || n.contains("iso")
+        let pressed = !isRawDisc && (hasSoftwareEncoder(name) || hasSoftwareEncoder(mediainfo))
         let is8K = n.contains("8k") || n.contains("4320")
         let is4K = n.contains("2160p") || n.contains("4k") || n.contains("uhd")
         if is8K { return isDisc ? "uhdbd8k" : "uhd8k" }
@@ -20,12 +24,66 @@ enum QualityTokens {
             return "uhd"
         }
         if n.contains("1080p") || n.contains("1080i") || n.contains("720p") || n.contains("1440p") || n.contains("2k") {
-            if isDisc { return "bluray" }
+            if isDisc { return pressed ? "encode" : "bluray" }
             if isWeb { return "webdl" }
             return "encode"
         }
         if n.contains("dvd") { return "dvd" }
         return nil
+    }
+
+    /// 文本里是否出现软件编码器 x264 / x265（x.264、libx264、x265 core 这类写法归一后同样命中）。
+    /// 只认这两个词：AVC / H.264 是格式名，原盘视频轨本来就常是 AVC，不能当成压制依据。
+    static func hasSoftwareEncoder(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        let t = text.lowercased()
+            .replacingOccurrences(of: #"[.\s_\-/]"#, with: "", options: .regularExpression)
+        return t.contains("x264") || t.contains("x265")
+    }
+
+    /// 碟片发布带中文字幕的证据（内封中字 / 字幕来自字幕站 / 中英双字…）。
+    /// 刻意不认裸「中文」：那可能只是中文配音或简介正文里的词。
+    static func hasChineseSubtitleEvidence(_ info: ReleaseInfo) -> Bool {
+        let text = HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.name
+            + "\n" + info.sourceTags.joined(separator: " ")
+        // 「官字/官字组」说明中文字幕是碟自带的官方字幕，不是后期加工盘
+        if text.contains("官字") { return false }
+        return ["中字", "中文字幕", "中英双字", "中英字幕", "简中", "繁中", "简体字幕", "繁体字幕",
+                "简体中文", "繁体中文", "字幕来自", "自制字幕", "原创字幕"].contains { text.contains($0) }
+    }
+
+    /// 中国大陆原创发布：简繁中文字幕是碟自带的，不能拿来当 DIY 依据（港台、外语碟加中字仍是 DIY）
+    static func isMainlandChineseRelease(_ info: ReleaseInfo) -> Bool {
+        let r = info.region
+        guard !r.isEmpty else { return false }
+        if r.contains("港") || r.contains("澳") || r.contains("台") { return false }
+        return r.contains("大陆") || r.contains("内地") || r.contains("中国")
+    }
+
+    /// 是否 DIY 发布（媒介选「Blu-ray/DIY」、标签打 DIY 的共同判据）：
+    /// 1) 发布名或源站标签写明 DIY / 自压 / 自制 / 重制 / 汉化；
+    /// 2) 碟片类发布（原盘、REMUX、DVD）带中文字幕证据——原版碟不带中文字幕，
+    ///    带上去的几乎都是后期加工盘（动画剧场版、外语片最常见，用户明确要求按这条判）。
+    static func isDIYRelease(_ info: ReleaseInfo) -> Bool {
+        let n = info.name.uppercased()
+        if n.contains("DIY") || n.contains("自压") || n.contains("自制") || n.contains("重制") { return true }
+        if info.sourceTags.contains(where: {
+            ["diy", "自压", "自制", "重制", "汉化"].contains($0.lowercased())
+        }) { return true }
+        let m = medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo)
+        guard ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(m ?? "") else { return false }
+        if isMainlandChineseRelease(info) { return false }
+        // 认不出产地时不瞎猜：国产剧的简介也常写「中文字幕」。要有外语原声的痕迹才当外发加工盘
+        if info.region.isEmpty, !hasForeignLanguageEvidence(info) { return false }
+        return hasChineseSubtitleEvidence(info)
+    }
+
+    /// 外语原声的痕迹（简介的「语言」行、"日语中字" 这类说法）：产地缺失时用它判断
+    /// 这份发布不是国产原创（国产剧简介也常写「中文字幕」，不能当成 DIY 依据）
+    static func hasForeignLanguageEvidence(_ info: ReleaseInfo) -> Bool {
+        let t = HTMLUtil.stripTags(info.descr) + "\n" + info.subtitle + "\n" + info.genre
+        return ["日语", "日文", "英语", "英文", "韩语", "韩文", "德语", "法语", "意大利语",
+                "西班牙语", "泰语", "俄语", "粤语", "闽南语", "original language"].contains { t.contains($0) }
     }
 
     /// 分辨率型分类 token（HDHome/TTG 的分类按分辨率划分）
@@ -221,15 +279,15 @@ enum QualityTokens {
         }
         // 英文字幕（龙的「英字」按这条勾）：源站标签行之外，简介与发布名里的字幕说明也算
         if hasEnglishSubtitles(info: info) { tags.append("english_sub") }
-        if n.contains("DIY") && (n.hasPrefix("DIY") || n.contains(" DIY") || n.contains("DIY ") || n.contains("DIY-")) {
-            tags.append("diy")
-        }
-        if ["bluray", "uhdbd", "uhdbd8k"].contains(medium(from: info.name, kind: info.kind)) {
+        // DIY 判定见 isDIYRelease：写明 DIY，或碟片发布带中文字幕证据（外发加工盘）
+        if isDIYRelease(info) { tags.append("diy") }
+        if ["bluray", "uhdbd", "uhdbd8k"].contains(medium(from: info.name, kind: info.kind,
+                                                          mediainfo: info.mediainfo)) {
             tags.append("disc")
         }
         if info.isForbidReseed { tags.append("forbid") }
         if evidence.contains("限转") { tags.append("limited") }
-        if medium(from: info.name, kind: info.kind) == "remux" { tags.append("remux") }
+        if medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo) == "remux" { tags.append("remux") }
         if info.kind == .anime { tags.append("anime") }
         if isCompletedRelease(info) { tags.append("completed") }
         // 源站「标签」行是打标最权威的依据（英字/应求/题材等无法从发布名推断）。

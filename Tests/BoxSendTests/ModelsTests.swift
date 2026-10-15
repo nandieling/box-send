@@ -68,7 +68,8 @@ final class ModelsTests: XCTestCase {
         XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1", kind: .other), "remux")
         XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.2160p.UHD.BluRay.x265.DDP5.1", kind: .other), "uhdbd")
         XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.2160p.WEB-DL.x265.DDP5.1", kind: .other), "webdl")
-        XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.1080p.BluRay.x264.DTS", kind: .other), "bluray")
+        // x264/x265 是软件编码器：1080p 碟名里出现就是压制盘（4K 仍保留 UHD 媒介）
+        XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.1080p.BluRay.x264.DTS", kind: .other), "encode")
         XCTAssertEqual(QualityTokens.medium(from: "Movie.2024.1080p.x265.AAC", kind: .other), "encode")
         XCTAssertEqual(QualityTokens.medium(from: "Movie.2019.1080i.HDTV.x264", kind: .other), "hdtv")
         XCTAssertEqual(QualityTokens.medium(from: "Artist.Album.2020.FLAC.24bit", kind: .music), "track")
