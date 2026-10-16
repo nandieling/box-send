@@ -2264,7 +2264,35 @@ class NexusPHPAdapter: SiteAdapter {
         return date.timeIntervalSince(now) / 3600
     }
 
-    enum PageOwnership { case ours, theirs, unknown }
+    typealias PageOwnership = TorrentOwnership
+
+    /// 重跑时判这条种子归谁。不比 info hash：跨站转种 info 段一样、hash 也一样，
+    /// 说明不了归属。只看发布者是不是本账号，以及这条种子上有没有我自己的编辑入口。
+    func torrentOwnership(detailURL: String, uploadedAt: Date?) -> TorrentOwnership {
+        guard let page = try? client.fetchHTML(detailURL, referer: site.url) else { return .unknown }
+        return Self.reseedOwnership(page, torrentID: Self.torrentIDFromDetail(detailURL),
+                                    uploadedAt: uploadedAt)
+    }
+
+    /// 详情页这条种子归谁：先比发布者与本账号；看不出就看这条种子上有没有我自己的编辑入口；
+    /// 还看不出就看发布时间 —— 站里那条比本地记下「转种成功」还早一天半以上，绝不可能是我们发的
+    /// （猫站这类允许匿名发布，发布者一行写「匿名」，只能靠时间判）。
+    /// 36 小时余量是把站点时区差和发种前后翻页的延迟也算进去。
+    static func reseedOwnership(_ html: String, torrentID: String?,
+                                uploadedAt: Date? = nil) -> TorrentOwnership {
+        if let me = currentUserID(html), let uploader = uploaderID(html) {
+            return me == uploader ? .ours : .theirs
+        }
+        if let id = torrentID,
+           html.contains("edit.php?id=" + id) || html.contains("editphp.php?id=" + id) {
+            return .ours        // 编辑/删除入口只对发布者（和管理员）可见
+        }
+        if let created = pageCreatedAt(html), let at = uploadedAt,
+           at.timeIntervalSince(created) > 36 * 3600 {
+            return .theirs
+        }
+        return .unknown
+    }
 
     /// 详情页这条种子是不是本次上传新建的
     static func pageOwnership(_ html: String, torrentID: String?, ourHash: String?,

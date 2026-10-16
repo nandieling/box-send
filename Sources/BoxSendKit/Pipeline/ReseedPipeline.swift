@@ -351,15 +351,19 @@ public final class ReseedPipeline {
                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种中…", phase: .working))
                     let tAdapter = adapterFactory(ts, client, debugDir)
                     if state.isUploaded(site: tid, key: release.dedupKey) {
-                        // 此前判定「站内已有」的站：那次可能没找回站内链接，推送就落空了。
-                        // 这次补查一次并把站内那条推给下载器，别只会重复报「已转种」
+                        // 本地那条记录只说「此前发过」，没说站内那条是谁发的。重跑时回站内看一眼：
+                        // 别人先发的要显示「站内已有该种子」并把那条推给下载器，别一律报「转种成功」
                         let wasExisting = state.isExisting(site: tid, key: release.dedupKey)
                         var found = state.targetURL(site: tid, key: release.dedupKey)
                             .map { absoluteTargetURL(tid, $0) }
                         if found == nil {
-                            found = (try? bounded(min(60, opts.siteTimeout / 3), "站内回查") {
-                                try tAdapter.searchExists(release, relaxed: true)
-                            }) ?? nil
+                            // 那次没找回站内链接（或压根没发成）：按名回站内查，先严格再放宽
+                            found = ((try? bounded(min(60, opts.siteTimeout / 3), "站内查重") {
+                                        try tAdapter.searchExists(release)
+                                      }) ?? nil)
+                                ?? (try? bounded(min(60, opts.siteTimeout / 3), "站内回查") {
+                                        try tAdapter.searchExists(release, relaxed: true)
+                                      }) ?? nil
                             if let u = found {
                                 let uAbs = absoluteTargetURL(tid, u)
                                 state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
@@ -367,17 +371,37 @@ public final class ReseedPipeline {
                                 state.note("reseed RECOVER \(tid): 补查到站内已有种子 \(uAbs)")
                             }
                         }
+                        // 站内这条归谁：认不出（框架不提供/页面读不出）时沿用此前的判定
+                        var duplicate = wasExisting
                         if let u = found {
-                            report.outcomes.append((tid, true, wasExisting ? "站内已有该种子：\(u)"
-                                                                            : "转种成功（此前已转种）"))
-                            opts.onSiteEvent?(SiteStatus(
-                                siteID: tid, text: wasExisting ? "站内已有该种子" : "转种成功",
-                                phase: wasExisting ? .exists : .done,
-                                detail: (wasExisting ? "此前已确认站内有这条种子\n\(u)"
-                                                     : "此前已转种过，本次跳过上传\n\(u)")))
-                            pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: wasExisting,
+                            switch tAdapter.torrentOwnership(
+                                    detailURL: u,
+                                    uploadedAt: state.uploadedAt(site: tid, key: release.dedupKey)) {
+                            case .ours:
+                                duplicate = false
+                                state.unmarkExisting(site: tid, key: release.dedupKey)
+                            case .theirs: duplicate = true
+                            case .unknown: break
+                            }
+                        }
+                        if let u = found, duplicate {
+                            state.markExisting(site: tid, key: release.dedupKey)
+                            let title = tAdapter.duplicateHitTitle
+                            report.outcomes.append((tid, true, "站内已有该种子：\(u)"))
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "站内已有该种子", phase: .exists,
+                                                         detail: [wasExisting ? "此前已确认站内有这条种子"
+                                                                              : "站内这条不是我发的（别人先发）",
+                                                                  title, u].compactMap { $0 }
+                                                            .filter { !$0.isEmpty }.joined(separator: "\n")))
+                            pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: true,
                                            debugDir: debugDir, opts: opts, report: &report)
-                        } else if wasExisting {
+                        } else if let u = found {
+                            report.outcomes.append((tid, true, "转种成功（此前已转种）"))
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
+                                                         detail: "此前已转种过，本次跳过上传\n\(u)"))
+                            pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: false,
+                                           debugDir: debugDir, opts: opts, report: &report)
+                        } else if duplicate {
                             report.outcomes.append((tid, true, "站内已有该种子（没能定位站内链接，未推送）"))
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "站内已有该种子", phase: .exists,
                                                          detail: "站内已有这条种子，但两次都没定位到它的详情页，本次未推送"))

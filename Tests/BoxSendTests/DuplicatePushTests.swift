@@ -102,6 +102,8 @@ final class DuplicatePushTests: XCTestCase {
         var override: SiteOverride? { nil }
         /// 第一次宽松回查查不到（站点提示页也没给链接），第二次才补到
         let relaxedCalls: DupCounter
+        /// 重跑时「站内这条归谁」的答案
+        var owned: TorrentOwnership = .unknown
         init(site: SiteConfig, client: HTTPClient, relaxedCalls box: DupCounter) {
             self.site = site; self.client = client; self.relaxedCalls = box
         }
@@ -120,6 +122,7 @@ final class DuplicatePushTests: XCTestCase {
             return relaxedCalls.n >= 2 ? "details.php?id=768037" : nil
         }
         var canPrecheckDuplicate: Bool { true }
+        func torrentOwnership(detailURL: String, uploadedAt: Date?) -> TorrentOwnership { owned }
         func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
             UploadOutcome(success: true, message: "站点回「种子已存在」，本次未新发种",
                           detailURL: nil, alreadyExists: true)
@@ -167,6 +170,96 @@ final class DuplicatePushTests: XCTestCase {
         XCTAssertTrue(events.contains("pter/站内已有该种子"), "\(events)")
         XCTAssertTrue(events.contains("pter/推送已有种子"), "\(events)")
     }
+
+    // MARK: - 4 重跑：回站内看清那条是谁发的
+
+    private let nav = "<span>欢迎回来, <a href=\"userdetails.php?id=14368\">andie</a></span>"
+
+    func testOwnershipReadsUploaderLine() {
+        let mine = nav + "<td>由 <a href=\"userdetails.php?id=14368\">andie</a> 发布于"
+            + "<span title=\"2026-03-07 22:23:12\">7月12天前</span></td>"
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(mine, torrentID: "768037"), .ours)
+        let theirs = nav + "<td>由 <a href=\"userdetails.php?id=99999\">someone</a> 发布于"
+            + "<span title=\"2026-03-07 22:23:12\">7月12天前</span></td>"
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(theirs, torrentID: "768037"), .theirs)
+    }
+
+    /// 猫站允许匿名发布：发布者一行写「匿名」，只能看发布时间与本地记下转种的时间差多久
+    func testOwnershipFallsBackToPublishTimeAndEditLink() {
+        let anon = nav + "<td>由&nbsp;<i>匿名</i>发布于<span title=\"2026-03-07 22:23:12\">7月12天前</span></td>"
+        let today = Date(timeIntervalSince1970: 1_792_100_000)     // 2026-10-16
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(anon, torrentID: "768037", uploadedAt: today),
+                       .theirs, "站里那条比本次转种早半年，不可能是我们发的")
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(anon, torrentID: "768037", uploadedAt: nil),
+                       .unknown, "认不出发布者也没时间参照时不下结论")
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(anon + "<a href=\"edit.php?id=768037\">编辑</a>",
+                                                      torrentID: "768037", uploadedAt: today),
+                       .ours, "页面上有我自己的编辑入口，就是这条是我发的")
+        let fresh = nav + "<td>由&nbsp;<i>匿名</i>发布于<span title=\"2026-10-16 10:00:00\">1小时前</span></td>"
+        XCTAssertEqual(NexusPHPAdapter.reseedOwnership(fresh, torrentID: "768037", uploadedAt: today),
+                       .unknown, "时间对得上时不判成别人的")
+    }
+
+    /// 早前那次只记下「已转种」，站内这条其实是别人发的：重跑要显示「站内已有该种子」并推那条
+    func testRerunReportsDuplicateWhenSiteCopyIsNotOurs() throws {
+        var cfg = AppConfig.template()
+        cfg.sourceSites = [SiteConfig(id: "src", name: "src", url: "https://src.invalid/",
+                                      framework: .nexusPHP, enabled: true),
+                           SiteConfig(id: "pter", name: "猫", url: "https://pterclub.net/",
+                                      framework: .nexusPHP, enabled: true)]
+        cfg.targetSites = ["pter"]
+        let state = StateStore(dataDir: "/tmp/boxsend-dup-\(UUID().uuidString)")
+        let key = stateTestKey
+        state.markUploaded(site: "pter", key: key)
+        state.markTargetURL(site: "pter", key: key, url: "https://pterclub.net/details.php?id=768037")
+        let dl = FakeDownloader()
+        let pipe = ReseedPipeline(config: cfg, cookies: CookieStore(), state: state, downloader: dl)
+        pipe.adapterFactory = { s, client, _ in
+            let a = ExistsAdapter(site: s, client: client, relaxedCalls: DupCounter())
+            a.owned = s.id == "pter" ? .theirs : .unknown
+            return a
+        }
+        var events: [String] = []
+        var o = ReseedPipeline.Options()
+        o.onSiteEvent = { e in events.append("\(e.siteID)/\(e.text)") }
+        o.onSitePush = { e in events.append("\(e.siteID)/\(e.text)") }
+
+        let report = try pipe.run(detailURL: "https://src.invalid/details.php?id=1",
+                                  sourceSiteID: "src", opts: o)
+        XCTAssertTrue(events.contains("pter/站内已有该种子"), "\(events)")
+        XCTAssertTrue(events.contains("pter/推送已有种子"), "\(events)")
+        XCTAssertTrue(report.outcomes.contains { $0.site == "pter" && $0.message.contains("768037") })
+        XCTAssertTrue(state.isExisting(site: "pter", key: key), "看清是别人的之后就记下「站内已有」")
+    }
+
+    /// 站内那条确实是自己发的：保持「转种成功（此前已转种）」，别乱标重复
+    func testRerunKeepsSuccessWhenSiteCopyIsOurs() throws {
+        var cfg = AppConfig.template()
+        cfg.sourceSites = [SiteConfig(id: "src", name: "src", url: "https://src.invalid/",
+                                      framework: .nexusPHP, enabled: true),
+                           SiteConfig(id: "pter", name: "猫", url: "https://pterclub.net/",
+                                      framework: .nexusPHP, enabled: true)]
+        cfg.targetSites = ["pter"]
+        let state = StateStore(dataDir: "/tmp/boxsend-dup-\(UUID().uuidString)")
+        state.markUploaded(site: "pter", key: stateTestKey)
+        state.markTargetURL(site: "pter", key: stateTestKey, url: "https://pterclub.net/details.php?id=1")
+        state.markExisting(site: "pter", key: stateTestKey)
+        let pipe = ReseedPipeline(config: cfg, cookies: CookieStore(), state: state,
+                                  downloader: FakeDownloader())
+        pipe.adapterFactory = { s, client, _ in
+            let a = ExistsAdapter(site: s, client: client, relaxedCalls: DupCounter())
+            a.owned = .ours
+            return a
+        }
+        var events: [String] = []
+        var o = ReseedPipeline.Options()
+        o.onSiteEvent = { e in events.append("\(e.siteID)/\(e.text)") }
+
+        _ = try pipe.run(detailURL: "https://src.invalid/details.php?id=1", sourceSiteID: "src", opts: o)
+        XCTAssertTrue(events.contains("pter/转种成功"), "\(events)")
+        XCTAssertFalse(state.isExisting(site: "pter", key: stateTestKey), "认出是自己的种子就撤掉重复标记")
+    }
+
 }
 
 /// 跨适配器实例共享的宽松回查计数

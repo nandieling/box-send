@@ -80,6 +80,12 @@ public final class StateStore {
         snapshot.uploaded[site, default: [:]][key] = Date().timeIntervalSince1970
         saveLocked()
     }
+    /// 本站记下「转种成功」的时间
+    public func uploadedAt(site: String, key: String) -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        guard let t = snapshot.uploaded[site]?[key] else { return nil }
+        return Date(timeIntervalSince1970: t)
+    }
     /// 该站此前是判定「站内已有」（不是本次新发种）
     public func isExisting(site: String, key: String) -> Bool {
         lock.lock(); defer { lock.unlock() }
@@ -88,6 +94,13 @@ public final class StateStore {
     public func markExisting(site: String, key: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.existing[site, default: [:]][key] = Date().timeIntervalSince1970
+        saveLocked()
+    }
+    /// 回站内看清了那条是自己发的：别再挂着「站内已有」的标记
+    public func unmarkExisting(site: String, key: String) {
+        lock.lock(); defer { lock.unlock() }
+        guard snapshot.existing[site]?[key] != nil else { return }
+        snapshot.existing[site]?.removeValue(forKey: key)
         saveLocked()
     }
     public func isPushed(key: String) -> Bool {

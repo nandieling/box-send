@@ -20,6 +20,9 @@ public protocol SiteAdapter: AnyObject {
     var canPrecheckDuplicate: Bool { get }
     /// 上一次查重在站内认出的那条已有种子的标题：UI 用它说清「重复的是哪一条」
     var duplicateHitTitle: String? { get }
+    /// 站内这条种子归谁（读详情页判定；认不出返回 unknown）。
+    /// uploadedAt 是本地记下「本站转种成功」的时间：站内那条比它还早很多，就不可能是我们发的。
+    func torrentOwnership(detailURL: String, uploadedAt: Date?) -> TorrentOwnership
     /// 上传（转种）
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
     /// 上传字段预览（调试用，CLI info --preview）
@@ -34,11 +37,15 @@ extension SiteAdapter {
     }
     var canPrecheckDuplicate: Bool { false }
     var duplicateHitTitle: String? { nil }
+    func torrentOwnership(detailURL: String, uploadedAt: Date?) -> TorrentOwnership { .unknown }
     /// 默认不支持宽松判定，退回严格查重
     func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? { try searchExists(info) }
     /// 框架暂无反查需求（源站直接给出 TMDB 链接的站够用）
     func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?) {}
 }
+
+/// 站内这条种子是不是本账号发的：重跑时用来分清「此前我发的」与「别人早就发过」
+public enum TorrentOwnership { case ours, theirs, unknown }
 
 public struct UploadOutcome {
     public var success: Bool
