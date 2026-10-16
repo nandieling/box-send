@@ -70,6 +70,39 @@ final class BluRayDIYTests: XCTestCase {
         XCTAssertFalse(QualityTokens.isDIYRelease(web))
     }
 
+    /// 蓝光原盘与蓝光 DIY 是两个概念：蓝光盘没中文字幕 = 原盘，加装中文字幕 = DIY；
+    /// REMUX 不推 DIY（天空那条 1080p Blu-ray Remux 内封中字曾被误打）
+    func testBluRaySubtitlesDecideDIYRemuxNeverInferred() throws {
+        let strip: (ReleaseInfo) -> ReleaseInfo = { info in
+            var c = info
+            c.subtitle = ""
+            c.sourceTags = c.sourceTags.filter { !$0.contains("中字") }
+            for word in ["中文字幕", "内封中字", "中字", "字幕来自"] {
+                c.descr = c.descr.replacingOccurrences(of: word, with: "")
+            }
+            return c
+        }
+        let diy = try real
+        XCTAssertTrue(QualityTokens.isDIYRelease(diy), "蓝光盘带中字 = 蓝光 DIY")
+
+        var clean = strip(diy)
+        XCTAssertFalse(QualityTokens.isDIYRelease(clean), "没有中文字幕的蓝光盘就是蓝光原盘")
+        XCTAssertTrue(QualityTokens.canonicalTags(clean).contains("disc"), "原盘标签照旧")
+
+        var remux = diy
+        remux.name = "Black Lagoon S01 2006 1080p Blu-ray Remux AVC LPCM 2.0-LuckAni"
+        XCTAssertFalse(QualityTokens.isDIYRelease(remux), "带中字的 Remux 不推 DIY")
+        XCTAssertTrue(QualityTokens.canonicalTags(remux).contains("remux"))
+
+        // 源站明写 DIY 的 Remux 仍然跟随；而 -LuckDIY 只是发布组名，不算明写
+        var declared = remux
+        declared.sourceTags = ["官方", "中字", "DIY"]
+        XCTAssertTrue(QualityTokens.isDIYRelease(declared), "源站标签写明 DIY 就跟随")
+        XCTAssertTrue(QualityTokens.hasDIYToken("Movie 2013 1080p Blu-ray DIY-x"))
+        XCTAssertFalse(QualityTokens.hasDIYToken("Movie 2013 1080p Blu-ray-LuckDIY"),
+                       "发布组名 LuckDIY 不是 DIY 词")
+    }
+
     // MARK: - 媒介 / 标签
 
     /// 站点上传页（选项文案取自实测表单）

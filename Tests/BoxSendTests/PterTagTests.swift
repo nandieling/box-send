@@ -40,7 +40,7 @@ final class PterTagTests: XCTestCase {
         let tags = QualityTokens.canonicalTags(info)
         XCTAssertTrue(tags.contains("chinese_sub"), "\(tags)")
         XCTAssertFalse(tags.contains("official"), "官方是源站概念，不该作为目标站标签外打：\(tags)")
-        XCTAssertTrue(tags.contains("diy"), "Remux 碟带中字 = 外发加工盘：\(tags)")
+        XCTAssertFalse(tags.contains("diy"), "REMUX 不推 DIY（站点的 DIY 专指蓝光 DIY）：\(tags)")
     }
 
     // MARK: - 猫上传页复选框
@@ -59,7 +59,7 @@ final class PterTagTests: XCTestCase {
         XCTAssertTrue(got.contains("zhongzi=yes"), "未勾选中字：\(got.filter { $0.contains("zhong") })")
         XCTAssertFalse(got.contains("guanfang=yes"), "官种只有源站能标，转出去的种子不是官种")
         XCTAssertFalse(got.contains("jinzhuan=yes"), "不该勾禁转")
-        XCTAssertTrue(got.contains("diy=yes"), "带中字的碟片发布是 DIY，要勾 DIY")
+        XCTAssertFalse(got.contains("diy=yes"), "Remux 带中字也不是 DIY，不该勾 DIY")
         XCTAssertFalse(got.contains("ensub=yes"), "不该勾英字")
     }
 

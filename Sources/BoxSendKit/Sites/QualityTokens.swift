@@ -60,18 +60,29 @@ enum QualityTokens {
         return r.contains("大陆") || r.contains("内地") || r.contains("中国")
     }
 
-    /// 是否 DIY 发布（媒介选「Blu-ray/DIY」、标签打 DIY 的共同判据）：
-    /// 1) 发布名或源站标签写明 DIY / 自压 / 自制 / 重制 / 汉化；
-    /// 2) 碟片类发布（原盘、REMUX、DVD）带中文字幕证据——原版碟不带中文字幕，
-    ///    带上去的几乎都是后期加工盘（动画剧场版、外语片最常见，用户明确要求按这条判）。
+    /// 发布名里是否把 DIY 当独立词写（DIY. / .DIY / DIY- / [DIY] 都算）。
+    /// 必须看边界：发布组名 -LuckDIY 只是组名，不代表「这份发布是 DIY」。
+    static func hasDIYToken(_ name: String) -> Bool {
+        name.range(of: #"(^|[^A-Z0-9])DIY([^A-Z0-9]|$)"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// 是否 DIY 发布（媒介选「Blu-ray/DIY」、标签打 DIY 的共同判据）。
+    /// 蓝光原盘与蓝光 DIY 是两个概念：蓝光盘没中文字幕 = 原盘，加装了中文字幕 = DIY。
+    /// 1) 发布名把 DIY 写成独立词，或源站标签行有 DIY / 自压 / 自制 / 重制 / 汉化
+    ///    —— 这是明写，什么媒介都跟随；
+    /// 2) 没明写时，只有蓝光盘（Blu-ray / UHD 碟）用「带中文字幕」推 DIY。
+    ///    REMUX 不推：Remux 是原盘无损封装，站点的 DIY 专指蓝光 DIY
+    ///    （天空那条 1080p Blu-ray Remux 内封中字曾被误打 DIY）。
     static func isDIYRelease(_ info: ReleaseInfo) -> Bool {
-        let n = info.name.uppercased()
-        if n.contains("DIY") || n.contains("自压") || n.contains("自制") || n.contains("重制") { return true }
+        if hasDIYToken(info.name) { return true }
+        let n = info.name
+        if n.contains("自压") || n.contains("自制") || n.contains("重制") { return true }
         if info.sourceTags.contains(where: {
             ["diy", "自压", "自制", "重制", "汉化"].contains($0.lowercased())
         }) { return true }
         let m = medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo)
-        guard ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(m ?? "") else { return false }
+        guard ["bluray", "uhdbd", "uhdbd8k"].contains(m ?? "") else { return false }
         if isMainlandChineseRelease(info) { return false }
         // 认不出产地时不瞎猜：国产剧的简介也常写「中文字幕」。要有外语原声的痕迹才当外发加工盘
         if info.region.isEmpty, !hasForeignLanguageEvidence(info) { return false }
