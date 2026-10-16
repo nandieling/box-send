@@ -21,6 +21,15 @@ public struct CookieRawMerge {
         return h
     }
 
+    /// 两个 host 是不是同一个站：完全相同，或一个是另一个的主域/子域。
+    /// 浏览器备份里 `.pthome.net` 与站点配的 `www.pthome.net` 必须认成同一站，
+    /// 否则同步会把这站整站判成「本地无 cookie」（mac 版同一规则）
+    public static func hostMatches(_ a: String, _ b: String) -> Bool {
+        let na = norm(a), nb = norm(b)
+        guard !na.isEmpty, !nb.isEmpty else { return false }
+        return na == nb || na.hasSuffix("." + nb) || nb.hasSuffix("." + na)
+    }
+
     public mutating func add(host: String, name: String, value: String, exp: Double?) {
         let h = Self.norm(host)
         guard !h.isEmpty, !name.isEmpty else { return }

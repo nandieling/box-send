@@ -39,6 +39,8 @@ public final class AppService {
     private var eventSeq = 0
     private var eventLog: [Event] = []
     private var checkResults: [String: StateStore.CookieCheckRec] = [:]
+    /// 此刻正在检测的站（界面据此在单张卡片上写「检测中」，不必等整批跑完）
+    private var checkingSites: Set<String> = []
     private var busyCookieSync = false
     private var busyCookieCheck = false
     private var busyDownloader = false
@@ -592,30 +594,9 @@ public final class AppService {
             }
         }
 
-        var imported = 0
-        var kept = 0
-        var skipped = 0
-        lock.lock()
-        let sites = cfg.managedSites.isEmpty ? cfg.sourceSites : cfg.managedSites
-        for (label, raws) in rawsBySource {
-            for (host, raw) in raws where !raw.isEmpty {
-                guard let site = matchSite(host, in: sites) else { skipped += 1; continue }
-                let h = Self.host(of: site)
-                if checkResults[site.id]?.ok == true {
-                    kept += 1
-                    continue                      // 本地这份是有效的，不被备份覆盖
-                }
-                if cookies.mergeRawString(host: h, raw) {
-                    imported += 1
-                } else {
-                    kept += 1
-                }
-            }
-            note("cookie: \(label) 备份已拉取")
-        }
+        let (imported, kept, skipped) = importBackupRaws(rawsBySource)
         cookieMessage = "同步完成：导入 \(imported) 个站，保留 \(kept) 个"
             + (errors.isEmpty ? "" : "；\(errors.joined(separator: "；"))")
-        lock.unlock()
         persistCookies()
         emit("note", nil, cookieMessage ?? "", "", phase: nil, ok: errors.isEmpty)
         // 同步完立刻逐站复检（mac 版同一步）：界面上要看到新导入的 cookie 到底能不能用
@@ -627,10 +608,49 @@ public final class AppService {
         return ["imported": imported, "kept": kept, "skipped": skipped, "errors": errors]
     }
 
-    /// 备份里的 host 与配置里的站点匹配（去 www、大小写不敏感）
+    /// 把两路备份拉到的 raw cookie 落到各站头上（同步与自动任务共用；测试也直接打这条）。
+    /// 本地已检测有效的站不被备份覆盖；认不出是哪个站的 host 记进 skipped。
+    @discardableResult
+    func importBackupRaws(_ sources: [(label: String, raws: [String: String])])
+        -> (imported: Int, kept: Int, skipped: Int) {
+        var imported = 0, kept = 0, skipped = 0
+        mutate {
+            let sites = cfg.managedSites.isEmpty ? cfg.sourceSites : cfg.managedSites
+            for (label, raws) in sources {
+                for (host, raw) in raws where !raw.isEmpty {
+                    guard let site = matchSite(host, in: sites) else { skipped += 1; continue }
+                    if checkResults[site.id]?.ok == true {
+                        kept += 1
+                        continue                  // 本地这份是有效的，不被备份覆盖
+                    }
+                    if cookies.mergeRawString(host: Self.host(of: site), raw) {
+                        imported += 1
+                    } else {
+                        kept += 1
+                    }
+                }
+                note("cookie: \(label) 备份已拉取")
+            }
+        }
+        persistCookies()
+        return (imported, kept, skipped)
+    }
+
+    /// 备份里的 host 与配置里的站点匹配。先认完全相同的那个，再退一步按主域/子域认：
+    /// 浏览器备份按 cookie 域分组，铂金家这类站点的 cookie 常记在 `pthome.net` 下，
+    /// 站点配的却是 `www.pthome.net`，只比字符串会把这站整站判成「本地无 cookie」
+    /// （mac 版一直是这么认的，两端这里必须一致）
     private func matchSite(_ host: String, in sites: [SiteConfig]) -> SiteConfig? {
-        let want = CookieRawMerge.norm(host)
-        return sites.first { CookieRawMerge.norm(Self.host(of: $0)) == want }
+        Self.matchBackupHost(host, in: sites)
+    }
+
+    /// 纯函数版（测试直接打这条）：完全相同的那个优先，其次才按主域/子域认
+    static func matchBackupHost(_ backupHost: String, in sites: [SiteConfig]) -> SiteConfig? {
+        let want = CookieRawMerge.norm(backupHost)
+        if let exact = sites.first(where: { CookieRawMerge.norm(Self.host(of: $0)) == want }) {
+            return exact
+        }
+        return sites.first { CookieRawMerge.hostMatches(want, CookieRawMerge.norm(Self.host(of: $0))) }
     }
 
     /// 手动填写弹窗的写入口：按站点凭据类型分流。
@@ -770,27 +790,64 @@ public final class AppService {
         queue.async { [weak self] in
             guard let self else { return }
             let c = self.cfg
-            let client = HTTPClient(cookies: self.cookies, userAgent: c.userAgent)
-            client.setRequestTimeout(20)
-            var done = 0
+            // 同时在检的站点数（mac 版同一档）。不是「一批检完再检下一批」：
+            // 那样每批都要等最慢的那个站，慢站多的时候整批被它拖住
+            let slots = DispatchSemaphore(value: Self.cookieCheckConcurrency)
+            let inflight = DispatchGroup()
+            let counter = CheckCounter()
             for site in targets {
-                let stale = self.lock.withLock { self.checkGeneration != generation }
-                if stale { break }
-                if !self.hasCredential(site) {
-                    self.recordCheck(site.id, ok: false, "本地无 cookie")
-                    done += 1
-                    self.emit("site", site.id, "\(site.name): 本地无 cookie", "", phase: "check", ok: false)
-                    continue
+                inflight.enter()
+                queue.async {
+                    slots.wait()
+                    defer { slots.signal(); inflight.leave() }
+                    if self.lock.withLock({ self.checkGeneration != generation }) { return }
+                    guard self.hasCredential(site) else {
+                        self.recordCheck(site.id, ok: false, "本地无 cookie")
+                        counter.bump()
+                        self.emit("site", site.id, "\(site.name): 本地无 cookie", "", phase: "check", ok: false)
+                        return
+                    }
+                    // 每站一个连接池 + 时长上限：卡死的站只作废它自己，也不占着别人
+                    let cap = CookieCheck.timeout
+                    let client = HTTPClient(cookies: self.cookies, userAgent: c.userAgent)
+                    client.setRequestTimeout(cap)
+                    self.markChecking([site.id])
+                    let r = CookieCheck.check(site: site, client: client,
+                                              budget: CookieCheck.Budget(
+                                                  until: Date().addingTimeInterval(cap), seconds: cap))
+                    self.clearChecking(site.id)
+                    self.recordCheck(r.siteID, ok: r.ok, r.message)
+                    counter.bump()
+                    self.emit("site", r.siteID, "\(site.name): \(r.message)", "", phase: "check", ok: r.ok)
                 }
-                let r = CookieCheck.check(site: site, client: client)
-                self.recordCheck(r.siteID, ok: r.ok, r.message)
-                done += 1
-                self.emit("site", r.siteID, "\(site.name): \(r.message)", "", phase: "check", ok: r.ok)
             }
-            self.mutate { self.busyCookieCheck = false }
-            self.emit("note", nil, "cookie 检测完成：\(done) 个站", "", phase: nil, ok: true)
+            inflight.wait()
+            self.mutate {
+                self.checkingSites.removeAll()
+                self.busyCookieCheck = false
+            }
+            self.emit("note", nil, "cookie 检测完成：\(counter.value) 个站", "", phase: nil, ok: true)
         }
         return ["started": true, "checked": targets.count]
+    }
+
+    /// 同时在检的站点数（与 mac 版同一档）
+    static let cookieCheckConcurrency = 4
+
+    /// 检测完成数（多站同时往上加）
+    private final class CheckCounter: @unchecked Sendable {
+        private let l = NSLock()
+        private var n = 0
+        func bump() { l.lock(); n += 1; l.unlock() }
+        var value: Int { l.lock(); defer { l.unlock() }; return n }
+    }
+
+    private func markChecking(_ ids: [String]) {
+        mutate { checkingSites.formUnion(ids) }
+    }
+
+    private func clearChecking(_ id: String) {
+        mutate { checkingSites.remove(id) }
     }
 
     private func recordCheck(_ siteID: String, ok: Bool, _ message: String) {
@@ -907,7 +964,7 @@ public final class AppService {
         return (es.overrides?.apiBase ?? "") != "" || (es.overrides?.usesAPIKey == true)
     }
 
-    private static func host(of site: SiteConfig) -> String {
+    static func host(of site: SiteConfig) -> String {
         (URL(string: site.url)?.host ?? site.url).lowercased()
     }
 
@@ -1027,6 +1084,7 @@ public final class AppService {
                 "hasCookie": snap[h] != nil && !(snap[h]?.isEmpty ?? true),
                 "check": rec.map { ["ok": $0.ok, "message": $0.message, "time": $0.time] }
                     ?? ["ok": NSNull(), "message": "", "time": 0] as [String: Any],
+                "checking": checkingSites.contains(s.id),
                 "upLimitMB": c.downloader.siteUpLimits[s.id].map { Int($0 / 1_048_576) } ?? 0,
                 "warning": siteWarnings[s.id] ?? "",
                 "needsSourceQuote": SiteRegistry.needsSourceQuoteField(s),

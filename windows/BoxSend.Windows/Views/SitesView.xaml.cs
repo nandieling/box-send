@@ -18,6 +18,9 @@ public partial class SitesView : UserControl
         _model = model;
         InitializeComponent();
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Reload);
+        // cookie 检测是逐站出结论的：局部刷新时只更新工具条和卡片上的那行状态，
+        // 不重建整页（重建会把用户正在填的限速框、拖拽状态一起清掉）
+        _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateToolbar);
         Reload();
     }
 
@@ -39,6 +42,11 @@ public partial class SitesView : UserControl
             });
         Hint.Text = $"共 {_model.Sites.Count(s => s.Managed)} 个已纳管站点"
             + $"（本地 cookie 记录 {_model.CookieTotal} 条）";
+        UpdateToolbar();
+    }
+
+    private void UpdateToolbar()
+    {
         BtnStopCheck.Visibility = _model.BusyCookieCheck ? Visibility.Visible : Visibility.Collapsed;
         BtnCheckAll.Content = _model.BusyCookieCheck ? "检测中…" : "检测全部 cookie";
         BtnCheckAll.IsEnabled = !_model.BusyCookieCheck;
@@ -228,9 +236,15 @@ public partial class SitesView : UserControl
             Text = s.Enabled ? s.CredentialText : "未开启",
             FontSize = 11,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Foreground = (Brush)FindResource(s.CheckOk == true ? "Accent" : "TextMuted"),
+            Foreground = (Brush)FindResource(s.StatusTone),
         };
         if (s.CheckMessage.Length > 0) status.ToolTip = s.CheckMessage;
+        s.PropertyChanged += (_, _) => Dispatcher.Invoke(() =>
+        {
+            status.Text = s.Enabled ? s.CredentialText : "未开启";
+            status.Foreground = (Brush)FindResource(s.StatusTone);
+            if (s.CheckMessage.Length > 0) status.ToolTip = s.CheckMessage;
+        });
         body.Children.Add(status);
         if (s.Warning.Length > 0)
             body.Children.Add(new TextBlock
@@ -430,8 +444,13 @@ public partial class SitesView : UserControl
         new Dialogs.AddSitesWindow(_model, groupIndex) { Owner = Window.GetWindow(this) }.ShowDialog();
     }
 
-    private void OnSyncCookies(object sender, RoutedEventArgs e) =>
-        _model.Call("cookies.sync", new { source = "both" });
+    // 两个来源都拉一次要走好几秒网络：丢给核心库后台跑，界面线程不参与
+    private async void OnSyncCookies(object sender, RoutedEventArgs e)
+    {
+        BtnSync.IsEnabled = false;
+        BtnSync.Content = "同步中…";
+        await _model.TryAsync("cookies.sync", new { source = "both" });
+    }
 
     private void OnCheckAll(object sender, RoutedEventArgs e) =>
         _model.Call("cookies.check", new { ids = Array.Empty<string>(), force = true });

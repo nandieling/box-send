@@ -234,6 +234,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
             foreach (var g in snap["groups"]?.AsArray() ?? new JsonArray()) Groups.Add(GroupRow.From(g!));
             Sites.Clear();
             foreach (var s in snap["sites"]?.AsArray() ?? new JsonArray()) Sites.Add(SiteRow.From(s!));
+            _siteIndex = null;      // 行对象全换了，逐站索引跟着作废
             CookieHosts.Clear();
             foreach (var h in snap["cookies"]?["hosts"]?.AsArray() ?? new JsonArray())
                 CookieHosts.Add(CookieHostRow.From(h!));
@@ -241,6 +242,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
             ResyncZipTimer();
             FullRefreshed?.Invoke(this, EventArgs.Empty);
         }
+        else ApplySiteStatus(snap["sites"]);
         Refreshed?.Invoke(this, EventArgs.Empty);
         Raise(nameof(Running), nameof(RunningStep), nameof(LastReport), nameof(CookieMessage),
               nameof(DownloaderMessage), nameof(ZipMessage), nameof(UpdateMessage), nameof(ConfigError),
@@ -308,6 +310,40 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         _api.TryInvoke(method, out var error, parameters);
         return error;
     }
+
+    /// 要走网络的动作都走这条：核心库就在本进程里，但同步一次 cookie 得等几秒网页请求，
+    /// 直接在界面线程调用会把整个窗口挂成「未响应」（mac 版这些都在后台队列里跑）。
+    /// 跑完补一次快照；返回 null 表示成功。
+    public async Task<string?> TryAsync(string method, object? parameters = null)
+    {
+        var error = await Task.Run(() =>
+        {
+            _api.TryInvoke(method, out var err, parameters);
+            return err;
+        });
+        await RefreshAsync(full: false);
+        return error;
+    }
+
+    private Dictionary<string, SiteRow>? _siteIndex;
+
+    /// cookie 检测结论逐站写回现有卡片。整站列表只在配置变化时重建，
+    /// 只等重建的话，先检完的站也会一直停在「检测中」。
+    private void ApplySiteStatus(JsonNode? array)
+    {
+        if (array is not JsonArray arr) return;
+        foreach (var n in arr)
+        {
+            if (n is not JsonObject o) continue;
+            var id = Text(o["id"]);
+            if (id.Length == 0) continue;
+            _siteIndex ??= Sites.ToDictionary(r => r.Id, r => r);
+            if (_siteIndex.TryGetValue(id, out var row)) row.ApplyStatus(o);
+        }
+    }
+
+    private static string Text(JsonNode? n) =>
+        n is JsonValue v && v.TryGetValue<string>(out var t) ? t : "";
 
     /// <summary>表单保存：只提交当前区块那一节（downloader / gistSync / zipWatch …），
     /// 其余字段原样保留，避免界面各区块互相覆盖。</summary>
@@ -430,8 +466,12 @@ public sealed class GroupRow
     };
 }
 
-public sealed class SiteRow
+/// <summary>一个站点的卡片数据。cookie 检测结论会随每一次刷新变（未检测 → 检测中 → 已登录/失效），
+/// 这几项做成可通知属性：整页不重建也能看到本站状态变化。</summary>
+public sealed class SiteRow : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";
     public string Url { get; init; } = "";
@@ -443,27 +483,92 @@ public sealed class SiteRow
     public int BlockSize { get; init; }
     public bool UsesApiKey { get; init; }
     public bool HasApiKey { get; init; }
-    public int CookieCount { get; init; }
-    public bool HasCookie { get; init; }
+    private int _cookieCount;
+    private bool _hasCookie;
+    private string _warning = "";
+    private string _checkMessage = "";
+    private bool? _checkOk;
+    private bool _checking;
+
+    public int CookieCount
+    {
+        get => _cookieCount;
+        private set { if (_cookieCount == value) return; _cookieCount = value; Raise(nameof(CookieCount)); }
+    }
+    public bool HasCookie
+    {
+        get => _hasCookie;
+        private set { if (_hasCookie == value) return; _hasCookie = value; Raise(nameof(HasCookie)); }
+    }
     public int UpLimitMB { get; init; }
-    public string Warning { get; init; } = "";
+    public string Warning
+    {
+        get => _warning;
+        private set { if (_warning == value) return; _warning = value; Raise(nameof(Warning)); }
+    }
     public bool NeedsSourceQuote { get; init; }
     /// <summary>站内有「帖子免费1天」按钮，卡片上才出现「发种后免费一天」开关</summary>
     public bool SupportsAutoFree { get; init; }
     public bool AutoFree { get; init; }
-    public string CheckMessage { get; init; } = "";
-    public bool? CheckOk { get; init; }
+    public string CheckMessage
+    {
+        get => _checkMessage;
+        private set { if (_checkMessage == value) return; _checkMessage = value; Raise(nameof(CheckMessage)); }
+    }
+    public bool? CheckOk
+    {
+        get => _checkOk;
+        private set { if (_checkOk == value) return; _checkOk = value; Raise(nameof(CheckOk)); }
+    }
+
+    /// 这一站正在检测（核心每批并发检 4 个站，界面逐站显示，不是整页一个「检测中」）
+    public bool Checking
+    {
+        get => _checking;
+        private set { if (_checking == value) return; _checking = value; Raise(nameof(Checking)); }
+    }
 
     /// 检测结论单独一句（弹窗状态行用，失效时带上原因）
-    public string CheckText => CheckOk == null ? "未检测" : CheckOk == true ? "有效" : CheckMessage;
+    public string CheckText => Checking ? "检测中"
+        : CheckOk == null ? "未检测" : CheckOk == true ? "有效" : CheckMessage;
 
     /// 卡片状态行：与 mac 版同一套说法，不写 cookie 条数（条数容易被读成站点数）
     public string CredentialText => UsesApiKey
         ? HasApiKey
-            ? CheckOk == null ? "API Key 已配置（未检测）" : CheckOk == true ? "API 已连接" : "API Key 失效"
+            ? Checking ? "API 检测中…"
+                : CheckOk == null ? "API Key 已配置（未检测）" : CheckOk == true ? "API 已连接" : "API Key 失效"
             : "未配置 API Key"
-        : !HasCookie ? "无 cookie"
+        : Checking ? "cookie 检测中…"
+            : !HasCookie ? "无 cookie"
             : CheckOk == null ? "未检测" : CheckOk == true ? "已登录" : "cookie 失效";
+
+    /// 状态行用哪一档颜色：只有这一站检测通过才给强调色
+    public string StatusTone => CheckOk == true && !Checking ? "Accent" : "TextMuted";
+
+    /// 局部刷新：把快照里这一站的检测状态写进现有卡片（整站列表只在配置变化时重建）
+    public void ApplyStatus(JsonObject n)
+    {
+        bool? ok = null;
+        if (n["check"]?["ok"] is JsonValue v && v.TryGetValue<bool>(out var b)) ok = b;
+        CheckOk = ok;
+        CheckMessage = Text(n["check"]?["message"]);
+        Checking = Yes(n["checking"]);
+        HasCookie = Yes(n["hasCookie"]);
+        CookieCount = n["cookieCount"] is JsonValue nv && nv.TryGetValue<int>(out var cnt) ? cnt : 0;
+        Warning = Text(n["warning"]);
+        Raise(nameof(CredentialText));
+        Raise(nameof(CheckText));
+        Raise(nameof(StatusTone));
+    }
+
+    private void Raise(string name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    private static string Text(JsonNode? n) =>
+        n is JsonValue v && v.TryGetValue<string>(out var t) ? t : "";
+
+    private static bool Yes(JsonNode? n) =>
+        n is JsonValue v && v.TryGetValue<bool>(out var b) && b;
 
     /// 弹窗里对当前凭据的一句说明
     public string CookieText => UsesApiKey ? (HasApiKey ? "已填 API Key" : "未填 API Key")
@@ -502,6 +607,7 @@ public sealed class SiteRow
             AutoFree = n["autoFree"]?.GetValue<bool>() ?? false,
             CheckMessage = n["check"]?["message"]?.GetValue<string>() ?? "",
             CheckOk = ok,
+            Checking = Yes(n["checking"]),
         };
     }
 }

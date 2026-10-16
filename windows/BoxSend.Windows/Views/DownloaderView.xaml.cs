@@ -86,12 +86,13 @@ public partial class DownloaderView : UserControl
         else s.Remove("vpsFreeGB");
     });
 
-    private void OnTest(object sender, RoutedEventArgs e)
+    private async void OnTest(object sender, RoutedEventArgs e)
     {
         Save();
-        var error = _model.Try("downloader.test");
-        Result.Text = error ?? "测试中…";
-        _ = _model.RefreshAsync(full: false);
+        Result.Text = "测试中…";
+        // 连下载器要走网络：放在界面线程上，窗口会先「未响应」一下
+        var error = await _model.TryAsync("downloader.test");
+        Result.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
     }
 
     private void OnTestSSH(object sender, RoutedEventArgs e) => _ = TestSSH();

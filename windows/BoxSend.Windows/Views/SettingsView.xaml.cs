@@ -126,12 +126,12 @@ public partial class SettingsView : UserControl
         _model.PatchSection("appearance", s => s["bgOpacity"] = Math.Round(e.NewValue, 2));
     }
 
-    private void OnCheckUpdate(object sender, RoutedEventArgs e)
+    private async void OnCheckUpdate(object sender, RoutedEventArgs e)
     {
         UpdateState.Text = "检查中…";
-        var error = _model.Try("update.check");
+        // 查一次版本要走 GitHub：在界面线程等会把窗口卡成「未响应」
+        var error = await _model.TryAsync("update.check");
         UpdateState.Text = error ?? "已提交检查";
-        _ = _model.RefreshAsync(full: false);
     }
 
     // 有新版本时直接给安装包直链（与 mac 版「下载 x.y.z 安装包」一致）

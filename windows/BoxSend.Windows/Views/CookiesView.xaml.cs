@@ -18,6 +18,8 @@ public partial class CookiesView : UserControl
         GistPeeker.Visibility = Visibility.Collapsed;
         GistTokenDock.Children.Insert(0, GistPeeker);
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
+        // 同步中把两个「立即同步」都压住（自动同步走的是同一条路，标记同样生效）
+        _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateSyncButtons);
         Load();
     }
 
@@ -43,7 +45,15 @@ public partial class CookiesView : UserControl
         GistAuto.IsChecked = _model.GistAuto;
         CcAuto.IsChecked = _model.CookieCloudAuto;
         ZipAuto.IsChecked = _model.SectionFlag("zipWatch", "enabled");
+        UpdateSyncButtons();
         _loading = false;
+    }
+
+    private void UpdateSyncButtons()
+    {
+        var busy = _model.BusyCookieSync;
+        BtnGist.IsEnabled = BtnCc.IsEnabled = !busy;
+        BtnGist.Content = BtnCc.Content = busy ? "同步中…" : "立即同步";
     }
 
     private static int Num(TextBox box, int fallback) =>
@@ -79,12 +89,15 @@ public partial class CookiesView : UserControl
     private void OnSyncGist(object sender, RoutedEventArgs e) => Sync("gist");
     private void OnSyncCookieCloud(object sender, RoutedEventArgs e) => Sync("cookieCloud");
 
-    private void Sync(string source)
+    // 拉一次备份要走几秒网络（Gist / CookieCloud 各一趟）：放在界面线程里调用，
+    // 整个窗口会卡成「未响应」，检测结论也要等这一轮跑完才刷得出来
+    private async void Sync(string source)
     {
         SaveCurrentSection(source);
-        var error = _model.Try("cookies.sync", new { source });
-        CookieMessage.Text = error ?? "同步已提交，正在拉取…";
-        _ = _model.RefreshAsync();
+        CookieMessage.Text = "同步中…";
+        var error = await _model.TryAsync("cookies.sync", new { source });
+        // 成功时核心库已经把「导入几个站、保留几个站」写进消息里，直接显示那句
+        CookieMessage.Text = error ?? (_model.CookieMessage.Length > 0 ? _model.CookieMessage : "同步完成");
     }
 
     private void SaveCurrentSection(string source)
@@ -110,13 +123,13 @@ public partial class CookiesView : UserControl
 
     private void OnZipAuto(object sender, RoutedEventArgs e) => OnSaveZip(this, new RoutedEventArgs());
 
-    private void OnZipScan(object sender, RoutedEventArgs e)
+    private async void OnZipScan(object sender, RoutedEventArgs e)
     {
         // 手动扫描也走服务：扫目录里新增的 PTD_backup*.zip，跳过已导入过的
         OnSaveZip(this, new RoutedEventArgs());
-        var error = _model.Try("zip.scan");
-        CookieMessage.Text = error ?? "扫描已提交…";
-        _ = _model.RefreshAsync();
+        CookieMessage.Text = "扫描中…";
+        var error = await _model.TryAsync("zip.scan");
+        CookieMessage.Text = error ?? (_model.CookieMessage.Length > 0 ? _model.CookieMessage : "扫描完成");
     }
 
     private void OnClear(object sender, RoutedEventArgs e)
