@@ -1,0 +1,128 @@
+<UserControl x:Class="BoxSend.Windows.Views.AssistView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左栏：参与站点 + 检索节奏 -->
+            <StackPanel Grid.Column="0">
+                <GroupBox Header="参与站点">
+                    <StackPanel>
+                        <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="SiteList" />
+                        </ScrollViewer>
+                        <TextBlock Text="辅种要逐条种子去站内检索，站点先少而后多。" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="检索节奏" Margin="0,12,0,0">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                                <Label Content="每站最小间隔（秒）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Interval" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <Label Content="随机抖动（秒）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Jitter" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0">
+                                <Label Content="单轮请求预算（次）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Budget" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2">
+                                <Label Content="查无结果保留（天）" Padding="0,0,0,2" />
+                                <TextBox x:Name="MissTTL" />
+                            </StackPanel>
+                        </Grid>
+                        <CheckBox x:Name="AutoAccept" Content="站点重打包（文件全等）自动采纳"
+                                  FontSize="12" Margin="0,4,0,0" />
+                        <CheckBox x:Name="RemoveOnFail" Content="校验不满 100% 时删掉刚加的种子"
+                                  FontSize="12" Margin="0,4,0,0" />
+                        <Button Content="保存节奏" Margin="0,8,0,0" Click="OnSavePace" />
+                        <TextBlock Text="一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。"
+                                   FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+
+            <!-- 右栏：扫描 / 执行 / 候选 / 计划 -->
+            <DockPanel Grid.Column="2" LastChildFill="True">
+                <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <Button x:Name="BtnScan" Content="扫描下载器" Click="OnScan" />
+                    <Button x:Name="BtnStart" Content="开始辅种" Style="{StaticResource Primary}"
+                            Margin="10,0,0,0" Click="OnStart" />
+                    <CheckBox x:Name="DryRun" Content="只预演" VerticalAlignment="Center"
+                              Margin="14,0,0,0" ToolTip="按真实流程走一遍，但不动下载器" />
+                    <TextBlock x:Name="State" Margin="12,0,0,0" VerticalAlignment="Center"
+                               FontSize="12" TextWrapping="Wrap" MaxWidth="380"
+                               Foreground="{DynamicResource TextMuted}" />
+                </WrapPanel>
+
+                <GroupBox DockPanel.Dock="Top" Header="候选种子（下载器里已下完的）">
+                    <StackPanel>
+                        <ScrollViewer MaxHeight="150" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="Candidates">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,2">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Right}"
+                                                       FontSize="12" Margin="8,0,0,0"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding Left}" FontSize="13"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock x:Name="CandidateSummary" FontSize="12" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="本轮计划与进展" Margin="0,12,0,0">
+                    <DockPanel>
+                        <TextBlock x:Name="PlanSummary" DockPanel.Dock="Top" FontSize="12"
+                                   TextWrapping="Wrap" Margin="0,0,0,6"
+                                   Foreground="{DynamicResource TextMuted}" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="PlanRows">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,2" ToolTip="{Binding Tip}">
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding SiteName}"
+                                                       FontSize="13" FontWeight="SemiBold" Width="86" />
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Status}"
+                                                       FontSize="12" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="300" Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding TorrentName}" FontSize="13"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </GroupBox>
+            </DockPanel>
+        </Grid>
+    </Border>
+</UserControl>

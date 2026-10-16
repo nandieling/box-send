@@ -124,6 +124,9 @@ struct ContentView: View {
             LogsView()
                 .tabItem { Label("日志", systemImage: "list.bullet") }
                 .tag(4)
+            AssistView()
+                .tabItem { Label("辅种", systemImage: "square.stack.3d.up.fill") }
+                .tag(6)
             SettingsView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag(5)
@@ -1665,6 +1668,261 @@ struct LogsView: View {
             .blockSurface(true)
         }
         .padding()
+    }
+}
+
+// MARK: - 辅种
+
+extension AssistPipeline.PlanRow {
+    /// 与 AssistPipeline.Status.rowKey 同一套拼法
+    var rowKey: String { "\(siteID)|\(hash)" }
+}
+
+struct AssistView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                sitesCard
+                paceCard
+            }
+            .frame(width: 300)
+
+            VStack(alignment: .leading, spacing: 12) {
+                header
+                candidatesCard
+                planCard
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding()
+    }
+
+    private var cfg: AssistConfig { model.assistConfig }
+
+    // MARK: 左栏
+
+    private var sitesCard: some View {
+        CardSection("参与站点") {
+            if model.assistSiteOptions.isEmpty {
+                Text("先在「站点分组」里启用站点").font(.callout).foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(model.assistSiteOptions, id: \.id) { site in
+                            Toggle(isOn: siteBinding(site.id)) {
+                                Text(site.name).font(.callout).lineLimit(1)
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                    }
+                }
+                .frame(maxHeight: 240)
+            }
+            Text("辅种要逐条种子去站内检索，站点先少而后多。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var paceCard: some View {
+        CardSection("检索节奏") {
+            numberedRow("每站最小间隔", dbl(\.perSiteIntervalSec, 0, 120), step: 1, unit: "秒")
+            numberedRow("随机抖动", dbl(\.jitterSec, 0, 30), step: 1, unit: "秒")
+            numberedRow("单轮请求预算", num(\.roundBudget, 1, 2000), step: 10, unit: "次")
+            numberedRow("查无结果保留", num(\.missTTLDays, 0, 90), step: 1, unit: "天")
+            Divider()
+            Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
+                .font(.callout)
+            Toggle("校验不满 100% 时删掉刚加的种子", isOn: flag(\.removeOnVerifyFail))
+                .font(.callout)
+            Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: 右栏
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Button {
+                model.assistScan()
+            } label: {
+                Label("扫描下载器", systemImage: "magnifyingglass")
+            }
+            .disabled(model.assistScanning || model.assistRunning)
+
+            Button {
+                model.assistRun()
+            } label: {
+                Label(model.assistDryRun ? "开始预演" : "开始辅种", systemImage: "square.stack.3d.up.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.assistScanning || model.assistRunning || model.assistCandidates.isEmpty)
+
+            Toggle("只预演", isOn: $model.assistDryRun)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help("按真实流程走一遍，但不动下载器")
+
+            if model.assistScanning || model.assistRunning {
+                ProgressView().controlSize(.small)
+            }
+            if let msg = model.assistMessage {
+                Text(msg).font(.callout).foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+        }
+    }
+
+    private var candidatesCard: some View {
+        CardSection("候选种子（下载器里已下完的）") {
+            if model.assistCandidates.isEmpty {
+                Text(model.assistScanning ? "正在读下载器…" : "（还没扫描）")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(model.assistCandidates, id: \.hash) { t in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(t.name).font(.callout).lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824))
+                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                Text("已做种 \(t.trackerHosts.count) 站")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+            Text("共 \(model.assistCandidates.count) 条。没下完、或按大小/分类筛掉的不在这里。")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private var planCard: some View {
+        CardSection("本轮计划与进展") {
+            if model.assistPlan.isEmpty {
+                Text("扫描后这里会列出每条种子在每个站的计划。")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                let willSearch = model.assistPlan.filter { $0.skipReason == nil }.count
+                Text("\(model.assistPlan.count) 个组合，其中 \(willSearch) 个会去站内检索"
+                     + "（单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑）")
+                    .font(.caption2).foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 5) {
+                        ForEach(model.assistPlan, id: \.rowKey) { row in
+                            planRow(row)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func planRow(_ row: AssistPipeline.PlanRow) -> some View {
+        let live = model.assistRows[row.rowKey]
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: chipIcon(live?.phase, skip: row.skipReason))
+                .foregroundStyle(chipColor(live?.phase, skip: row.skipReason))
+            Text(model.siteName(row.siteID))
+                .font(.callout.weight(.medium))
+                .frame(width: 72, alignment: .leading)
+            Text(row.torrentName).font(.callout).lineLimit(1)
+            Spacer(minLength: 8)
+            Text(live?.text ?? row.skipReason ?? "待检索")
+                .font(.caption2).foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: 260, alignment: .trailing)
+        }
+        .help([row.torrentName, live?.detail ?? row.skipReason ?? ""]
+            .filter { !$0.isEmpty }.joined(separator: "\n"))
+    }
+
+    private func chipIcon(_ phase: AssistPipeline.Status.Phase?, skip: String?) -> String {
+        guard phase == nil else { return chipPhaseIcon(phase!) }
+        return skip == nil ? "circle" : "circle.slash"
+    }
+
+    private func chipPhaseIcon(_ p: AssistPipeline.Status.Phase) -> String {
+        switch p {
+        case .working: return "circle.dashed"
+        case .verifying: return "hourglass"
+        case .done: return "checkmark.circle"
+        case .failed: return "xmark.circle"
+        case .skipped: return "circle.slash"
+        }
+    }
+
+    private func chipColor(_ phase: AssistPipeline.Status.Phase?, skip: String?) -> Color {
+        guard let phase else { return skip == nil ? .secondary : Color.secondary.opacity(0.6) }
+        switch phase {
+        case .working, .verifying: return .secondary
+        case .done: return .green
+        case .failed: return .red
+        case .skipped: return Color.secondary.opacity(0.6)
+        }
+    }
+
+    // MARK: 绑定
+
+    private func siteBinding(_ id: String) -> Binding<Bool> {
+        Binding(get: { model.assistConfig.siteIDs.contains(id) },
+                set: { on in
+                    model.assistUpdate { a in
+                        if on {
+                            if !a.siteIDs.contains(id) { a.siteIDs.append(id) }
+                        } else {
+                            a.siteIDs.removeAll { $0 == id }
+                        }
+                    }
+                })
+    }
+
+    private func num(_ keyPath: WritableKeyPath<AssistConfig, Int>, _ lo: Int,
+                     _ hi: Int) -> Binding<Int> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
+    }
+
+    private func dbl(_ keyPath: WritableKeyPath<AssistConfig, Double>, _ lo: Double,
+                     _ hi: Double) -> Binding<Double> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
+    }
+
+    private func flag(_ keyPath: WritableKeyPath<AssistConfig, Bool>) -> Binding<Bool> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = v } })
+    }
+
+    private func numberedRow(_ label: String, _ value: Binding<Double>, step: Double,
+                             unit: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.callout)
+            Spacer()
+            Stepper("\(Int(value.wrappedValue)) \(unit)", value: value, step: step)
+                .font(.callout.monospacedDigit())
+        }
+    }
+
+    private func numberedRow(_ label: String, _ value: Binding<Int>, step: Int,
+                             unit: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.callout)
+            Spacer()
+            Stepper("\(value.wrappedValue) \(unit)", value: value, step: step)
+                .font(.callout.monospacedDigit())
+        }
     }
 }
 

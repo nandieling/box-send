@@ -22,6 +22,9 @@ public static class TabIcons
     /// <summary>向下箭头 + 托盘线：下载器</summary>
     public static Geometry Downloader => Parse("M8,1.6 V10.2 M4.2,6.6 L8,10.4 L11.8,6.6 M2.6,13.6 H13.4");
 
+    /// <summary>叠起来的三层：辅种（同一份文件挂到多个站）</summary>
+    public static Geometry Assist => Parse("M8,1.6 L14.4,4.8 L8,8 L1.6,4.8 Z M2.8,7.6 L8,10.2 L13.2,7.6 M2.8,10.6 L8,13.2 L13.2,10.6");
+
     /// <summary>三行清单：日志</summary>
     public static Geometry Logs => Parse("M2.6,3.6 H13.4 M2.6,8 H13.4 M2.6,12.4 H9.6");
 

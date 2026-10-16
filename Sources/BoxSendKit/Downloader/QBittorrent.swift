@@ -44,19 +44,115 @@ final class QBittorrent: Downloader {
         return "qBittorrent \(version)，登录成功"
     }
 
+    // MARK: - 辅种要读的三样：种子清单、文件清单、暂停/删除
+
+    /// 种子清单。`tracker_hosts`（4.6+）或 `trackers`（老版本，逗号分隔的 announce 列表）
+    /// 任一能用就用，都拿不到的站退回逐种查 /torrents/trackers。
+    func listTorrents() throws -> [LocalTorrent] {
+        try login()
+        let resp = try client.get("\(baseURL)/api/v2/torrents/info", referer: baseURL)
+        guard resp.status == 200,
+              let arr = try? JSONSerialization.jsonObject(with: resp.data) as? [[String: Any]] else {
+            throw BoxSendError.http(status: resp.status, url: "\(baseURL)/api/v2/torrents/info",
+                                    body: String(data: resp.data.prefix(200), encoding: .utf8) ?? "")
+        }
+        return arr.compactMap { t -> LocalTorrent? in
+            guard let hash = (t["hash"] as? String)?.lowercased() else { return nil }
+            let hosts: [String]
+            if let th = t["tracker_hosts"] as? [String] {
+                hosts = th.map { $0.lowercased() }
+            } else if let tr = t["trackers"] as? String {
+                hosts = tr.split(separator: "|").compactMap { URL(string: String($0))?.host?.lowercased() }
+            } else {
+                hosts = []
+            }
+            return LocalTorrent(
+                hash: hash,
+                hashV2: t["infohash_v2"] as? String,
+                name: t["name"] as? String ?? "",
+                savePath: t["save_path"] as? String ?? "",
+                category: (t["category"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                tags: ((t["tags"] as? String) ?? "").split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespaces)
+                }.filter { !$0.isEmpty },
+                totalSize: t["size"] as? Int64 ?? Int64(t["size"] as? Int ?? 0),
+                progress: t["progress"] as? Double ?? 0,
+                trackerHosts: hosts)
+        }
+    }
+
+    /// 文件清单。参数名两版都试（同 trackers 端点的老坑：qB 5.x 只认 hash）
+    func torrentFiles(hash: String) throws -> [(path: String, size: Int64)] {
+        try login()
+        for param in ["hashes", "hash"] {
+            guard let resp = try? client.get("\(baseURL)/api/v2/torrents/files?\(param)=\(hash)",
+                                             referer: baseURL),
+                  resp.status == 200,
+                  let obj = try? JSONSerialization.jsonObject(with: resp.data) else { continue }
+            // 多 hash 查询时 qB 回 [[file,…],…]；单 hash 直接回 [file,…]
+            let list: [[String: Any]]
+            if let arr = obj as? [[String: Any]] {
+                list = arr
+            } else if let arr = obj as? [[[String: Any]]], let first = arr.first {
+                list = first
+            } else { continue }
+            return list.compactMap { f in
+                guard let path = f["name"] as? String else { return nil }
+                let size = (f["size"] as? Int64) ?? Int64(f["size"] as? Int ?? 0)
+                return (path, size)
+            }
+        }
+        throw BoxSendError.http(status: 0, url: "\(baseURL)/api/v2/torrents/files", body: "读不到文件清单")
+    }
+
+    /// 单条种子的完成度与状态（辅种等校验用；比整表拉一遍省）
+    func torrentProgress(hash: String) throws -> (progress: Double, state: String)? {
+        try login()
+        guard let resp = try? client.get("\(baseURL)/api/v2/torrents/info?hashes=\(hash)",
+                                        referer: baseURL),
+              let arr = try? JSONSerialization.jsonObject(with: resp.data) as? [[String: Any]],
+              let t = arr.first else { return nil }
+        return (t["progress"] as? Double ?? 0, t["state"] as? String ?? "")
+    }
+
+    func setPaused(hashes: [String], paused: Bool) throws {
+        try login()
+        let path = paused ? "pause" : "resume"
+        _ = try? client.postForm("\(baseURL)/api/v2/torrents/\(path)",
+                                 fields: ["hashes": hashes.joined(separator: "|")], referer: baseURL)
+    }
+
+    func removeTorrent(hash: String, keepFiles: Bool) throws {
+        try login()
+        _ = try? client.postForm("\(baseURL)/api/v2/torrents/delete",
+                                 fields: ["hashes": hash, "deleteFiles": keepFiles ? "false" : "true"],
+                                 referer: baseURL)
+    }
+
     func addTorrent(data: Data, filename: String,
                     savePath: String?, category: String?,
                     skipChecking: Bool, upLimit: Int64) throws -> AddTorrentResult {
+        try addTorrent(data: data, filename: filename, savePath: savePath, category: category,
+                       skipChecking: skipChecking, upLimit: upLimit, paused: false)
+    }
+
+    func addTorrent(data: Data, filename: String,
+                    savePath: String?, category: String?,
+                    skipChecking: Bool, upLimit: Int64, paused: Bool) throws -> AddTorrentResult {
         try login()
 
-        let fields = [
+        var fields = [
             HTTPClient.MultipartField("savepath", savePath ?? ""),
             HTTPClient.MultipartField("category", category ?? ""),
             HTTPClient.MultipartField("skip_checking", skipChecking ? "true" : "false"),
             HTTPClient.MultipartField("upLimit", String(upLimit)),
             // 4.3+：显式启动，避免下载器默认"添加后暂停"导致推送了却不跑
-            HTTPClient.MultipartField("started", "true"),
+            HTTPClient.MultipartField("started", paused ? "false" : "true"),
         ]
+        if paused {
+            // qB 4.4+ 的 torrents/add 直接收 paused；辅种靠它把「先暂停等校验」落到实处
+            fields.append(HTTPClient.MultipartField("paused", "true"))
+        }
         let resp = try client.postMultipart(
             "\(baseURL)/api/v2/torrents/add",
             fields: fields,

@@ -76,13 +76,64 @@ final class Transmission: Downloader {
         throw BoxSendError.badInput("transmission: 无响应")
     }
 
+    /// 种子清单：TorrentID 当 hash 用不稳，取 hashString
+    func listTorrents() throws -> [LocalTorrent] {
+        let r = try rpc("torrent-get", ["fields": ["id", "hashString", "name", "totalSize",
+                                                   "percentDone", "downloadDir", "labels",
+                                                   "trackers"]])
+        let list = (r["arguments"] as? [[String: Any]]) ?? []
+        return list.compactMap { t -> LocalTorrent? in
+            guard let hash = (t["hashString"] as? String)?.lowercased() else { return nil }
+            let hosts = ((t["trackers"] as? [[String: Any]]) ?? []).compactMap {
+                URL(string: ($0["announce"] as? String) ?? "")?.host?.lowercased()
+            }
+            return LocalTorrent(
+                hash: hash,
+                name: t["name"] as? String ?? "",
+                savePath: t["downloadDir"] as? String ?? "",
+                category: ((t["labels"] as? [String])?.first),
+                totalSize: t["totalSize"] as? Int64 ?? Int64(t["totalSize"] as? Int ?? 0),
+                progress: t["percentDone"] as? Double ?? 0,
+                trackerHosts: hosts)
+        }
+    }
+
+    /// files 字段：{name, bytes, length}；新版叫 sizeBytes
+    func torrentFiles(hash: String) throws -> [(path: String, size: Int64)] {
+        let r = try rpc("torrent-get", ["ids": [hash], "fields": ["files"]])
+        guard let first = (r["arguments"] as? [[String: Any]])?.first,
+              let files = first["files"] as? [[String: Any]] else { return [] }
+        return files.compactMap { f in
+            guard let path = f["name"] as? String else { return nil }
+            let size = (f["sizeBytes"] as? Int64) ?? (f["length"] as? Int64)
+                ?? Int64(f["bytes"] as? Int ?? 0)
+            return (path, size)
+        }
+    }
+
+    func setPaused(hashes: [String], paused: Bool) throws {
+        _ = try rpc(paused ? "torrent-stop" : "torrent-start", ["ids": hashes])
+    }
+
+    func removeTorrent(hash: String, keepFiles: Bool) throws {
+        _ = try rpc("torrent-remove", ["ids": [hash], "delete-local-data": !keepFiles])
+    }
+
     func addTorrent(data: Data, filename: String,
                     savePath: String?, category: String?,
                     skipChecking: Bool, upLimit: Int64) throws -> AddTorrentResult {
+        try addTorrent(data: data, filename: filename, savePath: savePath, category: category,
+                       skipChecking: skipChecking, upLimit: upLimit, paused: false)
+    }
+
+    func addTorrent(data: Data, filename: String,
+                    savePath: String?, category: String?,
+                    skipChecking: Bool, upLimit: Int64, paused: Bool) throws -> AddTorrentResult {
         var args: [String: Any] = [
             "metainfo": data.base64EncodedString(),
             "labels": [filename],
             "skip-verify": skipChecking,
+            "paused": paused,
         ]
         if let savePath, !savePath.isEmpty { args["download-dir"] = savePath }
         let resp = try rpc("torrent-add", args)

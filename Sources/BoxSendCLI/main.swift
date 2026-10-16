@@ -98,6 +98,12 @@ do {
               template              生成模板配置 Config/boxsend.json
               speedtest [--connect-only] [--print-script]
                                     SSH 连上转种服务器测公网上传速度（只报速度，不做判定）
+              assist scan           列出下载器里可以拿去辅种的种子（已完成 + 大小/分类筛选）
+              assist plan [--sites a,b]
+                                    本轮计划：哪些组合会检索、哪些直接跳过（不发站点请求）
+              assist run [--sites a,b] [--limit N] [--dry-run]
+                                    执行辅种：站内检索 → 比对文件清单 → 先暂停加进下载器，
+                                    校验到 100% 才启动（--dry-run 只报告不动下载器）
               notes                 查看最近运行日志
 
             全局:
@@ -392,6 +398,54 @@ do {
             if r.peakMBps < SSHConfig.throttlingHintMBps {
                 print("提示：低于 \(Int(SSHConfig.throttlingHintMBps)) MB/s 多半是被限速了（24 小时流量到 2T 后常见）")
             }
+        }
+
+    case "assist":
+        let action = args.count > 1 ? args[1] : "scan"
+        if config.assist == nil {
+            // 老配置没这一行也能从命令行跑：默认值只在界面里填过才会有
+            config.assist = AssistConfig(siteIDs: config.targetSites)
+            print("提示: 配置里没有 assist 段，按默认值跑（参与站点 = targetSites，"
+                  + "每站间隔 \(config.assist!.perSiteIntervalSec) 秒）")
+        }
+        let pipe = AssistPipeline(config: config, cookies: cookies, state: state,
+                                  downloader: makeDownloader())
+        let pickedSites = opt("--sites")?.split(separator: ",").map(String.init)
+        let candidates = try pipe.scanCandidates()
+        switch action {
+        case "scan":
+            if candidates.isEmpty { print("下载器里没有可辅的种子（要求：已下完、过大小/分类筛选）") }
+            for t in candidates.sorted(by: { $0.totalSize > $1.totalSize }) {
+                print(String(format: "%6@  %-9@  %@",
+                             String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824) as NSString,
+                             String(t.hash.prefix(10)) as NSString, t.name))
+                print("         存 \(t.savePath)  已做种 \(t.trackerHosts.count) 站")
+            }
+            print("共 \(candidates.count) 条候选；参与站点 \(config.assist!.siteIDs.joined(separator: ", "))")
+        case "plan":
+            let rows = pipe.plan(torrents: candidates, siteIDs: pickedSites)
+            var willSearch = 0
+            var reasons: [String: Int] = [:]
+            for r in rows where r.skipReason == nil { willSearch += 1 }
+            for r in rows { if let w = r.skipReason { reasons[w, default: 0] += 1 } }
+            print("候选 \(candidates.count) 条 × 站点 \(pickedSites?.count ?? config.assist!.siteIDs.count) 个"
+                  + " = \(rows.count) 个组合")
+            print("  会去站内检索: \(willSearch) 次（单轮预算 \(config.assist!.roundBudget) 次请求，"
+                  + "每次检索最多 3 次请求）")
+            for (why, n) in reasons.sorted(by: { $0.value > $1.value }) { print("  跳过 \(why): \(n)") }
+        case "run":
+            var o = AssistPipeline.Options()
+            o.siteIDs = pickedSites
+            o.dryRun = has("--dry-run")
+            o.limit = Int(opt("--limit") ?? "") ?? 0
+            o.onEvent = { st in
+                print("[\(st.siteID)] \(st.torrentName.prefix(52)) — \(st.text)")
+            }
+            let report = pipe.run(torrents: candidates, opts: o)
+            print("辅种结束: 成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
+                  + "跳过 \(report.skippedCount)，本轮站点请求 \(report.requests) 次")
+        default:
+            die("assist 支持 scan / plan / run")
         }
 
     case "notes":

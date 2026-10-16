@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         TabSites.Header = TabIcons.Header(TabIcons.Sites, "站点分组");
         TabCookies.Header = TabIcons.Header(TabIcons.Cookie, "Cookie");
         TabDownloader.Header = TabIcons.Header(TabIcons.Downloader, "下载器");
+        TabAssist.Header = TabIcons.Header(TabIcons.Assist, "辅种");
         TabLogs.Header = TabIcons.Header(TabIcons.Logs, "日志");
         TabSettings.Header = TabIcons.Header(TabIcons.Settings, "设置");
 
@@ -32,6 +33,7 @@ public partial class MainWindow : Window
         TabSites.Content = new SitesView(model);
         TabCookies.Content = new CookiesView(model);
         TabDownloader.Content = new DownloaderView(model);
+        TabAssist.Content = new AssistView(model);
         TabLogs.Content = new LogsView(model);
         TabSettings.Content = new SettingsView(model);
 

@@ -463,9 +463,11 @@ public struct AppConfig: Codable {
     public var ssh: SSHConfig?
     /// 启动时自动检查新版本（GitHub Releases）：关掉后只在「设置 → 软件更新」里手动点
     public var autoUpdateCheck: Bool
+    /// 自动批量辅种：白名单式，未配置 = 整个功能不参战
+    public var assist: AssistConfig?
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh, assist
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -488,6 +490,7 @@ public struct AppConfig: Codable {
         tmdb = try c.decodeIfPresent(TMDBConfig.self, forKey: .tmdb)
         ssh = try c.decodeIfPresent(SSHConfig.self, forKey: .ssh)
         autoUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .autoUpdateCheck) ?? true
+        assist = try c.decodeIfPresent(AssistConfig.self, forKey: .assist)
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
@@ -497,7 +500,8 @@ public struct AppConfig: Codable {
                 zipWatch: ZipWatchConfig? = nil, appearance: AppearanceConfig = AppearanceConfig(),
                 unmanagedSiteOrder: [String] = [],
                 sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "",
-                tmdb: TMDBConfig? = nil, ssh: SSHConfig? = nil, autoUpdateCheck: Bool = true) {
+                tmdb: TMDBConfig? = nil, ssh: SSHConfig? = nil, autoUpdateCheck: Bool = true,
+                assist: AssistConfig? = nil) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -515,6 +519,7 @@ public struct AppConfig: Codable {
         self.tmdb = tmdb
         self.ssh = ssh
         self.autoUpdateCheck = autoUpdateCheck
+        self.assist = assist
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
@@ -643,5 +648,85 @@ public struct AppConfig: Codable {
                                  sites: SiteRegistry.prioritySites.filter { $0.enabled }.map { $0.id })],
             zipWatch: ZipWatchConfig(enabled: false, dir: "~/Downloads", pollMinutes: 5, password: "")
         )
+    }
+}
+
+/// 自动批量辅种参数。检索节奏是这里最要紧的一组：辅种会拿下载器里每条种子去每个站搜，
+/// 请求量轻松上千，站点普遍有检索频控，所以默认值一律往「慢而稳」的一侧靠。
+public struct AssistConfig: Codable {
+    /// 参与辅种的站点 id（白名单：各站对辅种的态度差别很大，逐个开）
+    public var siteIDs: [String]
+    /// 同一站两次请求的最小间隔（秒）
+    public var perSiteIntervalSec: Double
+    /// 间隔上再加的随机量，避免固定节拍
+    public var jitterSec: Double
+    /// 单轮允许的站点请求次数，用完收工，下次接着跑
+    public var roundBudget: Int
+    /// 「站内没检索到」记几天，期内不再重搜
+    public var missTTLDays: Int
+    /// hash 不同但逐文件清单全等（站点重新打包）时是否自动采纳
+    public var autoAcceptSameFiles: Bool
+    /// 校验后进度不满 100% 时是否删掉刚加的那条（保留文件）：留着它会自己重下一整份
+    public var removeOnVerifyFail: Bool
+    /// 只辅这个大小以上（GB）的种子；0 = 不限
+    public var minSizeGB: Double
+    /// 只辅这个大小以下（GB）的种子；0 = 不限
+    public var maxSizeGB: Double
+    /// 只处理这些分类/标签的种子；空 = 不限
+    public var categories: [String]
+    /// 等校验的最长时间（秒）与轮询间隔：大种子校验要几分钟，等不到就转「待复核」
+    public var verifyWaitSec: Int
+    public var verifyPollSec: Int
+
+    public init(siteIDs: [String] = [], perSiteIntervalSec: Double = 8, jitterSec: Double = 3,
+                roundBudget: Int = 200, missTTLDays: Int = 7, autoAcceptSameFiles: Bool = true,
+                removeOnVerifyFail: Bool = true, minSizeGB: Double = 0, maxSizeGB: Double = 0,
+                categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10) {
+        self.siteIDs = siteIDs
+        self.perSiteIntervalSec = perSiteIntervalSec
+        self.jitterSec = jitterSec
+        self.roundBudget = roundBudget
+        self.missTTLDays = missTTLDays
+        self.autoAcceptSameFiles = autoAcceptSameFiles
+        self.removeOnVerifyFail = removeOnVerifyFail
+        self.minSizeGB = minSizeGB
+        self.maxSizeGB = maxSizeGB
+        self.categories = categories
+        self.verifyWaitSec = verifyWaitSec
+        self.verifyPollSec = verifyPollSec
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        siteIDs = try c.decodeIfPresent([String].self, forKey: .siteIDs) ?? []
+        perSiteIntervalSec = try c.decodeIfPresent(Double.self, forKey: .perSiteIntervalSec) ?? 8
+        jitterSec = try c.decodeIfPresent(Double.self, forKey: .jitterSec) ?? 3
+        roundBudget = try c.decodeIfPresent(Int.self, forKey: .roundBudget) ?? 200
+        missTTLDays = try c.decodeIfPresent(Int.self, forKey: .missTTLDays) ?? 7
+        autoAcceptSameFiles = try c.decodeIfPresent(Bool.self, forKey: .autoAcceptSameFiles) ?? true
+        removeOnVerifyFail = try c.decodeIfPresent(Bool.self, forKey: .removeOnVerifyFail) ?? true
+        minSizeGB = try c.decodeIfPresent(Double.self, forKey: .minSizeGB) ?? 0
+        maxSizeGB = try c.decodeIfPresent(Double.self, forKey: .maxSizeGB) ?? 0
+        categories = try c.decodeIfPresent([String].self, forKey: .categories) ?? []
+        verifyWaitSec = try c.decodeIfPresent(Int.self, forKey: .verifyWaitSec) ?? 600
+        verifyPollSec = try c.decodeIfPresent(Int.self, forKey: .verifyPollSec) ?? 10
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case siteIDs, perSiteIntervalSec, jitterSec, roundBudget, missTTLDays, autoAcceptSameFiles,
+             removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec
+    }
+
+    /// 节流参数（SiteThrottle 用）
+    public var throttleLimits: SiteThrottle.Limits {
+        SiteThrottle.Limits(perSiteInterval: perSiteIntervalSec, jitter: jitterSec,
+                            roundBudget: roundBudget)
+    }
+
+    /// 站点的 announce host：判断「这份文件是不是已经在这个站做种」。
+    /// 站点主页 host 与 announce host 多数一致，个别站 announce 另有域名，可在 overrides 里改。
+    public static func announceHost(of site: SiteConfig) -> String? {
+        guard let u = URL(string: site.url) else { return nil }
+        return u.host?.lowercased()
     }
 }

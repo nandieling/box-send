@@ -24,6 +24,7 @@
             <TabItem x:Name="TabSites" />
             <TabItem x:Name="TabCookies" />
             <TabItem x:Name="TabDownloader" />
+            <TabItem x:Name="TabAssist" />
             <TabItem x:Name="TabLogs" />
             <TabItem x:Name="TabSettings" />
         </TabControl>

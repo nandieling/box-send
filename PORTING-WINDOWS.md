@@ -309,6 +309,29 @@ WinForms 约 22 MB，真要抠体积可以在发布后按依赖树删，属于�
 测试 445 个全绿。
 
 
+## 2026-10-16 晚：自动批量辅种（M0–M2，两端同批落地）
+
+辅种与转种是两件事：转种发新种，辅种只是把站内已有的那条挂到本账号下做种。判定、
+节流、校验复核全在核心库里（`Assist/`），两端只是发起与显示，见 `ASSIST-PLAN.md` 第十节。
+
+Windows 侧新增：
+
+- 桥方法 `assist.scan`（扫描下载器 + 生成本轮计划，只读）、`assist.start`（后台跑，
+  照 `run.start` 的写法）、`assist.status`；进展随 `snapshot` 的 `assist` 段一起回来，
+  不另开一条轮询——`AppModel` 里那个 DispatcherTimer 本来就在轮快照。
+- `Event` 多带一个 `key`（`站点|种子 hash`）。辅种是「一条种子 × 一个站」的矩阵，
+  只给 siteID 定不了行；`AssistView` 拿 `assist.scan` 的计划建行，之后只按 key 覆盖状态文本，
+  整表不重建，滚动位置不动（这条正是「全量重建列表会把正在输入的框打掉」那条老坑的翻版）。
+- 新页签「辅种」（`Views/AssistView.xaml` + `TabIcons.Assist`）：左栏参与站点勾选与检索节奏，
+  右栏候选种子、本轮计划与逐行进展。站点勾选列表带一份签名，只有站点集合真变了才重建复选框。
+- 数值设置从配置里按 double 读：核心把 `perSiteIntervalSec` 存成 8.0，用 `GetValue<int>()`
+  读会抛「node holds a double」，所以 `AssistView.Num(...)` 先试 double 再退 int/long。
+
+mac 侧对应的是 `Views.swift` 里的 `AssistView`（TabView tag 6）与 `AppModel` 的辅种区块，
+mac 不走桥，直接注入 `AssistPipeline`。CLI 加 `box-send assist scan|plan|run`。
+
+测试 472 个全绿。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

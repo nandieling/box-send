@@ -203,6 +203,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         BusyDownloader = Bool(busy?["downloaderTest"]);
         BusyUpdate = Bool(busy?["update"]);
         BusySSH = Bool(busy?["sshTest"]);
+        BusyAssist = Bool(busy?["assist"]);
         var msg = snap["messages"]?.AsObject();
         CookieMessage = Str(msg?["cookie"]);
         DownloaderMessage = Str(msg?["downloader"]);
@@ -219,6 +220,12 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         ReplaceFrom(RunSites, snap["run"]?["sites"], "site");
         ReplaceFrom(RunPushes, snap["run"]?["pushes"], "push");
         SourcePush = snap["run"]?["sourcePush"] is { } sp ? RunRow.From(sp!, "push") : null;
+
+        var assist = snap["assist"]?.AsObject();
+        AssistRunning = Bool(assist?["running"]);
+        AssistStep = Str(assist?["step"]);
+        AssistReport = Str(assist?["report"]);
+        ApplyAssistRows(assist?["rows"]);
 
         var logs = snap["logs"]?.AsArray();
         if (logs != null && (Logs.Count != logs.Count || full))
@@ -249,7 +256,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
               nameof(LastGistSync), nameof(HasUpdate), nameof(UpdateVersion), nameof(UpdateUrl),
               nameof(UpdateDownloadUrl), nameof(StatusText), nameof(CookieTotal),
               nameof(BusyCookieSync), nameof(BusyCookieCheck), nameof(BusyDownloader), nameof(BusyUpdate),
-              nameof(BusySSH),
+              nameof(BusySSH), nameof(BusyAssist), nameof(AssistRunning),
+              nameof(AssistStep), nameof(AssistReport),
               nameof(CurrentTheme));
     }
 
@@ -403,6 +411,51 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     /// 测速默认值（私钥路径、每轮数据量、测速地址、限速参考线）
     public sealed record SshDefaults(string KeyPath, int TestMB, string ProbeURL, double ThrottlingMBps);
+
+    // MARK: 辅种
+    //
+    // 辅种不发新种：拿下载器里已有的文件去目标站找同一种子。站点请求节奏由核心库
+    // 的节流器收口，界面只发起与显示；进展随快照一起回来，不必另开一条轮询。
+
+    public bool BusyAssist { get; private set; }
+    public bool AssistRunning { get; private set; }
+    public string AssistStep { get; private set; } = "";
+    public string AssistReport { get; private set; } = "";
+    /// 逐行进展（按「站点|种子 hash」定位），扫描出的计划行由此上色
+    public ObservableCollection<AssistRow> AssistRows { get; } = new();
+
+    public void ClearAssistRows() => AssistRows.Clear();
+
+    private void ApplyAssistRows(JsonNode? array)
+    {
+        if (array is not JsonArray arr) return;
+        foreach (var n in arr)
+        {
+            if (n is not JsonObject o) continue;
+            var key = Text(o["key"]);
+            if (key.Length == 0) continue;
+            var row = AssistRows.FirstOrDefault(r => r.Key == key);
+            if (row == null)
+            {
+                row = new AssistRow { Key = key };
+                AssistRows.Add(row);
+            }
+            row.Apply(o);
+        }
+    }
+
+    /// 扫描下载器并生成本轮计划。只读：不动下载器，也不发站点请求。
+    public async Task<(JsonNode? Node, string? Error)> AssistScanAsync(string[]? siteIDs)
+    {
+        string? error = null;
+        var node = await Task.Run(() => _api.TryInvoke("assist.scan", out error,
+            siteIDs is { Length: > 0 } ? new { siteIDs } : null));
+        await RefreshAsync(full: false);
+        return (node, node == null ? error ?? "扫描下载器失败" : null);
+    }
+
+    public Task<string?> AssistStartAsync(string[] siteIDs, bool dryRun) =>
+        TryAsync("assist.start", new { siteIDs, dryRun });
 
     public void Raise(params string[] names)
     {
@@ -625,6 +678,60 @@ public sealed class CookieHostRow
 }
 
 /// <summary>转种页的逐站状态（阶段 + 主文案 + 详情行）</summary>
+/// 辅种逐行进展。计划行由 assist.scan 给出，这里的文本/阶段随快照更新。
+public sealed class AssistRow : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Key { get; init; } = "";
+    public string SiteId => Key.Split('|')[0];
+
+    private string _text = "";
+    private string _detail = "";
+    private string _phase = "";
+
+    public string Text
+    {
+        get => _text;
+        private set { if (_text == value) return; _text = value; Raise(nameof(Text)); }
+    }
+    public string Detail
+    {
+        get => _detail;
+        private set { if (_detail == value) return; _detail = value; Raise(nameof(Detail)); }
+    }
+    public string Phase
+    {
+        get => _phase;
+        private set
+        {
+            if (_phase == value) return;
+            _phase = value;
+            Raise(nameof(Phase));
+            Raise(nameof(PhaseText));
+        }
+    }
+
+    public string PhaseText => Phase switch
+    {
+        "working" => "检索中",
+        "verifying" => "校验中",
+        "done" => "已辅种",
+        "failed" => "失败",
+        "skipped" => "跳过",
+        _ => "",
+    };
+
+    public void Apply(JsonObject o)
+    {
+        Text = o["text"]?.GetValue<string>() ?? "";
+        Detail = o["detail"]?.GetValue<string>() ?? "";
+        Phase = o["phase"]?.GetValue<string>() ?? "";
+    }
+
+    private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
 public sealed class RunRow
 {
     public int Seq { get; init; }

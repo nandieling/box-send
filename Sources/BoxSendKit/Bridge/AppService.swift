@@ -27,6 +27,8 @@ public final class AppService {
         public var phase: String?
         public var ok: Bool?
         public var time: Double
+        /// 辅种行定位键（站点|种子 hash）；其他动作留空
+        public var key: String = ""
     }
 
     public let configPath: String
@@ -47,6 +49,7 @@ public final class AppService {
     private var busyZip = false
     private var busyUpdate = false
     private var busySSH = false
+    private var busyAssist = false
     private var checkGeneration = 0
     private var running = false
     private var runningStep = ""
@@ -55,6 +58,10 @@ public final class AppService {
     private var pushEvents: [String: Event] = [:]
     private var sourcePushEvent: Event?
     private var siteWarnings: [String: String] = [:]
+    /// 辅种逐行状态（key = 站点|种子 hash）
+    private var assistRows: [String: Event] = [:]
+    private var assistStep = ""
+    private var assistReport = ""
     private var cookieMessage: String?
     private var downloaderMessage: String?
     private var zipMessage: String?
@@ -340,6 +347,13 @@ public final class AppService {
         case "run.status":
             return runState()
 
+        case "assist.scan":
+            return try assistScan(params)
+        case "assist.start":
+            return try startAssist(params)
+        case "assist.status":
+            return assistState()
+
         case "ssh.test":
             return try testSSHSpeed()
         case "tmdb.test":
@@ -384,7 +398,7 @@ public final class AppService {
         let busy = [
             "cookieSync": busyCookieSync, "cookieCheck": busyCookieCheck,
             "downloaderTest": busyDownloader, "zipScan": busyZip, "update": busyUpdate,
-            "sshTest": busySSH,
+            "sshTest": busySSH, "assist": busyAssist,
         ]
         let run = runStateLocked()
         let messages: [String: Any] = [
@@ -420,6 +434,7 @@ public final class AppService {
             "sites": siteStatesLocked(c, snap: snap, checks: checks),
             "groups": groupsLocked(c),
             "run": run,
+            "assist": assistStateLocked(),
             "busy": busy,
             "messages": messages,
             "warnings": warnings,
@@ -547,6 +562,139 @@ public final class AppService {
         ]
         if let s = sourcePushEvent { out["sourcePush"] = Self.eventJSON(s) }
         return out
+    }
+
+    // MARK: 辅种
+    //
+    // 与转种分开一套：辅种不发新种，只是把站内已有的那条挂到自己账号下做种。
+    // 站点请求的节奏由 AssistPipeline 里的 SiteThrottle 收口，界面只管发起与显示。
+
+    /// 扫描下载器 + 生成本轮计划。只读，不动下载器，也不发站点请求。
+    private func assistScan(_ params: [String: Any]) throws -> [String: Any] {
+        lock.lock()
+        let cfg = self.cfg
+        lock.unlock()
+        let (pipe, _) = try makeAssistPipeline(cfg)
+        let picked = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
+        let candidates = try pipe.scanCandidates()
+        let rows = pipe.plan(torrents: candidates, siteIDs: picked)
+        let nameOf: (String) -> String = { id in
+            guard let s = cfg.site(id) else { return id }
+            return SiteRegistry.effectiveSite(s).name
+        }
+        return [
+            "torrents": candidates.map { t in
+                [
+                    "hash": t.hash,
+                    "name": t.name,
+                    "size": t.totalSize,
+                    "sizeText": String(format: "%.2f GiB", Double(t.totalSize) / 1_073_741_824),
+                    "savePath": t.savePath,
+                    "trackers": t.trackerHosts,
+                ]
+            },
+            "rows": rows.map { r in
+                [
+                    "key": "\(r.siteID)|\(r.hash)",
+                    "siteID": r.siteID,
+                    "siteName": nameOf(r.siteID),
+                    "hash": r.hash,
+                    "torrentName": r.torrentName,
+                    "skip": r.skipReason ?? "",
+                ]
+            },
+            "sites": (picked ?? cfg.assist?.siteIDs ?? []).map { ["id": $0, "name": nameOf($0)] },
+            "budget": pipe.throttle.remaining,
+        ]
+    }
+
+    private func startAssist(_ params: [String: Any]) throws -> [String: Any] {
+        var cfg: AppConfig!
+        lock.lock()
+        if busyAssist {
+            lock.unlock()
+            throw Failure("辅种正在运行，请等当前任务结束")
+        }
+        busyAssist = true
+        assistRows = [:]
+        assistStep = "扫描下载器…"
+        assistReport = ""
+        cfg = self.cfg
+        lock.unlock()
+
+        let (pipe, jar) = try makeAssistPipeline(cfg)
+        var opts = AssistPipeline.Options()
+        opts.siteIDs = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
+        opts.dryRun = params["dryRun"] as? Bool ?? false
+        opts.limit = int(params["limit"]) ?? 0
+        opts.onEvent = { [weak self] st in
+            guard let self else { return }
+            let ev = Event(seq: self.nextSeq(), kind: "assist", siteID: st.siteID,
+                           text: "\(st.torrentName)｜\(st.text)", detail: st.detail,
+                           phase: Self.assistPhaseName(st.phase), ok: nil,
+                           time: Date().timeIntervalSince1970, key: st.rowKey)
+            self.mutate { self.assistRows[st.rowKey] = ev }
+            self.emit("assist", st.siteID, ev.text, st.detail, phase: ev.phase, ok: nil)
+        }
+        let picked = opts.siteIDs ?? cfg.assist?.siteIDs ?? []
+        queue.async { [weak self] in
+            guard let self else { return }
+            var reportText = ""
+            var failure = ""
+            do {
+                let candidates = try pipe.scanCandidates()
+                self.mutate { self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个" }
+                let report = pipe.run(torrents: candidates, opts: opts)
+                reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
+                    + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+            } catch {
+                failure = error.localizedDescription
+            }
+            self.mutate {
+                self.busyAssist = false
+                self.assistStep = failure.isEmpty ? "完成" : "失败"
+                self.assistReport = failure.isEmpty ? reportText : failure
+            }
+            self.persistCookies()
+            self.emit(failure.isEmpty ? "assist" : "error", nil,
+                      failure.isEmpty ? "辅种结束：\(reportText)" : "辅种失败: \(failure)",
+                      "", phase: nil, ok: failure.isEmpty)
+        }
+        return assistState()
+    }
+
+    /// 辅种用的流水线：每次新建 cookie 罐与下载器，跑完把 Set-Cookie 并回主罐
+    private func makeAssistPipeline(_ c: AppConfig) throws -> (AssistPipeline, CookieStore) {
+        guard c.assist != nil else { throw Failure("请先在设置里配置辅种（assist）") }
+        let jar = CookieStore()
+        lock.lock()
+        if let data = cookies.exportBackupJSON() { _ = try? jar.replace(from: data) }
+        lock.unlock()
+        let client = HTTPClient(cookies: jar, userAgent: c.userAgent)
+        let downloader = DownloaderFactory.make(c, client: client)
+        return (AssistPipeline(config: c, cookies: jar, state: state, downloader: downloader), jar)
+    }
+
+    private func assistState() -> [String: Any] {
+        lock.lock()
+        defer { lock.unlock() }
+        return assistStateLocked()
+    }
+
+    /// 快照里也带一份：Windows 端按快照轮询刷新，不必另开一条轮询
+    private func assistStateLocked() -> [String: Any] {
+        let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map(Self.eventJSON)
+        return ["running": busyAssist, "step": assistStep, "report": assistReport, "rows": rows]
+    }
+
+    static func assistPhaseName(_ p: AssistPipeline.Status.Phase) -> String {
+        switch p {
+        case .working: return "working"
+        case .verifying: return "verifying"
+        case .done: return "done"
+        case .failed: return "failed"
+        case .skipped: return "skipped"
+        }
     }
 
     // MARK: cookie 同步
@@ -1108,6 +1256,7 @@ public final class AppService {
         var d: [String: Any] = ["seq": e.seq, "kind": e.kind, "text": e.text,
                                 "detail": e.detail, "time": e.time]
         d["site"] = e.siteID ?? ""
+        d["key"] = e.key
         d["phase"] = e.phase ?? ""
         d["ok"] = e.ok ?? NSNull()
         return d

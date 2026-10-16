@@ -26,6 +26,14 @@ public final class StateStore {
         var notes: [String] = []
         var importedZips: [String: Double] = [:]     // 已导入的 PTD_backup zip 文件名 -> 时间戳
         var cookieChecks: [String: CookieCheckRec] = [:]   // siteID -> 最近一次 cookie 检测结果
+        /// 辅种：站点 -> 本地种子 info hash -> 已辅记录（含站内详情页与判定级别）
+        var assisted: [String: [String: AssistRec]] = [:]
+        /// 辅种负缓存：站点 -> hash -> 站内没检索到的时间。没找到也要记，
+        /// 否则每轮都替站点重搜一遍同一条，纯属白跑（站点还嫌你烦）
+        var assistMiss: [String: [String: Double]] = [:]
+        /// 上次扫描下载器的时间与当时的 hash 集合摘要（增量扫描用）
+        var assistScanTime: Double?
+        var assistScanDigest: String?
 
         init() {}
 
@@ -40,7 +48,19 @@ public final class StateStore {
             notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
             importedZips = try c.decodeIfPresent([String: Double].self, forKey: .importedZips) ?? [:]
             cookieChecks = try c.decodeIfPresent([String: CookieCheckRec].self, forKey: .cookieChecks) ?? [:]
+            assisted = try c.decodeIfPresent([String: [String: AssistRec]].self, forKey: .assisted) ?? [:]
+            assistMiss = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistMiss) ?? [:]
+            assistScanTime = try c.decodeIfPresent(Double.self, forKey: .assistScanTime)
+            assistScanDigest = try c.decodeIfPresent(String.self, forKey: .assistScanDigest)
         }
+    }
+
+    /// 一条辅种记录
+    struct AssistRec: Codable {
+        var time: Double
+        var url: String
+        /// sameHash / sameFiles：靠什么判定是同一种子（界面上要说清）
+        var level: String
     }
 
     private let path: String
@@ -163,6 +183,49 @@ public final class StateStore {
             snapshot.cookieChecks = [:]
             saveLocked()
         }
+    }
+
+    // MARK: 辅种
+
+    /// 这条本地种子在这个站已经辅过
+    public func isAssisted(site: String, hash: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assisted[site]?[hash.lowercased()] != nil
+    }
+
+    public func markAssisted(site: String, hash: String, url: String, level: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assisted[site, default: [:]][hash.lowercased()] =
+            AssistRec(time: Date().timeIntervalSince1970, url: url, level: level)
+        snapshot.assistMiss[site]?.removeValue(forKey: hash.lowercased())
+        saveLocked()
+    }
+
+    /// 站内没检索到这条的时间（超过 ttlSeconds 就不再拦着）
+    public func assistMissedAt(site: String, hash: String, ttlSeconds: TimeInterval) -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        guard let t = snapshot.assistMiss[site]?[hash.lowercased()] else { return nil }
+        let at = Date(timeIntervalSince1970: t)
+        return Date().timeIntervalSince(at) > ttlSeconds ? nil : at
+    }
+
+    public func markAssistMiss(site: String, hash: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assistMiss[site, default: [:]][hash.lowercased()] = Date().timeIntervalSince1970
+        saveLocked()
+    }
+
+    /// 记一次扫描（增量扫描靠它：种子集合没变、站点也没新增，就没什么可搜的）
+    public var assistScanWatermark: (time: Date?, digest: String?) {
+        lock.lock(); defer { lock.unlock() }
+        return (snapshot.assistScanTime.map { Date(timeIntervalSince1970: $0) }, snapshot.assistScanDigest)
+    }
+
+    public func setAssistScan(digest: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assistScanTime = Date().timeIntervalSince1970
+        snapshot.assistScanDigest = digest
+        saveLocked()
     }
 
     public func note(_ s: String) {

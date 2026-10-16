@@ -1490,6 +1490,114 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: 辅种
+    //
+    // 辅种不发新种：拿下载器里已有的文件去目标站找同一种子，把站内那条挂到本账号下。
+    // 站点请求节奏由 AssistPipeline 里的节流器统一收口，界面只负责发起与显示。
+
+    /// 下载器里扫出来的候选种子
+    @Published var assistCandidates: [LocalTorrent] = []
+    /// 本轮计划（一条种子 × 一个站）
+    @Published var assistPlan: [AssistPipeline.PlanRow] = []
+    /// 逐行进展，key = 站点|种子 hash
+    @Published var assistRows: [String: AssistPipeline.Status] = [:]
+    @Published var assistScanning = false
+    @Published var assistRunning = false
+    @Published var assistMessage: String? = nil
+    /// 只报告不动下载器
+    @Published var assistDryRun = false
+
+    /// 可以参与辅种的站（已启用的那些）
+    var assistSiteOptions: [SiteConfig] { config.sourceSites.filter { $0.enabled } }
+
+    var assistConfig: AssistConfig { config.assist ?? AssistConfig(siteIDs: []) }
+
+    /// 改辅种设置并落盘（配置里没有 assist 段时先补一份默认值）
+    func assistUpdate(_ change: (inout AssistConfig) -> Void) {
+        var a = config.assist ?? AssistConfig(siteIDs: [])
+        change(&a)
+        config.assist = a
+        saveConfig()
+    }
+
+    /// 扫描下载器并生成本轮计划（不发站点请求）
+    func assistScan() {
+        guard !assistRunning, !assistScanning else { return }
+        assistScanning = true
+        assistMessage = nil
+        let cfg = config
+        let jar = cookies
+        let st = state
+        Task.detached(priority: .utility) {
+            let out: ([LocalTorrent], [AssistPipeline.PlanRow], String)
+            let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
+            let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
+                                      downloader: DownloaderFactory.make(cfg, client: client))
+            do {
+                let cands = try pipe.scanCandidates()
+                out = (cands, pipe.plan(torrents: cands), "")
+            } catch {
+                out = ([], [], "扫描下载器失败：\(error.localizedDescription)")
+            }
+            await MainActor.run {
+                self.assistCandidates = out.0
+                self.assistPlan = out.1
+                self.assistRows = [:]
+                self.assistScanning = false
+                self.assistMessage = out.2.isEmpty ? nil : out.2
+            }
+        }
+    }
+
+    /// 执行辅种。跑完顺手重算一次计划，「已辅过 / 站内没有」这些标记才会跟着变。
+    func assistRun() {
+        guard !assistRunning, !assistScanning else { return }
+        let ids = assistConfig.siteIDs.filter { id in config.site(id)?.enabled == true }
+        guard !ids.isEmpty else {
+            assistMessage = "先在左边勾选要辅种的站点"
+            return
+        }
+        let cands = assistCandidates
+        guard !cands.isEmpty else {
+            assistMessage = "先扫描下载器"
+            return
+        }
+        assistRunning = true
+        assistMessage = nil
+        assistRows = [:]
+        let cfg = config
+        let jar = cookies
+        let st = state
+        let dry = assistDryRun
+        Task.detached(priority: .utility) {
+            let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
+            let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
+                                      downloader: DownloaderFactory.make(cfg, client: client))
+            var o = AssistPipeline.Options()
+            o.siteIDs = ids
+            o.dryRun = dry
+            o.onEvent = { s in
+                Task { @MainActor in self.assistRows[s.rowKey] = s }
+            }
+            let report = pipe.run(torrents: cands, opts: o)
+            let plan = pipe.plan(torrents: cands, siteIDs: ids)
+            let text = (dry ? "预演结束：" : "辅种结束：")
+                + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
+                + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+            await MainActor.run {
+                self.cookies.mergeFrom(jar)
+                self.assistPlan = plan
+                self.assistRunning = false
+                self.assistMessage = text
+                self.notes = st.recentNotes
+                if let data = self.cookies.exportBackupJSON() {
+                    try? data.write(to: URL(fileURLWithPath: self.dataDir).appendingPathComponent("cookies.json"),
+                                    options: .atomic)
+                }
+            }
+        }
+    }
+
     func clearNotes() { notes = [] }
 }
 

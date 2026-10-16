@@ -140,6 +140,102 @@ public enum Bencode {
     }
 
     /// info 值在原始数据中的区间 [start, end)
+    /// info 内的文件清单：`[(相对路径, 字节数)]`，相对路径以 `/` 连接（不含根目录名）。
+    /// 辅种靠逐文件比对判定「同一段文件被不同站点重新打包」，聚合值（总大小、文件数）不够用。
+    /// 单文件种子返回一条（路径 = info.name）；解析不出返回 nil（v2 的 file_tree 之类不认）。
+    public static func fileList(_ data: Data) -> [(path: String, size: Int64)]? {
+        guard let (start, end) = infoRange(data) else { return nil }
+        var name: String?
+        var single: Int64?
+        var multi: [(path: String, size: Int64)]?
+        var i = start + 1                       // 跳过 info 的 'd'
+        while i < end, data[i] != 0x65 {
+            guard let (key, ni) = readString(at: i, data) else { return nil }
+            i = ni
+            switch key {
+            case "name":
+                name = readString(at: i, data)?.0
+                i = (try? skipValueOr(i, data)) ?? ni
+            case "length":
+                single = readInt(at: i, data)?.0
+                i = (try? skipValueOr(i, data)) ?? ni
+            case "files":
+                // bencode 的 dict 键按字典序排，files 一定排在 name 前面：这里先收相对段，
+                // 根目录名等循环结束后再补
+                guard let (list, ni2) = readFiles(at: i, data) else { return nil }
+                multi = list
+                i = ni2
+            default:
+                guard let ni2 = skipValue(at: i, data) else { return nil }
+                i = ni2
+            }
+        }
+        if let m = multi, !m.isEmpty {
+            guard let root = name else { return nil }
+            return m.map { (root + "/" + $0.path, $0.size) }
+        }
+        if let n = name, let l = single { return [(n, l)] }
+        return nil
+    }
+
+    /// skipValue 的可选版（配合 try? 用，失败时让上面的 guard 兜住）
+    private static func skipValueOr(_ i: Int, _ data: Data) throws -> Int {
+        guard let ni = skipValue(at: i, data) else { throw BencodeParseError.truncated }
+        return ni
+    }
+
+    private enum BencodeParseError: Error { case truncated }
+
+    /// 多文件条目：files = [ {length: n, path: ["a", "b"]}, … ]，返回不含根目录名的相对路径
+    private static func readFiles(at i0: Int, _ data: Data)
+        -> ([(path: String, size: Int64)], Int)? {
+        guard i0 < data.count, data[i0] == 0x6C else { return nil }
+        var i = i0 + 1
+        var out: [(path: String, size: Int64)] = []
+        while i < data.count, data[i] != 0x65 {
+            guard data[i] == 0x64 else { return nil }
+            var j = i + 1
+            var size: Int64?
+            var parts: [String]?
+            while j < data.count, data[j] != 0x65 {
+                guard let (k, nj) = readString(at: j, data) else { return nil }
+                j = nj
+                if k == "length" {
+                    guard let (v, nj2) = readInt(at: j, data) else { return nil }
+                    size = v
+                    j = nj2
+                } else if k == "path" {
+                    // path 是字符串列表；unpaired 编码里可能是 [[utf8, raw], …]，取每段首项
+                    var segs: [String] = []
+                    var m = j + 1
+                    while m < data.count, data[m] != 0x65 {
+                        if data[m] == 0x6C {
+                            guard let (first, nm) = readString(at: m + 1, data) else { return nil }
+                            segs.append(first)
+                            guard let nm2 = skipValue(at: nm, data) else { return nil }
+                            m = nm2
+                        } else {
+                            guard let (one, nm) = readString(at: m, data) else { return nil }
+                            segs.append(one)
+                            m = nm
+                        }
+                    }
+                    guard m < data.count else { return nil }
+                    parts = segs
+                    j = m + 1
+                } else {
+                    guard let nj2 = skipValue(at: j, data) else { return nil }
+                    j = nj2
+                }
+            }
+            guard j < data.count, let sz = size, let ps = parts, !ps.isEmpty else { return nil }
+            out.append((ps.joined(separator: "/"), sz))
+            i = j + 1
+        }
+        guard i < data.count else { return nil }
+        return (out, i + 1)
+    }
+
     static func infoRange(_ data: Data) -> (Int, Int)? {
         var i = 0
         guard i < data.count, data[i] == 0x64 else { return nil }
