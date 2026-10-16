@@ -11,6 +11,8 @@ class NexusPHPAdapter: SiteAdapter {
     /// 源站没带 TMDB 链接时的反查回调（流水线注入：豆瓣/IMDb -> TMDB 条目链接）。
     /// 只有上传页真的有 TMDB 输入框时才调用，避免白跑一次外网请求。
     var tmdbLookup: ((ReleaseInfo) -> String?)?
+    /// 上一次查重在站内认出的那条已有种子的标题（searchExists / 「已存在」响应页两处都会写）
+    private(set) var duplicateHitTitle: String?
 
     init(site: SiteConfig, client: HTTPClient, debugDir: String? = nil) {
         self.site = site
@@ -527,6 +529,12 @@ class NexusPHPAdapter: SiteAdapter {
         if let dash = info.name.lastIndex(of: "-"), dash > info.name.index(info.name.startIndex, offsetBy: 10) {
             pairs.append((String(info.name[..<dash]), info.name))
         }
+        // 站点检索多是按词匹配，标题里的点/连字符会把一个词劈成两半：站内把 Blu-ray 写成
+        // BluRay 时整名查询一条也查不到（实测猫站 Black Lagoon）。补一条「去标点、只取前几个词」
+        // 的查询词，命中与否仍由后面的名称匹配判，不会因为查询变宽就认错种子。
+        if let soft = Self.wordQuery(info.name) {
+            pairs.append((soft, info.name))
+        }
         if info.name.count > 32 {
             pairs.append((String(info.name.prefix(32)), info.name))
         }
@@ -538,11 +546,13 @@ class NexusPHPAdapter: SiteAdapter {
         if subtitle.count >= 6, subtitle != info.name {
             pairs.append((subtitle, subtitle))
         }
-        // 严格查重（上传前）只查前两个候选：整名与去组标签名，命中要求高，多查只是白等
-        if !relaxed { pairs = Array(pairs.prefix(2)) }
+        // 严格查重（上传前）只查前三个候选：整名、去组标签名、去标点词元查询，
+        // 命中要求都高，多查只是白等
+        if !relaxed { pairs = Array(pairs.prefix(3)) }
+        duplicateHitTitle = nil
         var seen = Set<String>()
-        for (name, target) in pairs where !seen.contains(name) {
-            seen.insert(name)
+        for (name, target) in pairs where !seen.contains(Self.normalizeSearchName(name)) {
+            seen.insert(Self.normalizeSearchName(name))
             var q = tmpl
             q = q.replacingOccurrences(of: "{imdb}", with: info.imdb ?? "")
             q = q.replacingOccurrences(of: "{name}", with: name.urlEncoded)
@@ -558,10 +568,13 @@ class NexusPHPAdapter: SiteAdapter {
             // 无结果特征（早退；最终判定以名称匹配为准）
             let noResultMarkers = ["No torrents found", "没有种子", "没有相关", "no results", "No torrents"]
             if noResultMarkers.contains(where: { html.contains($0) }) { continue }
-            // 结果行 = 详情链接的锚文本（各站搜索结果名称在 <a href="details.php?id=..">名称</a> 内）
-            if let hit = Self.searchNameInResults(html: html, releaseName: target,
+            // 结果行 = 详情链接的锚文本（各站搜索结果名称在 <a href="details.php?id=..">名称</a> 内）。
+            // 用中文副标题查的时候，结果行写的还是英文发布名：发布名也参与复核
+            let matchNames = Self.matchNames(target, releaseName: info.name)
+            if let hit = Self.searchNameInResults(html: html, releaseNames: matchNames,
                                                   base: URL(string: url)!,
                                                   hrefPattern: detailHrefPattern, relaxed: relaxed) {
+                duplicateHitTitle = hit.text
                 return hit.href
             }
             // 结果行根本不写发布名的站（海胆的结果行是「[全集] Blu-ray / H.264 / 1080p …」这种
@@ -573,7 +586,9 @@ class NexusPHPAdapter: SiteAdapter {
                 let candidate = HTMLUtil.resolveURL("details.php?id=" + only, against: URL(string: url)!)
                 if let page = try? client.fetchHTML(candidate, referer: site.url),
                    let found = (try? parseDetail(html: page, detailURL: candidate))?.name,
-                   Self.searchNamesMatch(found, target, tokenTolerant: true) {
+                   Self.matchNames(target, releaseName: info.name)
+                       .contains(where: { Self.searchNamesMatch(found, $0, tokenTolerant: true) }) {
+                    duplicateHitTitle = found
                     return candidate
                 }
             }
@@ -586,6 +601,15 @@ class NexusPHPAdapter: SiteAdapter {
     static func searchNameInResults(html: String, releaseName: String, base: URL,
                                        hrefPattern: String = "details\\.php\\?id=|/torrents\\.php\\?id=",
                                        relaxed: Bool = false) -> (href: String, text: String)? {
+        searchNameInResults(html: html, releaseNames: [releaseName], base: base,
+                            hrefPattern: hrefPattern, relaxed: relaxed)
+    }
+
+    /// 一个结果页可能要用几个名字认（按中文副标题检索时，结果行写的还是英文发布名）：
+    /// 任一名字命中就算找到这条已有种子。
+    static func searchNameInResults(html: String, releaseNames: [String], base: URL,
+                                       hrefPattern: String = "details\\.php\\?id=|/torrents\\.php\\?id=",
+                                       relaxed: Bool = false) -> (href: String, text: String)? {
         let anchors = HTMLUtil.anchorText(html, hrefPattern: hrefPattern, includeTitle: true)
         guard !anchors.isEmpty else { return nil }
         // 结果页常写相对链接（details.php?id=123）：必须补成绝对地址，否则推送下载器时
@@ -593,14 +617,32 @@ class NexusPHPAdapter: SiteAdapter {
         func resolved(_ a: (href: String, text: String)) -> (href: String, text: String) {
             (HTMLUtil.resolveURL(HTMLUtil.decodeEntities(a.href), against: base), a.text)
         }
-        if anchors.contains(where: { Self.searchNamesMatch($0.text, releaseName) }) {
-            return resolved(anchors.first { Self.searchNamesMatch($0.text, releaseName) }!)
+        func firstHit(_ tolerant: Bool) -> (href: String, text: String)? {
+            anchors.first { a in
+                releaseNames.contains { searchNamesMatch(a.text, $0, tokenTolerant: tolerant) }
+            }
         }
+        if let hit = firstHit(false) { return resolved(hit) }
         guard relaxed else { return nil }
-        if anchors.contains(where: { Self.searchNamesMatch($0.text, releaseName, tokenTolerant: true) }) {
-            return resolved(anchors.first { Self.searchNamesMatch($0.text, releaseName, tokenTolerant: true) }!)
-        }
+        if let hit = firstHit(true) { return resolved(hit) }
         return nil
+    }
+
+    /// 参与名称复核的名字：查询词本身 + 源站发布名（归一化后同一个就不用列两遍）
+    static func matchNames(_ queried: String, releaseName: String) -> [String] {
+        normalizeSearchName(queried) == normalizeSearchName(releaseName)
+            ? [releaseName] : [queried, releaseName]
+    }
+
+    /// 查询词：只取前几个词、去掉所有标点。站点检索多是按词做匹配（整名里一个「Blu-」
+    /// 就查不到写成 BluRay 的那条），词元查询命中率高得多；是否算同一种子仍由名称匹配判。
+    static func wordQuery(_ name: String, maxWords: Int = 6, minWords: Int = 3,
+                          maxLength: Int = 60) -> String? {
+        let words = nameTokens(name).filter { $0.count >= 3 }
+        guard words.count >= minWords else { return nil }
+        let q = words.prefix(maxWords).joined(separator: " ")
+        guard q.count >= 10 else { return nil }
+        return String(q.prefix(maxLength))
     }
 
     /// 两个名称是否指同一种子：归一化互含为准，tokenTolerant 时补一条词元包含判定
@@ -616,8 +658,8 @@ class NexusPHPAdapter: SiteAdapter {
     /// 发布名的每个词元都能在候选名里找到（允许缺 1 个非关键字元）。
     /// 站点常见差异：截断尾部（丢组名）、标题里多插 2Audios 一类备注——都不改变「同一种子」的事实。
     static func nameTokensContained(_ name: String, _ other: String) -> Bool {
-        let target = nameTokens(name)
-        let cand = Set(nameTokens(other))
+        let target = comparableNameTokens(name)
+        let cand = Set(comparableNameTokens(other))
         guard target.count >= 4, cand.count >= 4 else { return false }
         let missing = target.filter { !cand.contains($0) }
         return missing.count <= 1 && !missing.contains(where: { isDiscriminatingToken($0) })
@@ -631,6 +673,25 @@ class NexusPHPAdapter: SiteAdapter {
         return joined.lowercased()
             .components(separatedBy: CharacterSet.alphanumerics.inverted)
             .filter { $0.count >= 2 }
+    }
+
+    /// 比对用的词元（Lagoon 压成 lagon 就查不到站点了，所以只在比对时压）
+    static func comparableNameTokens(_ s: String) -> [String] {
+        nameTokens(s).map { foldDoubledLetters($0) }
+    }
+
+    /// 站点对同一介质常有两种写法：Blu-ray / Blu Ray / BluRay。去掉分隔符后前两种都是
+    /// bluray，最后一种成了 blurray，「关键字元对不上」会把同一种子判成两个版本。
+    /// 比对用的串里压掉连续重复的字母（两边同样处理；数字不压，2006、1080p 保持原样）。
+    static func foldDoubledLetters(_ s: String) -> String {
+        var out = ""
+        var prev: Character = "\u{0}"
+        for c in s {
+            if c == prev, c.isASCII, c.isLetter { continue }
+            out.append(c)
+            prev = c
+        }
+        return out
     }
 
     /// 关键字元：季/集/年份/分辨率/编码音频对不上，说明是两个不同种子，不能算「已存在」
@@ -652,7 +713,7 @@ class NexusPHPAdapter: SiteAdapter {
     /// 搜索名称归一化：去标签/实体、小写、只留字母数字（CJK 按字母保留）
     static func normalizeSearchName(_ s: String) -> String {
         let t = HTMLUtil.decodeEntities(HTMLUtil.stripTags(s)).lowercased()
-        return String(t.filter { $0.isLetter || $0.isNumber })
+        return foldDoubledLetters(String(t.filter { $0.isLetter || $0.isNumber }))
     }
 
     // MARK: - 上传（转种）
@@ -2046,7 +2107,8 @@ class NexusPHPAdapter: SiteAdapter {
         // 免得成功页里偶发出现「已存在」字样时反过来误判。
         if Self.hasExistMarker(body), Self.looksLikeRejectedPage(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
-                                           detailPattern: detailHrefPattern) {
+                                           detailPattern: detailHrefPattern,
+                                           releaseName: info.name) {
             return verifiedDuplicate(dup, info: info, body: body)
         }
         // 成功特征: 跳到新种子详情页 / 发布成功提示
@@ -2098,7 +2160,8 @@ class NexusPHPAdapter: SiteAdapter {
         // 视为成功但不算本次转种；连原始 body 一起查，防错误提取失败时漏判
         if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
-                                           detailPattern: detailHrefPattern) {
+                                           detailPattern: detailHrefPattern,
+                                           releaseName: info.name) {
             return verifiedDuplicate(dup, info: info, body: body)
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
@@ -2323,32 +2386,87 @@ class NexusPHPAdapter: SiteAdapter {
     /// 「已存在」提示页 -> 成功结果（尽力带上已有种子的详情链接，供后续推送下载器）。
     /// detailPattern = 本站详情链接正则（TTG 是 /t/<id>/，默认 details.php?id=）。
     static func duplicateOutcome(body: String, uploadURL: String,
-                                 detailPattern: String = "(?:details|torrents)\\.php\\?id=\\d+") -> UploadOutcome? {
+                                 detailPattern: String = "(?:details|torrents)\\.php\\?id=\\d+",
+                                 releaseName: String = "") -> UploadOutcome? {
         let link = "(?:" + detailPattern + ")"
+        // 注释块里常整段躺着横幅广告（实测猫站在页首注释着一条指向 Banner 图的 /details.php?id=2257）
+        let page = HTMLUtil.stripComments(body)
         var existingURL: String?
-        // 站点常把「已存在」那条种子整个展开在提示页上：标题下面是它自己的下载链接
-        // download.php?id=N，而 details 链接只出现在「同剧其他种子」列表里
-        //（实测织梦 LuckPT 43834：下载链接指向真种子 382434，页面上唯一的 details 链接
-        // 却是同剧另一版本 115285 WEB-DL）。先认下载链接，认不出再刮详情链接。
-        if detailPattern.contains("details"), let id = Self.pageTorrentID(body) {
+        var existingTitle: String?
+        func take(_ a: (href: String, text: String)?) {
+            guard existingURL == nil, let a else { return }
+            existingTitle = a.text.isEmpty ? nil : a.text
+            existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(a.href), against: URL(string: uploadURL)!)
+        }
+        // 1) 站点写在「已存在」提示块里的那条种子（猫站是 <table class="torrent-exists-tbl">，
+        //    一行 Torrent Name 直接给出站内那条的链接）：这就是站点认定的那条重复种子
+        take(Self.bestDetailAnchor(in: Self.existingTorrentBlock(page) ?? "",
+                                   link: link, releaseName: releaseName))
+        // 2) 提示页把已有种子展开成它自己的下载链接：织梦那次下载链接指向真种子 382434，
+        //    而页面上唯一的 details 链接是同剧另一版本 115285 WEB-DL
+        if existingURL == nil, detailPattern.contains("details"), let id = Self.pageTorrentID(page) {
             existingURL = HTMLUtil.resolveURL("details.php?id=" + id, against: URL(string: uploadURL)!)
         }
-        if existingURL == nil, let m = HTMLUtil.group(body, "href=[\"']([^\"']*?" + link + "[^\"']*)[\"']"),
+        // 3) 提示语之后那段里的详情链接，再退到整页：只认有锚文本的链接
+        //    （横幅广告也写成 details.php?id=…，但它里面只有 <img>，没有文字）
+        take(Self.bestDetailAnchor(in: Self.existingNoticeWindow(page) ?? page,
+                                   link: link, releaseName: releaseName))
+        if existingURL == nil, let m = HTMLUtil.group(page, "href=[\"']([^\"']*?" + link + "[^\"']*)[\"']"),
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(HTMLUtil.decodeEntities(m), against: URL(string: uploadURL)!)
         }
         if existingURL == nil,
-           let m = HTMLUtil.group(body, "(https?://[^\\s<>\"]+?" + link + "[^\\s<>\"]*)", group: 1),
+           let m = HTMLUtil.group(page, "(https?://[^\\s<>\"]+?" + link + "[^\\s<>\"]*)", group: 1),
            !m.contains("userdetails") {
             existingURL = m
         }
         if existingURL == nil,
-           let m = HTMLUtil.group(body, "(?<![>\"\'=\\w])" + link + "(?:&[^\\s<>\"]*)?", group: 1),
+           let m = HTMLUtil.group(page, "(?<![>\"\'=\\w])" + link + "(?:&[^\\s<>\"]*)?", group: 1),
            !m.contains("userdetails") {
             existingURL = HTMLUtil.resolveURL(m, against: URL(string: uploadURL)!)
         }
-        return UploadOutcome(success: true, message: "站点回「种子已存在」，本次未新发种",
-                             detailURL: existingURL, alreadyExists: true)
+        var message = "站点回「种子已存在」，本次未新发种"
+        if let t = existingTitle, !t.isEmpty { message += "（站内已有：\(t)）" }
+        return UploadOutcome(success: true, message: message, detailURL: existingURL, alreadyExists: true)
+    }
+
+    /// 站点写明「已存在」那条种子的容器：class/id 里带 exist（实测猫站 torrent-exists-tbl）。
+    /// 命中后截一段窗口，只用来限定挑链接的范围，不解析标签结构。
+    static func existingTorrentBlock(_ html: String) -> String? {
+        guard let r = html.range(
+                of: #"<(?:table|div|td|p|span|font)\b[^>]*(?:class|id)="[^"]*exist[^"]*""#,
+                options: [.regularExpression, .caseInsensitive]) else { return nil }
+        return Self.textWindow(after: r.upperBound, in: html, length: 4000)
+    }
+
+    /// 没有这种容器时退回提示语之后的一小段：多数站把已有种子展开在提示语下面
+    static func existingNoticeWindow(_ html: String) -> String? {
+        for marker in ["该种子已存在", "种子已存在", "已经存在", "已经上传", "被人上传", "already exists"]
+        where html.range(of: marker, options: .caseInsensitive) != nil {
+            let r = html.range(of: marker, options: .caseInsensitive)!
+            return Self.textWindow(after: r.upperBound, in: html, length: 2500)
+        }
+        return nil
+    }
+
+    private static func textWindow(after i: String.Index, in html: String, length: Int) -> String {
+        let to = html.index(i, offsetBy: length, limitedBy: html.endIndex) ?? html.endIndex
+        return String(html[i..<to])
+    }
+
+    /// 一段 HTML 里挑最像「那条种子」的详情链接：先要锚文本与本次发布名对得上的，
+    /// 再退而取锚文本最长的（种子标题远长于「下一页」「猜你喜欢」这类导航文字）。
+    static func bestDetailAnchor(in html: String, link: String,
+                                 releaseName: String) -> (href: String, text: String)? {
+        guard !html.isEmpty else { return nil }
+        let anchors = HTMLUtil.anchorText(html, hrefPattern: link, includeTitle: true)
+            .filter { !$0.href.contains("userdetails") && !$0.text.isEmpty }
+        guard !anchors.isEmpty else { return nil }
+        if !releaseName.isEmpty,
+           let m = anchors.first(where: { searchNamesMatch($0.text, releaseName, tokenTolerant: true) }) {
+            return m
+        }
+        return anchors.max { $0.text.count < $1.text.count }
     }
 
     /// 「已存在」页刮到的详情链接要验一遍：那页常并列同剧不同版本的种子。实测织梦
@@ -2366,6 +2484,7 @@ class NexusPHPAdapter: SiteAdapter {
         // 页面解析不出种子名（改版、要登录）时维持原判，别把对的链接也扔掉
         let found = ((try? parseDetail(html: page, detailURL: link))?.name ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        if found.count >= 8 { duplicateHitTitle = found }
         guard found.count >= 8, Self.conflictingVersion(info.name, found) else { return dup }
         var message = "站点回「种子已存在」，本次未新发种（页面给的链接指向「\(found)」，与本次版本不同）"
         if let dump = dumpDebugHTML(body) { message += "，响应页已存 \(dump)" }

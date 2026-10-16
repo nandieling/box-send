@@ -18,6 +18,8 @@ public protocol SiteAdapter: AnyObject {
     func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String?
     /// 未配置 searchURL 时能否仍主动做站内查重（该框架有通用检索端点）
     var canPrecheckDuplicate: Bool { get }
+    /// 上一次查重在站内认出的那条已有种子的标题：UI 用它说清「重复的是哪一条」
+    var duplicateHitTitle: String? { get }
     /// 上传（转种）
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome
     /// 上传字段预览（调试用，CLI info --preview）
@@ -31,6 +33,7 @@ extension SiteAdapter {
         throw BoxSendError.badInput("\(site.id) 适配器不支持上传字段预览")
     }
     var canPrecheckDuplicate: Bool { false }
+    var duplicateHitTitle: String? { nil }
     /// 默认不支持宽松判定，退回严格查重
     func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? { try searchExists(info) }
     /// 框架暂无反查需求（源站直接给出 TMDB 链接的站够用）

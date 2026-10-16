@@ -392,7 +392,9 @@ public partial class RunView : UserControl
     private static string Short(string s)
     {
         var i = s.IndexOf("（页面已存", StringComparison.Ordinal);
-        if (i > 0) return s[..i];
+        if (i > 0) s = s[..i];
+        // 「已存在」的详情是三行（说明 / 站内那条的标题 / 链接）：卡片窄，收成一行，全文在鼠标提示里
+        s = string.Join(" · ", s.Split('\n').Select(x => x.Trim()).Where(x => x.Length > 0));
         return s.Length > 80 ? s[..80] + "…" : s;
     }
 

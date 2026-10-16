@@ -212,9 +212,13 @@ final class ModelsTests: XCTestCase {
     // MARK: 搜索查重
 
     func testNormalizeSearchName() {
-        // 大小写/HTML 实体/全角空格 不敏感
-        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("  Food&nbsp;Inc　2009 "), "foodinc2009")
-        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("<b>Food Inc</b>"), "foodinc")
+        // 大小写/HTML 实体/全角空格 不敏感；比对用的串还会压掉连续重复字母
+        // （站内把 Blu-ray 写成 BluRay，去掉分隔符后是 blurray，不压就认不出是同一种子）
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("  Food&nbsp;Inc　2009 "), "fodinc2009")
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("<b>Food Inc</b>"), "fodinc")
+        XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("Big Bang 2020 Blu-ray"),
+                       NexusPHPAdapter.normalizeSearchName("Big Bang 2020 BluRay"),
+                       "介质写法差异归一")
         // 中英文混合保留
         XCTAssertEqual(NexusPHPAdapter.normalizeSearchName("凡人修仙传 全30集"), "凡人修仙传全30集")
     }

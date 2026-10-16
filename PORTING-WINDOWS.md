@@ -68,7 +68,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 420 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+- 回归测试从 337 个加到 428 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
   只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
   连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
@@ -183,6 +183,24 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - 影响：HDVideo 把地区设成必填，源站简介空着时以前直接不发（服务端回「上传失败！请选择地区」），
   现在按这条链填上；回归测试 `testHDVideoRegionNeverLeftEmpty`、`testRegionSelectAlwaysFilled`、
   `testRegionLabelVariants`
+
+## 这一轮（猫站重复：认对种子、说清是哪条、照常推送）
+
+- 站点回「该种子已存在」时不再抓页面上第一条详情链接：实测猫站那条指向页首横幅广告
+  （`/details.php?id=617819`），显示出来的「重复种子」莫名其妙。现在按四步认：
+  提示块（`class` 带 exist 的容器，猫站是 `torrent-exists-tbl`，一行 Torrent Name 就是答案）
+  -> 页面里那条种子自己的 `download.php?id=` -> 提示语之后有锚文本的详情链接 -> 裸链接兜底；
+  抓之前先剥掉 HTML 注释（注释里躺着 Banner 链接），并且不认锚文本为空的链接（横幅只有 `<img>`）
+- 重复信息显示：提示语带上站内那条的标题（「站点回「种子已存在」，本次未新发种（站内已有：xxx）」），
+  卡片详情行显示「说明 / 已有种子标题 / 链接」三行，Windows 卡片窄，收成一行、全文进鼠标提示
+- 站内检索的写法差异：比对用的串与词元会压掉连续重复字母（`foldDoubledLetters`），
+  站内把 Blu-ray 写成 BluRay 时去掉分隔符是 blurray，不压就永远认不出是同一种子；
+  查询词仍用原样分词（Lagoon 压成 lagon 就查不到东西了）
+- 上传前查重多一条候选查询词：去掉标点、只取前几个词（站点检索多按词匹配，
+  整名里一个「Blu-」就能让写成 BluRay 的那条查不到）；命中与否仍由名称匹配判
+- 「已存在」的站单独记账（`state.existing`）：重跑时不再显示成「转种成功（此前已转种）」，
+  而是「站内已有该种子」；那次没找回站内链接的，重跑会补查一次并把站内那条推给下载器，
+  推送文案是「推送已有种子」。实测猫站这条从 0 变成 `details.php?id=768037` + 跨种生效
 
 ## 两端有意不同
 

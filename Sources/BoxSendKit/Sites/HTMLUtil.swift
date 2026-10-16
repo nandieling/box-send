@@ -261,6 +261,14 @@ enum HTMLUtil {
 
     /// 抓 <a href=...>锚文本</a>。includeTitle = true 时，对「title 属性比锚文本更完整」的锚点
     /// 额外补一条以 title 为文本的候选：站点搜索结果页常把长标题截断显示，完整名在 title 里。
+    /// 去掉 HTML 注释块：站点的横幅广告常整段注释在页面里，注释里的链接不该当成种子链接
+    static func stripComments(_ html: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: "<!--[\\s\\S]*?-->", options: []) else { return html }
+        return re.stringByReplacingMatches(in: html, options: [],
+                                           range: NSRange(html.startIndex..., in: html),
+                                           withTemplate: "")
+    }
+
     static func anchorText(_ html: String, hrefPattern: String,
                            includeTitle: Bool = false) -> [(href: String, text: String)] {
         var out: [(String, String)] = []

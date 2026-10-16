@@ -121,6 +121,16 @@ public final class ReseedPipeline {
         }
     }
 
+    /// 「已存在」卡片要写清站内那条是哪一种子：站点提示里已带标题就不再重复一遍
+    private func existingDetail(_ message: String, adapter: any SiteAdapter, url: String) -> String {
+        var lines = [message]
+        if let t = adapter.duplicateHitTitle, !t.isEmpty, !message.contains(t) {
+            lines.append("站内已有：\(t)")
+        }
+        lines.append("已有种子：\(url)")
+        return lines.joined(separator: "\n")
+    }
+
     /// 站点适配器工厂（默认走内置注册表；单测注入假适配器以核对逐站执行顺序）
     var adapterFactory: (SiteConfig, HTTPClient, String) -> any SiteAdapter = { site, client, debugDir in
         SiteRegistry.adapter(for: site, client: client, debugDir: debugDir)
@@ -339,18 +349,46 @@ public final class ReseedPipeline {
                         continue
                     }
                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种中…", phase: .working))
+                    let tAdapter = adapterFactory(ts, client, debugDir)
                     if state.isUploaded(site: tid, key: release.dedupKey) {
-                        report.outcomes.append((tid, true, "转种成功（此前已转种）"))
-                        opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
-                                                     detail: "此前已转种过，本次跳过上传"))
-                        if let tu = state.targetURL(site: tid, key: release.dedupKey) {
-                            pushTargetSite(siteID: tid, detailURL: absoluteTargetURL(tid, tu),
-                                           seedPreexisting: false, debugDir: debugDir, opts: opts, report: &report)
+                        // 此前判定「站内已有」的站：那次可能没找回站内链接，推送就落空了。
+                        // 这次补查一次并把站内那条推给下载器，别只会重复报「已转种」
+                        let wasExisting = state.isExisting(site: tid, key: release.dedupKey)
+                        var found = state.targetURL(site: tid, key: release.dedupKey)
+                            .map { absoluteTargetURL(tid, $0) }
+                        if found == nil {
+                            found = (try? bounded(min(60, opts.siteTimeout / 3), "站内回查") {
+                                try tAdapter.searchExists(release, relaxed: true)
+                            }) ?? nil
+                            if let u = found {
+                                let uAbs = absoluteTargetURL(tid, u)
+                                state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
+                                found = uAbs
+                                state.note("reseed RECOVER \(tid): 补查到站内已有种子 \(uAbs)")
+                            }
+                        }
+                        if let u = found {
+                            report.outcomes.append((tid, true, wasExisting ? "站内已有该种子：\(u)"
+                                                                            : "转种成功（此前已转种）"))
+                            opts.onSiteEvent?(SiteStatus(
+                                siteID: tid, text: wasExisting ? "站内已有该种子" : "转种成功",
+                                phase: wasExisting ? .exists : .done,
+                                detail: (wasExisting ? "此前已确认站内有这条种子\n\(u)"
+                                                     : "此前已转种过，本次跳过上传\n\(u)")))
+                            pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: wasExisting,
+                                           debugDir: debugDir, opts: opts, report: &report)
+                        } else if wasExisting {
+                            report.outcomes.append((tid, true, "站内已有该种子（没能定位站内链接，未推送）"))
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "站内已有该种子", phase: .exists,
+                                                         detail: "站内已有这条种子，但两次都没定位到它的详情页，本次未推送"))
+                        } else {
+                            report.outcomes.append((tid, true, "转种成功（此前已转种）"))
+                            opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
+                                                         detail: "此前已转种过，本次跳过上传"))
                         }
                         continue
                     }
                     do {
-                        let tAdapter = adapterFactory(ts, client, debugDir)
                         // 注入 TMDB 反查：适配器只在上传页真有 TMDB 输入框、且源站没带链接时才调用
                         tAdapter.setTMDBLookup { info in
                             guard let r = tmdb else { return nil }
@@ -373,12 +411,16 @@ public final class ReseedPipeline {
                             : nil
                         if let exists = precheck {
                             let uAbs = absoluteTargetURL(tid, exists)
+                            let title = tAdapter.duplicateHitTitle
                             report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                             state.markUploaded(site: tid, key: release.dedupKey)
+                            state.markExisting(site: tid, key: release.dedupKey)
                             state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
                             state.note("reseed EXIST \(tid): 站内已有该种子，跳过上传，已有种子 \(uAbs)")
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
-                                                         detail: "站内已有该种子（别人先发或此前已发）\n\(uAbs)"))
+                                                         detail: ["站内已有该种子（别人先发或此前已发）",
+                                                                  title, uAbs].compactMap { $0 }
+                                                            .filter { !$0.isEmpty }.joined(separator: "\n")))
                             pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
                                            debugDir: debugDir, opts: opts, report: &report)
                             continue
@@ -396,14 +438,16 @@ public final class ReseedPipeline {
                                 }
                                 if let u = existing {
                                     let uAbs = absoluteTargetURL(tid, u)
+                                    state.markExisting(site: tid, key: release.dedupKey)
                                     state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
                                     report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
-                                                                 detail: "\(outcome.message)\n已有种子：\(uAbs)"))
+                                                                 detail: existingDetail(outcome.message, adapter: tAdapter, url: uAbs)))
                                     pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
                                                    debugDir: debugDir, opts: opts, report: &report)
                                 } else {
+                                    state.markExisting(site: tid, key: release.dedupKey)
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），未找到已有种子链接，跳过目标站推送")
                                     report.outcomes.append((tid, true, "种子已存在，跳过（站内没检索到该种子链接）"))
                                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,

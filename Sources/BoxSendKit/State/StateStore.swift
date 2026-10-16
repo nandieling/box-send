@@ -21,6 +21,7 @@ public final class StateStore {
         var uploaded: [String: [String: Double]] = [:]
         var pushed: [String: String] = [:]
         var targetURLs: [String: [String: String]] = [:]   // 目标站 -> dedupKey -> 新种子详情页
+        var existing: [String: [String: Double]] = [:]     // 目标站 -> dedupKey -> 判定「站内已有」的时间
         var lastGistSync: Double?
         var notes: [String] = []
         var importedZips: [String: Double] = [:]     // 已导入的 PTD_backup zip 文件名 -> 时间戳
@@ -34,6 +35,7 @@ public final class StateStore {
             uploaded = try c.decodeIfPresent([String: [String: Double]].self, forKey: .uploaded) ?? [:]
             pushed = try c.decodeIfPresent([String: String].self, forKey: .pushed) ?? [:]
             targetURLs = try c.decodeIfPresent([String: [String: String]].self, forKey: .targetURLs) ?? [:]
+            existing = try c.decodeIfPresent([String: [String: Double]].self, forKey: .existing) ?? [:]
             lastGistSync = try c.decodeIfPresent(Double.self, forKey: .lastGistSync)
             notes = try c.decodeIfPresent([String].self, forKey: .notes) ?? []
             importedZips = try c.decodeIfPresent([String: Double].self, forKey: .importedZips) ?? [:]
@@ -76,6 +78,16 @@ public final class StateStore {
     public func markUploaded(site: String, key: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.uploaded[site, default: [:]][key] = Date().timeIntervalSince1970
+        saveLocked()
+    }
+    /// 该站此前是判定「站内已有」（不是本次新发种）
+    public func isExisting(site: String, key: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.existing[site]?[key] != nil
+    }
+    public func markExisting(site: String, key: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.existing[site, default: [:]][key] = Date().timeIntervalSince1970
         saveLocked()
     }
     public func isPushed(key: String) -> Bool {
