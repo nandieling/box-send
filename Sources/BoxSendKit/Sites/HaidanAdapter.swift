@@ -10,8 +10,38 @@ final class HaidanAdapter: NexusPHPAdapter {
         return try parseDetail(html: html, detailURL: detailURL)
     }
 
+    /// 归属判定与解析只看本条种子那一段（见 `torrentBlock(forID:in:)`）
+    override func scopedPage(_ html: String, torrentID: String?) -> String {
+        guard let id = torrentID, let block = Self.torrentBlock(forID: id, in: html) else { return html }
+        return block
+    }
+
+    /// 海胆的详情页把同一部影片的每个版本并列在一页里，每个 `<div class="torrent-wrap">` 一块，
+    /// 各自有自己的 download.php?id=N、标题和发布时间。整页去读会读到排在最前面那个版本：
+    /// 实测黑礁新种（80033）排在 2020 年的 BDrip 后面，标题与发布时间都成了别人的，
+    /// 刚发的新种因此被判成「不是本次发布的」，推给下载器的是同页另一条种子。
+    /// 页面上找不到这个 id 时返回 nil，调用方退回整页（改版、只有一块等情况）
+    static func torrentBlock(forID id: String, in html: String) -> String? {
+        let ns = html as NSString
+        guard let re = try? NSRegularExpression(pattern: "class=['\"]torrent-wrap", options: [])
+        else { return nil }
+        let marks = re.matches(in: html, range: NSRange(location: 0, length: ns.length))
+            .map { $0.range.location }
+        guard !marks.isEmpty else { return nil }
+        for (i, start) in marks.enumerated() {
+            let end = i + 1 < marks.count ? marks[i + 1] : ns.length
+            let chunk = ns.substring(with: NSRange(location: start, length: end - start))
+            if chunk.contains("download.php?id=" + id) || chunk.contains("edit.php?id=" + id) {
+                return chunk
+            }
+        }
+        return nil
+    }
+
     /// 纯解析（供测试）
     override func parseDetail(html: String, detailURL: String) throws -> ReleaseInfo {
+        // 整页可能并列同一部影片的多个版本，先裁到本条种子那一段
+        let html = scopedPage(html, torrentID: Self.torrentIDFromDetail(detailURL))
         // 标题块：'detail-info-item-name'>标题</span> ... <b><span>NAME</span></b>
         guard let nameRaw = HTMLUtil.group(html,
                 "detail-info-item-name'>\\s*标题\\s*</span>[\\s\\S]{0,400}?<b><span>([^<]+)</span>",

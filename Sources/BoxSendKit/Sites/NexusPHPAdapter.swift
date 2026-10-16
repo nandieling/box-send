@@ -2115,24 +2115,26 @@ class NexusPHPAdapter: SiteAdapter {
         if let m = HTMLUtil.firstMatch(finalURL, Self.defaultDetailHrefPattern + "|" + detailHrefPattern),
            !m.isEmpty {
             let u = URL(string: uploadURL)!
-            return newSeedOutcome(detailURL: HTMLUtil.resolveURL(m, against: u), torrentData: torrentData)
+            return newSeedOutcome(detailURL: HTMLUtil.resolveURL(m, against: u), torrentData: torrentData, info: info)
         }
         // 站点自定义成功跳转（城市：/t-<id>），按 overrides.successIDPattern 取 id 组详情链接
         if let pat = override?.successIDPattern,
            let id = HTMLUtil.group(resp.finalURL, pat, group: 1) {
-            return newSeedOutcome(detailURL: site.url + "details.php?id=" + id, torrentData: torrentData)
+            return newSeedOutcome(detailURL: site.url + "details.php?id=" + id, torrentData: torrentData, info: info)
         }
         if resp.status == 200, body.contains("new torrent") || body.contains("发布成功") || body.contains("Torrent added") {
             // 站点只说「发布成功」、没跳详情页（实测海胆）：响应页里若只有唯一一条详情链接，
             // 就是刚发的那条种子，拿它去推下载器；否则交给流水线回站内检索
             if let sole = Self.soleDetailURL(body: body, base: URL(string: uploadURL)!,
                                              hrefPattern: detailHrefPattern) {
-                return newSeedOutcome(detailURL: sole, torrentData: torrentData)
+                return newSeedOutcome(detailURL: sole, torrentData: torrentData, info: info)
             }
             // 海胆这类站的详情页里没有指向自己的 details 链接，种子 id 只写在
             // download.php?id=N / edit.php?id=N 上：不认它就找不回新种子，推送只能作罢
-            if let id = Self.pageTorrentID(body), let mine = detailURL(forID: id) {
-                return newSeedOutcome(detailURL: mine, torrentData: torrentData)
+            if let id = Self.pageTorrentID(body), let mine = detailURL(forID: id),
+               pageReportsThisRelease(mine, info) {
+                // 这条得真是本次这个发布才认（海胆的发布成功页会带同页别的种子的链接）
+                return newSeedOutcome(detailURL: mine, torrentData: torrentData, info: info)
             }
             var msg = "发布成功"
             if let p = dumpDebugHTML(body) { msg += "（响应页已存 \(p)）" }
@@ -2187,16 +2189,27 @@ class NexusPHPAdapter: SiteAdapter {
     /// 站点跳到详情页不等于发了新种：站内已有同名种子时它也可能跳回那条详情页
     /// （实测优堡/麒麟/蟹黄堡对同名不同 hash 的旧就这么回）。回查详情页的 Info Hash，
     /// 与本次上传的种子对不上就按「已存在」报，链接仍给这条已有种子，供推送下载器。
-    private func newSeedOutcome(detailURL: String, torrentData: Data) -> UploadOutcome {
-        guard let page = try? client.fetchHTML(detailURL, referer: site.url) else {
+    private func newSeedOutcome(detailURL: String, torrentData: Data, info: ReleaseInfo) -> UploadOutcome {
+        guard let raw = try? client.fetchHTML(detailURL, referer: site.url) else {
             return UploadOutcome(success: true, message: "发布成功", detailURL: detailURL)
         }
+        // 一页并列多个版本的站（海胆）只看本条那一段，否则读到排在最前面的别的版本，
+        // 发布者与发布时间都是别人的
+        let page = scopedPage(raw, torrentID: Self.torrentIDFromDetail(detailURL))
         // hash 对不上不等于这条种子不是我们刚发的：站点会重写种子文件（改 announce / private 标记，
         // 实测高清视界重算出的 hash 就和上传的文件不同），只比 hash 会把刚发出去的新种判成「已存在」。
         // 改用发布者与发布时间判归属；两项都判不了时按发布成功报。
         switch Self.pageOwnership(page, torrentID: Self.torrentIDFromDetail(detailURL),
                                   ourHash: Bencode.infoHash(torrentData), now: Date()) {
         case .theirs:
+            // 站点把我们带到的那条可能与本次毫不相干（响应页里刮来的链接、同页别的版本）：
+            // 名字对不上就别把这条推给下载器，丢掉链接交给流水线按名回站内重查
+            if let found = releaseName(on: page), found.count >= 8,
+               Self.conflictingVersion(info.name, found) {
+                return UploadOutcome(success: true,
+                                     message: "发布成功（响应页给的链接指向「\(found)」，与本次无关，已丢弃）",
+                                     detailURL: nil, alreadyExists: true)
+            }
             return UploadOutcome(success: true, message: "站内同名种子不是本次发布的（发布者或发布时间对不上）",
                                  detailURL: detailURL, alreadyExists: true)
         case .ours, .unknown:
@@ -2269,9 +2282,29 @@ class NexusPHPAdapter: SiteAdapter {
     /// 重跑时判这条种子归谁。不比 info hash：跨站转种 info 段一样、hash 也一样，
     /// 说明不了归属。只看发布者是不是本账号，以及这条种子上有没有我自己的编辑入口。
     func torrentOwnership(detailURL: String, uploadedAt: Date?) -> TorrentOwnership {
-        guard let page = try? client.fetchHTML(detailURL, referer: site.url) else { return .unknown }
-        return Self.reseedOwnership(page, torrentID: Self.torrentIDFromDetail(detailURL),
+        guard let raw = try? client.fetchHTML(detailURL, referer: site.url) else { return .unknown }
+        let id = Self.torrentIDFromDetail(detailURL)
+        return Self.reseedOwnership(scopedPage(raw, torrentID: id), torrentID: id,
                                     uploadedAt: uploadedAt)
+    }
+
+    /// 一页并列多版时，解析与归属判定只看本条种子那一段；默认整页
+    func scopedPage(_ html: String, torrentID: String?) -> String { html }
+
+    /// 页面上这条种子的发布名；解析不出就返回 nil（调用方按「判不了」处理，不瞎判）
+    private func releaseName(on page: String) -> String? {
+        let name = ((try? parseDetail(html: page, detailURL: site.url))?.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    /// 响应页给的种子链接是不是本次这个发布：认不出名字时不拦（维持旧行为），
+    /// 明显是另一个发布就丢掉，回站内按名重查
+    private func pageReportsThisRelease(_ detailURL: String, _ info: ReleaseInfo) -> Bool {
+        guard let raw = try? client.fetchHTML(detailURL, referer: site.url) else { return true }
+        guard let found = releaseName(on: scopedPage(raw, torrentID: Self.torrentIDFromDetail(detailURL)))
+        else { return true }
+        return !Self.conflictingVersion(info.name, found)
     }
 
     /// 详情页这条种子归谁：先比发布者与本账号；看不出就看这条种子上有没有我自己的编辑入口；

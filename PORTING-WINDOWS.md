@@ -68,7 +68,7 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 - Gist / CookieCloud / 备份目录监控三个定时任务（含配置里那份 `zipWatch.enabled` 的开机续挂）
 - 图标 `boxsend.ico`（与 mac 的 AppIcon.icns 同源，`windows/make_icon.py` 生成）
 - 打包：`windows/build.ps1` + `windows/installer/boxsend.iss`
-- 回归测试从 337 个加到 437 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
+- 回归测试从 337 个加到 445 个，全绿（SSH 测速那 27 条按平台分流：密码 askpass 与 sh 桩
   只在类 UNIX 上跑，Windows 上改成验「密码登录被直接拒绝」，并另有一条用系统真 ssh
   连没人监听的端口，把「起进程 + 把 ssh 的抱怨翻成人话」在 Windows 上真跑一遍）
 
@@ -282,6 +282,32 @@ Apple 专属的东西只有四处，逐个改成可注入钩子即可；纯算�
 涨的 150 MB 全是 .NET 运行时本体（WPF 不支持 `PublishTrimmed`，裁剪省不动；里面还连带了用不上的
 WinForms 约 22 MB，真要抠体积可以在发布后按依赖树删，属于可优化的零头）。
 核心库 release 编译 2.9 MB，Swift 工具链那批运行时 DLL 还没在 Windows 上量过，量级十几 MB。
+
+## 这一轮（海胆一页并列多个版本：解析和归属都要裁到本条种子）
+
+现象：源站黑礁 S01 Remux 转海胆，界面写「转种成功」＋「站内同名种子不是本次发布的（发布者或发布时间
+对不上）已有种子：details.php?id=985」，推给下载器的也是 985。985 是《爱宠大机密2》，跟本次毫无关系。
+
+根因是海胆的详情页布局：同一部影片的每个版本并列在一页里，每个 `<div class="torrent-wrap">` 一块，
+各自有自己的 `download.php?id=N`、标题、发布时间。实测这张页里本次发的 80033（2026-10-16 15:09）排在
+2020 年那条 BDrip（1036）后面，整页去读标题和「发布于」都读到 1036：发布时间比刚那次上传早六年，
+`pageOwnership` 就判成别人的了。而「发布成功」响应页刮来的那条链接更是另一部片子（985），
+链接本身就该丢。海胆检索结果行只写 `details.php?group_id=`，种子 id 只出现在 `download.php?id=`、
+`edit.php?id=` 上，这也是之前回站内重查找不回链接的原因。
+
+改法：
+
+- `HaidanAdapter.torrentBlock(forID:in:)` 按 `torrent-wrap` 切块，返回含本 id 的那一段；
+  覆写 `NexusPHPAdapter.scopedPage(_:torrentID:)`（默认整页），详情解析、归属判定、重跑归属三处都先裁。
+- 上传成功响应页给的那条链接，先回查页面认名字：`conflictingVersion` 判出是另一个发布就丢掉链接
+  （`detailURL: nil`），交给流水线按名回站内重查，别把不相干的种子推给下载器。
+- 新增 fixture `detail-haidan-two-versions.html` 与 `HaidanVersionTests`（8 条）：分块、两条各自解析、
+  找不到 id 时退回整页、刚发一分钟的归属（本块认 ours、整页会误判 theirs）、重跑归属、版本比对。
+
+实测复跑：`转种成功（此前已转种）`，链接解析回 `details.php?id=80033`，推送提示
+「已存在于下载器，本站 tracker 已在种子中，跨种已生效」，误标的「站内已有该种子」自动清掉。
+测试 445 个全绿。
+
 
 ## 踩过记在这儿
 
