@@ -72,12 +72,12 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
 
 | 怎么触发 | 结果 |
 | --- | --- |
-| 推 tag（仓库现在的 tag 形如 `1.1`） | 两个包直接挂到该 tag 的 Release |
+| 推 tag（仓库现在的 tag 形如 `1.2`） | 两个包直接挂到该 tag 的 Release |
 | Actions 页面手动运行 | 只构建，产物留在 Runs 页可下载，不发版；下方 `平台` 选 `windows` 就只出安装包 |
 | 提 PR / 推 main | 只跑两平台的测试 |
 
 手动运行：Actions 页左侧选 `打包` → 右侧「Run workflow」→ 选分支/tag 与平台 → 绿色按钮。
-产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.1-win-x64.exe`）。
+产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.2-win-x64.exe`）。
 
 Windows 作业会自己下载安装器装 Swift 工具链（runner 没预装，Windows 那侧官方只发 `.exe`，没有 zip；
 runner 是 Server 镜像、里面也没有 winget，所以走 curl 直连，两 GB 十几秒就下来了）。
