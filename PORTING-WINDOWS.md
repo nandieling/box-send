@@ -332,6 +332,28 @@ mac 不走桥，直接注入 `AssistPipeline`。CLI 加 `box-send assist scan|pl
 
 测试 472 个全绿。
 
+## 2026-10-17：多下载器（发种一台、辅种一台）+ 增量扫描
+
+配置层：`DownloaderConfig` 加 `id`（主下载器固定 `main`）与 `name`；`AppConfig` 加
+`downloaders` / `reseedDownloaderID` / `assistDownloaderID`。老配置只有一个 `downloader`
+对象，解码出来照样是一台、两个用途都指它。逐站限速跟着**发种那台**存，辅种推送按辅种
+那台自己那份表算。
+
+Windows 侧：
+
+- 快照多带 `downloaders`（每台一行，含 `isMain`）与 `downloaderRoles`，`AppModel.Downloaders`
+  直接喂给「正在编辑」「批量发种推送用」「辅种扫描用」三个下拉（`DisplayMemberPath=Label`、
+  `SelectedValuePath=Id`）。`DownloaderView.Load()` 改成整页按快照重填，表单不再读
+  `Config["downloader"]`，保存走 `downloaders.save`（按 id upsert），删掉老的
+  `PatchSection("downloader")` 那条路——两条路并存的话，编辑附加那台会把主下载器覆盖掉。
+- `downloader.test` 带可选 `id`：测的是正在编辑的那台，结果文本里回机器名。
+- 两个用途下拉的 `SelectionChanged` 与 `DlPick` 的一起受 `_loading` 挡：填表时改选中项
+  会回调回来，形成「填表 → 存盘 → 刷新 → 再填表」。
+- 辅种页候选区脚注改用核心库给的 `summary.deltaText`（首次扫描 / 与上次一致 / 比上次多几条），
+  并写明辅种用的是哪台。
+
+测试 479 个全绿。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

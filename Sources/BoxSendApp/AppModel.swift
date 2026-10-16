@@ -157,14 +157,14 @@ final class AppModel: ObservableObject {
     var siteUpLimitMBInt: [String: Int] {
         var out: [String: Int] = [:]
         for s in config.sourceSites {
-            let v = config.downloader.siteUpLimits[s.id] ?? 0
+            let v = config.reseedDownloader.siteUpLimits[s.id] ?? 0
             out[s.id] = Int((Double(v) / 1048576.0).rounded())
         }
         return out
     }
 
     func setSiteUpLimitMBInt(_ mb: Int?, siteID: String) {
-        config.downloader.siteUpLimits[siteID] = Int64(mb ?? 0) * 1_048_576
+        config.mutateReseedDownloader { $0.siteUpLimits[siteID] = Int64(mb ?? 0) * 1_048_576 }
     }
 
     // MARK: 分组
@@ -549,8 +549,10 @@ final class AppModel: ObservableObject {
         // 新增站点默认限速：取所在分组的「上传限速」（未设 = 10 MB/s）；已有单独设置的保留
         let defaultMB = (gi >= 0 && config.groups.indices.contains(gi) && config.groups[gi].upLimitMB > 0)
             ? config.groups[gi].upLimitMB : 10
-        for id in ids where config.downloader.siteUpLimits[id] == nil {
-            config.downloader.siteUpLimits[id] = Int64(defaultMB) * 1_048_576
+        config.mutateReseedDownloader { d in
+            for id in ids where d.siteUpLimits[id] == nil {
+                d.siteUpLimits[id] = Int64(defaultMB) * 1_048_576
+            }
         }
         guard changed else { return }
         saveConfig()
@@ -1229,12 +1231,60 @@ final class AppModel: ObservableObject {
     // MARK: 下载器
 
     func setVpsFreeGB(_ gb: Int?) {
-        config.downloader.vpsFreeGB = (gb == nil || (gb ?? 0) <= 0) ? nil : gb
-        saveConfig()
+        updateEditingDownloader { $0.vpsFreeGB = (gb == nil || (gb ?? 0) <= 0) ? nil : gb }
     }
     func setVpsFreeMargin(_ gb: Int?) {
-        config.downloader.sizeGuardMarginGB = max(0, gb ?? 0)
+        updateEditingDownloader { $0.sizeGuardMarginGB = max(0, gb ?? 0) }
+    }
+
+    // MARK: 多下载器
+    //
+    // 发种推的那台和辅种扫的那台经常不是同一台机器：VPS 上只放正在做的片，家里那台存全量。
+    // 主下载器一直存在 config.downloader（id = "main"），附加的进 config.downloaders。
+
+    /// 下载器页当前编辑哪一台
+    @Published var editingDownloaderID: String = "main"
+
+    var downloaderList: [DownloaderConfig] { config.allDownloaders }
+    var editingDownloader: DownloaderConfig { config.downloaderEntry(id: editingDownloaderID) }
+    /// 主下载器不可删（老配置就这一台，删了整个软件就没下载器了）
+    var canRemoveEditingDownloader: Bool { editingDownloaderID != config.downloader.id }
+
+    func updateEditingDownloader(_ change: (inout DownloaderConfig) -> Void) {
+        var d = config.downloaderEntry(id: editingDownloaderID)
+        change(&d)
+        config.updateDownloader(d)
         saveConfig()
+    }
+
+    /// 新建一台：照当前这台抄一份骨架，地址与账号留空让人填
+    func addDownloader() {
+        let id = "dl-" + String(Int(Date().timeIntervalSince1970 * 1000) % 1_000_000_000)
+        var d = editingDownloader.copiedAs(id: id, name: config.nextDownloaderName())
+        d.url = ""
+        d.username = ""
+        d.password = ""
+        d.vpsFreeGB = nil
+        config.updateDownloader(d)
+        editingDownloaderID = id
+        saveConfig()
+    }
+
+    func removeEditingDownloader() {
+        config.removeDownloader(id: editingDownloaderID)
+        editingDownloaderID = config.downloader.id
+        saveConfig()
+    }
+
+    /// 某个用途改用哪台（role: reseed / assist）
+    func assignDownloader(role: String, id: String) {
+        config.assignDownloader(role: role, id: id)
+        saveConfig()
+    }
+
+    /// 下载器页下拉显示用的当前指派
+    func downloaderID(forRole role: String) -> String {
+        (role == "assist" ? config.assistDownloader : config.reseedDownloader).id
     }
 
     func testDownloader() {
@@ -1244,10 +1294,11 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
-                let d = DownloaderFactory.make(config, client: client)
-                downloaderTestResult = "成功: " + (try d.testConnection())
+                let target = editingDownloader
+                let d = DownloaderFactory.make(target, client: client)
+                downloaderTestResult = "成功（\(target.label)）: " + (try d.testConnection())
             } catch {
-                downloaderTestResult = "失败: " + error.localizedDescription
+                downloaderTestResult = "失败（\(editingDownloader.label)）: " + error.localizedDescription
             }
             testingDownloader = false
         }
@@ -1497,6 +1548,8 @@ final class AppModel: ObservableObject {
 
     /// 下载器里扫出来的候选种子
     @Published var assistCandidates: [LocalTorrent] = []
+    /// 最近一次扫描的摘要（种子集合变化、各站已辅数）
+    @Published var assistSummary: AssistPipeline.ScanSummary? = nil
     /// 本轮计划（一条种子 × 一个站）
     @Published var assistPlan: [AssistPipeline.PlanRow] = []
     /// 逐行进展，key = 站点|种子 hash
@@ -1511,6 +1564,12 @@ final class AppModel: ObservableObject {
     var assistSiteOptions: [SiteConfig] { config.sourceSites.filter { $0.enabled } }
 
     var assistConfig: AssistConfig { config.assist ?? AssistConfig(siteIDs: []) }
+
+    /// 辅种用的是哪台（没填地址时提示去「下载器」页补，免得扫描半天连不上）
+    var assistDownloaderName: String {
+        let d = config.assistDownloader
+        return d.url.isEmpty ? "\(d.label)（还没填地址）" : "\(d.label) · \(d.url)"
+    }
 
     /// 改辅种设置并落盘（配置里没有 assist 段时先补一份默认值）
     func assistUpdate(_ change: (inout AssistConfig) -> Void) {
@@ -1529,22 +1588,23 @@ final class AppModel: ObservableObject {
         let jar = cookies
         let st = state
         Task.detached(priority: .utility) {
-            let out: ([LocalTorrent], [AssistPipeline.PlanRow], String)
+            let out: (AssistPipeline.ScanSummary?, [AssistPipeline.PlanRow], String)
             let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
             let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
-                                      downloader: DownloaderFactory.make(cfg, client: client))
+                                      downloader: DownloaderFactory.makeForAssist(cfg, client: client))
             do {
-                let cands = try pipe.scanCandidates()
-                out = (cands, pipe.plan(torrents: cands), "")
+                let scan = try pipe.scanAndRecord()
+                out = (scan, pipe.plan(torrents: scan.torrents), "")
             } catch {
-                out = ([], [], "扫描下载器失败：\(error.localizedDescription)")
+                out = (nil, [], "扫描下载器失败：\(error.localizedDescription)")
             }
             await MainActor.run {
-                self.assistCandidates = out.0
+                self.assistSummary = out.0
+                self.assistCandidates = out.0?.torrents ?? []
                 self.assistPlan = out.1
                 self.assistRows = [:]
                 self.assistScanning = false
-                self.assistMessage = out.2.isEmpty ? nil : out.2
+                self.assistMessage = out.2.isEmpty ? out.0?.deltaText : out.2
             }
         }
     }
@@ -1572,7 +1632,7 @@ final class AppModel: ObservableObject {
         Task.detached(priority: .utility) {
             let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
             let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
-                                      downloader: DownloaderFactory.make(cfg, client: client))
+                                      downloader: DownloaderFactory.makeForAssist(cfg, client: client))
             var o = AssistPipeline.Options()
             o.siteIDs = ids
             o.dryRun = dry
@@ -1581,12 +1641,14 @@ final class AppModel: ObservableObject {
             }
             let report = pipe.run(torrents: cands, opts: o)
             let plan = pipe.plan(torrents: cands, siteIDs: ids)
+            let summary = pipe.recordScan(torrents: cands)
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
             await MainActor.run {
                 self.cookies.mergeFrom(jar)
                 self.assistPlan = plan
+                self.assistSummary = summary
                 self.assistRunning = false
                 self.assistMessage = text
                 self.notes = st.recentNotes

@@ -34,6 +34,8 @@ public final class StateStore {
         /// 上次扫描下载器的时间与当时的 hash 集合摘要（增量扫描用）
         var assistScanTime: Double?
         var assistScanDigest: String?
+        /// 上次扫描时的种子条数（报「上次 N 条 → 这次 M 条」用）
+        var assistScanCount: Int?
 
         init() {}
 
@@ -52,6 +54,7 @@ public final class StateStore {
             assistMiss = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistMiss) ?? [:]
             assistScanTime = try c.decodeIfPresent(Double.self, forKey: .assistScanTime)
             assistScanDigest = try c.decodeIfPresent(String.self, forKey: .assistScanDigest)
+            assistScanCount = try c.decodeIfPresent(Int.self, forKey: .assistScanCount)
         }
     }
 
@@ -221,11 +224,24 @@ public final class StateStore {
         return (snapshot.assistScanTime.map { Date(timeIntervalSince1970: $0) }, snapshot.assistScanDigest)
     }
 
-    public func setAssistScan(digest: String) {
+    public func setAssistScan(digest: String, count: Int) {
         lock.lock(); defer { lock.unlock() }
         snapshot.assistScanTime = Date().timeIntervalSince1970
         snapshot.assistScanDigest = digest
+        snapshot.assistScanCount = count
         saveLocked()
+    }
+
+    /// 上次扫描的条数（报「上次 N 条 → 这次 M 条」）
+    public var assistScanCount: Int? {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assistScanCount
+    }
+
+    /// 各站已辅条数（辅种页在站点名后面写「辅过 N」）
+    public func assistCountsBySite() -> [String: Int] {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assisted.mapValues { $0.count }
     }
 
     public func note(_ s: String) {

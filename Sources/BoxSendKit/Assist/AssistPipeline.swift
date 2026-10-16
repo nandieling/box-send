@@ -24,6 +24,9 @@ public final class AssistPipeline {
         self.throttle = throttle ?? SiteThrottle(limits: config.assist?.throttleLimits ?? .init())
     }
 
+    /// 辅种用的是哪台下载器（界面显示：免得在错的机器上找种子）
+    public var downloaderLabel: String { config.assistDownloader.label }
+
     /// 逐条进展（界面卡片用）。与转种分开一套：辅种多了「校验中」这一态，
     /// 因为「已添加」不等于「已辅种」——要等下载器校验到 100% 才算成。
     public struct Status: Equatable {
@@ -88,6 +91,60 @@ public final class AssistPipeline {
             }
             return true
         }
+    }
+
+    /// 扫描摘要：种子集合变没变（增量扫描的锚）+ 各站已辅多少
+    public struct ScanSummary {
+        public var torrents: [LocalTorrent]
+        public var count: Int
+        /// 上次扫描时的条数（nil = 没扫过）
+        public var previousCount: Int?
+        /// 首次扫描，或种子集合与上次不同
+        public var changed: Bool
+        public var lastScan: Date?
+        public var assistedBySite: [String: Int]
+
+        /// 给人看的一句：新增 / 有变化 / 没变
+        public var deltaText: String {
+            guard let prev = previousCount else { return "首次扫描：\(count) 条" }
+            guard changed else { return "与上次扫描一致（\(count) 条）" }
+            return count >= prev ? "比上次多 \(count - prev) 条（\(prev) → \(count)）"
+                                 : "比上次少 \(prev - count) 条（\(prev) → \(count)）"
+        }
+    }
+
+    /// 扫描并记账。种子集合摘要记进 state：辅种本来就能增量重跑（已辅过、站内没有
+    /// 的两张表会拦住重复检索），这里只是让人看得出「这批里哪些是新面孔」。
+    public func scanAndRecord() throws -> ScanSummary {
+        let torrents = try scanCandidates()
+        return recordScan(torrents: torrents)
+    }
+
+    @discardableResult
+    public func recordScan(torrents: [LocalTorrent]) -> ScanSummary {
+        let digest = Self.digest(of: torrents.map { $0.hash })
+        let previous = state.assistScanWatermark
+        let summary = ScanSummary(torrents: torrents, count: torrents.count,
+                                  previousCount: state.assistScanCount,
+                                  changed: previous.digest != digest,
+                                  lastScan: previous.time,
+                                  assistedBySite: state.assistCountsBySite())
+        state.setAssistScan(digest: digest, count: torrents.count)
+        return summary
+    }
+
+    /// FNV-1a 64：Swift 的 hashValue 每换一个进程就换一套哈希种子，跨启动比对会全判成「变了」
+    static func digest(of hashes: [String]) -> String {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for hash in hashes.sorted() {
+            for byte in hash.utf8 {
+                h ^= UInt64(byte)
+                h = h &* 0x100_0000_01b3
+            }
+            h ^= 0x1f
+            h = h &* 0x100_0000_01b3
+        }
+        return String(format: "%016llx", h)
     }
 
     // MARK: - 执行
@@ -259,7 +316,8 @@ public final class AssistPipeline {
             AssistOutcome(siteID: site.id, torrentName: t.name, level: phaseLevel ?? level,
                           detailURL: url, done: done, message: msg)
         }
-        let limit = config.effectiveUpLimit(siteID: site.id)
+        // 限速按辅种这台自己那份逐站表算：发种那台的逐站限速管不着这台
+        let limit = config.effectiveUpLimit(siteID: site.id, downloader: config.assistDownloader)
         do {
             _ = try downloader.addTorrent(data: data, filename: (Bencode.infoName(data) ?? t.name) + ".torrent",
                                           savePath: t.savePath, category: t.category,

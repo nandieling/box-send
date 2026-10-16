@@ -409,9 +409,9 @@ do {
                   + "每站间隔 \(config.assist!.perSiteIntervalSec) 秒）")
         }
         let pipe = AssistPipeline(config: config, cookies: cookies, state: state,
-                                  downloader: makeDownloader())
+                                  downloader: DownloaderFactory.makeForAssist(config, client: client))
         let pickedSites = opt("--sites")?.split(separator: ",").map(String.init)
-        let candidates = try pipe.scanCandidates()
+        let candidates = try pipe.scanAndRecord().torrents
         switch action {
         case "scan":
             if candidates.isEmpty { print("下载器里没有可辅的种子（要求：已下完、过大小/分类筛选）") }
@@ -421,7 +421,8 @@ do {
                              String(t.hash.prefix(10)) as NSString, t.name))
                 print("         存 \(t.savePath)  已做种 \(t.trackerHosts.count) 站")
             }
-            print("共 \(candidates.count) 条候选；参与站点 \(config.assist!.siteIDs.joined(separator: ", "))")
+            print("共 \(candidates.count) 条候选；辅种下载器 = \(config.assistDownloader.label)；"
+              + "参与站点 \(config.assist!.siteIDs.joined(separator: ", "))")
         case "plan":
             let rows = pipe.plan(torrents: candidates, siteIDs: pickedSites)
             var willSearch = 0

@@ -164,9 +164,36 @@ Discuz 帖式站排除得更彻底，原因是站点结构与辅种的前提对�
   进展随 `snapshot` 里的 `assist` 段回来（不另开一条轮询），`Event` 多带一个 `key`（站点|hash）供界面定位行。
 - CLI：`box-send assist scan|plan|run [--sites a,b] [--limit N] [--dry-run]`。
 
-判定口径与节流都在核心里，两端只是显示。测试 472 个全绿（新增 27 条：`BencodeFileListTests` 5、
+判定口径与节流都在核心里，两端只是显示。测试 479 个全绿（新增 34 条：`BencodeFileListTests` 5、
 `AssistMatcherTests` 6、`SiteThrottleTests` 5、`AssistPipelineTests` 11）。
 
-还没做（留 M3+）：`searchCandidates(_:)` 多候选列表（现在沿用 `searchExists` 取第一条命中，
-站点请求更少但同名多版本时只能挑第一条）、增量扫描与定时、Blu/Discuz 检索、
-`SiteOverride.assistEnabled`（现在按 `assist.siteIDs` 白名单一处管）。
+## 十一、多下载器（发种与辅种各一台）
+
+发种推的那台和辅种扫的那台经常不是同一台机器：VPS 上只放正在做的片，辅种要读的是家里
+那台存全量文件的。所以：
+
+- `DownloaderConfig` 加 `id`（主下载器固定 `main`）与 `name`；`AppConfig` 加
+  `downloaders`（附加的那几台）、`reseedDownloaderID`、`assistDownloaderID`。
+  老配置只有 `downloader` 一个对象，解码后 `allDownloaders` 就一台，两个用途都指它，行为不变。
+- `DownloaderFactory.make(_:)` 解析成发种那台，新增 `makeForAssist(_:)` 解析辅种那台，
+  另有 `make(_:client:)` 直接按某台配置建。`ReseedPipeline` 里的 savePath / 跳过校验 /
+  大小检测一律读 `config.reseedDownloader`，辅种流水线读 `config.assistDownloader`。
+- 逐站上传限速跟着**发种那台**存（`setSiteUpLimitMB` 走 `mutateReseedDownloader`）：
+  换了机器再不改的话，界面上设了等于没设。辅种推送按辅种那台自己那份逐站表算，没有就用不限速。
+- 界面：mac 与 Windows 的「下载器」页顶部多一张卡——列表（正在编辑哪台）、添加一台、
+  删除这台（主下载器不可删）、以及「批量发种推送用」「辅种扫描用」两个下拉；
+  「辅种」页顶部写明现在用的是哪台。桥方法 `downloaders.add/save/remove/assign`、
+  `downloader.test` 带可选 `id`，快照多带 `downloaders` 与 `downloaderRoles`。
+- Web 控制台仍只编辑主下载器（那台就是发种那台），辅种不进网页端。
+
+## 十二、增量扫描与统计（M3 的一部分）
+
+`AssistPipeline.scanAndRecord()` 在扫描时把种子集合摘要（FNV-1a，跨进程稳定：Swift 的
+`hashValue` 换个进程就换种子，用它每次都会报「有变化」）、条数与时间记进 `state.json`，
+界面上报「首次扫描 N 条 / 与上次一致 / 比上次多 M 条」，并显示各站「辅过 N」。
+真正的增量靠已有的两张表拦着：已辅过、以及「站内没有」的负缓存（默认 7 天），
+它们让重跑的请求数掉到零头，摘要只是让人看得出这批里哪些是新面孔。
+
+还没做（留后面）：`searchCandidates(_:)` 多候选列表（现在沿用 `searchExists` 取第一条命中，
+站点请求更少但同名多版本时只能挑第一条）、定时自动跑、Blu/Discuz 检索、
+`SiteOverride.assistEnabled`（现在按 `assist.siteIDs` 白名单一处管）、Web 控制台看辅种。

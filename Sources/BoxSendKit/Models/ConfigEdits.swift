@@ -204,8 +204,10 @@ public extension AppConfig {
         }
         let defaultMB = (gi >= 0 && groups.indices.contains(gi) && groups[gi].upLimitMB > 0)
             ? groups[gi].upLimitMB : 10
-        for id in ids where downloader.siteUpLimits[id] == nil {
-            downloader.siteUpLimits[id] = Int64(defaultMB) * 1_048_576
+        mutateReseedDownloader { d in
+            for id in ids where d.siteUpLimits[id] == nil {
+                d.siteUpLimits[id] = Int64(defaultMB) * 1_048_576
+            }
         }
         if changed { unmanagedSiteOrder = unmanagedSiteOrder.filter { !ids.contains($0) } }
     }
@@ -228,14 +230,15 @@ public extension AppConfig {
     var siteUpLimitMBInt: [String: Int] {
         var out: [String: Int] = [:]
         for s in sourceSites {
-            let v = downloader.siteUpLimits[s.id] ?? 0
+            // 逐站限速按「转种推到哪台」存，问的就是发种那台
+            let v = reseedDownloader.siteUpLimits[s.id] ?? 0
             out[s.id] = Int((Double(v) / 1048576.0).rounded())
         }
         return out
     }
 
     mutating func setSiteUpLimitMB(_ mb: Int?, siteID: String) {
-        downloader.siteUpLimits[siteID] = Int64(mb ?? 0) * 1_048_576
+        mutateReseedDownloader { $0.siteUpLimits[siteID] = Int64(mb ?? 0) * 1_048_576 }
     }
 
     /// 站点退回未分组列表时：已有手动排序不变，返回站点按名称默认序插到其名称序位置

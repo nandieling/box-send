@@ -71,16 +71,25 @@ extension Downloader {
 
 /// 下载器工厂（CLI 与 Web 共用）
 public enum DownloaderFactory {
-    public static func make(_ config: AppConfig, client: HTTPClient) -> Downloader {
-        switch config.downloader.type {
+    /// 按配置建：给哪台配置就建哪台
+    public static func make(_ d: DownloaderConfig, client: HTTPClient) -> Downloader {
+        switch d.type {
         case .qbittorrent:
-            return QBittorrent(client: client, baseURL: config.downloader.url,
-                               username: config.downloader.username,
-                               password: config.downloader.password)
+            return QBittorrent(client: client, baseURL: d.url,
+                               username: d.username, password: d.password)
         case .transmission:
-            return Transmission(client: client, baseURL: config.downloader.url,
-                                username: config.downloader.username,
-                                password: config.downloader.password)
+            return Transmission(client: client, baseURL: d.url,
+                                username: d.username, password: d.password)
         }
+    }
+
+    /// 批量发种推送用的那台（转种流水线、CLI、Web 控制台都走这个）
+    public static func make(_ config: AppConfig, client: HTTPClient) -> Downloader {
+        make(config.reseedDownloader, client: client)
+    }
+
+    /// 辅种用的那台：多半是存全量文件的那台，和发种那台可以完全无关
+    public static func makeForAssist(_ config: AppConfig, client: HTTPClient) -> Downloader {
+        make(config.assistDownloader, client: client)
     }
 }

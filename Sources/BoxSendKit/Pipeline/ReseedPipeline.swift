@@ -51,9 +51,9 @@ public final class ReseedPipeline {
         do {
             let result = try downloader.addTorrent(
                 data: torrentData, filename: filename,
-                savePath: config.downloader.savePath,
-                category: config.downloader.category,
-                skipChecking: config.downloader.skipChecking,
+                savePath: config.reseedDownloader.savePath,
+                category: config.reseedDownloader.category,
+                skipChecking: config.reseedDownloader.skipChecking,
                 upLimit: upLimit
             )
             report.pushed = true
@@ -98,9 +98,9 @@ public final class ReseedPipeline {
             let limit = config.effectiveUpLimit(siteID: siteID)
             let result = try downloader.addTorrent(
                 data: tData, filename: tName,
-                savePath: config.downloader.savePath,
-                category: config.downloader.category,
-                skipChecking: config.downloader.skipChecking,
+                savePath: config.reseedDownloader.savePath,
+                category: config.reseedDownloader.category,
+                skipChecking: config.reseedDownloader.skipChecking,
                 upLimit: limit
             )
             state.markPushed(key: pushKey, id: result.id)
@@ -310,9 +310,9 @@ public final class ReseedPipeline {
 
         // 3.5 大小检测：种子大小 vs VPS 剩余空间（含安全边际）
         if case .over(let msg) = SizeGuard.evaluate(sizeBytes: release.size ?? 0,
-                                                    freeGB: config.downloader.vpsFreeGB,
-                                                    marginGB: config.downloader.sizeGuardMarginGB) {
-            if config.downloader.sizeGuardMode == .skip {
+                                                    freeGB: config.reseedDownloader.vpsFreeGB,
+                                                    marginGB: config.reseedDownloader.sizeGuardMarginGB) {
+            if config.reseedDownloader.sizeGuardMode == .skip {
                 report.sizeSkipped = true
                 report.sizeGuardWarning = msg
                 state.note("sizeGuard SKIP \(release.summary): \(msg)")

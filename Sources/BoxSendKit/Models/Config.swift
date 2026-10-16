@@ -244,6 +244,10 @@ extension SiteOverride {
 }
 
 public struct DownloaderConfig: Codable {
+    /// 一台下载器的稳定标识：主下载器固定 "main"，附加的由界面生成
+    public var id: String
+    /// 给人看的名字（列表与「用哪台」下拉里显示）
+    public var name: String
     public var type: DownloaderType       // qbittorrent | transmission
     public var url: String                // 如 http://127.0.0.1:8080 或 http://127.0.0.1:9091
     public var username: String
@@ -266,6 +270,9 @@ public struct DownloaderConfig: Codable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // 老配置只有一台下载器，没有这两个字段
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? "main"
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? "主下载器"
         type = try c.decode(DownloaderType.self, forKey: .type)
         url = try c.decode(String.self, forKey: .url)
         username = try c.decode(String.self, forKey: .username)
@@ -281,10 +288,13 @@ public struct DownloaderConfig: Codable {
         sizeGuardMarginGB = try c.decodeIfPresent(Int.self, forKey: .sizeGuardMarginGB) ?? 5
     }
 
-    public init(type: DownloaderType, url: String, username: String, password: String,
+    public init(id: String = "main", name: String = "主下载器",
+                type: DownloaderType, url: String, username: String, password: String,
                 savePath: String?, category: String?, skipChecking: Bool,
                 defaultUpLimit: Int64, siteUpLimits: [String: Int64], pushPolicy: PushPolicy,
                 vpsFreeGB: Int? = nil, sizeGuardMode: SizeGuardMode = .warn, sizeGuardMarginGB: Int = 5) {
+        self.id = id
+        self.name = name
         self.type = type
         self.url = url
         self.username = username
@@ -302,6 +312,17 @@ public struct DownloaderConfig: Codable {
 
     public func upLimitFor(originSiteID: String) -> Int64 {
         siteUpLimits[originSiteID] ?? defaultUpLimit
+    }
+
+    /// 列表与下拉里显示的那行字
+    public var label: String { name.isEmpty ? url : name }
+
+    /// 以本机为模板复制一台（新建附加下载器时用）
+    public func copiedAs(id: String, name: String) -> DownloaderConfig {
+        var d = self
+        d.id = id
+        d.name = name
+        return d
     }
 }
 
@@ -465,9 +486,16 @@ public struct AppConfig: Codable {
     public var autoUpdateCheck: Bool
     /// 自动批量辅种：白名单式，未配置 = 整个功能不参战
     public var assist: AssistConfig?
+    /// 附加下载器。主下载器存在 `downloader` 里（id = "main"），完整列表 = 主 + 这些。
+    /// 发种和辅种常常不在同一台机器上：发种推 VPS，辅种扫家里那台存全量文件的。
+    public var downloaders: [DownloaderConfig]?
+    /// 批量发种推送用哪台（默认主下载器）
+    public var reseedDownloaderID: String
+    /// 辅种扫描与校验用哪台（nil = 与发种同一台）
+    public var assistDownloaderID: String?
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh, assist
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh, assist, downloaders, reseedDownloaderID, assistDownloaderID
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -491,6 +519,9 @@ public struct AppConfig: Codable {
         ssh = try c.decodeIfPresent(SSHConfig.self, forKey: .ssh)
         autoUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .autoUpdateCheck) ?? true
         assist = try c.decodeIfPresent(AssistConfig.self, forKey: .assist)
+        downloaders = try c.decodeIfPresent([DownloaderConfig].self, forKey: .downloaders)
+        reseedDownloaderID = try c.decodeIfPresent(String.self, forKey: .reseedDownloaderID) ?? "main"
+        assistDownloaderID = try c.decodeIfPresent(String.self, forKey: .assistDownloaderID)
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
@@ -501,7 +532,8 @@ public struct AppConfig: Codable {
                 unmanagedSiteOrder: [String] = [],
                 sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "",
                 tmdb: TMDBConfig? = nil, ssh: SSHConfig? = nil, autoUpdateCheck: Bool = true,
-                assist: AssistConfig? = nil) {
+                assist: AssistConfig? = nil, downloaders: [DownloaderConfig]? = nil,
+                reseedDownloaderID: String = "main", assistDownloaderID: String? = nil) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -520,6 +552,9 @@ public struct AppConfig: Codable {
         self.ssh = ssh
         self.autoUpdateCheck = autoUpdateCheck
         self.assist = assist
+        self.downloaders = downloaders
+        self.reseedDownloaderID = reseedDownloaderID
+        self.assistDownloaderID = assistDownloaderID
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()
@@ -583,8 +618,78 @@ public struct AppConfig: Codable {
     }
 
     /// 实际生效的上传限速（bytes/s）：以「站点分组」页设置的站点限速为准，0 = 不限
-    public func effectiveUpLimit(siteID: String) -> Int64 {
-        downloader.siteUpLimits[siteID] ?? 0
+    /// 某站推送后的限速。默认问的是发种那台：逐站限速本来就是按「转种推到哪台」设的。
+    public func effectiveUpLimit(siteID: String, downloader d: DownloaderConfig? = nil) -> Int64 {
+        (d ?? reseedDownloader).siteUpLimits[siteID] ?? 0
+    }
+
+    // MARK: 多下载器
+
+    /// 全部下载器：主下载器在最前，其余按添加顺序；顺手滤掉与主下载器同 id 的重复项
+    public var allDownloaders: [DownloaderConfig] {
+        [downloader] + (downloaders ?? []).filter { $0.id != downloader.id }
+    }
+
+    /// 按 id 取一台，认不出来就退回主下载器（配置手改坏、或那台被删了）
+    public func downloaderEntry(id: String?) -> DownloaderConfig {
+        guard let id, let hit = allDownloaders.first(where: { $0.id == id }) else { return downloader }
+        return hit
+    }
+
+    /// 批量发种用的那台
+    public var reseedDownloader: DownloaderConfig { downloaderEntry(id: reseedDownloaderID) }
+    /// 辅种用的那台（没单独指定就和发种同一台）
+    public var assistDownloader: DownloaderConfig { downloaderEntry(id: assistDownloaderID ?? reseedDownloaderID) }
+
+    /// 按 id 替换一台；主下载器就存在 `downloader` 里，单独走那条路
+    public mutating func updateDownloader(_ d: DownloaderConfig) {
+        if d.id == downloader.id {
+            downloader = d
+            return
+        }
+        var list = downloaders ?? []
+        if let i = list.firstIndex(where: { $0.id == d.id }) {
+            list[i] = d
+        } else {
+            list.append(d)
+        }
+        downloaders = list
+    }
+
+    public mutating func removeDownloader(id: String) {
+        guard id != downloader.id else { return }   // 主下载器不可删
+        downloaders?.removeAll { $0.id == id }
+        if reseedDownloaderID == id { reseedDownloaderID = downloader.id }
+        if assistDownloaderID == id { assistDownloaderID = downloader.id }
+    }
+
+    /// 指定某个用途（reseed / assist）用哪台
+    public mutating func assignDownloader(role: String, id: String) {
+        guard allDownloaders.contains(where: { $0.id == id }) else { return }
+        if role == "assist" {
+            assistDownloaderID = id
+        } else {
+            reseedDownloaderID = id
+        }
+    }
+
+    /// 改发种那台（它可能是附加下载器，改完要整份写回原位）
+    public mutating func mutateReseedDownloader(_ change: (inout DownloaderConfig) -> Void) {
+        var d = reseedDownloader
+        change(&d)
+        updateDownloader(d)
+    }
+
+    /// 新建附加下载器时给个不重样的名字    /// 新建附加下载器时给个不重样的名字
+    public func nextDownloaderName() -> String {
+        let n = allDownloaders.count + 1
+        var candidate = "下载器 \(n)"
+        var i = 0
+        while allDownloaders.contains(where: { $0.name == candidate }) {
+            i += 1
+            candidate = "下载器 \(n)-\(i)"
+        }
+        return candidate
     }
 
     public static func load(path: String) -> AppConfig? {

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -17,27 +18,79 @@ public partial class DownloaderView : UserControl
     }
 
     private bool _loading;
+    /// 表单当前编辑哪台（"main" = 主下载器）
+    private string _editingID = "main";
 
+    /// 快照回来就整页重填：列表、用途、表单都以核心库那份为准
     private void Load()
     {
         _loading = true;
         Result.Text = _model.DownloaderMessage;
-        var type = _model.SectionText("downloader", "type", "qbittorrent");
-        Select(Type, type);
-        Url.Text = _model.SectionText("downloader", "url", "http://127.0.0.1:8080");
-        User.Text = _model.SectionText("downloader", "username");
-        Pass.Password = _model.SectionText("downloader", "password");
-        SavePath.Text = _model.SectionText("downloader", "savePath");
-        Category.Text = _model.SectionText("downloader", "category");
-        SkipCheck.IsChecked = _model.SectionFlag("downloader", "skipChecking");
-        DefaultLimit.Text = (_model.SectionInt("downloader", "defaultUpLimit", 10485760) / 1048576).ToString();
-        Select(PushPolicy, _model.SectionText("downloader", "pushPolicy", "onSuccess"));
-        Select(GuardMode, _model.SectionText("downloader", "sizeGuardMode", "warn"));
-        GuardMargin.Text = _model.SectionInt("downloader", "sizeGuardMarginGB", 20).ToString();
-        VpsFree.Text = _model.Config?["downloader"]?["vpsFreeGB"] is { } v && v.GetValue<int>() > 0
-            ? v.GetValue<int>().ToString() : "";
+
+        var list = _model.Downloaders;
+        var picked = list.FirstOrDefault(d => d.Id == _editingID) ?? list.LastOrDefault();
+        if (picked == null)
+        {
+            _loading = false;
+            return;
+        }
+        _editingID = picked.Id;
+        DlPick.ItemsSource = list;
+        DlPick.SelectedValue = picked.Id;
+        DlName.Text = picked.Name;
+        BtnDelDl.IsEnabled = !picked.IsMain;
+        ConnCard.Header = $"连接（{picked.Label}）";
+        RoleReseed.ItemsSource = list;
+        RoleReseed.SelectedValue = _model.ReseedDownloaderID;
+        RoleAssist.ItemsSource = list;
+        RoleAssist.SelectedValue = _model.AssistDownloaderID;
+
+        Select(Type, picked.Type);
+        Url.Text = picked.Url;
+        User.Text = picked.Username;
+        Pass.Password = picked.Password;
+        SavePath.Text = picked.SavePath;
+        Category.Text = picked.Category;
+        SkipCheck.IsChecked = picked.SkipChecking;
+        DefaultLimit.Text = (picked.DefaultUpLimit / 1048576).ToString();
+        Select(PushPolicy, picked.PushPolicy);
+        Select(GuardMode, picked.SizeGuardMode);
+        GuardMargin.Text = picked.SizeGuardMarginGB.ToString();
+        VpsFree.Text = picked.VpsFreeGB > 0 ? picked.VpsFreeGB.ToString() : "";
         LoadSSH();
         _loading = false;
+    }
+
+    // MARK: 多台下载器
+
+    private void OnDownloaderPicked(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || DlPick.SelectedValue is not string id || id == _editingID) return;
+        _editingID = id;
+        Load();
+    }
+
+    private void OnRoleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        if (sender == RoleReseed && RoleReseed.SelectedValue is string r)
+            _model.AssignDownloader("reseed", r);
+        if (sender == RoleAssist && RoleAssist.SelectedValue is string a)
+            _model.AssignDownloader("assist", a);
+    }
+
+    private void OnAddDownloader(object sender, RoutedEventArgs e) => _model.AddDownloader();
+
+    private void OnRemoveDownloader(object sender, RoutedEventArgs e)
+    {
+        var err = _model.RemoveDownloader(_editingID);
+        if (err != null)
+        {
+            Result.Text = err;
+            return;
+        }
+        _editingID = "main";
+        Result.Text = "已删除，用途自动指回主下载器";
     }
 
     /// SSH 测速卡片：配置里没这一段时用默认值显示（密钥登录、每轮 64 MB、Cloudflare 接收端）
@@ -69,8 +122,15 @@ public partial class DownloaderView : UserControl
 
     private void OnSave(object sender, RoutedEventArgs e) => Save();
 
-    private void Save() => _model.PatchSection("downloader", s =>
+    /// 保存正在编辑的那台（按 id upsert；逐站限速由核心库原样保留）
+    private void Save()
     {
+        if (_loading) return;
+        var s = new JsonObject
+        {
+            ["id"] = _editingID,
+            ["name"] = string.IsNullOrWhiteSpace(DlName.Text) ? "主下载器" : DlName.Text.Trim(),
+        };
         s["type"] = SelectedTag(Type);
         s["url"] = Url.Text.Trim();
         s["username"] = User.Text;
@@ -83,15 +143,16 @@ public partial class DownloaderView : UserControl
         s["sizeGuardMode"] = SelectedTag(GuardMode);
         s["sizeGuardMarginGB"] = int.TryParse(GuardMargin.Text.Trim(), out var g) ? g : 20;
         if (int.TryParse(VpsFree.Text.Trim(), out var free)) s["vpsFreeGB"] = free;
-        else s.Remove("vpsFreeGB");
-    });
+        else s["vpsFreeGB"] = null;
+        _model.SaveDownloader(s);
+    }
 
     private async void OnTest(object sender, RoutedEventArgs e)
     {
         Save();
         Result.Text = "测试中…";
         // 连下载器要走网络：放在界面线程上，窗口会先「未响应」一下
-        var error = await _model.TryAsync("downloader.test");
+        var error = await _model.TestDownloaderAsync(_editingID);
         Result.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
     }
 

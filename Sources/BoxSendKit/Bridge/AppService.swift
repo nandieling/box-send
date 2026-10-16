@@ -328,7 +328,16 @@ public final class AppService {
             return try scanZip()
 
         case "downloader.test":
-            return try testDownloader()
+            return try testDownloader(id: params["id"] as? String)
+
+        case "downloaders.add":
+            return try addDownloader(params)
+        case "downloaders.save":
+            return try saveDownloader(params)
+        case "downloaders.remove":
+            return try removeDownloader(params)
+        case "downloaders.assign":
+            return try assignDownloaderRole(params)
 
         case "zip.set":
             mutate {
@@ -430,6 +439,8 @@ public final class AppService {
             "configPath": configPath,
             "dataDir": dataDir,
             "config": (try? json(c)) ?? [:],
+            "downloaders": Self.downloadersJSON(c),
+            "downloaderRoles": ["reseed": c.reseedDownloader.id, "assist": c.assistDownloader.id],
             "cookies": ["hosts": cookieList, "total": snap.values.reduce(0) { $0 + $1.count }],
             "sites": siteStatesLocked(c, snap: snap, checks: checks),
             "groups": groupsLocked(c),
@@ -564,6 +575,102 @@ public final class AppService {
         return out
     }
 
+    // MARK: 多下载器
+    //
+    // 发种推的那台和辅种扫的那台经常不是同一台机器，所以列表与用途指派都在核心里，
+    // 界面两端只是列表与两个下拉。
+
+    /// 快照/返回值里的下载器列表与用途指派
+    static func downloadersJSON(_ c: AppConfig) -> [[String: Any]] {
+        c.allDownloaders.map { d in
+            [
+                "id": d.id, "name": d.name, "label": d.label,
+                "type": d.type.rawValue, "url": d.url, "username": d.username,
+                "password": d.password,
+                "savePath": d.savePath ?? "", "category": d.category ?? "",
+                "skipChecking": d.skipChecking,
+                "defaultUpLimit": d.defaultUpLimit,
+                "pushPolicy": d.pushPolicy.rawValue,
+                "vpsFreeGB": d.vpsFreeGB as Any,
+                "sizeGuardMode": d.sizeGuardMode.rawValue,
+                "sizeGuardMarginGB": d.sizeGuardMarginGB,
+                "isMain": d.id == c.downloader.id,
+            ]
+        }
+    }
+
+    private func downloadersState() -> [String: Any] {
+        lock.lock()
+        let c = cfg
+        lock.unlock()
+        return ["downloaders": Self.downloadersJSON(c),
+                "downloaderRoles": ["reseed": c.reseedDownloader.id,
+                                    "assist": c.assistDownloader.id]]
+    }
+
+    private func addDownloader(_ params: [String: Any]) throws -> [String: Any] {
+        mutate {
+            let id = "dl-" + String(Int(Date().timeIntervalSince1970 * 1000) % 1_000_000_000)
+            var d = cfg.downloader.copiedAs(id: id, name: cfg.nextDownloaderName())
+            // 照主下载器抄骨架，但地址与账号留空：新建时人要自己填
+            d.url = ""
+            d.username = ""
+            d.password = ""
+            d.vpsFreeGB = nil
+            if let name = params["name"] as? String, !name.isEmpty { d.name = name }
+            cfg.updateDownloader(d)
+            self.downloaderMessage = "已新增 \(d.name)，填好地址与账号后点测试连接"
+        }
+        save()
+        return downloadersState()
+    }
+
+    /// 保存一台（按 id upsert）。逐站限速在站点分组页改，这里不动它。
+    private func saveDownloader(_ params: [String: Any]) throws -> [String: Any] {
+        guard let obj = params["downloader"] else { throw Failure("缺少 downloader") }
+        guard let raw = try? JSONSerialization.data(withJSONObject: obj) else {
+            throw Failure("downloader 格式不对")
+        }
+        var d: DownloaderConfig
+        do {
+            d = try JSONDecoder().decode(DownloaderConfig.self, from: raw)
+        } catch {
+            throw Failure("downloader 读不出来：\(error.localizedDescription)")
+        }
+        if let name = (params["downloader"] as? [String: Any])?["name"] as? String, !name.isEmpty {
+            d.name = name
+        }
+        mutate {
+            let existing = cfg.downloaderEntry(id: d.id)
+            d.siteUpLimits = existing.siteUpLimits
+            if d.savePath?.isEmpty == true { d.savePath = nil }
+            if d.category?.isEmpty == true { d.category = nil }
+            if d.name.isEmpty { d.name = existing.name }
+            cfg.updateDownloader(d)
+        }
+        save()
+        return downloadersState()
+    }
+
+    private func removeDownloader(_ params: [String: Any]) throws -> [String: Any] {
+        let id = params["id"] as? String ?? ""
+        lock.lock()
+        let isMain = id == cfg.downloader.id
+        lock.unlock()
+        guard !isMain else { throw Failure("主下载器不能删：把用途改到别的机器上再删这台") }
+        mutate { cfg.removeDownloader(id: id) }
+        save()
+        return downloadersState()
+    }
+
+    private func assignDownloaderRole(_ params: [String: Any]) throws -> [String: Any] {
+        let role = params["role"] as? String ?? "reseed"
+        let id = params["id"] as? String ?? ""
+        mutate { cfg.assignDownloader(role: role, id: id) }
+        save()
+        return downloadersState()
+    }
+
     // MARK: 辅种
     //
     // 与转种分开一套：辅种不发新种，只是把站内已有的那条挂到自己账号下做种。
@@ -576,13 +683,23 @@ public final class AppService {
         lock.unlock()
         let (pipe, _) = try makeAssistPipeline(cfg)
         let picked = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
-        let candidates = try pipe.scanCandidates()
+        let scan = try pipe.scanAndRecord()
+        let candidates = scan.torrents
         let rows = pipe.plan(torrents: candidates, siteIDs: picked)
         let nameOf: (String) -> String = { id in
             guard let s = cfg.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
         }
         return [
+            "summary": [
+                "count": scan.count,
+                "previousCount": scan.previousCount as Any,
+                "changed": scan.changed,
+                "deltaText": scan.deltaText,
+                "lastScan": scan.lastScan.map { Self.dateText($0.timeIntervalSince1970) } ?? "从未",
+                "assistedBySite": scan.assistedBySite,
+            ],
+            "downloader": pipe.downloaderLabel,
             "torrents": candidates.map { t in
                 [
                     "hash": t.hash,
@@ -642,7 +759,8 @@ public final class AppService {
             var reportText = ""
             var failure = ""
             do {
-                let candidates = try pipe.scanCandidates()
+                let scan = try pipe.scanAndRecord()
+                let candidates = scan.torrents
                 self.mutate { self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个" }
                 let report = pipe.run(torrents: candidates, opts: opts)
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
@@ -671,7 +789,7 @@ public final class AppService {
         if let data = cookies.exportBackupJSON() { _ = try? jar.replace(from: data) }
         lock.unlock()
         let client = HTTPClient(cookies: jar, userAgent: c.userAgent)
-        let downloader = DownloaderFactory.make(c, client: client)
+        let downloader = DownloaderFactory.makeForAssist(c, client: client)
         return (AssistPipeline(config: c, cookies: jar, state: state, downloader: downloader), jar)
     }
 
@@ -1021,8 +1139,10 @@ public final class AppService {
 
     // MARK: 下载器 / TMDB / 更新
 
-    private func testDownloader() throws -> [String: Any] {
+    /// 测某台下载器连通（不带 id = 发种那台）
+    private func testDownloader(id: String?) throws -> [String: Any] {
         let c = cfg
+        let target = c.downloaderEntry(id: id ?? c.reseedDownloaderID)
         lock.lock()
         if busyDownloader {
             lock.unlock()
@@ -1034,12 +1154,12 @@ public final class AppService {
 
         let client = HTTPClient(cookies: cookies, userAgent: c.userAgent)
         do {
-            let info = try DownloaderFactory.make(c, client: client).testConnection()
-            mutate { self.downloaderMessage = "连接成功：\(info)" }
+            let info = try DownloaderFactory.make(target, client: client).testConnection()
+            mutate { self.downloaderMessage = "连接成功（\(target.label)）：\(info)" }
             emit("note", nil, "下载器连接成功", info, phase: nil, ok: true)
             return ["ok": true, "message": "连接成功：\(info)"]
         } catch {
-            let why = "连接失败：\(error.localizedDescription)"
+            let why = "连接失败（\(target.label)）：\(error.localizedDescription)"
             mutate { self.downloaderMessage = why }
             emit("error", nil, "下载器\(why)", "", phase: nil, ok: false)
             return ["ok": false, "message": why]
@@ -1233,7 +1353,7 @@ public final class AppService {
                 "check": rec.map { ["ok": $0.ok, "message": $0.message, "time": $0.time] }
                     ?? ["ok": NSNull(), "message": "", "time": 0] as [String: Any],
                 "checking": checkingSites.contains(s.id),
-                "upLimitMB": c.downloader.siteUpLimits[s.id].map { Int($0 / 1_048_576) } ?? 0,
+                "upLimitMB": c.reseedDownloader.siteUpLimits[s.id].map { Int($0 / 1_048_576) } ?? 0,
                 "warning": siteWarnings[s.id] ?? "",
                 "needsSourceQuote": SiteRegistry.needsSourceQuoteField(s),
                 "supportsAutoFree": c.siteSupportsAutoFree(s.id),

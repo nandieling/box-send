@@ -163,7 +163,11 @@ public partial class AssistView : UserControl
             _candidates.Add(new Line(n?["name"]?.GetValue<string>() ?? "",
                 $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站"));
         }
-        CandidateSummary.Text = $"共 {_candidates.Count} 条。没下完、或按大小/分类筛掉的不在这里。";
+        var delta = Text(result["summary"]?["deltaText"]);
+        var dl = Text(result["downloader"]);
+        CandidateSummary.Text = $"{(delta.Length > 0 ? delta + "。" : $"共 {_candidates.Count} 条。")}"
+            + "没下完、或按大小/分类筛掉的不在这里。"
+            + $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「下载器」页的「辅种扫描用」里换一台）";
 
         _plan.Clear();
         var sites = result["sites"]?.AsArray()?.Count ?? 0;

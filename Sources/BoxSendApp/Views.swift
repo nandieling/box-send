@@ -1483,25 +1483,76 @@ struct CookiesView: View {
 struct DownloaderView: View {
     @EnvironmentObject var model: AppModel
 
+    /// 改「正在编辑的那台」：可能是主下载器，也可能是附加的那台
+    private func dl<T>(_ kp: WritableKeyPath<DownloaderConfig, T>) -> Binding<T> {
+        Binding(get: { model.editingDownloader[keyPath: kp] },
+                set: { v in model.updateEditingDownloader { $0[keyPath: kp] = v } })
+    }
+
+    /// 某个用途用哪台
+    private func rolePicker(_ role: String) -> some View {
+        Picker("", selection: Binding(get: { model.downloaderID(forRole: role) },
+                                      set: { v in model.assignDownloader(role: role, id: v) })) {
+            ForEach(model.downloaderList, id: \.id) { d in
+                Text(d.label).tag(d.id)
+            }
+        }
+        .labelsHidden()
+    }
+
+    private var downloadersCard: some View {
+        CardSection("下载器（可以有多台）") {
+            HStack(spacing: 10) {
+                Text("正在编辑").font(.callout)
+                Picker("", selection: Binding(get: { model.editingDownloaderID },
+                                              set: { model.editingDownloaderID = $0 })) {
+                    ForEach(model.downloaderList, id: \.id) { d in
+                        Text(d.label + (d.id == model.config.downloader.id ? "（主）" : ""))
+                            .tag(d.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+                Button("添加一台") { model.addDownloader() }
+                Button("删除这台") { model.removeEditingDownloader() }
+                    .disabled(!model.canRemoveEditingDownloader)
+                    .help("主下载器不能删")
+                Spacer()
+            }
+            HStack(alignment: .top, spacing: 24) {
+                LabeledRow("批量发种推送用") { rolePicker("reseed") }
+                LabeledRow("辅种扫描用") { rolePicker("assist") }
+            }
+            Text("辅种要读的那台得真有这些文件，否则加进去就是重下一遍。"
+                 + "两台不是同一台时，「辅种」页顶部会写明现在用的哪台。")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                CardSection("qBittorrent / Transmission（VPS 上）") {
+                downloadersCard
+                CardSection("连接（\(model.editingDownloader.label)）") {
+                    LabeledRow("名字（列表与用途下拉里显示）") {
+                        TextField("如 VPS / 家里NAS", text: dl(\.name)).textFieldStyle(.roundedBorder)
+                    }
                     LabeledRow("类型") {
-                        Picker("", selection: $model.config.downloader.type) {
+                        Picker("", selection: dl(\.type)) {
                             Text("qBittorrent").tag(DownloaderType.qbittorrent)
                             Text("Transmission").tag(DownloaderType.transmission)
                         }
                         .labelsHidden()
                     }
                     LabeledRow("URL（VPS 隧道地址）") {
-                        TextField("", text: $model.config.downloader.url).textFieldStyle(.roundedBorder)
+                        TextField("", text: dl(\.url)).textFieldStyle(.roundedBorder)
                     }
                     LabeledRow("用户名") {
-                        TextField("", text: $model.config.downloader.username).textFieldStyle(.roundedBorder)
+                        TextField("", text: dl(\.username)).textFieldStyle(.roundedBorder)
                     }
                     LabeledRow("密码") {
-                        RevealField(text: $model.config.downloader.password)
+                        RevealField(text: dl(\.password))
                     }
                     LabeledRow("保存路径（空 = 下载器默认）") {
                         TextField("", text: optBinding(\.savePath)).textFieldStyle(.roundedBorder)
@@ -1509,7 +1560,7 @@ struct DownloaderView: View {
                     LabeledRow("分类（空 = 无）") {
                         TextField("", text: optBinding(\.category)).textFieldStyle(.roundedBorder)
                     }
-                    Toggle("添加后跳过校验（skipChecking）", isOn: $model.config.downloader.skipChecking)
+                    Toggle("添加后跳过校验（skipChecking）", isOn: dl(\.skipChecking))
                 }
                 CardSection("连接检测") {
                     HStack(spacing: 12) {
@@ -1615,17 +1666,17 @@ struct DownloaderView: View {
                 }
                 CardSection("种子大小检测") {
                     LabeledRow("VPS 剩余空间（GB，空 = 不做大小检测）") {
-                        IntLimitField(initial: model.config.downloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }.frame(width: 60)
+                        IntLimitField(initial: model.editingDownloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }.frame(width: 60)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("超过剩余空间时").font(.caption).foregroundStyle(.secondary)
                         HStack {
-                            Picker("", selection: $model.config.downloader.sizeGuardMode) {
+                            Picker("", selection: dl(\.sizeGuardMode)) {
                                 Text("提醒（继续转种）").tag(SizeGuardMode.warn)
                                 Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
                             }
                             .labelsHidden()
-                            IntLimitField(initial: model.config.downloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
+                            IntLimitField(initial: model.editingDownloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
                                 .frame(width: 50)
                             Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
                         }
@@ -1640,8 +1691,8 @@ struct DownloaderView: View {
 
 
     private func optBinding(_ kp: WritableKeyPath<DownloaderConfig, String?>) -> Binding<String> {
-        Binding(get: { model.config.downloader[keyPath: kp] ?? "" },
-                set: { v in model.config.downloader[keyPath: kp] = v.isEmpty ? nil : v })
+        Binding(get: { model.editingDownloader[keyPath: kp] ?? "" },
+                set: { v in model.updateEditingDownloader { $0[keyPath: kp] = v.isEmpty ? nil : v } })
     }
 }
 
@@ -1711,10 +1762,17 @@ struct AssistView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 5) {
                         ForEach(model.assistSiteOptions, id: \.id) { site in
-                            Toggle(isOn: siteBinding(site.id)) {
-                                Text(site.name).font(.callout).lineLimit(1)
+                            HStack(spacing: 6) {
+                                Toggle(isOn: siteBinding(site.id)) {
+                                    Text(site.name).font(.callout).lineLimit(1)
+                                }
+                                .toggleStyle(.checkbox)
+                                Spacer(minLength: 4)
+                                let n = model.assistSummary?.assistedBySite[site.id] ?? 0
+                                if n > 0 {
+                                    Text("辅过 \(n)").font(.caption2).foregroundStyle(.secondary)
+                                }
                             }
-                            .toggleStyle(.checkbox)
                         }
                     }
                 }
@@ -1776,6 +1834,9 @@ struct AssistView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            Text("辅种下载器：\(model.assistDownloaderName)")
+                .font(.caption2).foregroundStyle(.primary)
+                .help("在「下载器」页的「辅种扫描用」里换一台")
         }
     }
 
@@ -1801,8 +1862,11 @@ struct AssistView: View {
                 }
                 .frame(maxHeight: 180)
             }
-            Text("共 \(model.assistCandidates.count) 条。没下完、或按大小/分类筛掉的不在这里。")
+            Text((model.assistSummary?.deltaText ?? "共 \(model.assistCandidates.count) 条")
+                 + "。没下完、或按大小/分类筛掉的不在这里。"
+                 + (model.assistSummary?.lastScan.map { "上次扫描 " + AppModel.dateText($0.timeIntervalSince1970) } ?? ""))
                 .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

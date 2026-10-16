@@ -221,6 +221,15 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         ReplaceFrom(RunPushes, snap["run"]?["pushes"], "push");
         SourcePush = snap["run"]?["sourcePush"] is { } sp ? RunRow.From(sp!, "push") : null;
 
+        var dl = snap["downloaders"]?.AsArray();
+        if (dl != null)
+        {
+            Downloaders.Clear();
+            foreach (var n in dl) Downloaders.Add(DownloaderRow.From(n!));
+            ReseedDownloaderID = Text(snap["downloaderRoles"]?["reseed"]);
+            AssistDownloaderID = Text(snap["downloaderRoles"]?["assist"]);
+        }
+
         var assist = snap["assist"]?.AsObject();
         AssistRunning = Bool(assist?["running"]);
         AssistStep = Str(assist?["step"]);
@@ -256,6 +265,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
               nameof(LastGistSync), nameof(HasUpdate), nameof(UpdateVersion), nameof(UpdateUrl),
               nameof(UpdateDownloadUrl), nameof(StatusText), nameof(CookieTotal),
               nameof(BusyCookieSync), nameof(BusyCookieCheck), nameof(BusyDownloader), nameof(BusyUpdate),
+              nameof(ReseedDownloaderID), nameof(AssistDownloaderID),
               nameof(BusySSH), nameof(BusyAssist), nameof(AssistRunning),
               nameof(AssistStep), nameof(AssistReport),
               nameof(CurrentTheme));
@@ -412,10 +422,33 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 测速默认值（私钥路径、每轮数据量、测速地址、限速参考线）
     public sealed record SshDefaults(string KeyPath, int TestMB, string ProbeURL, double ThrottlingMBps);
 
+    // MARK: 多下载器
+    //
+    // 发种推的那台和辅种扫的那台经常不是同一台机器，列表与用途指派都存在核心里。
+
+    public void AddDownloader() => Call("downloaders.add");
+
+    /// 删除一台（主下载器删不掉，核心库会给出原因）
+    public string? RemoveDownloader(string id) => Try("downloaders.remove", new { id });
+
+    public void AssignDownloader(string role, string id) => Call("downloaders.assign", new { role, id });
+
+    /// 保存一台（按 id upsert）。逐站限速在站点分组页改，核心库会原样保留。
+    public void SaveDownloader(JsonObject downloader) =>
+        Call("downloaders.save", new JsonObject { ["downloader"] = downloader });
+
+    public Task<string?> TestDownloaderAsync(string id) =>
+        TryAsync("downloader.test", new { id });
+
     // MARK: 辅种
     //
     // 辅种不发新种：拿下载器里已有的文件去目标站找同一种子。站点请求节奏由核心库
     // 的节流器收口，界面只发起与显示；进展随快照一起回来，不必另开一条轮询。
+
+    /// 快照里的下载器列表（主 + 附加），以及发种/辅种各用哪台
+    public ObservableCollection<DownloaderRow> Downloaders { get; } = new();
+    public string ReseedDownloaderID { get; private set; } = "main";
+    public string AssistDownloaderID { get; private set; } = "main";
 
     public bool BusyAssist { get; private set; }
     public bool AssistRunning { get; private set; }
@@ -678,6 +711,54 @@ public sealed class CookieHostRow
 }
 
 /// <summary>转种页的逐站状态（阶段 + 主文案 + 详情行）</summary>
+/// 一台下载器（快照 downloaders 里的一项）
+public sealed class DownloaderRow
+{
+    public string Id { get; init; } = "";
+    public string Name { get; init; } = "";
+    public string Label { get; init; } = "";
+    public string Type { get; init; } = "qbittorrent";
+    public string Url { get; init; } = "";
+    public string Username { get; init; } = "";
+    public string Password { get; init; } = "";
+    public string SavePath { get; init; } = "";
+    public string Category { get; init; } = "";
+    public bool SkipChecking { get; init; } = true;
+    public long DefaultUpLimit { get; init; }
+    public string PushPolicy { get; init; } = "always";
+    public int VpsFreeGB { get; init; }
+    public string SizeGuardMode { get; init; } = "warn";
+    public int SizeGuardMarginGB { get; init; } = 5;
+    public bool IsMain { get; init; }
+
+    public override string ToString() => Label;
+
+    public static DownloaderRow From(JsonNode n)
+    {
+        var o = n.AsObject();
+        var name = o["name"]?.GetValue<string>() ?? "";
+        return new DownloaderRow
+        {
+            Id = o["id"]?.GetValue<string>() ?? "main",
+            Name = name,
+            Label = o["label"]?.GetValue<string>() ?? (name.Length > 0 ? name : "下载器"),
+            Type = o["type"]?.GetValue<string>() ?? "qbittorrent",
+            Url = o["url"]?.GetValue<string>() ?? "",
+            Username = o["username"]?.GetValue<string>() ?? "",
+            Password = o["password"]?.GetValue<string>() ?? "",
+            SavePath = o["savePath"]?.GetValue<string>() ?? "",
+            Category = o["category"]?.GetValue<string>() ?? "",
+            SkipChecking = o["skipChecking"]?.GetValue<bool>() ?? true,
+            DefaultUpLimit = o["defaultUpLimit"]?.GetValue<long>() ?? 0,
+            PushPolicy = o["pushPolicy"]?.GetValue<string>() ?? "always",
+            VpsFreeGB = o["vpsFreeGB"] is JsonValue fv && fv.TryGetValue<int>(out var gi) ? gi : 0,
+            SizeGuardMode = o["sizeGuardMode"]?.GetValue<string>() ?? "warn",
+            SizeGuardMarginGB = o["sizeGuardMarginGB"]?.GetValue<int>() ?? 5,
+            IsMain = o["isMain"]?.GetValue<bool>() ?? false,
+        };
+    }
+}
+
 /// 辅种逐行进展。计划行由 assist.scan 给出，这里的文本/阶段随快照更新。
 public sealed class AssistRow : INotifyPropertyChanged
 {

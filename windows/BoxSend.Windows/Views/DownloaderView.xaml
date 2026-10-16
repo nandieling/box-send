@@ -4,7 +4,35 @@
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel MaxWidth="760" HorizontalAlignment="Left">
-                <GroupBox Header="下载器（VPS 上的 qBittorrent / Transmission）">
+                <GroupBox Header="下载器（可以有多台：发种与辅种各用一台）">
+                    <StackPanel>
+                        <WrapPanel>
+                            <Label Content="正在编辑" VerticalAlignment="Center" />
+                            <ComboBox x:Name="DlPick" Width="190" MinHeight="32" VerticalAlignment="Center"
+                                      DisplayMemberPath="Label" SelectedValuePath="Id"
+                                      SelectionChanged="OnDownloaderPicked" />
+                            <Label Content="名字" Margin="12,0,0,0" VerticalAlignment="Center" />
+                            <TextBox x:Name="DlName" Width="140" VerticalAlignment="Center" />
+                            <Button Content="添加一台" Margin="12,0,0,0" Click="OnAddDownloader" />
+                            <Button x:Name="BtnDelDl" Content="删除这台" Margin="8,0,0,0" Click="OnRemoveDownloader" />
+                        </WrapPanel>
+                        <WrapPanel Margin="0,8,0,0">
+                            <Label Content="批量发种推送用" VerticalAlignment="Center" />
+                            <ComboBox x:Name="RoleReseed" Width="180" MinHeight="32" VerticalAlignment="Center"
+                                      DisplayMemberPath="Label" SelectedValuePath="Id"
+                                      SelectionChanged="OnRoleChanged" />
+                            <Label Content="辅种扫描用" Margin="16,0,0,0" VerticalAlignment="Center" />
+                            <ComboBox x:Name="RoleAssist" Width="180" MinHeight="32" VerticalAlignment="Center"
+                                      DisplayMemberPath="Label" SelectedValuePath="Id"
+                                      SelectionChanged="OnRoleChanged" />
+                        </WrapPanel>
+                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Text="主下载器不能删。辅种要读的那台得真有这些文件，否则加进去就是重下一遍；两台不是同一台时，「辅种」页顶部会写明现在用的哪台。逐站上传限速按「批量发种推送用」那台保存。" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox x:Name="ConnCard" Header="下载器（VPS 上的 qBittorrent / Transmission）" Margin="0,12,0,0">
                   <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
