@@ -164,7 +164,7 @@ Discuz 帖式站排除得更彻底，原因是站点结构与辅种的前提对�
   进展随 `snapshot` 里的 `assist` 段回来（不另开一条轮询），`Event` 多带一个 `key`（站点|hash）供界面定位行。
 - CLI：`box-send assist scan|plan|run [--sites a,b] [--limit N] [--dry-run]`。
 
-判定口径与节流都在核心里，两端只是显示。测试 485 个全绿（新增 34 条：`BencodeFileListTests` 5、
+判定口径与节流都在核心里，两端只是显示。当时测试 479 个全绿（新增 34 条：`BencodeFileListTests` 5、
 `AssistMatcherTests` 6、`SiteThrottleTests` 5、`AssistPipelineTests` 11）。
 
 ## 十一、多下载器（发种与辅种各一台）
@@ -217,6 +217,9 @@ Discuz 帖式站排除得更彻底，原因是站点结构与辅种的前提对�
 Windows 端每分钟敲一次桥的 `assist.tick`，让核心库替它判断——两端共用一把尺，
 不会出现一个按启动时间起算、另一个按上次跑完起算。到点跑的就是「扫描 + 辅种」整套，
 站点请求仍受逐站间隔与单轮预算约束，界面左栏会写「约 N 分钟后自动跑下一轮」。
+
+测试 485 个全绿（这一节新增 6 条：`AssistPipelineTests` 的人工采纳 3 条、
+`AssistAutoRunTests` 的定时钟与配置默认值 3 条）。
 
 还没做（留后面）：`searchCandidates(_:)` 多候选列表（现在沿用 `searchExists` 取第一条命中，
 站点请求更少但同名多版本时只能挑第一条）、Blu/Discuz 检索、
