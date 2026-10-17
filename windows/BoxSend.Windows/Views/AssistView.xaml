@@ -33,6 +33,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
                                 <Label Content="每站最小间隔（秒）" Padding="0,0,0,2" />
@@ -50,6 +51,13 @@
                                 <Label Content="查无结果保留（天）" Padding="0,0,0,2" />
                                 <TextBox x:Name="MissTTL" />
                             </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,8,0,0">
+                                <Label Content="定时自动跑（分，0=关）" Padding="0,0,0,2" />
+                                <TextBox x:Name="AutoRun" />
+                            </StackPanel>
+                            <TextBlock x:Name="AutoRunHint" Grid.Row="2" Grid.Column="2" FontSize="12"
+                                       TextWrapping="Wrap" VerticalAlignment="Bottom"
+                                       Foreground="{DynamicResource TextMuted}" />
                         </Grid>
                         <CheckBox x:Name="AutoAccept" Content="站点重打包（文件全等）自动采纳"
                                   FontSize="12" Margin="0,4,0,0" />
@@ -113,6 +121,21 @@
                                             <TextBlock DockPanel.Dock="Right" Text="{Binding Status}"
                                                        FontSize="12" Margin="8,0,0,0" TextTrimming="CharacterEllipsis"
                                                        MaxWidth="300" Foreground="{DynamicResource TextMuted}" />
+                                            <!-- 人比对过觉得是同一种子，就按人的判断走一遍推送（校验不满照样回滚） -->
+                                            <Button DockPanel.Dock="Right" Content="采纳" FontSize="12"
+                                                    Padding="8,0" Click="OnAdopt"
+                                                    ToolTip="按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding NeedConfirm}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                             <TextBlock Text="{Binding TorrentName}" FontSize="13"
                                                        TextTrimming="CharacterEllipsis" />
                                         </DockPanel>

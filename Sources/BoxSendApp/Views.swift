@@ -1790,6 +1790,12 @@ struct AssistView: View {
             numberedRow("随机抖动", dbl(\.jitterSec, 0, 30), step: 1, unit: "秒")
             numberedRow("单轮请求预算", num(\.roundBudget, 1, 2000), step: 10, unit: "次")
             numberedRow("查无结果保留", num(\.missTTLDays, 0, 90), step: 1, unit: "天")
+            numberedRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), step: 15, unit: "分钟")
+            Text(cfg.autoRunMinutes == 0
+                 ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
+                 : "约 \(model.assistAutoNext ?? 0) 分钟后自动跑下一轮，请求仍受单轮预算约束。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Divider()
             Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
                 .font(.callout)
@@ -1907,6 +1913,13 @@ struct AssistView: View {
                 .font(.caption2).foregroundStyle(.secondary)
                 .lineLimit(1)
                 .frame(maxWidth: 260, alignment: .trailing)
+            // 人比对过觉得是同一种子，就按人的判断走一遍推送（校验不满照样回滚）
+            if live?.text.hasPrefix("待人工确认") == true {
+                Button("采纳") { model.assistConfirm(key: row.rowKey) }
+                    .controlSize(.mini)
+                    .disabled(model.assistRunning)
+                    .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
+            }
         }
         .help([row.torrentName, live?.detail ?? row.skipReason ?? ""]
             .filter { !$0.isEmpty }.joined(separator: "\n"))

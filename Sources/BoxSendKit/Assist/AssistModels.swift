@@ -103,3 +103,26 @@ public struct AssistOutcome: Equatable {
         self.message = message
     }
 }
+
+/// 定时自动跑的判定。mac 端直接用它，Windows 端通过 `assist.tick` 让核心库替它算，
+/// 两边共用一把尺：都从「上一轮起跑时间」起算，开机后先等满一个周期再自己动。
+public struct AssistAutoRun {
+    public private(set) var lastRun: Date
+
+    public init(now: Date = Date()) { lastRun = now }
+
+    /// 到点没有（minutes = 0 表示没开定时）
+    public func due(minutes: Int, now: Date = Date()) -> Bool {
+        guard minutes > 0 else { return false }
+        return now.timeIntervalSince(lastRun) >= Double(minutes) * 60
+    }
+
+    /// 还有几分钟跑下一轮；没开定时返回 nil
+    public func minutesLeft(minutes: Int, now: Date = Date()) -> Int? {
+        guard minutes > 0 else { return nil }
+        let left = Double(minutes) * 60 - now.timeIntervalSince(lastRun)
+        return max(0, Int((left / 60).rounded(.up)))
+    }
+
+    public mutating func noteRun(now: Date = Date()) { lastRun = now }
+}

@@ -309,9 +309,111 @@ final class AssistPipelineTests: XCTestCase {
         let got = try pipe.scanCandidates().map(\.hash)
         XCTAssertEqual(got, ["a"], "未下完与太小的都要筛掉")
     }
+
+    // MARK: 人工采纳（界面上的「采纳」按钮）
+
+    /// 清单对不上默认只报「待人工确认」；点了采纳就照人的判断推一次
+    func testManualAdoptPushesDespiteFileListMismatch() throws {
+        let data = torrent(root: "Movie.2020", files: [("Movie.2020.mkv", 100)], source: "Target")
+        let dl = FakeDownloader()
+        // 本地多一条字幕：清单对不上，布局也不完全一致
+        dl.files = [("Movie.2020/Movie.2020.mkv", 100), ("Movie.2020/chs.srt", 20)]
+        let (pipe, _, state) = makePipe(cfg: quickCfg, downloader: dl,
+                                        site: site("target"), torrentData: data)
+        let local = localTorrent(hash: "aaaa".replacingOccurrences(of: "a", with: "a"))
+        var o = AssistPipeline.Options(); o.sleep = noSleep
+        var report = pipe.run(torrents: [local], opts: o)
+        XCTAssertEqual(report.pendingCount, 1, "默认该交人工")
+        XCTAssertTrue(dl.addedPaused.isEmpty)
+
+        var forced = AssistPipeline.Options(); forced.sleep = noSleep
+        forced.forceKeys = ["target|\(local.hash)"]
+        report = pipe.run(torrents: [local], opts: forced)
+        XCTAssertEqual(report.assistedCount, 1, "采纳之后就是一次完整推送")
+        XCTAssertEqual(report.pendingCount, 0, "采纳过的不该再算待确认")
+        XCTAssertEqual(dl.addedPaused, [true], "仍旧先暂停加进去等校验")
+        XCTAssertTrue(report.outcomes[0].message.contains("已按人工采纳"),
+                      "要说清这条是人工放行才推的")
+        XCTAssertEqual(state.assistCountsBySite()["target"], 1)
+    }
+
+    /// 负缓存拦不住人工采纳：人既然比对过，就再去站内看一次
+    func testManualAdoptIgnoresNegativeCache() throws {
+        let data = torrent(root: "Movie.2020", files: [("Movie.2020.mkv", 100)], source: "Target")
+        let dl = FakeDownloader()
+        dl.files = [("Movie.2020/Movie.2020.mkv", 100)]
+        let (pipe, fake, _) = makePipe(cfg: quickCfg, downloader: dl,
+                                       site: site("target"), torrentData: nil)
+        let local = localTorrent(hash: Bencode.infoHash(data)!)
+        var o = AssistPipeline.Options(); o.sleep = noSleep
+        _ = pipe.run(torrents: [local], opts: o)          // 站内没有 → 记进负缓存
+        let searchesAfterMiss = fake.searchCalls
+
+        fake.torrentData = data                            // 站点后来补了同一种子
+        var normal = AssistPipeline.Options(); normal.sleep = noSleep
+        _ = pipe.run(torrents: [local], opts: normal)
+        XCTAssertEqual(fake.searchCalls, searchesAfterMiss, "负缓存期内普通重跑不该发请求")
+
+        var forced = AssistPipeline.Options(); forced.sleep = noSleep
+        forced.forceKeys = ["target|\(local.hash)"]
+        let report = pipe.run(torrents: [local], opts: forced)
+        XCTAssertEqual(fake.searchCalls, searchesAfterMiss + 1, "采纳就要重新去站内查一次")
+        XCTAssertEqual(report.assistedCount, 1)
+    }
+
+    /// 布局对不上时人工采纳会照推，但要把「可能重下一部分」留在结论里
+    func testManualAdoptOverridesLayoutGuardWithWarning() throws {
+        let data = torrent(root: "Movie.2020.Chs", files: [("Movie.2020.mkv", 100)], source: "Target")
+        let dl = FakeDownloader()
+        dl.files = [("Movie.2020/Movie.2020.mkv", 100)]    // 内层目录名与站点不同
+        let (pipe, _, _) = makePipe(cfg: quickCfg, downloader: dl,
+                                    site: site("target"), torrentData: data)
+        let local = localTorrent(hash: "bb" + String(repeating: "0", count: 38))
+        var o = AssistPipeline.Options(); o.sleep = noSleep
+        let blocked = pipe.run(torrents: [local], opts: o)
+        XCTAssertTrue(blocked.outcomes[0].message.contains("内层目录名"), "默认拦下并说明原因")
+        XCTAssertTrue(dl.addedPaused.isEmpty)
+
+        var forced = AssistPipeline.Options(); forced.sleep = noSleep
+        forced.forceKeys = ["target|\(local.hash)"]
+        let report = pipe.run(torrents: [local], opts: forced)
+        XCTAssertEqual(report.assistedCount, 1, "人工点头就推")
+        XCTAssertTrue(report.outcomes[0].message.contains("内层目录名"),
+                      "风险要留在结论里，别悄悄重下")
+    }
 }
 
 private extension Data {
     /// 记录里用的 hash（测试断言 helper）
     var hexHashPrefix: String { Bencode.infoHash(self) ?? "" }
+}
+
+/// 定时自动跑的钟：两端共用，逻辑就这几行，测清楚比读代码快
+final class AssistAutoRunTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testOffMeansNeverDue() {
+        let clock = AssistAutoRun(now: now)
+        XCTAssertFalse(clock.due(minutes: 0, now: now.addingTimeInterval(86_400)))
+        XCTAssertNil(clock.minutesLeft(minutes: 0, now: now))
+    }
+
+    func testDueOnlyAfterFullInterval() {
+        var clock = AssistAutoRun(now: now)
+        XCTAssertFalse(clock.due(minutes: 30, now: now.addingTimeInterval(29 * 60)))
+        XCTAssertEqual(clock.minutesLeft(minutes: 30, now: now.addingTimeInterval(29 * 60)), 1)
+        XCTAssertTrue(clock.due(minutes: 30, now: now.addingTimeInterval(30 * 60)))
+        clock.noteRun(now: now.addingTimeInterval(30 * 60))
+        XCTAssertFalse(clock.due(minutes: 30, now: now.addingTimeInterval(40 * 60)))
+        XCTAssertEqual(clock.minutesLeft(minutes: 30, now: now.addingTimeInterval(40 * 60)), 20)
+    }
+
+    /// 老配置没有这个字段：默认不自动跑，别升级完自己动起来
+    func testAutoRunMinutesDefaultsToOff() throws {
+        let legacy = try JSONDecoder().decode(AssistConfig.self, from: Data("{}".utf8))
+        XCTAssertEqual(legacy.autoRunMinutes, 0)
+        let on = try JSONDecoder().decode(AssistConfig.self,
+                                         from: Data(#"{"autoRunMinutes":45}"#.utf8))
+        XCTAssertEqual(on.autoRunMinutes, 45)
+    }
 }

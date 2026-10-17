@@ -62,6 +62,8 @@ public final class AppService {
     private var assistRows: [String: Event] = [:]
     private var assistStep = ""
     private var assistReport = ""
+    /// 定时自动跑的钟（从进程起来算第一轮的起点）
+    private var assistAutoRun = AssistAutoRun()
     private var cookieMessage: String?
     private var downloaderMessage: String?
     private var zipMessage: String?
@@ -360,6 +362,10 @@ public final class AppService {
             return try assistScan(params)
         case "assist.start":
             return try startAssist(params)
+        case "assist.confirm":
+            return try confirmAssist(params)
+        case "assist.tick":
+            return tickAssist()
         case "assist.status":
             return assistState()
 
@@ -732,9 +738,11 @@ public final class AppService {
             lock.unlock()
             throw Failure("辅种正在运行，请等当前任务结束")
         }
+        let force = (params["forceKeys"] as? [String]) ?? []
         busyAssist = true
-        assistRows = [:]
-        assistStep = "扫描下载器…"
+        // 只采纳一条时别把别的行打回「待检索」，那会让整表看起来没跑过
+        if force.isEmpty { assistRows = [:] }
+        assistStep = force.isEmpty ? "扫描下载器…" : "已采纳，重新核对这一条…"
         assistReport = ""
         cfg = self.cfg
         lock.unlock()
@@ -744,6 +752,7 @@ public final class AppService {
         opts.siteIDs = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
         opts.dryRun = params["dryRun"] as? Bool ?? false
         opts.limit = int(params["limit"]) ?? 0
+        opts.forceKeys = Set(force)
         opts.onEvent = { [weak self] st in
             guard let self else { return }
             let ev = Event(seq: self.nextSeq(), kind: "assist", siteID: st.siteID,
@@ -760,7 +769,10 @@ public final class AppService {
             var failure = ""
             do {
                 let scan = try pipe.scanAndRecord()
-                let candidates = scan.torrents
+                // 单条采纳：只跑被点名的那条，别顺带把整个下载器过一遍
+                let forceHashes = Set(force.compactMap { $0.split(separator: "|").last }.map(String.init))
+                let candidates = forceHashes.isEmpty ? scan.torrents
+                    : scan.torrents.filter { forceHashes.contains($0.hash) }
                 self.mutate { self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个" }
                 let report = pipe.run(torrents: candidates, opts: opts)
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
@@ -779,6 +791,36 @@ public final class AppService {
                       "", phase: nil, ok: failure.isEmpty)
         }
         return assistState()
+    }
+
+    /// 人工采纳一条「待人工确认」：只跑这一条，预筛（负缓存、已辅过）一律让路
+    private func confirmAssist(_ params: [String: Any]) throws -> [String: Any] {
+        guard let key = params["key"] as? String, key.contains("|") else {
+            throw Failure("没说要采纳哪条")
+        }
+        let siteID = String(key.split(separator: "|").first ?? "")
+        guard !siteID.isEmpty else { throw Failure("没说要采纳哪条") }
+        return try startAssist(["siteIDs": [siteID], "forceKeys": [key]])
+    }
+
+    /// 定时自动跑：界面只管每分钟敲这一下，该不该跑由核心库判断（两端共用一套算法）
+    private func tickAssist() -> [String: Any] {
+        lock.lock()
+        let minutes = cfg.assist?.autoRunMinutes ?? 0
+        let busy = busyAssist
+        let sites = cfg.assist?.siteIDs ?? []
+        lock.unlock()
+        guard minutes > 0, !busy, !sites.isEmpty, assistAutoRun.due(minutes: minutes) else {
+            return ["started": false, "minutes": minutes,
+                    "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any]
+        }
+        assistAutoRun.noteRun()
+        do {
+            _ = try startAssist([:])
+            return ["started": true, "minutes": minutes, "nextInMinutes": minutes]
+        } catch {
+            return ["started": false, "minutes": minutes, "error": error.localizedDescription]
+        }
     }
 
     /// 辅种用的流水线：每次新建 cookie 罐与下载器，跑完把 Set-Cookie 并回主罐
@@ -802,7 +844,11 @@ public final class AppService {
     /// 快照里也带一份：Windows 端按快照轮询刷新，不必另开一条轮询
     private func assistStateLocked() -> [String: Any] {
         let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map(Self.eventJSON)
-        return ["running": busyAssist, "step": assistStep, "report": assistReport, "rows": rows]
+        let minutes = cfg.assist?.autoRunMinutes ?? 0
+        return ["running": busyAssist, "step": assistStep, "report": assistReport, "rows": rows,
+                "autoRun": ["minutes": minutes,
+                            "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
+                            "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]
     }
 
     static func assistPhaseName(_ p: AssistPipeline.Status.Phase) -> String {

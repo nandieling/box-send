@@ -354,6 +354,17 @@ Windows 侧：
 
 测试 479 个全绿。
 
+### 2026-10-17 晚：辅种的人工采纳与定时自动跑
+
+- 计划表里「待人工确认」那行多一个「采纳」按钮（mac 在行尾，Windows 在行的右侧，
+  靠 `PlanItem.NeedConfirm` 的 DataTrigger 控制显示，样式 `BasedOn` 全局按钮样式，
+  免得失了主题色）。点了走 `assist.confirm`，只重跑那一条，别的行进展不清空。
+- 左栏「检索节奏」多一格「定时自动跑（分，0=关）」，保存走原地的 `assist` 段补丁；
+  下面一行提示「约 N 分钟后自动跑下一轮」，N 从快照的 `assist.autoRun.nextInMinutes` 读。
+- Windows 不自建一套判定：`AppModel` 里每分钟调一次 `assist.tick`，该不该跑由核心库说，
+  与 mac 的 `AssistAutoRun` 同一个类型。`AssistStartAsync` 多一个可选 `forceKeys` 参数。
+- 测试 485 个全绿（新增 6 个：人工采纳 3 个 + 定时钟与配置默认值 3 个）。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

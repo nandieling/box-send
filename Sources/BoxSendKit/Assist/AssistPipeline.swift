@@ -49,6 +49,9 @@ public final class AssistPipeline {
         public var dryRun = false
         /// 本轮最多处理几条（0 = 不限）
         public var limit = 0
+        /// 人工采纳的组合（"站点|种子 hash"）：跳过负缓存与「已辅过」预筛，
+        /// 也不再停在「待人工确认」，直接按人的判断走推送流程
+        public var forceKeys: Set<String> = []
         public var onEvent: ((Status) -> Void)?
         /// 等校验时的等待（注入点：单测不真睡觉）
         public var sleep: (TimeInterval) -> Void = { Thread.sleep(forTimeInterval: $0) }
@@ -61,8 +64,9 @@ public final class AssistPipeline {
         public var requests: Int { throttleUsed }
         public var throttleUsed = 0
         public var assistedCount: Int { outcomes.filter { $0.done }.count }
+        /// 待人工确认：只有没被采纳的才算，人工采纳成功的已经进 assistedCount
         public var pendingCount: Int {
-            outcomes.filter { if case .nameOnly = $0.level { return true }; return false }.count
+            outcomes.filter { if case .nameOnly = $0.level { return !$0.done }; return false }.count
         }
         public var skippedCount: Int {
             outcomes.filter { if case .skip = $0.level { return true }; return false }.count
@@ -181,6 +185,7 @@ public final class AssistPipeline {
     private func emit(_ opts: Options, _ s: Status) { opts.onEvent?(s) }
 
     private func textOf(_ o: AssistOutcome) -> String {
+        if o.done { return "辅种成功" }
         switch o.level {
         case .sameHash, .sameFiles: return o.done ? "辅种成功" : "待复核"
         case .nameOnly: return "待人工确认"
@@ -189,6 +194,7 @@ public final class AssistPipeline {
     }
 
     private func phaseOf(_ o: AssistOutcome) -> Status.Phase {
+        if o.done { return .done }
         switch o.level {
         case .sameHash, .sameFiles: return o.done ? .done : .verifying
         case .nameOnly: return .skipped
@@ -255,8 +261,10 @@ public final class AssistPipeline {
             AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
                           detailURL: url, done: done, message: msg)
         }
+        // 人工点了「采纳」：就算在负缓存期内、或此前辅过，也照着人的判断再走一遍
+        let forced = opts.forceKeys.contains("\(site.id)|\(t.hash)")
         // 先筛掉不该花请求的组合：白扔请求既慢又给站点添负载
-        if let pre = preSkip(t, site: site, cfg: cfg) {
+        if !forced, let pre = preSkip(t, site: site, cfg: cfg) {
             return out(.skip(pre.why), pre.detail)
         }
         if !throttle.acquire(site.id) {
@@ -280,37 +288,50 @@ public final class AssistPipeline {
                                        files: localFiles)
         let (level, why) = AssistMatcher.judge(localHashes: t.allHashes, local: local,
                                               siteTorrentData: data, siteName: info.name)
+        // 目录结构对不上时加进去会重下一整份：默认拦下来，人工采纳过就只当一句提醒
+        let layoutNote: String? = {
+            switch AssistMatcher.layout(localPaths: Set(localFiles.map { $0.path }),
+                                        sitePaths: Set(Bencode.fileList(data)?.map { $0.path } ?? [])) {
+            case .same: return nil
+            case .rootDiffers: return "站点种子的内层目录名与本地不同"
+            case .differs: return "站点种子的目录结构与本地不同"
+            }
+        }()
+
+        /// 推下载器；原本会被拦下的两种情况，人工采纳过也走这里
+        func admit(_ lvl: AssistLevel, _ reason: String) -> AssistOutcome {
+            if opts.dryRun {
+                return out(lvl, "可辅（dry-run 未推送）：\(reason)", url: detail)
+            }
+            var note = forced ? "已按人工采纳" : ""
+            if forced, let layoutNote { note += "（\(layoutNote)，可能会重下一部分）" }
+            return push(t, site: site, cfg: cfg, data: data, level: lvl, why: reason, detail: detail,
+                        opts: opts, prefix: note.isEmpty ? "" : note + "：")
+        }
+
         switch level {
         case .nameOnly:
+            if forced { return admit(level, why) }
             return out(level, "名字对得上但文件清单对不上：\(why)")
         case .skip(let why):
+            // 判定明说不是同一种子：不因一句「采纳」就硬加
             return out(.skip(why), why)
         case .sameHash, .sameFiles:
-            if case .sameFiles = level, !cfg.autoAcceptSameFiles {
+            if case .sameFiles = level, !cfg.autoAcceptSameFiles, !forced {
                 return out(.nameOnly(info.name), "站点重新打包过（hash 不同），按设置不自动采纳")
             }
-            let sitePaths = Set(Bencode.fileList(data)?.map { $0.path } ?? [])
-            switch AssistMatcher.layout(localPaths: Set(localFiles.map { $0.path }),
-                                       sitePaths: sitePaths) {
-            case .rootDiffers:
-                return out(level, "文件一致，但站点种子的内层目录名与本地不同，"
-                                + "直接加会重下一整份，先不动下载器", url: detail)
-            case .differs:
-                return out(level, "文件一致，但目录结构不同，直接加会重下一整份，先不动下载器",
+            if !forced, let layoutNote {
+                return out(level, "文件一致，但\(layoutNote)，直接加会重下一整份，先不动下载器",
                            url: detail)
-            case .same:
-                break
             }
-            if opts.dryRun {
-                return out(level, "可辅（dry-run 未推送）：\(why)", url: detail)
-            }
-            return push(t, site: site, cfg: cfg, data: data, level: level, why: why, detail: detail, opts: opts)
+            return admit(level, why)
         }
     }
 
     /// 加进下载器 → 等校验 → 满 100% 才启动
     private func push(_ t: LocalTorrent, site: SiteConfig, cfg: AssistConfig, data: Data,
-                      level: AssistLevel, why: String, detail: String, opts: Options) -> AssistOutcome {
+                      level: AssistLevel, why: String, detail: String, opts: Options,
+                      prefix: String = "") -> AssistOutcome {
         func out(_ msg: String, url: String? = detail, done: Bool = false,
                  phaseLevel: AssistLevel? = nil) -> AssistOutcome {
             AssistOutcome(siteID: site.id, torrentName: t.name, level: phaseLevel ?? level,
@@ -326,6 +347,12 @@ public final class AssistPipeline {
             return AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
                                  detailURL: detail, message: "加进下载器失败：\(error.localizedDescription)")
         }
+        // 记进「已辅过」表的级别：人工采纳的那种单标出来，日后好回看是怎么过的
+        func levelTag() -> String {
+            if case .sameHash = level { return "sameHash" }
+            if case .sameFiles = level { return "sameFiles" }
+            return "manual"
+        }
         let siteHash = Bencode.infoHash(data)?.lowercased() ?? t.hash
         var waited: TimeInterval = 0
         let poll = TimeInterval(max(1, cfg.verifyPollSec))
@@ -333,12 +360,11 @@ public final class AssistPipeline {
             if let p = try? downloader.torrentProgress(hash: siteHash) {
                 if p.progress >= 0.999 {
                     try? downloader.setPaused(hashes: [siteHash], paused: false)
-                    state.markAssisted(site: site.id, hash: t.hash, url: detail,
-                                       level: level == .sameHash ? "sameHash" : "sameFiles")
-                    state.note("assist[\(site.id)] OK \(t.name) \(level == .sameHash ? "同 hash" : "同文件")")
+                    state.markAssisted(site: site.id, hash: t.hash, url: detail, level: levelTag())
+                    state.note("assist[\(site.id)] OK \(t.name) \(levelTag())")
                     return AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
                                          detailURL: detail, done: true,
-                                         message: "校验到 100%，已启动（\(why)）")
+                                         message: prefix + "校验到 100%，已启动（\(why)）")
                 }
                 // 校验跑完仍不满：文件对不上，留着它会自己重下一整份
                 if waited > 0, !isChecking(p.state) {

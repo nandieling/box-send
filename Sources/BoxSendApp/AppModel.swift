@@ -122,6 +122,7 @@ final class AppModel: ObservableObject {
             }
         }
         notes = state.recentNotes
+        startAssistAutoTimer()
         selectedTargets = Set(config.targetSites)
         sourceQuoteEnabled = config.sourceQuoteEnabled
         sourceQuoteText = config.sourceQuoteText
@@ -1559,6 +1560,9 @@ final class AppModel: ObservableObject {
     @Published var assistMessage: String? = nil
     /// 只报告不动下载器
     @Published var assistDryRun = false
+    /// 定时自动跑的钟：构造即「刚跑过」，开机后先等满一个周期再自己动
+    private var assistAutoRun = AssistAutoRun()
+    private var assistAutoTimer: Timer?
 
     /// 可以参与辅种的站（已启用的那些）
     var assistSiteOptions: [SiteConfig] { config.sourceSites.filter { $0.enabled } }
@@ -1609,26 +1613,61 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// 执行辅种。跑完顺手重算一次计划，「已辅过 / 站内没有」这些标记才会跟着变。
+    /// 执行辅种（跑配置里勾选的站点）。跑完顺手重算一次计划，
+    /// 「已辅过 / 站内没有」这些标记才会跟着变。
     func assistRun() {
-        guard !assistRunning, !assistScanning else { return }
-        let ids = assistConfig.siteIDs.filter { id in config.site(id)?.enabled == true }
+        let ids = enabledAssistSites
         guard !ids.isEmpty else {
             assistMessage = "先在左边勾选要辅种的站点"
             return
         }
-        let cands = assistCandidates
-        guard !cands.isEmpty else {
-            assistMessage = "先扫描下载器"
-            return
-        }
+        runAssist(siteIDs: ids, forceKeys: [])
+    }
+
+    /// 人工采纳一条「待人工确认」：只重跑被点名的这一条，负缓存与「已辅过」预筛都让路
+    func assistConfirm(key: String) {
+        let site = String(key.split(separator: "|").first ?? "")
+        guard !site.isEmpty else { return }
+        runAssist(siteIDs: [site], forceKeys: [key])
+    }
+
+    /// 一分钟一次的表：到点自己扫一遍再辅一轮。定时跑没人先点「扫描」，
+    /// 所以扫描放在执行体里，不依赖界面上的候选。
+    func assistTick() {
+        let minutes = assistConfig.autoRunMinutes
+        guard minutes > 0, !assistRunning, !assistScanning,
+              assistAutoRun.due(minutes: minutes), !enabledAssistSites.isEmpty else { return }
+        assistAutoRun.noteRun()
+        runAssist(siteIDs: enabledAssistSites, forceKeys: [])
+    }
+
+    /// 距下一轮定时辅种还有几分钟（没开定时返回 nil）
+    var assistAutoNext: Int? {
+        assistAutoRun.minutesLeft(minutes: assistConfig.autoRunMinutes)
+    }
+
+    func startAssistAutoTimer() {
+        guard assistAutoTimer == nil else { return }
+        let t = Timer(timeInterval: 60, repeats: true) { [weak self] _ in self?.assistTick() }
+        RunLoop.main.add(t, forMode: .common)
+        assistAutoTimer = t
+    }
+
+    private var enabledAssistSites: [String] {
+        assistConfig.siteIDs.filter { id in config.site(id)?.enabled == true }
+    }
+
+    /// forceKeys 非空 = 人工采纳的单条重跑：不清空别的行进展，也不重画整表计划
+    private func runAssist(siteIDs ids: [String], forceKeys: Set<String>) {
+        guard !assistRunning, !assistScanning else { return }
         assistRunning = true
-        assistMessage = nil
-        assistRows = [:]
+        assistMessage = forceKeys.isEmpty ? nil : "已采纳，重新核对这一条…"
+        if forceKeys.isEmpty { assistRows = [:] }
         let cfg = config
         let jar = cookies
         let st = state
         let dry = assistDryRun
+        let forceHashes = Set(forceKeys.compactMap { $0.split(separator: "|").last }.map(String.init))
         Task.detached(priority: .utility) {
             let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
             let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
@@ -1636,17 +1675,32 @@ final class AppModel: ObservableObject {
             var o = AssistPipeline.Options()
             o.siteIDs = ids
             o.dryRun = dry
+            o.forceKeys = forceKeys
             o.onEvent = { s in
                 Task { @MainActor in self.assistRows[s.rowKey] = s }
             }
-            let report = pipe.run(torrents: cands, opts: o)
-            let plan = pipe.plan(torrents: cands, siteIDs: ids)
-            let summary = pipe.recordScan(torrents: cands)
+            let all: [LocalTorrent]
+            do {
+                all = try pipe.scanCandidates()
+            } catch {
+                await MainActor.run {
+                    self.assistRunning = false
+                    self.assistMessage = "扫描下载器失败：\(error.localizedDescription)"
+                }
+                return
+            }
+            let picked = forceHashes.isEmpty ? all : all.filter { forceHashes.contains($0.hash) }
+            let report = pipe.run(torrents: picked, opts: o)
+            // 计划表按整批候选 + 勾选的站点重算：单条采纳不该把整表缩成一行
+            let planIDs = (cfg.assist?.siteIDs ?? ids).filter { cfg.site($0)?.enabled == true }
+            let plan = pipe.plan(torrents: all, siteIDs: planIDs)
+            let summary = pipe.recordScan(torrents: all)
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
             await MainActor.run {
                 self.cookies.mergeFrom(jar)
+                self.assistCandidates = all
                 self.assistPlan = plan
                 self.assistSummary = summary
                 self.assistRunning = false

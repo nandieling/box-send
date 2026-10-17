@@ -15,6 +15,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private bool _refreshing;
     private bool _pendingFull;
 
+    private readonly System.Windows.Threading.DispatcherTimer _assistTickTimer;
     private readonly AutoTask _gistTask;
     private readonly AutoTask _ccTask;
     private readonly AutoTask _zipTask;
@@ -43,6 +44,14 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
             Interval = TimeSpan.FromMilliseconds(600)
         };
         _timer.Tick += async (_, _) => await RefreshAsync(full: false);
+
+        // 定时辅种：每分钟敲一次核心库那张表，该不该跑由它判断（两端共用一把尺）
+        _assistTickTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(60)
+        };
+        _assistTickTimer.Tick += async (_, _) => await AssistTickAsync();
+        _assistTickTimer.Start();
 
         // 自动任务跑在后台线程：同步一次要走网络，不能卡住界面线程
         _gistTask = new AutoTask(() => RunInBackground("cookies.sync", new { source = "gist" }));
@@ -232,6 +241,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
         var assist = snap["assist"]?.AsObject();
         AssistRunning = Bool(assist?["running"]);
+        AssistAutoNextMinutes = Num(assist?["autoRun"]?["nextInMinutes"]);
         AssistStep = Str(assist?["step"]);
         AssistReport = Str(assist?["report"]);
         ApplyAssistRows(assist?["rows"]);
@@ -267,7 +277,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
               nameof(BusyCookieSync), nameof(BusyCookieCheck), nameof(BusyDownloader), nameof(BusyUpdate),
               nameof(ReseedDownloaderID), nameof(AssistDownloaderID),
               nameof(BusySSH), nameof(BusyAssist), nameof(AssistRunning),
-              nameof(AssistStep), nameof(AssistReport),
+              nameof(AssistStep), nameof(AssistReport), nameof(AssistAutoNextMinutes),
               nameof(CurrentTheme));
     }
 
@@ -452,6 +462,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     public bool BusyAssist { get; private set; }
     public bool AssistRunning { get; private set; }
+    /// 距下一轮定时辅种还有几分钟（没开定时为 0）
+    public int AssistAutoNextMinutes { get; private set; }
     public string AssistStep { get; private set; } = "";
     public string AssistReport { get; private set; } = "";
     /// 逐行进展（按「站点|种子 hash」定位），扫描出的计划行由此上色
@@ -487,8 +499,19 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         return (node, node == null ? error ?? "扫描下载器失败" : null);
     }
 
-    public Task<string?> AssistStartAsync(string[] siteIDs, bool dryRun) =>
-        TryAsync("assist.start", new { siteIDs, dryRun });
+    public Task<string?> AssistStartAsync(string[] siteIDs, bool dryRun, string[]? forceKeys = null) =>
+        TryAsync("assist.start", new { siteIDs, dryRun, forceKeys });
+
+    /// 人工采纳一条「待人工确认」：只重跑这一条，负缓存与「已辅过」预筛都让路
+    public Task<string?> AssistConfirmAsync(string key) =>
+        TryAsync("assist.confirm", new { key });
+
+    /// 到点问一句核心库：该跑就跑，没到点它什么都不做
+    private async Task AssistTickAsync()
+    {
+        if (BusyAssist || SectionInt("assist", "autoRunMinutes", 0) <= 0) return;
+        await RunInBackground("assist.tick", null);
+    }
 
     public void Raise(params string[] names)
     {
@@ -500,9 +523,19 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     private static bool Bool(JsonNode? n) => n is JsonValue v && v.TryGetValue<bool>(out var b) && b;
 
+    private static int Num(JsonNode? n)
+    {
+        if (n is not JsonValue v) return 0;
+        if (v.TryGetValue<int>(out var i)) return i;
+        if (v.TryGetValue<long>(out var l)) return (int)l;
+        if (v.TryGetValue<double>(out var d)) return (int)d;
+        return 0;
+    }
+
     public void Dispose()
     {
         _timer.Stop();
+        _assistTickTimer.Stop();
         _gistTask.Stop();
         _ccTask.Stop();
         _zipTask.Stop();

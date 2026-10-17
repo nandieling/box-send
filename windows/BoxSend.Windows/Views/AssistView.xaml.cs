@@ -105,6 +105,10 @@ public partial class AssistView : UserControl
         MissTTL.Text = ((int)Num("missTTLDays", 7)).ToString();
         AutoAccept.IsChecked = _model.SectionFlag("assist", "autoAcceptSameFiles", true);
         RemoveOnFail.IsChecked = _model.SectionFlag("assist", "removeOnVerifyFail", true);
+        AutoRun.Text = ((int)Num("autoRunMinutes", 0)).ToString();
+        AutoRunHint.Text = AutoRun.Text == "0"
+            ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
+            : $"约 {_model.AssistAutoNextMinutes} 分钟后自动跑下一轮。";
         _loading = false;
     }
 
@@ -129,6 +133,7 @@ public partial class AssistView : UserControl
             if (int.TryParse(MissTTL.Text, out var tt)) o["missTTLDays"] = Math.Max(0, Math.Min(90, tt));
             o["autoAcceptSameFiles"] = AutoAccept.IsChecked == true;
             o["removeOnVerifyFail"] = RemoveOnFail.IsChecked == true;
+            if (int.TryParse(AutoRun.Text, out var ar)) o["autoRunMinutes"] = Math.Max(0, Math.Min(1440, ar));
         });
         LoadPace();
     }
@@ -228,11 +233,13 @@ public partial class AssistView : UserControl
                 item.Status = (live.PhaseText.Length > 0 ? live.PhaseText + "：" : "")
                     + (at >= 0 ? text[(at + 1)..] : text);
                 item.Tip = live.Detail;
+                item.NeedConfirm = live.Text.Contains("待人工确认");
             }
             else
             {
                 item.Status = item.Skip.Length > 0 ? item.Skip : (_model.AssistRunning ? "排队中" : "待检索");
                 item.Tip = item.Skip;
+                item.NeedConfirm = false;
             }
         }
         BtnScan.IsEnabled = !_model.BusyAssist;
@@ -240,6 +247,18 @@ public partial class AssistView : UserControl
         BtnStart.Content = DryRun.IsChecked == true ? "开始预演" : "开始辅种";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
+        if (_model.SectionInt("assist", "autoRunMinutes", 0) > 0)
+            AutoRunHint.Text = $"约 {_model.AssistAutoNextMinutes} 分钟后自动跑下一轮。";
+    }
+
+    /// 人工采纳一条：只重跑这一条，负缓存与「已辅过」预筛都让路
+    private async void OnAdopt(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.DataContext is not PlanItem item) return;
+        item.Status = "已采纳，重新核对这一条…";
+        var err = await _model.AssistConfirmAsync(item.Key);
+        if (err != null) item.Status = err;
+        RefreshProgress();
     }
 
     private static string Text(JsonNode? n) =>
@@ -260,6 +279,14 @@ public partial class AssistView : UserControl
 
         private string _status = "待检索";
         private string _tip = "";
+        private bool _needConfirm;
+
+        /// 这行是不是「待人工确认」：是才显示「采纳」按钮
+        public bool NeedConfirm
+        {
+            get => _needConfirm;
+            set { if (_needConfirm == value) return; _needConfirm = value; Raise(nameof(NeedConfirm)); }
+        }
 
         public string Status
         {

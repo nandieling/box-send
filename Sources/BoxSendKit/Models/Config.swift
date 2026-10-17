@@ -782,11 +782,15 @@ public struct AssistConfig: Codable {
     /// 等校验的最长时间（秒）与轮询间隔：大种子校验要几分钟，等不到就转「待复核」
     public var verifyWaitSec: Int
     public var verifyPollSec: Int
+    /// 隔这么多分钟自动跑一轮（0 = 不自动跑）。到点是「扫描 + 辅种」整套，
+    /// 站点请求仍受单轮预算与逐站间隔约束，不会把检索打在站点脸上。
+    public var autoRunMinutes: Int
 
     public init(siteIDs: [String] = [], perSiteIntervalSec: Double = 8, jitterSec: Double = 3,
                 roundBudget: Int = 200, missTTLDays: Int = 7, autoAcceptSameFiles: Bool = true,
                 removeOnVerifyFail: Bool = true, minSizeGB: Double = 0, maxSizeGB: Double = 0,
-                categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10) {
+                categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10,
+                autoRunMinutes: Int = 0) {
         self.siteIDs = siteIDs
         self.perSiteIntervalSec = perSiteIntervalSec
         self.jitterSec = jitterSec
@@ -799,6 +803,7 @@ public struct AssistConfig: Codable {
         self.categories = categories
         self.verifyWaitSec = verifyWaitSec
         self.verifyPollSec = verifyPollSec
+        self.autoRunMinutes = autoRunMinutes
     }
 
     public init(from decoder: Decoder) throws {
@@ -815,11 +820,13 @@ public struct AssistConfig: Codable {
         categories = try c.decodeIfPresent([String].self, forKey: .categories) ?? []
         verifyWaitSec = try c.decodeIfPresent(Int.self, forKey: .verifyWaitSec) ?? 600
         verifyPollSec = try c.decodeIfPresent(Int.self, forKey: .verifyPollSec) ?? 10
+        autoRunMinutes = try c.decodeIfPresent(Int.self, forKey: .autoRunMinutes) ?? 0
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteIDs, perSiteIntervalSec, jitterSec, roundBudget, missTTLDays, autoAcceptSameFiles,
-             removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec
+             removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec,
+             autoRunMinutes
     }
 
     /// 节流参数（SiteThrottle 用）
