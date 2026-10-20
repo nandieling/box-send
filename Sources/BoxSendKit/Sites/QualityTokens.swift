@@ -257,7 +257,10 @@ enum QualityTokens {
         // 题材标签：取源站「类别」行（财神等站按题材标签审核，缺题材标签会被打回）
         ("comedy", ["喜剧", "comedy"]),
         ("action", ["动作", "action"]),
-        ("romance", ["爱情", "情色", "romance"]),
+        // 情色不等于爱情：唐PT 的标签里有「情色」没有「爱情」，
+        // 把情色当爱情关键词会让爱情片被勾成情色（审核口径也不同）
+        ("romance", ["爱情", "romance"]),
+        ("erotic", ["情色", "伦理", "三级", "erotic"]),
         ("drama", ["剧情", "drama"]),
         ("scifi", ["科幻", "sci-fi", "scifi"]),
         ("horror", ["恐怖", "horror"]),

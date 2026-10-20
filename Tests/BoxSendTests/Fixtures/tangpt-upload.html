@@ -1,0 +1,1234 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="NexusPHP" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>不可躺 :: 发布 - Powered by NexusPHP</title>
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+<link rel="search" type="application/opensearchdescription+xml" title="不可躺 Torrents" href="opensearch.php" />
+<link rel="stylesheet" href="styles/mediumfont.css" type="text/css" />
+<link rel="stylesheet" href="styles/sprites.css" type="text/css" />
+<link rel="stylesheet" href="pic/forum_pic/chs/forumsprites.css" type="text/css" />
+<link rel="stylesheet" href="styles/DarkPassion/theme.css" type="text/css" />
+<link rel="stylesheet" href="styles/DarkPassion/DomTT.css" type="text/css" />
+<link rel="stylesheet" href="styles/curtain_imageresizer.css" type="text/css" />
+<link rel="stylesheet" href="styles/nexus.css" type="text/css" />
+
+<style type="text/css">
+	ul.menu li.nav-entertainment {
+		position: relative;
+		display: inline-block;
+	}
+	ul.menu li.nav-entertainment > ul.nav-submenu {
+		display: none;
+		position: absolute;
+		top: 100%;
+		left: 0;
+		z-index: 2100;
+		min-width: 92px;
+		margin: 0;
+		padding: 4px 0;
+		list-style: none;
+		text-align: left;
+		white-space: nowrap;
+		background: #ffffff;
+		border: 1px solid #9aa6b2;
+		box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+	}
+	ul.menu li.nav-entertainment:hover > ul.nav-submenu,
+	ul.menu li.nav-entertainment:focus-within > ul.nav-submenu {
+		display: block;
+	}
+	ul.menu li.nav-entertainment > ul.nav-submenu li {
+		display: block;
+		margin: 0;
+	}
+	ul.menu li.nav-entertainment > ul.nav-submenu li a,
+	ul.menu li.nav-entertainment.selected > ul.nav-submenu li a {
+		display: block;
+		margin: 0;
+		padding: 5px 12px;
+		color: #1f2933;
+		background: #ffffff;
+		background-image: none;
+		border: 0;
+		text-align: left;
+		text-decoration: none;
+	}
+	ul.menu li.nav-entertainment > ul.nav-submenu li a:hover,
+	ul.menu li.nav-entertainment > ul.nav-submenu li.selected a {
+		color: #111827;
+		background: #e8eef6;
+		background-image: none;
+		text-decoration: none;
+	}
+	.head-right-tools {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+		height: 100px;
+		position: relative;
+	}
+			.sitewide-free-head-widget {
+			position: fixed;
+			right: max(24px, calc((100vw - 1228.66px) / 2 - 196px));
+			bottom: 72px;
+			z-index: 80;
+			display: block;
+			width: 180px;
+			height: 222px;
+			overflow: visible;
+			text-decoration: none !important;
+			outline: none;
+			pointer-events: auto;
+		}
+		.sitewide-free-head-canvas {
+			position: absolute;
+			top: 0;
+			left: 50%;
+			display: block;
+			width: 160px;
+			height: 194px;
+			transform: translateX(-50%);
+			transform-origin: 50% 70%;
+			animation: sitewide-free-sheep-breathe 3.2s ease-in-out infinite;
+			filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.12));
+			pointer-events: none;
+		}
+		.sitewide-free-head-progress {
+			position: absolute;
+			left: 50%;
+			right: auto;
+			width: 146px;
+			top: 198px;
+			bottom: auto;
+			display: block;
+			direction: ltr;
+			text-align: left;
+			height: 12px;
+			padding: 2px;
+			box-sizing: border-box;
+			transform: translateX(-50%);
+			border: 1px solid rgba(255, 255, 255, 0.95);
+			border-radius: 999px;
+			background: linear-gradient(180deg, rgba(238, 246, 252, 0.96), rgba(210, 226, 239, 0.94));
+			box-shadow: inset 0 1px 2px rgba(31, 60, 86, 0.18), 0 2px 7px rgba(31, 60, 86, 0.18);
+			pointer-events: auto;
+			cursor: pointer;
+		}
+	.sitewide-free-head-progress-fill {
+		display: block;
+		width: 0;
+		height: 100%;
+		margin-left: 0;
+		margin-right: auto;
+		border-radius: inherit;
+		background: linear-gradient(90deg, #42b8f4 0%, #4f8df4 52%, #f4b63c 100%);
+		box-shadow: 0 0 5px rgba(74, 143, 239, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+		transition: width 0.45s ease;
+	}
+	.sitewide-free-head-widget:hover .sitewide-free-head-canvas {
+		filter: drop-shadow(0 5px 7px rgba(0, 0, 0, 0.2));
+	}
+	.sitewide-free-head-widget.is-unavailable {
+		display: none;
+	}
+	@keyframes sitewide-free-sheep-breathe {
+		0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+		50% { transform: translateX(-50%) translateY(-2px) scale(1.025); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.sitewide-free-head-canvas { animation: none; }
+	}
+	.sitewide-free-head-widget.is-collapsed {
+		width: 36px;
+		height: auto;
+		bottom: 24px;
+		position: fixed;
+	}
+	.sitewide-free-head-dock {
+		visibility: hidden;
+		opacity: 0;
+		pointer-events: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		padding: 10px 0;
+		border-radius: 6px;
+		background: #4a90e2;
+		box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+		transition: box-shadow 0.2s ease;
+		user-select: none;
+		-webkit-user-select: none;
+		position: relative;
+		z-index: 10;
+		cursor: grab;
+	}
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-canvas,
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-progress,
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-trigger {
+		display: none;
+	}
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-dock {
+		visibility: visible;
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.sitewide-free-head-widget.is-collapsed:hover .sitewide-free-head-dock {
+		box-shadow: 0 6px 20px rgba(74, 143, 239, 0.5);
+	}
+	.sitewide-free-head-dock.is-dragging {
+		animation: none !important;
+		cursor: grabbing !important;
+	}
+
+	.sitewide-free-head-dock-text {
+		writing-mode: vertical-rl;
+		text-orientation: upright;
+		font-size: 13px;
+		font-weight: 600;
+		color: #fff;
+		letter-spacing: 2px;
+		line-height: 1;
+	}
+	.sitewide-free-head-trigger {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 194px;
+		cursor: pointer;
+		z-index: 2;
+	}
+	.sitewide-free-head-menu {
+		position: absolute;
+		right: calc(100% + 10px);
+		top: 50%;
+		z-index: 3;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 118px;
+		padding: 6px 0;
+		transform: translateY(-50%) translateX(20px) scale(0.85);
+		opacity: 0;
+		visibility: hidden;
+		pointer-events: none;
+		background: rgba(255, 255, 255, 0.97);
+		border: 1px solid rgba(200, 215, 230, 0.9);
+		border-radius: 10px;
+		box-shadow: 0 6px 20px rgba(31, 60, 86, 0.18), 0 2px 6px rgba(31, 60, 86, 0.10);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0.22s;
+		transform-origin: 100% 50%;
+	}
+	.sitewide-free-head-menu.is-open {
+		opacity: 1;
+		visibility: visible;
+		pointer-events: auto;
+		transform: translateY(-50%) translateX(0) scale(1);
+	}
+	.sitewide-free-head-menu-btn {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		width: 100%;
+		padding: 8px 14px;
+		box-sizing: border-box;
+		border: 0;
+		background: transparent;
+		color: #2c3e50;
+		font-size: 13px;
+		line-height: 1.4;
+		text-align: left;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+	.sitewide-free-head-menu-btn:hover {
+		background: rgba(66, 184, 244, 0.10);
+		color: #1a73a7;
+	}
+	.sitewide-free-head-menu-btn svg {
+		width: 15px;
+		height: 15px;
+		flex-shrink: 0;
+		opacity: 0.7;
+	}
+	.sitewide-free-head-menu-btn:hover svg {
+		opacity: 1;
+	}
+	.sitewide-free-head-menu-collapse {
+		display: flex;
+	}
+	.sitewide-free-head-menu-expand {
+		display: none;
+	}
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-menu-collapse {
+		display: none;
+	}
+	.sitewide-free-head-widget.is-collapsed .sitewide-free-head-menu-expand {
+		display: flex;
+	}
+
+</style>
+
+<link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php" />
+<script type="text/javascript" src="js/curtain_imageresizer.js"></script>
+<script type="text/javascript" src="js/ajaxbasic.js"></script>
+<script type="text/javascript" src="js/common.js"></script>
+<script type="text/javascript" src="js/domLib.js"></script>
+<script type="text/javascript" src="js/domTT.js"></script>
+<script type="text/javascript" src="js/domTT_drag.js"></script>
+<script type="text/javascript" src="js/fadomatic.js"></script>
+<script type="text/javascript" src="js/jquery-1.12.4.min.js"></script>
+<script type="text/javascript">
+    jQuery.noConflict();
+    window.nexusLayerOptions = {
+        confirm: {btnAlign: 'c', title: 'Confirm', btn: ['OK', 'Cancel']},
+        alert: {btnAlign: 'c', title: 'Info', btn: ['OK', 'Cancel']}
+    }
+</script>
+<script type="text/javascript" src="vendor/layer-v3.5.1/layer/layer.js"></script>
+</head>
+<body>
+<table class="head" cellspacing="0" cellpadding="0" align="center" style="width: 1228.66px">
+	<tr>
+		<td class="clear">
+			<div class="logo_img"><img src="https://img.y8o.de/i/2026/04/29/69f1d5307028b.png" alt="不可躺" title="不可躺 - 无论你是老鸟还是新手，在这里都可以安心“躺平”，享受高效、清爽的PT。 " /></div>
+		</td>
+		<td class="clear nowrap" align="right" valign="middle">
+		    	<div class="head-right-tools">
+            				<div class="sitewide-free-head-widget" id="sitewideFreeHeadWidget" title="全站站免池：已筹 62,880,000 / 目标 90,000,000 魔力（69.87%）" data-progress="69.87">
+					<div class="sitewide-free-head-trigger" id="sitewideFreeHeadTrigger"></div>
+					<canvas class="sitewide-free-head-canvas" id="sitewideFreeHeadCanvas" width="708" height="859"></canvas>
+					<span class="sitewide-free-head-progress" role="progressbar" aria-label="全站站免筹集进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="69.87">
+						<span class="sitewide-free-head-progress-fill" style="width: 69.87%;"></span>
+					</span>
+					<div class="sitewide-free-head-dock" id="sitewideFreeHeadDock">
+						<span class="sitewide-free-head-dock-text">懒羊羊</span>
+					</div>
+					<div class="sitewide-free-head-menu" id="sitewideFreeHeadMenu">
+						<button class="sitewide-free-head-menu-btn" id="sitewideFreeHeadGo" type="button">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+							进入页面
+						</button>
+						<button class="sitewide-free-head-menu-btn sitewide-free-head-menu-expand" id="sitewideFreeHeadExpand" type="button">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 15 21 15 21 21"/><polyline points="9 9 3 3 3 9"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+							展开
+						</button>
+						<button class="sitewide-free-head-menu-btn sitewide-free-head-menu-collapse" id="sitewideFreeHeadCollapse" type="button">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+							收起
+						</button>
+					</div>
+				</div>
+						</div>
+		</td>
+	</tr>
+</table>
+<script type="text/javascript">
+(function () {
+	var DOCK_KEY = 'sitewide-free-head-docked';
+	var widget = document.getElementById('sitewideFreeHeadWidget');
+	var canvas = document.getElementById('sitewideFreeHeadCanvas');
+	if (!widget || !canvas || !canvas.getContext) {
+		return;
+	}
+	try {
+		if (window.localStorage.getItem(DOCK_KEY) === '1') {
+			widget.className += ' is-collapsed';
+		}
+	} catch (e) {}
+
+	var context = canvas.getContext('2d');
+	if (!context) {
+		widget.className += ' is-unavailable';
+		return;
+	}
+
+	var imageWidth = 708;
+	var imageHeight = 859;
+	var waveAmplitude = 7;
+	var waveLength = 115;
+	var waveSpeed = 0.035;
+	var progress = Number(widget.getAttribute('data-progress'));
+	var waveOffset = 0;
+	var colorImage = new Image();
+	var lineImage = new Image();
+	var colorLoaded = false;
+	var lineLoaded = false;
+	var failed = false;
+	var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	if (!isFinite(progress)) {
+		progress = 0;
+	}
+	progress = Math.max(0, Math.min(100, progress));
+
+	function fail() {
+		if (!failed) {
+			failed = true;
+			widget.className += ' is-unavailable';
+		}
+	}
+
+	function waveY(x, baseY) {
+		return baseY + Math.sin((x / waveLength) * Math.PI * 2 + waveOffset) * waveAmplitude;
+	}
+
+	function bottomWavePath(baseY) {
+		context.beginPath();
+		context.moveTo(0, imageHeight);
+		context.lineTo(0, waveY(0, baseY));
+		for (var x = 0; x <= imageWidth; x += 3) {
+			context.lineTo(x, waveY(x, baseY));
+		}
+		context.lineTo(imageWidth, imageHeight);
+		context.closePath();
+	}
+
+	function topWavePath(baseY) {
+		context.beginPath();
+		context.moveTo(0, 0);
+		context.lineTo(imageWidth, 0);
+		context.lineTo(imageWidth, waveY(imageWidth, baseY));
+		for (var x = imageWidth; x >= 0; x -= 3) {
+			context.lineTo(x, waveY(x, baseY));
+		}
+		context.closePath();
+	}
+
+	function drawWaveHighlight(baseY) {
+		if (progress <= 0 || progress >= 100) {
+			return;
+		}
+		context.save();
+		context.beginPath();
+		for (var x = 0; x <= imageWidth; x += 3) {
+			var y = waveY(x, baseY);
+			if (x === 0) {
+				context.moveTo(x, y);
+			} else {
+				context.lineTo(x, y);
+			}
+		}
+		var gradient = context.createLinearGradient(0, 0, imageWidth, 0);
+		gradient.addColorStop(0, 'rgba(255,255,255,0)');
+		gradient.addColorStop(0.25, 'rgba(255,255,255,0.28)');
+		gradient.addColorStop(0.5, 'rgba(255,255,255,0.58)');
+		gradient.addColorStop(0.75, 'rgba(255,255,255,0.28)');
+		gradient.addColorStop(1, 'rgba(255,255,255,0)');
+		context.strokeStyle = gradient;
+		context.lineWidth = 2;
+		context.lineCap = 'round';
+		context.stroke();
+		context.restore();
+	}
+
+	function drawFrame() {
+		if (!colorLoaded || !lineLoaded || failed) {
+			return;
+		}
+		context.clearRect(0, 0, imageWidth, imageHeight);
+		if (progress <= 0) {
+			context.drawImage(lineImage, 0, 0, imageWidth, imageHeight);
+			return;
+		}
+		if (progress >= 100) {
+			context.drawImage(colorImage, 0, 0, imageWidth, imageHeight);
+			return;
+		}
+
+		var baseY = imageHeight - (imageHeight * progress) / 100;
+		context.save();
+		topWavePath(baseY);
+		context.clip();
+		context.drawImage(lineImage, 0, 0, imageWidth, imageHeight);
+		context.restore();
+
+		context.save();
+		bottomWavePath(baseY);
+		context.clip();
+		context.drawImage(colorImage, 0, 0, imageWidth, imageHeight);
+		context.restore();
+		drawWaveHighlight(baseY);
+	}
+
+	function animate() {
+		waveOffset += waveSpeed;
+		drawFrame();
+		window.requestAnimationFrame(animate);
+	}
+
+	function startWhenReady() {
+		if (!colorLoaded || !lineLoaded || failed) {
+			return;
+		}
+		if (reduceMotion || progress <= 0 || progress >= 100 || !window.requestAnimationFrame) {
+			drawFrame();
+		} else {
+			window.requestAnimationFrame(animate);
+		}
+	}
+
+	colorImage.onload = function () {
+		colorLoaded = true;
+		startWhenReady();
+	};
+	lineImage.onload = function () {
+		lineLoaded = true;
+		startWhenReady();
+	};
+	colorImage.onerror = fail;
+	lineImage.onerror = fail;
+	colorImage.src = '/pic/lyy/lazy-sheep.webp?v=1';
+	lineImage.src = '/pic/lyy/lazy-sheep-line-thin.png?v=1';
+
+	var trigger = document.getElementById('sitewideFreeHeadTrigger');
+	var menu = document.getElementById('sitewideFreeHeadMenu');
+	var dock = document.getElementById('sitewideFreeHeadDock');
+	var goBtn = document.getElementById('sitewideFreeHeadGo');
+	var collapseBtn = document.getElementById('sitewideFreeHeadCollapse');
+	var expandBtn = document.getElementById('sitewideFreeHeadExpand');
+	var menuOpen = false;
+	var isDragging = false;
+	var dragStartX = 0, dragStartY = 0;
+	var widgetStartX = 0, widgetStartY = 0;
+
+	function openMenu() {
+		if (!menu) return;
+		menu.classList.add('is-open');
+		menuOpen = true;
+	}
+	function closeMenu() {
+		if (!menu) return;
+		menu.classList.remove('is-open');
+		menuOpen = false;
+	}
+	function toggleMenu(e) {
+		if (e) { e.stopPropagation(); }
+		if (menuOpen) { closeMenu(); } else { openMenu(); }
+	}
+	function isCollapsed() {
+		return widget.classList.contains('is-collapsed');
+	}
+	if (trigger) {
+		trigger.addEventListener('click', function (e) {
+			if (isDragging) return;
+			toggleMenu(e);
+		});
+	}
+	// Drag logic - only on the dock label when collapsed
+	if (dock) {
+		dock.addEventListener('mousedown', function (e) {
+			if (!isCollapsed()) return;
+			e.preventDefault();
+			e.stopPropagation();
+			isDragging = false;
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+			var rect = widget.getBoundingClientRect();
+			widgetStartX = rect.left;
+			widgetStartY = rect.top;
+			dock.classList.add('is-dragging');
+
+			function onMove(ev) {
+				var dx = ev.clientX - dragStartX;
+				var dy = ev.clientY - dragStartY;
+				if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+					isDragging = true;
+				}
+				if (isDragging) {
+					var newX = widgetStartX + dx;
+					var newY = widgetStartY + dy;
+					widget.style.left = newX + 'px';
+					widget.style.top = newY + 'px';
+					widget.style.right = 'auto';
+					widget.style.bottom = 'auto';
+				}
+			}
+			function onUp() {
+				dock.classList.remove('is-dragging');
+				document.removeEventListener('mousemove', onMove);
+				document.removeEventListener('mouseup', onUp);
+				setTimeout(function () { isDragging = false; }, 50);
+			}
+			document.addEventListener('mousemove', onMove);
+			document.addEventListener('mouseup', onUp);
+		});
+
+		// Touch drag - only on dock
+		dock.addEventListener('touchstart', function (e) {
+			if (!isCollapsed()) return;
+			var touch = e.touches[0];
+			isDragging = false;
+			dragStartX = touch.clientX;
+			dragStartY = touch.clientY;
+			var rect = widget.getBoundingClientRect();
+			widgetStartX = rect.left;
+			widgetStartY = rect.top;
+			dock.classList.add('is-dragging');
+
+			function onMove(ev) {
+				var t = ev.touches[0];
+				var dx = t.clientX - dragStartX;
+				var dy = t.clientY - dragStartY;
+				if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+					isDragging = true;
+				}
+				if (isDragging) {
+					ev.preventDefault();
+					var newX = widgetStartX + dx;
+					var newY = widgetStartY + dy;
+					widget.style.left = newX + 'px';
+					widget.style.top = newY + 'px';
+					widget.style.right = 'auto';
+					widget.style.bottom = 'auto';
+				}
+			}
+			function onEnd() {
+				dock.classList.remove('is-dragging');
+				document.removeEventListener('touchmove', onMove);
+				document.removeEventListener('touchend', onEnd);
+				document.removeEventListener('touchcancel', onEnd);
+				setTimeout(function () { isDragging = false; }, 50);
+			}
+			document.addEventListener('touchmove', onMove, { passive: false });
+			document.addEventListener('touchend', onEnd);
+			document.addEventListener('touchcancel', onEnd);
+		}, { passive: true });
+
+		dock.addEventListener('click', function (e) {
+			if (isDragging) return;
+			e.stopPropagation();
+			if (isCollapsed()) {
+				toggleMenu(e);
+			}
+		});
+	}
+	if (goBtn) {
+		goBtn.addEventListener('click', function (e) {
+			e.stopPropagation();
+			closeMenu();
+			window.location.href = '/mybonus.php';
+		});
+	}
+	if (collapseBtn) {
+		collapseBtn.addEventListener('click', function (e) {
+			e.stopPropagation();
+			closeMenu();
+			widget.classList.add('is-collapsed');
+			try { window.localStorage.setItem(DOCK_KEY, '1'); } catch (err) {}
+		});
+	}
+	if (expandBtn) {
+		expandBtn.addEventListener('click', function (e) {
+			e.stopPropagation();
+			closeMenu();
+			widget.classList.remove('is-collapsed');
+			widget.style.left = '';
+			widget.style.top = '';
+			widget.style.right = '';
+			widget.style.bottom = '';
+			try { window.localStorage.removeItem(DOCK_KEY); } catch (err) {}
+		});
+	}
+	document.addEventListener('click', function (e) {
+		if (menuOpen && widget && !widget.contains(e.target)) {
+			closeMenu();
+		}
+	});
+}());
+</script>
+<table class="mainouter" width="1200" cellspacing="0" cellpadding="5" align="center">
+	<tr><td id="nav_block" class="text" align="center">
+<table class="main" width="1200" border="0" cellspacing="0" cellpadding="0"><tr><td class="embedded" ><div id="nav"><ul id="mainmenu" class="menu"><li><a href="index.php">&nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li><a href="forums.php">&nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li><a href="torrents.php" rel='sub-menu'>种子</a></li><li><a href="offers.php">&nbsp;候&nbsp;&nbsp;选&nbsp;</a></li><li><a href="viewrequests.php">&nbsp;求&nbsp;&nbsp;种&nbsp;</a></li><li class="selected"><a href="upload.php">&nbsp;发&nbsp;&nbsp;布&nbsp;</a></li><li><a href="subtitles.php">&nbsp;字&nbsp;&nbsp;幕&nbsp;</a></li><li class="nav-entertainment" data-entertainment-nav="1"><a href="/game/">&nbsp;娱&nbsp;&nbsp;乐&nbsp;</a><ul id="entertainment-menu" class="nav-submenu"><li data-game-nav="1" data-entertainment-order="10"><a href="/game/" target="_blank">&nbsp;游&nbsp;&nbsp;戏&nbsp;</a></li><li data-big-small-nav="1" data-entertainment-order="20"><a href="/plugins/big-small/index.php">猜大小</a></li><li data-omnibot-lottery-nav="1" data-entertainment-order="30"><a href="/omnibot_lottery.php">抽奖</a></li><li data-omnibot-slot-nav="1" data-entertainment-order="40"><a href="/omnibot_slot.php">老虎机</a></li><li data-parking-nav="1" data-entertainment-order="50"><a href="/parking.php" target="_blank">抢车位</a></li></ul></li><li><a href="rules.php">&nbsp;规&nbsp;&nbsp;则&nbsp;</a></li><li><a href="faq.php">&nbsp;常见问题&nbsp;</a></li><li><a href="contactstaff.php">联系管理组</a></li></ul></div></td></tr></table>
+
+<table id="info_block" cellpadding="4" cellspacing="0" border="0" width="100%"><tr>
+	<td><table width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
+		<td class="bottom" align="left">
+            <span class="medium">
+                欢迎回来, <span class="nowrap"><a  href="https://www.tangpt.top/userdetails.php?id=10128" class='User_Name'><b class="rainbow">nan</b></a><img class="star" src="/pic/trans.gif" alt="Donor" style='margin-left: 2pt' /><img src="https://img.y8o.de/i/2025/11/18/691c96ea88c7e.gif" title="清纯小姐姐" class="nexus-username-medal preview" style="max-height: 11px;max-width: 11px;margin-left: 2pt"/><img src="https://img.y8o.de/i/2025/11/18/691c9396329ae.gif" title="CFBoom压惊小姐姐" class="nexus-username-medal preview" style="max-height: 11px;max-width: 11px;margin-left: 2pt"/></span>                [<a href="logout.php">退出</a>]
+                [<a href="usercp.php">&nbsp;控制面板&nbsp;</a>]
+                                                [<a href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0">收藏</a>]
+                <font class = 'color_bonus'>魔力值 </font>[<a href="mybonus.php">使用</a>]: 18,160,766.9                 <a href="attendance.php" class="">[签到已得25000, 补签卡: 112]</a>                <a href="medal.php">[勋章]</a>
+                <a href="task.php">[任务]</a>
+                <font class = 'color_invite'>邀请 </font>[<a href="invite.php?id=10128">发送</a>]: 33(0)                                <br />
+	            <font class="color_ratio">分享率:</font> 105.070                <font class='color_uploaded'>上传量:</font> 2.846 TB                <font class='color_downloaded'> 下载量:</font> 27.53 GB                <font class='color_active'>当前活动:</font> <img class="arrowup" alt="Torrents seeding" title="当前做种" src="pic/trans.gif" />467  <img class="arrowdown" alt="Torrents leeching" title="当前下载" src="pic/trans.gif" />0&nbsp;&nbsp;
+                <font class='color_connectable'>可连接:</font><b><font color="green">是</font></b> <font class='color_slots'>连接数：</font>无限制                                <font class='color_bonus'>认领: </font> [<a href="claim.php?uid=10128">0/1000</a>]            </span>
+        </td>
+                        <td class="bottom" align="left" style="border: none">
+            <form action="search.php" method="get" target="_blank">
+                <div style="display: flex;align-items: center">
+                    <div style="display: flex;flex-direction: column">
+                        <div>
+                            <span><input type="text" name="search" style="width: 80px;height: 12px" value="" placeholder="关键字"/></span>
+                        </div>
+                        <div>
+                            <span><select name="search_area" style="width: 88px"><option value="0">标题</option><option value="1">简介</option><option value="3">发布者</option><option value="4">IMDB链接</option></select></span>
+                        </div>
+                    </div>
+                    <div><input type="submit" value="全站搜索" style="width: 39px;white-space: break-spaces;padding: 0" /></div>
+                </div>
+            </form>
+        </td>
+                	<td class="bottom" align="right"><span class="medium">
+ <a href="friends.php"><img class="buddylist" alt="Buddylist" title="社交名单" src="pic/trans.gif" /></a> <a href="getrss.php"><img class="rss" alt="RSS" title="获取RSS" src="pic/trans.gif" /></a><br/><a href="messages.php"><img class="inbox" src="pic/trans.gif" alt="inbox" title="收件箱&nbsp;(无新短讯)" /></a> 38 (0 新)  <a href="messages.php?action=viewmailbox&amp;box=-1"><img class="sentbox" alt="sentbox" title="发件箱" src="pic/trans.gif" /></a> 0
+	</span></td>
+	</tr></table></td>
+</tr></table>
+
+</td></tr>
+
+<tr><td id="outer" align="center" class="outer" style="padding-top: 20px; padding-bottom: 20px">
+<table border="0" cellspacing="0" cellpadding="10"><tr><td style='border: none; padding: 10px; background: #0000FF'>
+<b><a href="task.php" target='_blank'><font color="white">名称：VIP<br />
+时间：2026-10-01 00:00:00 ~ 2026-10-31 23:59:59<br />
+指标1：魔力增量, 要求：1000 , 当前：303745, 结果：完成！<br />
+<br />
+VIP 月50w 最后一天领 签到即完成</font></a></b></td></tr></table><br />	<form id="compose" enctype="multipart/form-data" action="takeupload.php" method="post" name="upload">
+			<p align="center">红星号(<font color="red">*</font>)标记的区域必须填写</p>			<table border="1" cellspacing="0" cellpadding="5" width="97%">
+				<tr>
+					<td class='colhead' colspan='2' align='center'>
+						Tracker服务器的URL是: &nbsp;&nbsp;&nbsp;&nbsp;<b>https://www.tangpt.top/announce.php</b>
+											</td>
+				</tr>
+				<tr><td class="rowhead nowrap" valign="top" align="right">种子文件<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><input type="file" class="file" id="torrent" name="file" onchange="getname()" />
+</td></tr><tr><td class="rowhead nowrap" valign="top" align="right">标题</td><td class="rowfollow" valign="top" align="left"><div class="nexus-input-box" style="display: flex">
+    <div style="display: flex;flex-direction: column;flex-grow: 1">
+        <input type="text" id="name" name="name" value="">
+        <span class="medium">(若不填将使用种子文件名。<b>要求规范填写</b>，如<i>Blade Runner 1982 Final Cut 720p HDDVD DTS x264-ESiR</i>)
+</span>
+    </div>
+    <div><input type="button" class="nexus-action-btn" value="填写质量"></div>
+</div></td></tr><tr><td class="rowhead nowrap" valign="top" align="right">副标题</td><td class="rowfollow" valign="top" align="left"><input type="text" style="width: 99%;" name="small_descr" /><br /><font class="medium">(将在种子页面种子标题下显示。如<i>银翼杀手 720p @ 4615 kbps - DTS 5.1 @ 1536 kbps</i>)</font></td></tr><tr><td class="rowhead nowrap" valign="top" align="right">IMDb链接</td><td class="rowfollow" valign="top" align="left"><div style="display: flex">
+    <div style="display: flex;flex-direction: column;flex-grow: 1">
+        <input type="text" name="url" value="" data-pt-gen="url">
+        <span class="medium">(来自<strong><a href="https://www.imdb.com">IMDb</a></strong>的链接。如电影<b>The Dark Knight</b>的链接是<b>https://www.imdb.com/title/tt0468569/</b>)</span>
+    </div>
+    
+</div></td></tr><tr><td class="rowhead nowrap" valign="top" align="right">NFO文件</td><td class="rowfollow" valign="top" align="left"><input type="file" class="file" name="nfo" /><br /><font class="medium">(不允许<b class='PowerUser_Name'>Power User</b>以下用户查看。请上传<b>.nfo</b>文件)
+</font></td></tr><tr><td class="rowhead" style='padding: 3px' valign="top">简介<font color="red">*</font></td><td class="rowfollow">
+<script type="text/javascript">
+    let textareaId = "descr"
+    let editTbodyId = "upload-descr-edit"
+    let previewTbodyId = "upload-descr-preview"
+    let btnEditId = "upload-descr-btn-edit"
+    let btnPreviewId = "upload-descr-btn-preview"
+//<![CDATA[
+var b_open = 0;
+var i_open = 0;
+var u_open = 0;
+var color_open = 0;
+var list_open = 0;
+var quote_open = 0;
+var html_open = 0;
+
+var myAgent = navigator.userAgent.toLowerCase();
+var myVersion = parseInt(navigator.appVersion);
+
+var is_ie = ((myAgent.indexOf("msie") != -1) && (myAgent.indexOf("opera") == -1));
+var is_nav = ((myAgent.indexOf('mozilla')!=-1) && (myAgent.indexOf('spoofer')==-1)
+&& (myAgent.indexOf('compatible') == -1) && (myAgent.indexOf('opera')==-1)
+&& (myAgent.indexOf('webtv') ==-1) && (myAgent.indexOf('hotjava')==-1));
+
+var is_win = ((myAgent.indexOf("win")!=-1) || (myAgent.indexOf("16bit")!=-1));
+var is_mac = (myAgent.indexOf("mac")!=-1);
+var bbtags = new Array();
+function cstat() {
+	var c = stacksize(bbtags);
+	if ( (c < 1) || (c == null) ) {c = 0;}
+	if ( ! bbtags[0] ) {c = 0;}
+	document.upload.tagcount.value = "Close last, Open "+c;
+}
+function stacksize(thearray) {
+	for (i = 0; i < thearray.length; i++ ) {
+		if ( (thearray[i] == "") || (thearray[i] == null) || (thearray == 'undefined') ) {return i;}
+	}
+	return thearray.length;
+}
+function pushstack(thearray, newval) {
+	arraysize = stacksize(thearray);
+	thearray[arraysize] = newval;
+}
+function popstackd(thearray) {
+	arraysize = stacksize(thearray);
+	theval = thearray[arraysize - 1];
+	return theval;
+}
+function popstack(thearray) {
+	arraysize = stacksize(thearray);
+	theval = thearray[arraysize - 1];
+	delete thearray[arraysize - 1];
+	return theval;
+}
+function closeall() {
+	if (bbtags[0]) {
+		while (bbtags[0]) {
+			tagRemove = popstack(bbtags)
+			if ( (tagRemove != 'color') ) {
+				doInsert("[/"+tagRemove+"]", "", false);
+				eval("document.upload." + tagRemove + ".value = ' " + tagRemove.toUpperCase() + " '");
+				eval(tagRemove + "_open = 0");
+			} else {
+				doInsert("[/"+tagRemove+"]", "", false);
+			}
+			cstat();
+			return;
+		}
+	}
+	document.upload.tagcount.value = "Close last, Open 0";
+	bbtags = new Array();
+	document.upload.descr.focus();
+}
+function add_code(NewCode) {
+	document.upload.descr.value += NewCode;
+	document.upload.descr.focus();
+}
+function alterfont(theval, thetag) {
+	if (theval == 0) return;
+	if(doInsert("[" + thetag + "=" + theval + "]", "[/" + thetag + "]", true)) pushstack(bbtags, thetag);
+	document.upload.color.selectedIndex = 0;
+	cstat();
+}
+
+function tag_url(PromptURL, PromptTitle, PromptError) {
+	var FoundErrors = '';
+	var enterURL = prompt(PromptURL, "http://");
+	var enterTITLE = prompt(PromptTitle, "");
+	if (!enterURL || enterURL=="") {FoundErrors += " " + PromptURL + ",";}
+	if (!enterTITLE) {FoundErrors += " " + PromptTitle;}
+	if (FoundErrors) {alert(PromptError+FoundErrors);return;}
+	doInsert("[url="+enterURL+"]"+enterTITLE+"[/url]", "", false);
+}
+
+function tag_list(PromptEnterItem, PromptError) {
+	var FoundErrors = '';
+	var enterTITLE = prompt(PromptEnterItem, "");
+	if (!enterTITLE) {FoundErrors += " " + PromptEnterItem;}
+	if (FoundErrors) {alert(PromptError+FoundErrors);return;}
+	doInsert("[*]"+enterTITLE+"", "", false);
+}
+
+function tag_image(PromptImageURL, PromptError) {
+	var FoundErrors = '';
+	var enterURL = prompt(PromptImageURL, "http://");
+	if (!enterURL || enterURL=="http://") {
+		alert(PromptError+PromptImageURL);
+		return;
+	}
+	doInsert("[img]"+enterURL+"[/img]", "", false);
+}
+
+function tag_extimage(content) {
+	doInsert(content, "", false);
+}
+
+function tag_email(PromptEmail, PromptError) {
+	var emailAddress = prompt(PromptEmail, "");
+	if (!emailAddress) {
+		alert(PromptError+PromptEmail);
+		return;
+	}
+	doInsert("[email]"+emailAddress+"[/email]", "", false);
+}
+
+function doInsert(ibTag, ibClsTag, isSingle)
+{
+	var isClose = false;
+	var obj_ta = document.upload.descr;
+	if ( (myVersion >= 4) && is_ie && is_win)
+	{
+		if(obj_ta.isTextEdit)
+		{
+			obj_ta.focus();
+			var sel = document.selection;
+			var rng = sel.createRange();
+			rng.colapse;
+			if((sel.type == "Text" || sel.type == "None") && rng != null)
+			{
+				if(ibClsTag != "" && rng.text.length > 0)
+				ibTag += rng.text + ibClsTag;
+				else if(isSingle) isClose = true;
+				rng.text = ibTag;
+			}
+		}
+		else
+		{
+			if(isSingle) isClose = true;
+			obj_ta.value += ibTag;
+		}
+	}
+	else if (obj_ta.selectionStart || obj_ta.selectionStart == '0')
+	{
+		var startPos = obj_ta.selectionStart;
+		var endPos = obj_ta.selectionEnd;
+		obj_ta.value = obj_ta.value.substring(0, startPos) + ibTag + obj_ta.value.substring(endPos, obj_ta.value.length);
+		obj_ta.selectionEnd = startPos + ibTag.length;
+		if(isSingle) isClose = true;
+	}
+	else
+	{
+		if(isSingle) isClose = true;
+		obj_ta.value += ibTag;
+	}
+	obj_ta.focus();
+	// obj_ta.value = obj_ta.value.replace(/ /, " ");
+	return isClose;
+}
+
+function clearContent()
+{
+    document.upload.descr.value = '';
+}
+
+function winop()
+{
+	windop = window.open("moresmilies.php?form=upload&text=descr","mywin","height=500,width=500,resizable=no,scrollbars=yes");
+}
+
+function simpletag(thetag)
+{
+	var tagOpen = eval(thetag + "_open");
+	if (tagOpen == 0) {
+		if(doInsert("[" + thetag + "]", "[/" + thetag + "]", true))
+		{
+			eval(thetag + "_open = 1");
+			eval("document.upload." + thetag + ".value += '*'");
+			pushstack(bbtags, thetag);
+			cstat();
+		}
+	}
+	else {
+		lastindex = 0;
+		for (i = 0; i < bbtags.length; i++ ) {
+			if ( bbtags[i] == thetag ) {
+				lastindex = i;
+			}
+		}
+
+		while (bbtags[lastindex]) {
+			tagRemove = popstack(bbtags);
+			doInsert("[/" + tagRemove + "]", "", false)
+			if ((tagRemove != 'COLOR') ){
+				eval("document.upload." + tagRemove + ".value = '" + tagRemove.toUpperCase() + "'");
+				eval(tagRemove + "_open = 0");
+			}
+		}
+		cstat();
+	}
+}
+
+function textBBCodePreview() {
+    let poststr = encodeURIComponent( document.getElementById(textareaId).value );
+    let result=ajax.posts('preview.php','body='+poststr);
+    jQuery('#' + editTbodyId).hide()
+    jQuery('#' + previewTbodyId).html(result).show()
+    jQuery('#' + btnPreviewId).hide()
+    jQuery('#' + btnEditId).show()
+}
+function textBBCodeEdit() {
+    jQuery('#' + editTbodyId).show()
+    jQuery('#' + previewTbodyId).hide()
+    jQuery('#' + btnPreviewId).show()
+    jQuery('#' + btnEditId).hide()
+}
+//]]>
+</script>
+<table width="100%" cellspacing="0" cellpadding="5" border="0">
+    <tbody id="upload-descr-edit">
+<tr><td align="left" colspan="2">
+<table cellspacing="1" cellpadding="2" border="0">
+<tr>
+<td class="embedded"><input style="font-weight: bold;font-size:11px; margin-right:3px" type="button" name="b" value="B" onclick="javascript: simpletag('b')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-style: italic;font-size:11px;margin-right:3px" type="button" name="i" value="I" onclick="javascript: simpletag('i')" /></td>
+<td class="embedded"><input class="codebuttons" style="text-decoration: underline;font-size:11px;margin-right:3px" type="button" name="u" value="U" onclick="javascript: simpletag('u')" /></td>
+<td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name='url' value='URL' onclick="javascript:tag_url('你必须输入一个URL','你必须输入一个标题','错误!')" /></td><td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="IMG" value="IMG" onclick="javascript: tag_image('你必须输入一个完整的图像URL','错误!')" /></td><td class="embedded"><input type="button" style="font-size:11px;margin-right:3px" name="list" value="List" onclick="tag_list('输入一个列表的项目. 在列表的末尾, 按取消或将下一个留空','错误!')" /></td><td class="embedded"><input class="codebuttons" style="font-size:11px;margin-right:3px" type="button" name="quote" value="QUOTE" onclick="javascript: simpletag('quote')" /></td>
+<td class="embedded"><input style="font-size:11px;margin-right:3px" type="button" onclick='javascript:closeall();' name='tagcount' value="Close all tags" /></td>
+<td class="embedded"><select class="med codebuttons" style="margin-right:3px" name='color' onchange="alterfont(this.options[this.selectedIndex].value, 'color')">
+<option value='0'>--- 颜色 ---</option>
+<option style="background-color: black" value="Black">Black</option>
+<option style="background-color: sienna" value="Sienna">Sienna</option>
+<option style="background-color: darkolivegreen" value="DarkOliveGreen">Dark Olive Green</option>
+<option style="background-color: darkgreen" value="DarkGreen">Dark Green</option>
+<option style="background-color: darkslateblue" value="DarkSlateBlue">Dark Slate Blue</option>
+<option style="background-color: navy" value="Navy">Navy</option>
+<option style="background-color: indigo" value="Indigo">Indigo</option>
+<option style="background-color: darkslategray" value="DarkSlateGray">Dark Slate Gray</option>
+<option style="background-color: darkred" value="DarkRed">Dark Red</option>
+<option style="background-color: darkorange" value="DarkOrange">Dark Orange</option>
+<option style="background-color: olive" value="Olive">Olive</option>
+<option style="background-color: green" value="Green">Green</option>
+<option style="background-color: teal" value="Teal">Teal</option>
+<option style="background-color: blue" value="Blue">Blue</option>
+<option style="background-color: slategray" value="SlateGray">Slate Gray</option>
+<option style="background-color: dimgray" value="DimGray">Dim Gray</option>
+<option style="background-color: red" value="Red">Red</option>
+<option style="background-color: sandybrown" value="SandyBrown">Sandy Brown</option>
+<option style="background-color: yellowgreen" value="YellowGreen">Yellow Green</option>
+<option style="background-color: seagreen" value="SeaGreen">Sea Green</option>
+<option style="background-color: mediumturquoise" value="MediumTurquoise">Medium Turquoise</option>
+<option style="background-color: royalblue" value="RoyalBlue">Royal Blue</option>
+<option style="background-color: purple" value="Purple">Purple</option>
+<option style="background-color: gray" value="Gray">Gray</option>
+<option style="background-color: magenta" value="Magenta">Magenta</option>
+<option style="background-color: orange" value="Orange">Orange</option>
+<option style="background-color: yellow" value="Yellow">Yellow</option>
+<option style="background-color: lime" value="Lime">Lime</option>
+<option style="background-color: cyan" value="Cyan">Cyan</option>
+<option style="background-color: deepskyblue" value="DeepSkyBlue">Deep Sky Blue</option>
+<option style="background-color: darkorchid" value="DarkOrchid">Dark Orchid</option>
+<option style="background-color: silver" value="Silver">Silver</option>
+<option style="background-color: pink" value="Pink">Pink</option>
+<option style="background-color: wheat" value="Wheat">Wheat</option>
+<option style="background-color: lemonchiffon" value="LemonChiffon">Lemon Chiffon</option>
+<option style="background-color: palegreen" value="PaleGreen">Pale Green</option>
+<option style="background-color: paleturquoise" value="PaleTurquoise">Pale Turquoise</option>
+<option style="background-color: lightblue" value="LightBlue">Light Blue</option>
+<option style="background-color: plum" value="Plum">Plum</option>
+<option style="background-color: white" value="White">White</option>
+</select></td>
+<td class="embedded">
+<select class="med codebuttons" name='font' onchange="alterfont(this.options[this.selectedIndex].value, 'font')">
+<option value="0">--- 字体 ---</option>
+<option value="Arial">Arial</option>
+<option value="Arial Black">Arial Black</option>
+<option value="Arial Narrow">Arial Narrow</option>
+<option value="Book Antiqua">Book Antiqua</option>
+<option value="Century Gothic">Century Gothic</option>
+<option value="Comic Sans MS">Comic Sans MS</option>
+<option value="Courier New">Courier New</option>
+<option value="Fixedsys">Fixedsys</option>
+<option value="Garamond">Garamond</option>
+<option value="Georgia">Georgia</option>
+<option value="Impact">Impact</option>
+<option value="Lucida Console">Lucida Console</option>
+<option value="Lucida Sans Unicode">Lucida Sans Unicode</option>
+<option value="Microsoft Sans Serif">Microsoft Sans Serif</option>
+<option value="Palatino Linotype">Palatino Linotype</option>
+<option value="System">System</option>
+<option value="Tahoma">Tahoma</option>
+<option value="Times New Roman">Times New Roman</option>
+<option value="Trebuchet MS">Trebuchet MS</option>
+<option value="Verdana">Verdana</option>
+</select>
+</td>
+<td class="embedded">
+<select class="med codebuttons" name='size' onchange="alterfont(this.options[this.selectedIndex].value, 'size')">
+<option value="0">--- 字号 ---</option>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="7">7</option>
+</select></td></tr>
+</table>
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="middle">
+<iframe src="https://www.tangpt.top/attachment.php" width="100%" height="24" frameborder="0" scrolling="no" marginheight="0" marginwidth="0"></iframe>
+</td>
+</tr>
+<tr><td align="left"><textarea class="bbcode" cols="100" style="width: 100%;" name="descr" id="descr" rows="20" onkeydown="ctrlenter(event,'compose','qr')"></textarea></td>
+<td align="center" width="">
+<table cellspacing="1" cellpadding="3">
+<tr>
+<td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em1]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/1.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/1.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em2]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/2.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/2.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em3]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/3.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/3.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em5]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/5.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/5.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em6]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/6.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/6.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em7]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/7.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/7.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em8]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/8.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/8.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em9]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/9.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/9.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em10]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/10.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/10.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em11]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/11.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/11.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em13]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/13.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/13.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em16]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/16.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/16.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em17]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/17.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/17.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em19]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/19.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/19.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em20]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/20.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/20.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em21]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/21.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/21.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em24]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/24.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/24.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em25]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/25.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/25.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em26]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/26.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/26.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em27]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/27.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/27.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em28]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/28.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/28.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em29]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/29.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/29.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em30]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/30.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/30.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em31]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/31.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/31.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em32]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/32.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/32.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em33]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/33.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/33.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em34]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/34.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/34.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em35]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/35.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/35.gif" alt="" /></a></td></tr><tr><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em36]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/36.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/36.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em39]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/39.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/39.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em40]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/40.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/40.gif" alt="" /></a></td><td class="embedded" style="padding: 3px;"><a href="javascript: SmileIT('[em41]','upload','descr')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\&#039;pic/smilies/41.gif\&#039; alt=\&#039;\&#039; /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="pic/smilies/41.gif" alt="" /></a></td></tr></table>
+<br />
+<a href="javascript:winop();">更多表情</a>
+</td></tr></tobdy>
+        <tbody id="upload-descr-preview"></tbody>
+    <tbody>
+        <tr><td colspan="2" style="text-align: center;border: none">
+            <input id="upload-descr-btn-preview" type="button" class="btn" value="预览" onclick="javascript:textBBCodePreview()">
+            <input id="upload-descr-btn-edit" type="button" class="btn" style="display: none" value="编辑" onclick="javascript:textBBCodeEdit()">
+        </td></tr>
+    </tbody>
+    </table>
+</td></tr>
+<tr><td class="rowhead nowrap" valign="top" align="right">MediaInfo/BDInfo</td><td class="rowfollow" valign="top" align="left"><textarea name="technical_info" rows="8" style="width: 99%;"></textarea><br/><b>&middot;</b> MediaInfo 来自软件 <b><a href="https://mediaarea.net/en/MediaInfo" target='_blank'>MediaInfo</a></b>，用该软件打开文件，语言选择英语，点击菜单视图(View)->文件(Text)，在框中右键->全选，再右键->复制，粘贴到这里来。
+	<br>
+	<b>&middot;</b> BDInfo 来自软件 <b><a href="https://github.com/UniqProject/BDInfo" target='_blank'>BDInfo</a></b>，用该软件打开文件，点击扫描比特率(Scan Bitrates) 查看报告(View Report...)，在框中右键->全选，再右键->复制，粘贴到这里来。
+	</td></tr><tr><td class="rowhead nowrap" valign="top" align="right">类型<font color="red">*</font></td><td class="rowfollow" valign="top" align="left"><select name="type" id="browsecat" data-mode='4' >
+<option value="0">请选择</option>
+<option value="401">电影</option>
+<option value="402">电视剧</option>
+<option value="403">综艺</option>
+<option value="404">纪录片</option>
+<option value="405">动漫</option>
+<option value="406">MV</option>
+<option value="407">体育</option>
+<option value="414">其他</option>
+<option value="409">音乐</option>
+</select>
+</td></tr><tr relation="mode_4" class="mode_4"><td class="rowhead nowrap" valign="top" align="right">质量</td><td class="rowfollow" valign="top" align="left"><b>媒介: </b><select name="medium_sel[4]" data-mode="medium_4"><option value="0">请选择一项</option><option value="9">Other</option><option value="8">CD</option><option value="6">DVDR</option><option value="5">HDTV</option><option value="4">MiniBD</option><option value="7">Encode</option><option value="3">Remux</option><option value="2">HD DVD</option><option value="1">Blu-ray</option><option value="10">UHD Blu-ray</option><option value="11">WEB-DL</option></select>&nbsp;&nbsp;<b>编码: </b><select name="codec_sel[4]" data-mode="codec_4"><option value="0">请选择一项</option><option value="1">H.264/AVC</option><option value="6">H.265/HEVC</option><option value="7">AV1</option><option value="10">VP8/9</option><option value="2">VC-1</option><option value="3">Xvid</option><option value="4">MPEG-2</option><option value="5">Other</option></select>&nbsp;&nbsp;<b>分辨率: </b><select name="standard_sel[4]" data-mode="standard_4"><option value="0">请选择一项</option><option value="1">1080i/1080P</option><option value="4">2K/1440i/1440P</option><option value="5">4K/2160i/2160P</option><option value="6">8K/4320i/4320P</option><option value="7">Other</option><option value="2">720i/720P</option><option value="3">480i/480P</option></select>&nbsp;&nbsp;<b>音频: </b><select name="audiocodec_sel[4]" data-mode="audiocodec_4"><option value="0">请选择一项</option><option value="9">TrueHD Atmos</option><option value="16">DTS-HD MA</option><option value="15">DTS:X</option><option value="14">DTS</option><option value="12">TrueHD</option><option value="19">LPCM</option><option value="13">WAV</option><option value="1">FLAC</option><option value="11">DD/AC3</option><option value="10">DDP/E-AC3</option><option value="6">AAC</option><option value="5">OGG</option><option value="4">MP3</option><option value="17">M4A</option><option value="18">OPUS</option><option value="2">APE</option><option value="8">AV3V</option><option value="7">Other</option></select>&nbsp;&nbsp;<b>制作组: </b><select name="team_sel[4]" data-mode="team_4"><option value="0">请选择一项</option><option value="39">TPWEB</option><option value="43">LUCKMUSIC</option><option value="42">LUCKWEB</option><option value="41">LUCKDIY</option><option value="40">AilMWeb</option><option value="37">QHstudIo</option><option value="2">CHD</option><option value="1">HDS</option><option value="26">U2</option><option value="3">MySiLU</option><option value="4">WiKi</option><option value="5">Other</option><option value="6">StarfallWeb</option><option value="38">CSWEB</option><option value="7">AGSVWEB</option><option value="36">UBWEB</option><option value="35">ZmWeb</option><option value="34">HHWEB</option><option value="31">ADWeb</option><option value="8">FRDS</option><option value="24">OpenCD</option><option value="23">beAst</option><option value="21">HDArea</option><option value="19">FFansDIY</option><option value="17">CMCT</option><option value="16">OurTV</option><option value="15">BtsHD</option><option value="14">HDHome</option><option value="12">PTerWEB</option><option value="11">HDSWEB</option><option value="10">MWeb</option></select></td></tr><tr relation="mode_4" class="mode_4"><td class="rowhead nowrap" valign="top" align="right">标签</td><td class="rowfollow" valign="top" align="left"><label><input type="checkbox" name="tags[4][]" value="45" />首发</label><label><input type="checkbox" name="tags[4][]" value="35" />玄学</label><label><input type="checkbox" name="tags[4][]" value="28" />自制</label><label><input type="checkbox" name="tags[4][]" value="1" />演唱会</label><label><input type="checkbox" name="tags[4][]" value="40" />cosplay</label><label><input type="checkbox" name="tags[4][]" value="39" />禁转</label><label><input type="checkbox" name="tags[4][]" value="38" />写真</label><label><input type="checkbox" name="tags[4][]" value="41" />NSFW</label><label><input type="checkbox" name="tags[4][]" value="23" />讲座</label><label><input type="checkbox" name="tags[4][]" value="4" />DIY</label><label><input type="checkbox" name="tags[4][]" value="10" />粤语</label><label><input type="checkbox" name="tags[4][]" value="5" />国语</label><label><input type="checkbox" name="tags[4][]" value="6" />中字</label><label><input type="checkbox" name="tags[4][]" value="19" />完结</label><label><input type="checkbox" name="tags[4][]" value="7" />HDR</label><label><input type="checkbox" name="tags[4][]" value="42" />秀人网</label><label><input type="checkbox" name="tags[4][]" value="34" />娱乐</label><label><input type="checkbox" name="tags[4][]" value="32" />恐怖</label><label><input type="checkbox" name="tags[4][]" value="31" />书籍</label><label><input type="checkbox" name="tags[4][]" value="30" />游戏</label><label><input type="checkbox" name="tags[4][]" value="29" />软件</label><label><input type="checkbox" name="tags[4][]" value="27" />情色</label><label><input type="checkbox" name="tags[4][]" value="24" />短视频</label><label><input type="checkbox" name="tags[4][]" value="21" />分集</label><label><input type="checkbox" name="tags[4][]" value="20" />大包</label><label><input type="checkbox" name="tags[4][]" value="15" />动画</label><label><input type="checkbox" name="tags[4][]" value="9" />DV</label><label><input type="checkbox" name="tags[4][]" value="8" />特效</label></td></tr><tr><td class="rowhead nowrap" valign="top" align="right">匿名发布</td><td class="rowfollow" valign="top" align="left"><input type="checkbox" name="uplver" value="yes" />不要在发布者项目中显示我的用户名</td></tr>				<tr><td class="toolbox" align="center" colspan="2"><b>我已经阅读过规则</b> <input id="qr" type="submit" class="btn" value="发布" /></td></tr>
+		</table>
+	</form>
+</td></tr></table><div id="footer"><div style="margin-top: 10px; margin-bottom: 30px;" align="center"> (c)  <a href="https://www.tangpt.top" target="_self">不可躺</a> 2025-2026 Powered by <a href="aboutnexus.php">NexusPHP</a><br /><br />[page created in <b> 0.185 </b> sec with <b>43</b> db queries, <b>16</b> reads and <b>3</b> writes of Redis and <b>1.04 MB</b> ram]</div>
+<div style="display: none;" id="lightbox" class="lightbox"></div><div style="display: none;" id="curtain" class="curtain"></div></div><script>
+(function () {
+    var menu = document.getElementById('mainmenu');
+    if (!menu) {
+        return;
+    }
+
+    function ensureEntertainmentMenu() {
+        var submenu = document.getElementById('entertainment-menu');
+        if (submenu) {
+            return submenu;
+        }
+
+        var parent = menu.querySelector('[data-entertainment-nav]');
+        if (!parent) {
+            parent = document.createElement('li');
+            parent.className = 'nav-entertainment';
+            parent.setAttribute('data-entertainment-nav', '1');
+            parent.innerHTML = '<a href="/game/">娱乐</a>';
+
+            var rules = menu.querySelector('a[href="rules.php"]');
+            var rulesItem = rules ? rules.closest('li') : null;
+            if (rulesItem && rulesItem.parentNode === menu) {
+                menu.insertBefore(parent, rulesItem);
+            } else {
+                menu.appendChild(parent);
+            }
+        }
+
+        submenu = document.createElement('ul');
+        submenu.id = 'entertainment-menu';
+        submenu.className = 'nav-submenu';
+        parent.appendChild(submenu);
+        return submenu;
+    }
+
+    var submenu = ensureEntertainmentMenu();
+    if (!submenu || submenu.querySelector('[data-big-small-nav]')) {
+        return;
+    }
+
+    function sortEntertainmentItems() {
+        Array.prototype.slice.call(submenu.children)
+            .sort(function (left, right) {
+                return Number(left.getAttribute('data-entertainment-order') || 999)
+                    - Number(right.getAttribute('data-entertainment-order') || 999);
+            })
+            .forEach(function (child) {
+                submenu.appendChild(child);
+            });
+    }
+
+    var item = document.createElement('li');
+    item.setAttribute('data-big-small-nav', '1');
+    item.setAttribute('data-entertainment-order', '20');
+    item.innerHTML = '<a href="/plugins/big-small/index.php">猜大小</a>';
+    if (window.location.pathname.indexOf('/plugins/big-small/') === 0) {
+        menu.querySelectorAll('li.selected').forEach(function (selectedItem) {
+            selectedItem.classList.remove('selected');
+        });
+        var parentItem = submenu.closest('li');
+        if (parentItem) {
+            parentItem.classList.add('selected');
+        }
+        item.className = 'selected';
+    }
+    submenu.appendChild(item);
+    sortEntertainmentItems();
+})();
+</script><script>
+(function () {
+    function createNavItem(key, href, label) {
+        var li = document.createElement('li');
+        li.setAttribute('data-omnibot-' + key + '-nav', '');
+
+        var link = document.createElement('a');
+        link.href = href;
+        link.textContent = label;
+        li.appendChild(link);
+
+        return li;
+    }
+
+    function ensureMenu(attempt) {
+        attempt = attempt || 0;
+
+        var menu = document.getElementById('mainmenu');
+        if (!menu) {
+            if (attempt < 20) {
+                window.setTimeout(function () {
+                    ensureMenu(attempt + 1);
+                }, 250);
+            }
+            return;
+        }
+
+        var lotteryExists = menu.querySelector('[data-omnibot-lottery-nav]') !== null;
+        var slotExists = menu.querySelector('[data-omnibot-slot-nav]') !== null;
+        if (lotteryExists && slotExists) {
+            return;
+        }
+
+        var lottery = createNavItem('lottery', 'omnibot_lottery.php', '抽奖');
+        var slot = createNavItem('slot', 'omnibot_slot.php', '老虎机');
+        var currentPath = window.location.pathname || '';
+        if (currentPath.indexOf('omnibot_lottery.php') !== -1) {
+            lottery.classList.add('selected');
+        }
+        if (currentPath.indexOf('omnibot_slot.php') !== -1) {
+            slot.classList.add('selected');
+        }
+
+        var rulesLink = menu.querySelector('a[href="rules.php"]');
+        var rulesItem = rulesLink ? rulesLink.closest('li') : null;
+        if (rulesItem && rulesItem.parentNode === menu) {
+            if (!lotteryExists) {
+                menu.insertBefore(lottery, rulesItem);
+            }
+            if (!slotExists) {
+                menu.insertBefore(slot, rulesItem);
+            }
+        } else {
+            if (!lotteryExists) {
+                menu.appendChild(lottery);
+            }
+            if (!slotExists) {
+                menu.appendChild(slot);
+            }
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            ensureMenu(0);
+        }, { once: true });
+    } else {
+        ensureMenu(0);
+    }
+    setTimeout(function () {
+        ensureMenu(1);
+    }, 500);
+})();
+</script><script type="text/javascript" src="vendor/jquery-loading/jquery.loading.min.js"></script><script type="text/javascript" src="js/ptgen.js"></script><script type="text/javascript">jQuery("#compose").on("change", "select[name=type]", function () {
+    let _this = jQuery(this);
+    let mode = _this.attr("data-mode");
+    let value = _this.val();
+    console.log(mode)
+    jQuery("tr[relation]").hide();
+    if (value > 0) {
+        jQuery("tr[relation=mode_" + mode +"]").show();
+    }
+})
+jQuery("tr[relation]").hide();</script><script type="application/javascript" src="js/nexus.js"></script>
+<script type="application/javascript" src="vendor/jquery-goup-1.1.3/jquery.goup.min.js"></script>
+<script>
+jQuery(document).ready(function(){
+    jQuery.goup()
+});
+</script><img id="nexus-preview" style="display: none; position: absolute" src="" /></body></html>
