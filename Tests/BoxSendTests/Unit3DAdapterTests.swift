@@ -97,6 +97,25 @@ final class Unit3DAdapterTests: XCTestCase {
         XCTAssertTrue(String(data: sentBody, encoding: .utf8)!.contains("keyword"))
     }
 
+    /// 整名检索对长标题常一条也不返（实测亡国的阿基德第2章：站内明明有 2Audios 那条）：
+    /// 再补一条「去标点、取前几个词」的查询词，命中后仍按发布名复核
+    func testSearchFallsBackToWordQueryWhenFullNameMatchesNothing() throws {
+        let name = "Code Geass Boukoku no Akito 2 Hikitsuketa Zenbu 2012 1080p Blu-ray AVC DTS-HD MA 5.1-LuckAni"
+        let row = "Code Geass Boukoku no Akito 2 Hikitsuketa Zenbu 2012 1080p Blu-ray AVC DTS-HD MA 5 1 2Audios-LuckAni"
+        var bodies: [String] = []
+        let adapter = Unit3DAdapter(site: site(), client: client { req in
+            bodies.append(String(data: req.httpBody ?? Data(), encoding: .utf8) ?? "")
+            return bodies.count == 1
+                ? self.resp(#"{"code":"0","message":"SUCCESS","data":{"total":"0","data":[]}}"#)
+                : self.resp(#"{"code":"0","message":"SUCCESS","data":{"total":"1","data":[{"id":"1147279","name":"\#(row)","size":"1"}]}}"#)
+        })
+        let info = ReleaseInfo(siteID: "mteam", detailURL: "https://kp.m-team.cc/detail/1", name: name)
+        XCTAssertEqual(try adapter.searchExists(info), "https://kp.m-team.cc/detail/1147279")
+        XCTAssertEqual(bodies.count, 2, "整名查不到就该补一次宽松查询：\(bodies)")
+        XCTAssertTrue(bodies[0].contains(name), "第一次仍用整名：\(bodies[0])")
+        XCTAssertFalse(bodies[1].contains(name), "第二次换成词元查询：\(bodies[1])")
+    }
+
     /// 站方不认的 Key：抛 apiKeyInvalid（而不是「HTTP 200 成功」）
     func testInvalidKeyThrows() {
         let adapter = Unit3DAdapter(site: site(), client: client { _ in

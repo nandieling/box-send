@@ -87,38 +87,67 @@ public final class ReseedPipeline {
                                         detail: "此前已推送过"))
             return
         }
-        do {
-            guard let ts = config.site(siteID) else {
-                report.pushes.append((siteID, false, "未配置的站点 id"))
+        guard let ts = config.site(siteID) else {
+            report.pushes.append((siteID, false, "未配置的站点 id"))
+            return
+        }
+        // 刚发完就推送时，站方页面可能还没把下载入口放出来（实测 hdtime：发种成功 2 秒后去取，
+        // 详情页还没有 download.php，隔一会儿再取就有了）；站点自己的提示（审核中、
+        // 下载过于频繁）也是这类暂时情况。这类失败等一段再试，别整批报「推送失败」
+        let delays = seedPreexisting ? [] : pushRetryWaits
+        var attempt = 0
+        while true {
+            do {
+                let tAdapter = adapterFactory(ts, client, debugDir)
+                let tInfo = try tAdapter.fetchDetail(detailURL: detailURL)
+                let (tData, tName) = try tAdapter.downloadTorrentFile(tInfo)
+                let limit = config.effectiveUpLimit(siteID: siteID)
+                let result = try downloader.addTorrent(
+                    data: tData, filename: tName,
+                    savePath: config.reseedDownloader.savePath,
+                    category: config.reseedDownloader.category,
+                    skipChecking: config.reseedDownloader.skipChecking,
+                    upLimit: limit
+                )
+                state.markPushed(key: pushKey, id: result.id)
+                var msg = "upLimit=\(limit == 0 ? "unlimited" : "\(limit) B/s")"
+                if !result.note.isEmpty { msg += " [\(result.note)]" }
+                report.pushes.append((siteID, true, msg))
+                state.note("push[\(siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
+                // 下载器给的附加说明必须显示出来：种子 hash 与源站相同时 qB 只回"已存在"，
+                // 补没补上本站 tracker 全在这句话里，只写"已推送"会把没生效的推送看成成功
+                opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
+                                            detail: result.note.isEmpty ? tInfo.name
+                                                                        : "\(tInfo.name)\n\(result.note)"))
+                return
+            } catch {
+                let text = error.localizedDescription
+                if attempt < delays.count, Self.transientPushIssue(text) {
+                    state.note("push[\(siteID)] 站内还没就绪（\(text)），\(Int(delays[attempt])) 秒后重试")
+                    Thread.sleep(forTimeInterval: delays[attempt])
+                    attempt += 1
+                    continue
+                }
+                let shown = Self.transientPushIssue(text)
+                    ? "\(text)——站内可能仍在审核，稍后重跑本条即可补推送" : text
+                report.pushes.append((siteID, false, shown))
+                state.note("push[\(siteID)] FAIL \(detailURL): \(text)")
+                opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送失败", phase: .failed, detail: shown))
                 return
             }
-            let tAdapter = adapterFactory(ts, client, debugDir)
-            let tInfo = try tAdapter.fetchDetail(detailURL: detailURL)
-            let (tData, tName) = try tAdapter.downloadTorrentFile(tInfo)
-            let limit = config.effectiveUpLimit(siteID: siteID)
-            let result = try downloader.addTorrent(
-                data: tData, filename: tName,
-                savePath: config.reseedDownloader.savePath,
-                category: config.reseedDownloader.category,
-                skipChecking: config.reseedDownloader.skipChecking,
-                upLimit: limit
-            )
-            state.markPushed(key: pushKey, id: result.id)
-            var msg = "upLimit=\(limit == 0 ? "unlimited" : "\(limit) B/s")"
-            if !result.note.isEmpty { msg += " [\(result.note)]" }
-            report.pushes.append((siteID, true, msg))
-            state.note("push[\(siteID)] OK \(tInfo.name) upLimit=\(limit)\(result.note.isEmpty ? "" : " [\(result.note)]")")
-            // 下载器给的附加说明必须显示出来：种子 hash 与源站相同时 qB 只回"已存在"，
-            // 补没补上本站 tracker 全在这句话里，只写"已推送"会把没生效的推送看成成功
-            opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
-                                        detail: result.note.isEmpty ? tInfo.name
-                                                                    : "\(tInfo.name)\n\(result.note)"))
-        } catch {
-            report.pushes.append((siteID, false, error.localizedDescription))
-            state.note("push[\(siteID)] FAIL \(detailURL): \(error.localizedDescription)")
-            opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送失败", phase: .failed,
-                                        detail: error.localizedDescription))
         }
+    }
+
+    /// 重试间隔：只在「本次刚发种、站内暂时取不到 .torrent」时用（合计多等 75 秒封顶）
+    var pushRetryWaits: [TimeInterval] = [15, 60]
+
+    /// 值不值得再试一次：站方还没把下载入口放出来、种子还在审核、下载太频繁这类暂时情况
+    static func transientPushIssue(_ text: String) -> Bool {
+        if ["会话失效", "cookie", "无权", "不存在", "未通过", "驳回"].contains(where: { text.contains($0) }) {
+            return false
+        }
+        if text.contains("未找到 .torrent 下载链接") { return true }
+        return ["审核", "尚未", "频繁", "稍后", "请等待"].contains { text.contains($0) }
     }
 
     /// 「已存在」卡片要写清站内那条是哪一种子：站点提示里已带标题就不再重复一遍

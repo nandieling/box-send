@@ -194,20 +194,42 @@ class Unit3DAdapter: SiteAdapter {
     func searchExists(_ info: ReleaseInfo) throws -> String? {
         try guardKey()
         // 名称搜索（imdb/豆瓣在馒头不一定录入，名称更可靠）
-        let data = try apiJSON("/api/torrent/search",
-                               ["pageNumber": 1, "pageSize": 50, "keyword": info.name])
+        // 整名检索对长标题常一条也不返（实测馒头），再补「去标点、取前几个词」的查询词
+        var queries: [[String: Any]] = [["keyword": info.name]]
+        if let soft = NexusPHPAdapter.wordQuery(info.name), soft != info.name {
+            queries.append(["keyword": soft])
+        }
+        for q in queries {
+            var body = q
+            body["pageNumber"] = 1
+            body["pageSize"] = 50
+            guard let data = try? apiJSON("/api/torrent/search", body) else { continue }
+            dumpDebug(data, tag: "search")
+            if let hit = searchHit(data, releaseName: info.name) { return hit }
+        }
+        return nil
+    }
+
+    /// 检索响应里的行是否就是本次这条发布：命中即给出详情链接
+    private func searchHit(_ data: Any, releaseName: String) -> String? {
         guard let page = data as? [String: Any], let rows = page["data"] as? [[String: Any]] else { return nil }
-        let target = NexusPHPAdapter.normalizeSearchName(info.name)
-        guard target.count >= 8 else { return nil }
         for row in rows {
-            guard let n = row["name"] as? String else { continue }
-            let cand = NexusPHPAdapter.normalizeSearchName(n)
-            guard cand.count >= 8 else { continue }
-            if cand.contains(target) || target.contains(cand) {
-                return site.url + "detail/" + (Self.rowID(row) ?? "")
+            guard let n = row["name"] as? String, let id = Self.rowID(row), !id.isEmpty else { continue }
+            if NexusPHPAdapter.searchNamesMatch(n, releaseName, tokenTolerant: true) {
+                return site.url + "detail/" + id
             }
         }
         return nil
+    }
+
+    /// 接口响应存档（查重没命中时，只有这份能说明站方到底返回了什么）
+    private func dumpDebug(_ obj: Any, tag: String) {
+        guard let dir = debugDir,
+              let d = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]) else { return }
+        let root = (dir as NSString).appendingPathComponent("debug")
+        try? FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        let path = (root as NSString).appendingPathComponent("\(tag)-\(site.id)-\(Int(Date().timeIntervalSince1970)).json")
+        try? d.write(to: URL(fileURLWithPath: path))
     }
 
     // MARK: - 上传（转种）

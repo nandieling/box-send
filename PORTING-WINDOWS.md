@@ -468,6 +468,24 @@ Windows 侧：
 - 全站点回归：改动前后跑同一源站 76 站的字段审计，只有 `audiences.medium_sel` 从 1 变 14
 - 测试 519 个全绿（新增 3 个：下拉选项可读、内封中字蓝光选 DIY、无中字证据仍选原盘）
 
+## 这一轮（刚发完就推送：站内没就绪要重试，馒头整名查不到要补查询词）
+
+- 现象一（hdtime，LuckPT 46569）：发种成功，2 秒后推送报「未找到 .torrent 下载链接」，隔几十分钟
+  再推就正常；同日另一条（231430）也是当时失败、半小时后成功。站方是先把详情页建好、再把下载入口
+  放出来，所以这是暂时情况。`ReseedPipeline.pushTargetSite` 改成有限重试（`pushRetryWaits = [15, 60]`，
+  合计封顶 75 秒），只重试 `transientPushIssue` 认的那几类文案（缺下载入口、审核中、下载频繁），
+  会话失效/种子不存在不重试；放弃时把原因写成「站内可能仍在审核，稍后重跑本条即可补推送」，
+  并且不标记 `pushed`，下次重跑会自己补上。本次没新发种（站内已有）的推送不重试——那条种子早就就绪了。
+- hdtime 的「下载过于频繁，请等待 1 秒后再下载。」是整页没有标签的纯文本，`downloadNotice` 原来
+  `guard html.contains("<")` 会把它丢掉；现在按关键词取所在的一句，并把它拼进「未找到 .torrent 下载链接」
+  的报错里，用户一眼能看出是站内还没放行而不是我们解析坏了。
+- 现象二（馒头）：站内已有 2Audios 那条，但整名检索返 `total:0`，于是报「站内已有这条种子，但两次都没
+  定位到它的详情页」。`Unit3DAdapter.searchExists` 现在先整名、再补一条 `NexusPHPAdapter.wordQuery`
+  的去标点词元查询，命中后仍用 `searchNamesMatch(tokenTolerant:)` 按发布名复核。
+- 两端同源：重试、错误文案、检索都在核心里，WPF 侧不用改；`dotnet build` 只是回归确认（0 错误）。
+- 验证：`swift test` 525 绿（新增 `DeferredPushRetryTests` 6 条 + 馒头词元回退 1 条）；
+  实测 `box-send info --site hdtime --detail .../id=231456` 已能解析出 `download.php?id=231456`。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

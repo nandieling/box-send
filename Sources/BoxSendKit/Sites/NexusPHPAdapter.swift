@@ -318,7 +318,9 @@ class NexusPHPAdapter: SiteAdapter {
             throw BoxSendError.badInput("无法解析标题: \(detailURL)")
         }
         guard let finalTorrentURL = torrentURL else {
-            throw BoxSendError.badInput("未找到 .torrent 下载链接: \(detailURL)")
+            // 页面里把站方自己那句话带上：新种在审核、下载限频这类只能从这句话看出来
+            let hint = Self.downloadNotice(html)
+            throw BoxSendError.badInput("未找到 .torrent 下载链接\(hint.isEmpty ? "" : "（站点提示：\(hint)）"): \(detailURL)")
         }
         if torrentName.isEmpty { torrentName = finalName.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "release.torrent" }
 
@@ -496,11 +498,13 @@ class NexusPHPAdapter: SiteAdapter {
 
     /// 下载 .torrent 却拿回 HTML 提示页时，提取页面正文里最像原因的一句话（待审核/未通过/请登录…）
     static func downloadNotice(_ html: String) -> String {
-        guard html.contains("<") else { return "" }
+        // 站方也回纯文本提示（hdtime 的「下载过于频繁，请等待 1 秒后再下载。」整页没有标签），
+        // 不能因为不像 HTML 就把提示丢掉
         let text = HTMLUtil.stripTags(html)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
-        for kw in ["审核", "未通过", "驳回", "尚未", "已被屏蔽", "请登录", "无权", "不存在", "已到期", "失败"] {
+        for kw in ["审核", "未通过", "驳回", "尚未", "已被屏蔽", "请登录", "无权", "不存在", "已到期",
+                   "频繁", "稍后", "失败"] {
             guard let r = text.range(of: kw) else { continue }
             // 只取关键词所在的一句，别把整页正文倒进错误提示
             let anchor = text[..<r.lowerBound].lastIndex(where: { "。！？；;.\n".contains($0) })
