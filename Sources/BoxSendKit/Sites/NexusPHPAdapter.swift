@@ -924,12 +924,36 @@ class NexusPHPAdapter: SiteAdapter {
         -> (prefer: [String], avoid: [String], bonus: [String]) {
         let filmWords = ["电影", "影片", "剧场", "ova", "movie", "film"]
         let seriesWords = ["剧集", "电视剧", "连载", "分集", "series"]
+        // 站点把同一体裁再按分辨率/来源分档（HDArea：Movie UHD-4K、Movies 1080p、
+        // Movies WEB-DL…）：按发布实际的分辨率与介质加分，别的档减分。
+        // 不减不行——站方常把 4K 档排第一个，1080p 的发布会被它白捡走。
+        var shapePrefer: [String] = []
+        var shapeAvoid: [String] = []
+        let std = QualityTokens.standard(from: info.name) ?? ""
+        switch std {
+        case "2160p": shapePrefer += ["4k", "uhd", "2160"]
+        case "8k": shapePrefer += ["8k", "4k", "uhd"]
+        case "1080p", "1080i": shapePrefer += ["1080"]
+        case "720p": shapePrefer += ["720"]
+        case "sd": shapePrefer += ["sd", "dvd", "480", "576"]
+        default: break
+        }
+        if !["2160p", "8k"].contains(std) { shapeAvoid += ["4k", "uhd", "2160", "8k"] }
+        if !QualityTokens.normLabel(info.name).contains("3d") { shapeAvoid += ["3d"] }
+        switch QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo) ?? "" {
+        case "webdl", "webrip": shapePrefer += ["web", "流媒体"]
+        case "hdtv": shapePrefer += ["hdtv", "电视"]
+        case "remux": shapePrefer += ["remux"]
+        case "bluray", "uhdbd", "uhdbd8k": shapePrefer += ["bluray", "蓝光"]
+        case "dvd": shapePrefer += ["dvd"]
+        default: break
+        }
         guard QualityTokens.releaseShape(from: info.name) == "series" else {
-            return (filmWords, seriesWords, [])
+            return (filmWords + shapePrefer, seriesWords + shapeAvoid, [])
         }
         let completed = QualityTokens.isCompletedRelease(info)
-        return (seriesWords + ["合集"] + (completed ? ["完结", "完結"] : []),
-                filmWords + (completed ? ["连载"] : []),
+        return (seriesWords + ["合集"] + (completed ? ["完结", "完結"] : []) + shapePrefer,
+                filmWords + (completed ? ["连载"] : []) + shapeAvoid,
                 completed ? ["合集"] : ["分集"])
     }
 
@@ -939,9 +963,15 @@ class NexusPHPAdapter: SiteAdapter {
                                    prefer: [String] = [], avoid: [String] = [],
                                    bonus: [String] = []) -> String? {
         var best: (score: Int, value: String)?
+        // 选项文案与关键词都过一遍 QualityMatcher.normalize：站方写法太杂
+        // （"Blu-ray" / "BluRay" / "WEB-DL" / "UHD 4K"），只去空白的归一会漏掉带连字符的写法
+        let needle = QualityMatcher.normalize(keyword)
+        let preferWords = prefer.map { QualityMatcher.normalize($0) }.filter { !$0.isEmpty }
+        let avoidWords = avoid.map { QualityMatcher.normalize($0) }.filter { !$0.isEmpty }
+        let bonusWords = bonus.map { QualityMatcher.normalize($0) }.filter { !$0.isEmpty }
         for (i, o) in options.enumerated() {
-            let l = o.label.lowercased()
-            guard let r = l.range(of: keyword) else { continue }
+            let l = QualityMatcher.normalize(o.label)
+            guard let r = l.range(of: needle) else { continue }
             var score = 10 - min(i, 9)
             let pos = l.distance(from: l.startIndex, to: r.lowerBound)
             score += max(0, 8 - pos)
@@ -950,10 +980,13 @@ class NexusPHPAdapter: SiteAdapter {
                 score -= 12
             }
             score -= min(l.count / 4, 6)
-            if l == keyword.lowercased() { score += 6 }
-            if prefer.contains(where: { l.contains($0) }) { score += 6 }
-            if avoid.contains(where: { l.contains($0) }) { score -= 8 }
-            if bonus.contains(where: { l.contains($0) }) { score += 3 }
+            if l == needle { score += 6 }
+            // 命中越多加分越多：分类把体裁与分辨率/来源都写出来的那项才是正主
+            // （HDArea 的 "Movies 1080p" 要盖过排第一的 "Movies Blu-ray"）
+            let preferHits = preferWords.filter { l.contains($0) }.count
+            if preferHits > 0 { score += 6 + min(preferHits - 1, 3) * 4 }
+            if avoidWords.contains(where: { l.contains($0) }) { score -= 8 }
+            if bonusWords.contains(where: { l.contains($0) }) { score += 3 }
             if best == nil || score > best!.score { best = (score, o.value) }
         }
         return best?.value

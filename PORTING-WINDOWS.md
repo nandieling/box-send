@@ -389,8 +389,15 @@ Windows 侧：
   影剧对应 438 / 435 / 403 / 402，动画分 405 与 453）。
   碟片形态看发布名而不是 medium token —— x264 压制的蓝盘 token 是「压制」，
   站方自己仍把它放进 BluRay 档。字典缓存常驻进程（`Unit3DAdapter.resetOptionCache()` 可清）
-- 测试 494 个全绿（新增 9 个：站点分类行优先、分类值表兜底、体裁词表、外链判据、
-  Atmos 音频、馒头编码表两条、馒头分类分档）
+- 分类选项打分补「形态分」：站点把同一体裁再按分辨率/来源切档（HDArea 把电影分成
+  Movie UHD-4K / Movies Blu-ray / Movies REMUX / Movies 1080p / Movies WEB-DL…，
+  还把 4K 排第一个）时，1080p WEB-DL 曾被抢进 4K 档。`categoryShapeWords` 现在按发布的
+  实际分辨率与介质给 prefer 词（1080 / 720 / 4k / remux / bluray / web / dvd…），
+  不同档给 avoid 词（非 4K 发布减「4k / uhd / 2160 / 8k」，非 3D 发布减「3d」）；
+  `bestCategoryOption` 改成按命中的 prefer 词条数阶梯加分，选项文案与关键词、prefer、
+  avoid 一律过 `QualityMatcher.normalize`（站方 "Blu-ray" / "BluRay" / "WEB-DL" 写法不一）
+- 测试 495 个全绿（新增 10 个：站点分类行优先、分类值表兜底、体裁词表、外链判据、
+  Atmos 音频、馒头编码表两条、馒头分类分档、HDArea 分辨率分档）
 
 ## 踩过记在这儿
 

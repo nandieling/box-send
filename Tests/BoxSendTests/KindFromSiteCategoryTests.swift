@@ -61,6 +61,26 @@ final class KindFromSiteCategoryTests: XCTestCase {
         XCTAssertEqual(value(chd, "source_sel"), "7", "来源选转载，不是官方")
     }
 
+    // MARK: 同体裁按分辨率/来源分档的站（HDArea）
+
+    /// HDArea 把电影按分辨率/来源切成十档，站方又把 4K 排第一个：
+    /// 1080p WEB-DL 曾被选成 300=Movie UHD-4K
+    func testHDAreaCategoryFollowsResolutionAndSource() throws {
+        let page = try fixture("hdarea-upload.html")
+        func type(_ name: String) throws -> String? {
+            let info = ReleaseInfo(siteID: "luckpt", detailURL: "https://pt.luckpt.de/details.php?id=46561",
+                                   name: name, kind: .movie)
+            return value(adapter("hdarea").buildUploadFields(info, page: page), "type")
+        }
+        XCTAssertEqual(try type("NANA 2 2006 1080p AMZN WEB-DL DDP 2.0 H.264-LuckWeb"), "410",
+                       "410=Movies 1080p，不是 300=Movie UHD-4K")
+        XCTAssertEqual(try type("NANA 2 2006 2160p AMZN WEB-DL DDP5.1 H265-LuckWeb"), "300",
+                       "4K 发布才落 UHD-4K 档")
+        XCTAssertEqual(try type("NANA 2 2006 1080p BluRay Remux AVC LPCM-Luck"), "415", "Movies REMUX")
+        XCTAssertEqual(try type("NANA 2 2006 1080p BluRay AVC DTS-HD MA5.1-Luck"), "401", "Movies Blu-ray")
+        XCTAssertEqual(try type("NANA 2 2006 720p WEB-DL AAC H.264-Luck"), "411", "Movies 720p")
+    }
+
     // MARK: - ReleaseKind 判据
 
     func testFromCategoryTextOnlyKnowsContentCategories() {
