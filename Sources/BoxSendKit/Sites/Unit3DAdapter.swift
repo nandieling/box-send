@@ -143,7 +143,9 @@ class Unit3DAdapter: SiteAdapter {
         let douban = Self.idFromLink(t["douban"], "subject/(\\d+)")
             ?? HTMLUtil.group(descr, "douban\\.com/subject/(\\d+)")
         let catID = (t["category"] as? Int) ?? Int((t["category"] as? String) ?? "")
-        let kind = Self.categoryKind(catID) ?? ReleaseKind.infer(from: name)
+        // 站方分类优先；分类认不出时按名称 + 外链判体裁（别让电影落到「其他」）
+        let kind = Self.categoryKind(catID)
+            ?? ReleaseKind.infer(from: name, imdb: imdb, douban: douban)
         // 站方标签（labelsNew: ["中字"]）比正文猜词可靠；副标题优先站方 smallDescr
         let labels = ((t["labelsNew"] as? [String]) ?? []).filter { !$0.isEmpty }
         let subtitleText = !smallDescr.isEmpty ? smallDescr
@@ -253,6 +255,7 @@ class Unit3DAdapter: SiteAdapter {
         ]
         if !info.subtitle.isEmpty { fields.append(.init("smallDescr", String(info.subtitle.prefix(250)))) }
         if !info.mediainfo.isEmpty { fields.append(.init("mediainfo", info.mediainfo)) }
+        fields += qualityFields(info)
         if let imdb = info.imdb { fields.append(.init("imdb", Self.imdbLink(imdb))) }
         if let douban = info.douban { fields.append(.init("douban", Self.doubanLink(douban))) }
         let labels = Self.labels(for: info)
@@ -311,16 +314,140 @@ class Unit3DAdapter: SiteAdapter {
     /// 站方动画分类（发种页只有这两类要求 Bangumi 链接）
     static let animeCategories: Set<Int> = [405, 453]
 
-    /// 发种分类：动画按源介质分「动画」/「动画-BluRay」
+    /// 发种分类：电影/影剧/动画再按介质与分辨率分档
+    /// （419 电影/HD、421 电影/BluRay、439 电影/Remux、420 电影/DVDiSo、401 电影/SD；
+    ///  影剧对应 402/438/435/403；动画分 405 与 453 动画/BluRay）
     static func uploadCategory(for info: ReleaseInfo) -> Int {
-        let id = categoryID(for: info.kind)
-        if id == 405 {
-            let n = info.name.uppercased()
-            if ["BLURAY", "BLU-RAY", "BDMV", "REMUX", "BDRIP", "BRRIP"].contains(where: { n.contains($0) }) {
-                return 453
-            }
+        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo) ?? ""
+        let std = QualityTokens.standard(from: info.name) ?? ""
+        let n = info.name.uppercased()
+        // 碟片形态看发布名而不是 medium token：x264/x265 压制的蓝盘 token 是「压制」，
+        // 站方仍把它放进 BluRay 档（站方自己的 1080p BluRay AVC 影剧就在 438）
+        let isRemux = n.contains("REMUX")
+        let isDisc = isRemux || ["BLURAY", "BLU-RAY", "BDMV", "BDRIP", "BRRIP", "UHD", "BDISO"]
+            .contains { n.contains($0) }
+        switch info.kind ?? .other {
+        case .movie:
+            if isRemux { return 439 }
+            if isDisc { return 421 }
+            if medium == "dvd" { return n.contains("ISO") ? 420 : 401 }
+            if std == "sd" { return 401 }
+            return 419
+        case .series, .tvshow:
+            if isDisc { return 438 }
+            if medium == "dvd" { return n.contains("ISO") ? 435 : 403 }
+            if std == "sd" { return 403 }
+            return 402
+        case .anime:
+            return isDisc ? 453 : 405
+        default:
+            return categoryID(for: info.kind)
         }
-        return id
+    }
+
+    // MARK: - 质量型下拉（视频编码 / 音频编码 / 分辨率 / 媒介 / 来源）
+
+    /// 站方字典接口（属性 -> POST 路径）。id 由站方维护（AV1、VP8/9 都是 2024 年才加的），
+    /// 写死会随站点更新失效，所以每个属性拉一次并缓存，交给 QualityMatcher 动态匹配。
+    private static let listPaths: [String: String] = [
+        "medium": "/api/torrent/mediumList",
+        "standard": "/api/torrent/standardList",
+        "codec": "/api/torrent/videoCodecList",
+        "audiocodec": "/api/torrent/audioCodecList",
+        "source": "/api/torrent/sourceList",
+    ]
+
+    /// 字典接口拉不到时的兜底 id（2026-10 与站方字典核对）
+    static let fallbackOptionIDs: [String: [String: Int]] = [
+        "medium": ["bluray": 1, "uhdbd": 1, "uhdbd8k": 1, "remux": 3, "encode": 7, "minibd": 4,
+                   "hdtv": 5, "dvd": 6, "cd": 8, "webdl": 10, "webrip": 10, "track": 9,
+                   "uhd": 7, "uhd8k": 7],
+        "standard": ["1080p": 1, "1080i": 2, "720p": 3, "sd": 5, "2160p": 6, "8k": 7, "1440p": 1],
+        "codec": ["avc": 1, "hevc": 16, "vc1": 2, "mpeg2": 4, "xvid": 3, "av1": 19, "vp9": 21],
+        "audiocodec": ["flac": 1, "ape": 2, "dts": 3, "mp3": 4, "mp2": 4, "ogg": 5, "aac": 6,
+                       "other": 7, "ac3": 8, "truehd": 9, "truehd atmos": 10, "dtsma": 11,
+                       "eac3": 12, "eac3 atmos": 13, "pcm": 14, "lpcm": 14, "wav": 15,
+                       "dtsbr": 11, "dtsc": 3, "dtsx": 3, "m4a": 6, "opus": 5],
+    ]
+
+    /// 来源字典（Bluray=1 / DVD=3 / Remux=4 / HDTV-TV=5 / Other=6 / Web-DL=8 / CD=10）
+    static let fallbackSourceIDs: [String: Int] = [
+        "bluray": 1, "uhdbd": 1, "uhdbd8k": 1, "dvd": 3, "remux": 4, "hdtv": 5,
+        "other": 6, "webdl": 8, "webrip": 8, "cd": 10, "track": 10, "encode": 6,
+        "uhd": 6, "uhd8k": 6,
+    ]
+
+    private static var listsCache: [String: [(value: String, label: String)]] = [:]
+    private static let listsLock = NSLock()
+
+    /// 清空字典缓存（测试用；站方改了选项表时也可以靠重启进程生效）
+    static func resetOptionCache() {
+        listsLock.lock()
+        defer { listsLock.unlock() }
+        listsCache = [:]
+    }
+
+    /// 站方某属性的选项表；拉不到返回空表（调用方用兜底 id）
+    private func qualityOptions(_ attr: String) -> [(value: String, label: String)] {
+        Self.listsLock.lock()
+        defer { Self.listsLock.unlock() }
+        if let hit = Self.listsCache[attr] { return hit }
+        guard let path = Self.listPaths[attr],
+              let rows = (try? apiJSON(path, [:])) as? [[String: Any]] else { return [] }
+        let opts = rows.compactMap { row -> (value: String, label: String)? in
+            guard let id = Self.rowID(row) else { return nil }
+            let label = (row["name"] as? String) ?? (row["nameChs"] as? String)
+                ?? (row["nameEng"] as? String) ?? ""
+            return label.isEmpty ? nil : (id, label)
+        }
+        if !opts.isEmpty { Self.listsCache[attr] = opts }
+        return opts
+    }
+
+    /// 视频编码 / 音频编码 / 分辨率 / 媒介 / 来源：站方字典动态匹配，字典缺失时用兜底 id
+    private func qualityFields(_ info: ReleaseInfo) -> [HTTPClient.MultipartField] {
+        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo)
+        let std = QualityTokens.standard(from: info.name)
+        let ctx = QualityMatcher.Context(
+            isUHD: ["2160p", "8k"].contains(std ?? ""),
+            isDIY: QualityTokens.isDIYRelease(info),
+            isDisc: ["bluray", "uhdbd", "uhdbd8k", "remux", "dvd"].contains(medium ?? ""))
+        var out: [HTTPClient.MultipartField] = []
+        func pick(field: String, attr: String, token: String?) {
+            guard let token else { return }
+            guard let v = QualityMatcher.match(token: token, attr: attr,
+                                               options: qualityOptions(attr), ctx: ctx)
+                ?? Self.fallbackOptionIDs[attr]?[token].map(String.init) else { return }
+            out.append(.init(field, v))
+        }
+        pick(field: "medium", attr: "medium", token: medium)
+        pick(field: "standard", attr: "standard", token: std)
+        pick(field: "videoCodec", attr: "codec", token:
+            QualityTokens.codec(from: info.name, mediainfo: info.mediainfo))
+        pick(field: "audioCodec", attr: "audiocodec", token: QualityTokens.audio(from: info.name))
+        if let src = Self.sourceValue(forMedium: medium, options: qualityOptions("source")) {
+            out.append(.init("source", src))
+        }
+        return out
+    }
+
+    /// 来源按媒介取（站方来源表：Bluray / Remux / Web-DL / HDTV-TV / DVD / CD / Other）
+    static func sourceValue(forMedium medium: String?,
+                            options: [(value: String, label: String)]) -> String? {
+        let keys: [String: [String]] = [
+            "bluray": ["bluray"], "uhdbd": ["bluray"], "uhdbd8k": ["bluray"],
+            "remux": ["remux"], "webdl": ["webdl", "web"], "webrip": ["webdl", "web"],
+            "hdtv": ["hdtv"], "dvd": ["dvd"], "cd": ["cd"], "track": ["cd"],
+        ]
+        for kw in keys[medium ?? ""] ?? ["other"] {
+            if let hit = options.first(where: {
+                $0.value != "0" && QualityMatcher.normalize($0.label).contains(kw)
+            }) { return hit.value }
+        }
+        if let other = options.first(where: {
+            QualityMatcher.isOtherLabel(QualityMatcher.normalize($0.label))
+        }) { return other.value }
+        return Self.fallbackSourceIDs[medium ?? "other"].map(String.init) ?? "6"
     }
 
     /// 站方标签（标签为自由文本，只提交能确定的规范标签）

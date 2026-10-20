@@ -365,6 +365,33 @@ Windows 侧：
   与 mac 的 `AssistAutoRun` 同一个类型。`AssistStartAsync` 多一个可选 `forceKeys` 参数。
 - 测试 485 个全绿（新增 6 个：人工采纳 3 个 + 定时钟与配置默认值 3 个）。
 
+## 这一轮（体裁判定、静态值表兜底、馒头编码表）
+
+- 体裁（电影 / 剧集 / 动漫…）的取数顺序改为 **站点自己的分类行 > 豆瓣「◎类　　别」行 >
+  发布名惯例 > 外链判据（TMDB 的 /movie 与 /tv、IMDb、豆瓣）**。
+  LuckPT 这类 PTGen 主题把分类写在详情页「基本信息」一行里（`<b>类型:</b>&nbsp;电影`），
+  以前只读豆瓣那行影评分类（剧情 / 爱情），认不出就整批落「其他」——
+  天空的 Misc/其他、彩虹岛的 Demo、套的 Game Ebook 都是这么来的。
+  站点分类行只认内容体裁词（电影 / 剧集 / 动漫 / 综艺 / 纪录片 / 体育 / 音乐），
+  站点自己的「其他 / Misc」不算体裁证据；豆瓣那行仍留在 `ReleaseInfo.genre`
+  （题材标签从它取），站点分类行放进新增的 `ReleaseInfo.siteCategory`
+- 连载痕迹补 `EP03`、`第3期`、`全24话` 这类写法；带 IMDb 或豆瓣链接、又没有连载痕迹的
+  按电影处理。`ReleaseKind.infer` 多了 `siteCategory / imdb / douban / tmdb` 四个入参，
+  NexusPHP、Gazelle、Blu、海胆、馒头适配器都传链接（Windows 走同一个核心，无需改前端）
+- 静态质量值表没命中不再直接留空：`applyQualitySelects` 在值表缺 token 时改走动态选项匹配
+  （彩虹岛的音频值表没有 eac3 → 按回退链选 7=AC3，而不是停在「请选择」）
+- Atmos 音频（TrueHD Atmos / E-AC3 Atmos）以前因为 token 找不到回退链而整栏留空，
+  现在先找本站的 Atmos 选项、没有再退回同名编码；4K/8K 非碟片媒介也补了降档链
+- 馒头（Unit3D）发种补上 媒介 / 分辨率 / 视频编码 / 音频编码 / 来源：
+  走站方字典 `POST /api/torrent/{medium,standard,videoCodec,audioCodec,source}List`，
+  选项表交给 QualityMatcher 匹配，字典拉不到时用核对过的兜底 id；
+  分类按介质与分辨率分档（439 Remux / 421 BluRay / 420 DVDiSo / 401 SD / 419 HD，
+  影剧对应 438 / 435 / 403 / 402，动画分 405 与 453）。
+  碟片形态看发布名而不是 medium token —— x264 压制的蓝盘 token 是「压制」，
+  站方自己仍把它放进 BluRay 档。字典缓存常驻进程（`Unit3DAdapter.resetOptionCache()` 可清）
+- 测试 494 个全绿（新增 9 个：站点分类行优先、分类值表兜底、体裁词表、外链判据、
+  Atmos 音频、馒头编码表两条、馒头分类分档）
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

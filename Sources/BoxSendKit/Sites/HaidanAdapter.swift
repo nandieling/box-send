@@ -102,7 +102,7 @@ final class HaidanAdapter: NexusPHPAdapter {
             imdb: imdb,
             douban: douban,
             size: nil,
-            kind: ReleaseKind.infer(from: name, genre: genre),
+            kind: ReleaseKind.infer(from: name, genre: genre, imdb: imdb, douban: douban),
             torrentName: torrentName.hasSuffix(".torrent") ? torrentName : torrentName + ".torrent",
             torrentURL: torrentURL,
             isForbidReseed: isForbid,

@@ -195,12 +195,10 @@ class NexusPHPAdapter: SiteAdapter {
         if subtitle.isEmpty { subtitle = Self.lineValue(plain, prefix: "译", suffix: "名") ?? "" }
         var genre = Self.lineValue(plain, prefix: "类", suffix: "别")
             ?? Self.lineValue(plain, prefix: "类", suffix: "型") ?? ""
-        if genre.isEmpty,
-           let v = HTMLUtil.group(html, "<b[^>]*>\\s*类型\\s*[:：]\\s*</b>([^<]{1,40})", group: 1, options: [.caseInsensitive]) {
-            let t = HTMLUtil.stripTags(HTMLUtil.decodeEntities(v))
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty { genre = t }
-        }
+        // 站点自己的分类行（PTGen 主题写在「基本信息」行里：类型: 电影 媒介: WEB-DL …）。
+        // 豆瓣那行「◎类　　别　剧情 / 爱情」是影评分类，拿它判体裁会让电影落到「其他」，
+        // 所以站点行优先；豆瓣行照旧留着，题材标签（剧情/喜剧/爱情）要从它取。
+        let siteCategory = Self.siteCategoryRow(html) ?? ""
         let region = Self.regionValue(fromPlain: plain) ?? ""
         let sourceTags = Self.sourceTags(fromHTML: html)
 
@@ -333,7 +331,8 @@ class NexusPHPAdapter: SiteAdapter {
             douban: douban,
             tmdb: tmdb,
             size: size,
-            kind: ReleaseKind.infer(from: finalName, genre: genre),
+            kind: ReleaseKind.infer(from: finalName, genre: genre, siteCategory: siteCategory,
+                                    imdb: imdb, douban: douban, tmdb: tmdb),
             torrentName: torrentName.hasSuffix(".torrent") ? torrentName : torrentName + ".torrent",
             torrentURL: finalTorrentURL,
             isForbidReseed: isForbid,
@@ -342,12 +341,32 @@ class NexusPHPAdapter: SiteAdapter {
             mediainfo: mediainfo,
             region: region,
             sourceName: override?.sourceLabel ?? site.name,
-            sourceTags: sourceTags
+            sourceTags: sourceTags,
+            siteCategory: siteCategory
         )
     }
 
     /// 提取 "❁ 译　　名:　X" 风格的行值（prefix/suffix 之间容忍全角空格，如 ("译","名") / ("类","别")；
     /// 冒号可选——"◎类　　别　　X"（无冒号）与 "❁ 类　　别: X" 均支持，无冒号时值前需至少一个空格）
+    /// 站点自己的分类行文案（"类型: 电影"、"类　　型：紀錄"）。只在文案能认出体裁时返回：
+    /// 站点照抄豆瓣影评分类（剧情 / 爱情）时返回 nil，体裁交给豆瓣行与外链判据继续判。
+    static func siteCategoryRow(_ html: String) -> String? {
+        var candidates: [String] = []
+        if let v = detailRowValue(html, label: "类型") { candidates.append(v) }
+        // PTGen 主题把分类塞在「基本信息」一行里：<b>类型:</b>&nbsp;电影&nbsp;&nbsp;&nbsp;<b>媒介: </b>…
+        let patterns = [
+            "<b[^>]*>\\s*类[\\s　]*型[\\s　]*[:：]\\s*</b>\\s*([^<]{1,60})",
+            "<(?:span|strong)[^>]*>\\s*类[\\s　]*型\\s*[:：]\\s*</(?:span|strong)>\\s*([^<]{1,60})",
+        ]
+        for pat in patterns {
+            guard let v = HTMLUtil.group(html, pat, group: 1, options: [.caseInsensitive]) else { continue }
+            let t = HTMLUtil.stripTags(HTMLUtil.decodeEntities(v))
+                .trimmingCharacters(in: CharacterSet(charactersIn: " \u{3000}\u{00A0}：:、,."))
+            if !t.isEmpty { candidates.append(t) }
+        }
+        return candidates.first { ReleaseKind.fromCategoryText($0) != nil }
+    }
+
     static func lineValue(_ text: String, prefix: String, suffix: String) -> String? {
         let pfx = NSRegularExpression.escapedPattern(for: prefix)
         let sfx = NSRegularExpression.escapedPattern(for: suffix)
@@ -1041,20 +1060,25 @@ class NexusPHPAdapter: SiteAdapter {
         if let selects = override?.qualitySelects {
             for (field, attr) in selects {
                 guard let token = tokens[attr].flatMap({ $0 }) else { continue }
+                let opts = HTMLUtil.selectGroups(page, name: field).first?.options ?? []
                 var mapped: String?
                 if let v = override?.qualityValueMaps?[attr]?[token] { mapped = String(v) }
                 else if let v = override?.qualityStringMaps?[attr]?[token] { mapped = v }
+                // 本站值表里没这个 token（彩虹岛的音频表没有 eac3）：改用动态选项匹配，
+                // 按回退链选到次优项（E-AC3 → AC3），别让下拉停在「请选择」
+                if mapped == nil, !opts.isEmpty,
+                   let v = QualityMatcher.match(token: token, attr: attr, options: opts, ctx: ctx) {
+                    mapped = v
+                }
                 guard let mapped else { continue }
                 // 编码值表可能指向压制器（x264/x265）：站点另有格式选项时改用格式选项，
                 // 值表是历史快照时也不会再选错
                 if attr == "codec",
-                   let opts = HTMLUtil.selectGroups(page, name: field).first?.options,
                    let better = Self.codecFormatOption(opts, token: token, value: mapped) {
                     set(field, better)
                 // 值表写死了「Blu-ray」，而本站另有「Blu-ray/DIY」选项、这份发布又是 DIY：
                 // 用动态匹配换到 DIY 那项（天空的 medium 表只有 1=Blu-ray）
-                } else if attr == "medium", ctx.isDIY,
-                          let opts = HTMLUtil.selectGroups(page, name: field).first?.options,
+                } else if attr == "medium", ctx.isDIY, !opts.isEmpty,
                           let v = QualityMatcher.match(token: token, attr: "medium", options: opts, ctx: ctx),
                           opts.first(where: { $0.value == v }).map({ QualityMatcher.normalize($0.label) })?
                               .contains("diy") == true {

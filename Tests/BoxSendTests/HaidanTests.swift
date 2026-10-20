@@ -31,7 +31,8 @@ final class HaidanTests: XCTestCase {
         XCTAssertTrue(info.mediainfo.contains("Format"))
         XCTAssertTrue(info.descr.contains("◎简 介") || info.descr.contains("◎简　　介"))
         XCTAssertTrue(info.descr.contains("https://imgs.longpt.org/file/"))
-        XCTAssertEqual(info.kind, .other)  // 剧情/犯罪 -> 无对应 kind 时回退命名启发式（电影名无 SxxExx）
+        // 豆瓣那行「剧情 / 犯罪」不是体裁；带 IMDb + 豆瓣链接、又没连载痕迹 -> 电影
+        XCTAssertEqual(info.kind, .movie)
         XCTAssertFalse(info.isForbidReseed)
     }
 

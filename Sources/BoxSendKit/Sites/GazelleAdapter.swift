@@ -138,7 +138,7 @@ final class GazelleAdapter: SiteAdapter {
             imdb: imdb,
             douban: douban,
             size: size,
-            kind: ReleaseKind.infer(from: finalName, genre: ""),
+            kind: ReleaseKind.infer(from: finalName, genre: "", imdb: imdb, douban: douban),
             torrentName: torrentName.hasSuffix(".torrent") ? torrentName : torrentName + ".torrent",
             torrentURL: finalTorrentURL,
             isForbidReseed: isForbid,

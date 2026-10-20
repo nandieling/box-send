@@ -16,6 +16,9 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var isForbidReseed: Bool    // 命中源站禁转标记
     public var subtitle: String        // 副标题（源简介"译名"，如 毒食难肥）
     public var genre: String           // 源站类别（如 纪录片）
+    /// 源站自己的分类行文案（如「电影」「剧集」「紀錄」），与豆瓣的「◎类　　别」
+    /// （影评分类：剧情 / 爱情）是两回事：判体裁要用它，判题材标签才用豆瓣那行。
+    public var siteCategory: String
     public var mediainfo: String       // 源页 MediaInfo/BDInfo 原文
     public var region: String          // 源简介"产地"（个别目标站"制作组"下拉实为地区）
     public var sourceName: String      // 源站显示名（如 LuckPT；目标站"附加信息=转种来源"用）
@@ -77,7 +80,8 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
          kind: ReleaseKind? = nil, torrentName: String = "", torrentURL: String = "",
          isForbidReseed: Bool = false, subtitle: String = "", genre: String = "",
          mediainfo: String = "", region: String = "", sourceName: String = "",
-         bangumi: String = "", sourceTags: [String] = [], extraQuote: String = "") {
+         bangumi: String = "", sourceTags: [String] = [], extraQuote: String = "",
+         siteCategory: String = "") {
         self.siteID = siteID
         self.detailURL = detailURL
         self.name = name
@@ -92,6 +96,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         self.isForbidReseed = isForbidReseed
         self.subtitle = subtitle
         self.genre = genre
+        self.siteCategory = siteCategory
         self.mediainfo = mediainfo
         self.region = region
         self.sourceName = sourceName
@@ -103,7 +108,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     private enum CodingKeys: String, CodingKey {
         case siteID, detailURL, name, descr, imdb, douban, size, kind, extraQuote
         case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo, region
-        case sourceName, bangumi, sourceTags
+        case sourceName, bangumi, sourceTags, siteCategory
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -120,6 +125,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         isForbidReseed = try c.decodeIfPresent(Bool.self, forKey: .isForbidReseed) ?? false
         subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
         genre = try c.decodeIfPresent(String.self, forKey: .genre) ?? ""
+        siteCategory = try c.decodeIfPresent(String.self, forKey: .siteCategory) ?? ""
         mediainfo = try c.decodeIfPresent(String.self, forKey: .mediainfo) ?? ""
         region = try c.decodeIfPresent(String.self, forKey: .region) ?? ""
         sourceName = try c.decodeIfPresent(String.self, forKey: .sourceName) ?? ""
@@ -150,24 +156,51 @@ public enum ReleaseKind: String, Codable {
     private static let seriesRe = try! NSRegularExpression(pattern: "S\\d{1,2}[. ]E\\d{1,3}")
     private static let series2Re = try! NSRegularExpression(pattern: "S\\d{2}E\\d{2}")
 
-    /// 优先用源站"类别"行（如 纪录片），其次命名惯例启发式
-    public static func infer(from name: String, genre: String = "") -> ReleaseKind {
+    /// 站点分类文案 → 体裁。只认内容体裁词（电影 / 剧集 / 动漫…），
+    /// 豆瓣那种影评分类（剧情 / 爱情 / 喜剧）认不出，返回 nil 交给下一级判据。
+    /// 「其他 / Misc」也不认：那是站点的兜底分类，不能反过来证明这份发布是「其他」。
+    public static func fromCategoryText(_ text: String) -> ReleaseKind? {
+        let t = QualityTokens.normLabel(text)
+        guard !t.isEmpty else { return nil }
+        let table: [(ReleaseKind, [String])] = [
+            (.documentary, ["纪录片", "纪录", "纪实", "科教", "documentary", "discovery"]),
+            (.sports, ["体育", "赛事", "运动", "sport"]),
+            (.tvshow, ["综艺", "脱口秀", "真人秀", "访谈", "影剧", "variety", "tvshow", "tv show"]),
+            (.anime, ["动漫", "动画", "番剧", "卡通", "anime", "animation", "cartoon"]),
+            (.music, ["音乐", "无损音乐", "single", "music"]),
+            (.series, ["电视剧", "连续剧", "剧集", "网剧", "短剧", "日剧", "韩剧", "美剧",
+                       "tv series", "series", "drama series"]),
+            (.movie, ["电影", "影片", "院线", "movie", "film"]),
+        ]
+        for (kind, keys) in table where keys.contains(where: { t.contains(QualityTokens.normLabel($0)) }) {
+            return kind
+        }
+        return nil
+    }
+
+    /// 连载痕迹（没有 SxxExx 时的补充判据）：EP03 / 第 12 集 / 全 24 话 / 8x12 / [01-24]
+    private static let episodicRe = try! NSRegularExpression(
+        pattern: #"(?i)(?:\bep\d{1,3}\b|第\s*\d+\s*[集话話季期]|全\s*\d+\s*[集话話季期]|(?<!\d)\d{1,2}x\d{1,3}(?!\d)|\be\d{1,3}\b)"#)
+
+    /// 体裁判定：站点分类行 > 豆瓣类别行 > 命名惯例 > 外链判据。
+    /// 外链（TMDB/IMDb/豆瓣）能存在就说明这是部影视内容，不该落到「其他」：
+    /// TMDB 链接的 /movie/ 与 /tv/ 段直接给出电影还是剧集。
+    public static func infer(from name: String, genre: String = "", siteCategory: String = "",
+                             imdb: String? = nil, douban: String? = nil, tmdb: String? = nil) -> ReleaseKind {
         let range = NSRange(name.startIndex..., in: name)
         if seriesRe.firstMatch(in: name, range: range) != nil || series2Re.firstMatch(in: name, range: range) != nil {
             return .series
         }
-        if !genre.isEmpty {
-            let g = genre.lowercased()
-            if genre.contains("纪录片") || g.contains("documentary") { return .documentary }
-            if genre.contains("综艺") || g.contains("tv show") || g.contains("varied") { return .tvshow }
-            if genre.contains("体育") || g.contains("sports") { return .sports }
-            if genre.contains("动漫") || genre.contains("动画") || g.contains("anime") || g.contains("animation") { return .anime }
-            if genre.contains("音乐") || genre.contains("无损") || g.contains("music") { return .music }
-            if genre.contains("剧集") || g.contains("series") || g.contains("tv") { return .series }
-            if g.contains("movie") || genre.contains("电影") { return .movie }
-        }
+        if let k = fromCategoryText(siteCategory) ?? fromCategoryText(genre) { return k }
         if name.contains("OST") || name.contains("FLAC") || name.contains("APE") || name.contains("AMV") { return .music }
         if name.contains("Anime") || name.contains("动漫") { return .anime }
+        if episodicRe.firstMatch(in: name, range: range) != nil { return .series }
+        if let path = tmdb?.lowercased() {
+            if path.contains("/tv/") { return .series }
+            if path.contains("/movie/") { return .movie }
+        }
+        // 只剩 IMDb / 豆瓣链接：有外链在就是部影视内容，单片按电影处理
+        if imdb != nil || douban != nil { return .movie }
         return .other
     }
 }
