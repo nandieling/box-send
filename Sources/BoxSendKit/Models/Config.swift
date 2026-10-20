@@ -74,7 +74,7 @@ public struct SiteOverride: Codable {
     var titleMode: String?
     /// 解析详情标题后剥离的站名后缀（城市 "<title>" 带品牌后缀）
     var titleStrip: String?
-    /// 蓝光 Remux 发布的主标题写法改写（春天只认 "BluRay"，写 "Blu-ray" 会被拒）：
+    /// 本站追加的 Remux 主标题改写规则（"Blu-ray" -> "BluRay" 已全站点默认生效，见 ReleaseTitle）：
     /// 键 = 标题里的 token（不区分大小写，按 . _ - 空格 分词整词匹配），值 = 改写后的写法；
     /// 标题里没有独立的 Remux 段时不改
     var remuxTitleTokens: [String: String]?

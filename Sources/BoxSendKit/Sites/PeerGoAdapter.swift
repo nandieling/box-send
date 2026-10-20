@@ -184,7 +184,7 @@ final class PeerGoAdapter: SiteAdapter {
 
         var fields: [HTTPClient.MultipartField] = [
             .init("category_id", cid),
-            .init("title", info.name),
+            .init("title", ReleaseTitle.rewrite(info.name)),
             .init("subtitle", info.subtitle),
             .init("description", description(info)),
             .init("media_info", info.mediainfo),

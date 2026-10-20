@@ -503,7 +503,7 @@ final class YemaPTAdapter: SiteAdapter {
         func setFields(_ name: String, _ values: [String]) {
             for v in values where !v.isEmpty { fields.append(.init(name, v)) }
         }
-        setField("showName", info.name)
+        setField("showName", ReleaseTitle.rewrite(info.name))
         setField("shortDesc", info.subtitle.isEmpty ? Self.fallbackSubtitle(info) : info.subtitle)
         if let v = try categoryId(info) { setField("categoryId", String(v)) }
         if let v = try mediumValue(info) { setField("medium", v) }

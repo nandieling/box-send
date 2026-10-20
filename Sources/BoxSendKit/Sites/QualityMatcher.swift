@@ -39,7 +39,9 @@ enum QualityMatcher {
             "8k": Rule(match: ["8k", "4320"], exclude: ["3d"]),
             "2160p": Rule(match: ["2160", "4k"], exclude: ["3d"]),
             "1440p": Rule(match: ["1440", "2k"], exclude: ["3d"]),
-            "1080p": Rule(match: ["1080p", "1080"], exclude: ["3d"]),
+            // 只认带 p 的写法：裸 "1080" 交给回退链里的 1080i 规则兜，
+            // 否则冬樱的 "1080i" 会因为更靠前而盖过 "2K/1080p"
+            "1080p": Rule(match: ["1080p"], exclude: ["3d"]),
             "1080i": Rule(match: ["1080i", "1080"], exclude: ["3d"]),
             "720p": Rule(match: ["720"], exclude: ["3d"]),
             "sd": Rule(match: ["sd", "480", "576"], exclude: ["3d"]),
@@ -257,6 +259,15 @@ enum QualityMatcher {
         // 碟片发布的回退链里不许出现「压制/HDTV/流媒体」，宁可不填（聆音：只该选 Other）
         if ctx.isDisc { chain = chain.filter { !["encode", "webrip", "webdl", "hdtv"].contains($0) } }
         let dtsAvailable = opts.contains { $0.norm.contains("dts") }
+        // 「x264/x265」只是压制器名，站点「编码」字段要的是格式：同一张表里既有
+        // 压制器又有格式项时选格式项（冬樱的 x264 排在 H264/AVC 前面）
+        let codecFormatKeys: [String: [String]] = ["avc": ["h264", "avc"], "hevc": ["h265", "hevc"]]
+        let encoderName = attr == "codec" ? ["avc": "x264", "hevc": "x265"][token] : nil
+        let hasCodecFormatOption = encoderName.map { enc in
+            opts.contains { opt in
+                !opt.norm.contains(enc) && (codecFormatKeys[token] ?? []).contains { opt.norm.contains($0) }
+            }
+        } ?? false
         for t in chain {
             if t == "first" {
                 let usable = opts.filter { $0.value != "0" && !$0.norm.contains("请选") }
@@ -288,6 +299,11 @@ enum QualityMatcher {
                     score += ctx.isDIY ? 7 : -6
                 }
                 if ctx.kindKeywords.contains(where: { o.norm.contains($0) }) { score += 6 }
+                // 纯压制器名（"x264"）在格式项存在时让位；"AVC/H.264/x264" 这类合并写法不算
+                if let enc = encoderName, hasCodecFormatOption, o.norm.contains(enc),
+                   !(codecFormatKeys[token] ?? []).contains(where: { o.norm.contains($0) }) {
+                    score -= 9
+                }
                 if o.norm.contains("完结") || o.norm.contains("完結") { score += ctx.completed ? 3 : -2 }
                 if o.norm.contains("连载") && ctx.completed { score -= 3 }
                 if best == nil || score > best!.score { best = (score, o.order, o.value) }

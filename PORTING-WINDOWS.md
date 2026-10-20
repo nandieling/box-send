@@ -399,6 +399,23 @@ Windows 侧：
 - 测试 495 个全绿（新增 10 个：站点分类行优先、分类值表兜底、体裁词表、外链判据、
   Atmos 音频、馒头编码表两条、馒头分类分档、HDArea 分辨率分档）
 
+## 这一轮（Remux 片源写法全站点生效、编码与分辨率选项的取舍）
+
+- 主标题「Blu-ray + Remux 必须写 BluRay」从春天逐站配置升级为全站点默认规则
+  （青蛙同样拒收：「标题片源拼写错误：Remux 资源，片源必须拼写为 BluRay」）。
+  规则搬到新的 `Sites/ReleaseTitle.swift`（`defaultRemuxTokens`、`hasRemuxToken`、
+  `rewrite(_:extraTokens:)`、`rewrite(_:tokens:)`），NexusPHP / 馒头 / Discuz / PeerGo /
+  TNode / Blu / Gazelle（TTG 的 filename）/ YemaPT 的发种标题都过它一遍；
+  站点 `overrides.remuxTitleTokens` 变成「在默认表之上追加」，cmct 那份配置删掉了。
+  只在标题含独立 Remux 段时改，整词匹配，长 token 先替换（Windows 用同一核心，无需改前端）
+- 编码下拉：站表里同时有压制器名和格式名时选格式项（冬樱 8=x264 与 6=H264/AVC 并存，
+  原先按顺序选中 x264）。`QualityMatcher.match` 给纯压制器名（"x264" 且不含 h264/avc）
+  在格式项存在时减 9 分；「AVC/H.264/x264」这类合并写法本来就是格式项，不受影响
+- 分辨率下拉：`1080p` 规则只认带 p 的写法，裸 "1080" 交给回退链里的 1080i 规则兜，
+  否则冬樱的 "1080i" 会因为排在 "2K/1080p" 前面而抢走（站点只写裸数字时仍能兜住）
+- 测试 502 个全绿（新增 7 个：冬樱真实上传页四条下拉、编码格式项优先三例、
+  分辨率逐行/隔行三例、默认改写规则四条、无逐站配置的 NexusPHP 与馒头标题各一条）
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

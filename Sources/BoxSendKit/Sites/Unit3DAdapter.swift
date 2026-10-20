@@ -463,7 +463,8 @@ class Unit3DAdapter: SiteAdapter {
 
     /// 主标题：源站详情页主标题（点分文件名换成空格，站方不允许下划线）
     static func uploadTitle(_ info: ReleaseInfo) -> String {
-        info.name.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        ReleaseTitle.rewrite(info.name)
+            .replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func imdbLink(_ s: String) -> String {

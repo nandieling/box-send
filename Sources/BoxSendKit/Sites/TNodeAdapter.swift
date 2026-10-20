@@ -391,7 +391,7 @@ final class TNodeAdapter: SiteAdapter {
             fields.removeAll { $0.name == name }
             fields.append(.init(name, value))
         }
-        setField("title", info.name)
+        setField("title", ReleaseTitle.rewrite(info.name))
         setField("subtitle", info.subtitle.isEmpty ? Self.fallbackSubtitle(info) : info.subtitle)
         if let v = try categoryOptionID(info) { setField("category", String(v)) }
         if let v = try mediumOptionID(info) { setField("medium", String(v)) }

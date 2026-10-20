@@ -244,7 +244,7 @@ final class BluAdapter: SiteAdapter {
         }
 
         // 标题（Blu 直接用解析出的发布名）
-        setField("name", info.name)
+        setField("name", ReleaseTitle.rewrite(info.name))
         // 分类 / 媒介 / 分辨率（站点值表）
         if let v = resolveValue(info, "category") { setField("category_id", v) }
         if let v = resolveValue(info, "medium") { setField("type_id", v) }

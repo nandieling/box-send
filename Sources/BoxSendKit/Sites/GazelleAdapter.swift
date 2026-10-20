@@ -266,7 +266,7 @@ final class GazelleAdapter: SiteAdapter {
         }
 
         // 经典 Gazelle 字段：filename=标题, info=BBCode 简介, category=分类 ID
-        setField("filename", info.name)
+        setField("filename", ReleaseTitle.rewrite(info.name))
         setField("genre", "")
         if let imdb = info.imdb { setField("imdb", imdb) }
         if let category = resolveCategory(info) { setField("category", String(category)) }

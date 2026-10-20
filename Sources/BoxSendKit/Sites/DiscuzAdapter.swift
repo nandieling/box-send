@@ -256,8 +256,10 @@ final class DiscuzAdapter: SiteAdapter {
 
     private func uploadTitle(_ info: ReleaseInfo) -> String {
         let mode = override?.titleMode ?? ""
-        if mode == "torrentName" { return (info.torrentName as NSString).deletingPathExtension }
-        return info.name
+        if mode == "torrentName" {
+            return ReleaseTitle.rewrite((info.torrentName as NSString).deletingPathExtension)
+        }
+        return ReleaseTitle.rewrite(info.name)
     }
 
     private func description(_ info: ReleaseInfo) -> String {
