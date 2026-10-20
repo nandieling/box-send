@@ -1,0 +1,922 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<link rel="stylesheet" href="public/css/font-awesome-4.7.0/css/font-awesome.min.css">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <meta name="keywords"
+        content="haidan" />
+        <meta name="description"
+        content="haidan" />
+        <meta name="generator" content="NexusPHP" />
+    
+    <title>HAIDAN :: 详情  海胆之家 - Powered by NexusPHP    </title>
+    <link rel="shortcut icon" href="public/pic/favicon.ico" type="image/x-icon" />
+    <link rel="search" type="application/opensearchdescription+xml"
+        title="HAIDAN Torrents"
+        href="opensearch.php" />
+    <link rel="stylesheet"
+        href="public/css/mediumfont.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/sprites.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/theme/Default/theme.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Default/details.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/forum_pic/chs/forumsprites.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/theme/Classic/theme.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Classic/details.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/css/theme/Classic/DomTT.css?202107312100"
+        type="text/css" />
+    <link rel="stylesheet"
+        href="public/css/curtain_imageresizer.css?202107312100"
+        type="text/css" />
+        <link rel="stylesheet"
+        href="public/pic/category/chd/scenetorrents/catsprites.css?202107312100"
+        type="text/css" />
+        <link rel="alternate" type="application/rss+xml" title="Latest Torrents" href="torrentrss.php" />
+
+
+
+    <script src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    <!-- clipboard -->
+    <script src="https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js"></script>
+    <!-- Tippy -->
+    <script type="text/javascript" src="public/js/popper.min.js"></script>
+    <script type="text/javascript" src="public/js/tippy-bundle.umd.min.js"></script>
+        <script type="text/javascript"
+        src="public/js/page/details.js?202107312100"></script>
+        <script type="text/javascript"
+        src="public/js/curtain_imageresizer.js?202107312100"></script>
+    <script type="text/javascript"
+        src="public/js/ajaxbasic.js?202107312100"></script>
+    <script type="text/javascript" src="public/js/common.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/domLib.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/domTT.js?202107312100">
+    </script>
+    <script type="text/javascript" src="public/js/sortable.min.js?202107312100">
+    </script>
+    <script type="text/javascript"
+        src="public/js/domTT_drag.js?202107312100"></script>
+    <script type="text/javascript"
+        src="public/js/fadomatic.js?202107312100"></script>
+
+<body>
+    <div class="head" id="head">
+                    <div class="option">
+
+        </div>
+    <div class="top-panel special-border">
+                            <a class="logo_img" href="index.php"><img
+                        src="public/pic/logo.png"
+                        alt="HAIDAN"
+                        title="HAIDAN - 海胆PT,PT" />
+                </a>
+                <div class="userinfo medium border-box">
+    <div class="userinfo-half">
+        <div class="user_sub_item"
+            href="userdetails.php?id=22440">
+            <span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></div>
+        <a class="user_sub_item" href="logout.php"
+            title="退出">
+            <i class="fa fa-sign-out" aria-hidden="true"></i>&nbsp;退出        </a>
+        <a class="user_sub_item" href="usercp.php"
+            title="控制面板">
+            <i class="fa fa-cog" aria-hidden="true"></i>&nbsp;控制面板        </a>
+        <a class="user_sub_item"
+            href="invite.php?id=22440"
+            title="邀请 ">
+            <i class="fa fa-user-plus " aria-hidden="true"></i>&nbsp;邀请         </a>
+        <a class="user_sub_item" href="torrents.php?inclbookmarked=1&amp;allsec=1&amp;incldead=0"
+            title="收藏">
+            <i class="fa fa-star" aria-hidden="true"></i>&nbsp;收藏        </a>
+        <a class="user_sub_item" href="friends.php"
+            title="好友">
+            <i class="fa fa-users" aria-hidden="true"></i>&nbsp;好友        </a>
+        <a class="user_sub_item" href="getrss.php"
+            title="RSS订阅">
+            <i class="fa fa-rss" aria-hidden="true"></i>&nbsp;RSS订阅        </a>
+        <div class="user_sub_item">
+             <input type="submit" id="modalBtn" style="cursor: default;" disabled class="dt_button" value="已经打卡" />            <div id="signinFailModal" class="modal">
+                <div class="modal-content">
+                    <div>
+                        <div class="modal-header">
+                            <span class="closeBtn">&times;</span>
+                            <h2 style="text-align:center">
+                                每日打卡                            </h2>
+                        </div>
+                        <div class="modal-body">
+                            <p>小海胆开小差了，刷新后再来试试吧!                        </div>
+                        <div class="modal-footer">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div class="userinfo-half">
+        <div class="user_item">
+        <a href="classpoint.php">
+        <i class="fa fa-trophy" aria-hidden="true"></i>
+        <font class='color_bonus'>等级积分: </font>
+        </a>
+        <span> 8,712 </span>
+        </div>
+        <div class="user_item">
+            <font class='color_bonus'>魔力值:             </font>
+            <span id="magic_num">1,506,111.4(197.173/h)</span>
+            
+        </div>
+
+        <div class="user_item">
+            <font class="color_ratio">分享率:             </font> 44.007        </div>
+        <div class="user_item">
+            <font class='color_uploaded'>上传量:             </font> 31.656 TB        </div>
+        <div class="user_item">
+            <font class='color_downloaded'> 下载量:             </font> 736.60 GB        </div>
+        <div class="user_item">
+            <font class='color_active'>当前活动:             </font> <img class="arrowup" alt="Torrents seeding"
+                title="当前做种"
+                src="public/pic/trans.gif" />104 <img class="arrowdown"
+                alt="Torrents leeching"
+                title="当前下载"
+                src="public/pic/trans.gif" />
+            0
+        </div>
+        <div class="user_item">
+            <a href="messages.php">&nbsp;<i class="fa fa-envelope" style="color:" aria-hidden="true" alt="inbox" title="收件箱&nbsp;(无新短讯)" ></i></a> 0  <a href="messages.php?action=viewmailbox&amp;box=-1"><i class="fa fa-envelope-o" aria-hidden="true" alt="sentbox" title="发件箱"></i></a> 0
+        </div>
+        
+    </div>
+<script>
+                daily_attendance(
+                    '已经打卡'
+                );
+            </script>
+
+</div>    </div>
+
+</div>
+    <div class="mainroute">
+        <div class="navbar special-border"><ul class="menu navmenu"><li class="nav"><a data-hover="&nbsp;首&nbsp;&nbsp;页&nbsp;" href="index.php">&nbsp;首&nbsp;&nbsp;页&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;论&nbsp;&nbsp;坛&nbsp;" href="forums.php">&nbsp;论&nbsp;&nbsp;坛&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;主题推荐区&nbsp;" href="collections.php">&nbsp;主题推荐区&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;影视区&nbsp;" href="videos.php">&nbsp;影视区&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;种&nbsp;&nbsp;子&nbsp;" href="torrents.php">&nbsp;种&nbsp;&nbsp;子&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;魔力商店&nbsp;" href="mybonus.php">&nbsp;魔力商店&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;种子悬赏&nbsp;" href="torrentrequest.php">&nbsp;种子悬赏&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;H&R&nbsp;" href="uploadrequest.php">&nbsp;H&R&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;字&nbsp;&nbsp;幕&nbsp;" href="subtitles.php">&nbsp;字&nbsp;&nbsp;幕&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;排&nbsp;&nbsp;行&nbsp;" href="topten.php">&nbsp;排&nbsp;&nbsp;行&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;规&nbsp;&nbsp;则&nbsp;" href="rules.php">&nbsp;规&nbsp;&nbsp;则&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;常见问题&nbsp;" href="faq.php">&nbsp;常见问题&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;管理组&nbsp;" href="staff.php">&nbsp;管理组&nbsp;</a></li><li class="nav"><a data-hover="&nbsp;日&nbsp;志&nbsp;" href="log.php">&nbsp;日&nbsp;志&nbsp;</a></li></ul></div>        <div class="mainpanel special-border">
+        <a href="#footer" class="float-item right-float-item-1"><img src="public/pic/down-arrow.png "/></a>
+        <a href="#head" class="float-item right-float-item-2"><img src="public/pic/top-arrow.png "/></a>
+        <a href="upload.php" class="float-item left-float-item-2"><img width="100%" src="public/pic/upload.png "/></a>
+        <a href="imgdonate.php" class="float-item left-float-item-1"><img width="100%" src="public/pic/donate.png "/></a>
+                    <div align="center" style="margin-bottom: 10px" id="ad_belownav"><a href="adredir.php?id=2&amp;url=https%3A%2F%2Fitem.taobao.com%2Fitem.htm%3Fid%3D942731898846%26amp%3Bspm%3Da213gs.v2success.0.0.4a5848319xMx9r%26amp%3BskuId%3D6011200635934" target="_blank"><img border="0" src="https://s2.loli.net/2025/06/24/bnlTsquDWk6NECY.jpg" width="728" alt="ad" /></a></div><script type="text/javascript">
+					$(document).ready(function (){
+					var target= $('#torrent-28902').offset().top;
+					$('html,body').animate({scrollTop: target-50}, 500);
+					viewDetail(28902);
+				});</script>
+
+
+
+<div class="movie-content medium">
+		<div class="movie-info">
+
+
+		<div class="movie-body content-color">
+			<div class="poster">
+				<img class="poster-img"
+					src="./res/douban/images/4830890.jpg" />
+			</div>
+			<div class="detail-info">
+				<div class="detail-info-title">
+					<span id="master-title">亡国的阿基德第1章：翼龙降临</span>
+					<span id="sub-title">コードギアス 亡国のアキト 第1章 翼竜は舞い降りた</span>
+				</div>
+				<div class="detail-info-items">
+						<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>评分:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+				<div class="rating-item">
+		<a class="rating-item-inner"         href="https://www.imdb.com/title/tt3354244" target="_blank"><img src="public/pic/imdb.jpg" width="25" style="padding-bottom: 0px;"
+	/>
+		&nbsp;&nbsp;
+			<img src=public/pic/imdb_pic/70.gif height="25">&nbsp;
+		<span class="rating" title="IMDB评分">7.3</span> &nbsp;<span class="votes" title="IMDB评论数量">(90票)</span>
+		&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+		</a>
+				<a class="rating-item-inner"        href="https://movie.douban.com/subject/4830890" target="_blank"><img src="public/pic/douban.jpg" width="25"/>
+		&nbsp;&nbsp;
+        <img src=public/pic/imdb_pic/70.gif height="25">&nbsp;
+		<span class="rating" title="豆瓣评分">7.1</span>&nbsp;<span class="votes" title="豆瓣评论数量">(4700票)</span>
+		</a>
+			</div>
+		</div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>又名:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+			Code Geass 亡国的阿基德 第一章「翼龙降临」
+		</div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='mult-item'><div class='mult-item-desc mult-first-item-desc'> <span class='detail-info-item-name'>片长:</span></div> <div class='mult-item-content'> 50分钟 </div> <div class='mult-item-desc '> <span class='detail-info-item-name'>上映日期:</span></div> <div class='mult-item-content'> 2012-08-04 </div> </div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='mult-item'><div class='mult-item-desc mult-first-item-desc'> <span class='detail-info-item-name'>地区:</span></div> <div class='mult-item-content'>     <a href="videos.php?regionType=61">日本</a> </div> <div class='mult-item-desc '> <span class='detail-info-item-name'>语言:</span></div> <div class='mult-item-content'>     <a href="videos.php?langType=45">日语</a> </div> <div class='mult-item-desc '> <span class='detail-info-item-name'>年份:</span></div> <div class='mult-item-content'>     <a href="videos.php?yearType=37">2012</a> </div> </div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>类型:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+			    <a href="videos.php?styleType=45">战争</a>
+		</div>
+	</div>	<div class='detail-info-items-block'>
+		<div class='detail-info-items-block-desc'>
+			<span class='detail-info-item-name'>介绍:</span>
+		</div>
+		<div class='detail-info-items-block-content'>
+			E.U.联盟和布里塔利亚帝国旷日持久的战争在皇历2010年发生转机，帝国派出压倒性的兵力突袭远东日。在很短的时间内，日本这个国家不复存在，从此作为“11区”写入历史。旧日本人民流往世界各地，饱受歧视，心中满是愤懑和不甘。2017年，E.U.联军132部队向圣彼得堡挺进，但遭到帝国军队的围困，面临全军覆没的危险。联军少校蕾拉·玛露卡尔（坂本真绫 配音）将旧日本青年组成非正规军W Zero部队，并提出以这支部队营救132部队的建议。但是在最为凶险的前线，他们不过肩负着牺牲自己来营救友军的悲哀命运。惨烈的对决过
+		</div>
+	</div>				</div>
+			</div>
+		</div>
+	</div>
+		<div class="torrents content-color">
+				<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:25px;'> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;'>种子</div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>操作</div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-arrow-up fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-arrow-down fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'><i class="fa fa-check fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'><i class="fa fa-align-justify fa-lg" aria-hidden="true"></i></div> 
+				<div class="head-color" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>发布信息</div> 
+			</div>
+		</div>    <div class="torrent-wrap content-color">
+    	<a style='margin-left:10px; margin-top: 4px;' class='switch-button switch-btn-color' id='t-28902-switch-button' href='javascript: viewDetail(28902);'> <i id="img_minus_28902" class='fa fa-plus-square fa-lg'></i> </a>
+			<div class="torrent" id="torrent-28902">
+					<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=t-simple-info>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:20px;'> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;justify-content:flex-start'><div style='display:flex;flex-direction:row;align-items:center;'><div class="poster"></div>    <div class="torrent_name_wrap">
+    <div class="torrent_name_col torrent_cell">
+        <a href="javascript: viewDetail(28902)">    <b class="episode">[全集]</b>&nbsp Encode&nbsp;/&nbsp;H.265&nbsp;/&nbsp;1080p&nbsp;/&nbsp;FLAC&nbsp;/&nbsp;VCB-Studio&nbsp;</a>
+        <div></div>
+        <div class="sp">   <img class="pro_free" src="public/pic/trans.gif" alt="Free" title="免费" />&nbsp;     </div>
+        <div><label style='white-space: nowrap;background-color: #0000ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>中字</b></label><label style='white-space: nowrap;background-color: #004040; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>外语</b></label>&nbsp;</div>
+    </div>
+    </div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'><div style='display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%; padding: 0 4px;'><a class='action_item copy-download-link clipboard' title="复制种子下载链接" href="javascript:;" data-clipboard-text="https://www.haidan.cc/download.php?id=28902&passkey=00000000000000000000000000000000"><i class="fa fa-copy fa-lg" aria-hidden="true" alt="copy"></i></a><a class='action_item' title="下载种子" href="download.php?id=28902&passkey=00000000000000000000000000000000"><i class="fa fa-download fa-lg" aria-hidden="true" alt="download"></i></a><a class='action_item' title="举报该种子违反了规则" href="report.php?torrent=28902"><i class="fa fa-exclamation-triangle fa-lg" aria-hidden="true" alt="report" ></i></a>  <div class='action_item' style='display:flex;align-items:center;justify-content:center;'><a id="bookmark28902" href="javascript: bookmark(28902);"><i class="fa fa-star-o fa-lg" alt="Unbookmarked" title="收藏"></i></a></div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>2</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>0</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>9</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'>29.99 GB</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>&nbsp;&nbsp;<i>匿名</i>发布于<span title="2022-03-10 14:12:41">4年8月前</span></div> 
+			</div>
+		</div>
+			<div class="torrent-detail" id="t-28902-hidden-area">
+				<table style="width: 100%;border:none;">
+					<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>标题</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<b><span>Code Geass Akito The Exiled 2012 BDRip 1080 TV Series VCB-S&philosophy-raws</span></br><span>反叛的鲁路修 亡国的阿基德</span></b>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>其他信息</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id='kdescr'><img alt="image" src="https://img9.doubanio.com/view/photo/l_ratio_poster/public/p1957643704.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+<br />
+◎译　　名　亡国的阿基德<br />
+◎片　　名　Code Geass Akito The Exiled<br />
+◎年　　代　2012<br />
+◎产　　地　日本<br />
+◎类　　别　剧情 / 动作 / 科幻 / 动画 / 战争<br />
+◎语　　言　日语<br />
+◎上映日期　2012-08-04(日本)<br />
+◎IMDb评分 &nbsp;6.6/10 from 588 users<br />
+◎IMDb链接 &nbsp;<a class="faqlink" href="https://www.imdb.com/title/tt3354244">https://www.imdb.com/title/tt3354244</a><br />
+◎豆瓣评分　7.1/10 from 4374 users<br />
+◎豆瓣链接　<a class="faqlink" href="https://movie.douban.com/subject/4830890/">https://movie.douban.com/subject/4830890/</a><br />
+◎片　　长　50分钟<br />
+◎导　　演　赤根和树 Kazuki Akane<br />
+◎编　　剧　大河内一楼 Ichiro Okouchi<br />
+　　　　　 &nbsp;谷口悟朗 Goro Taniguchi<br />
+　　　　　 &nbsp;赤根和树 Kazuki Akane<br />
+　　　　　 &nbsp;浅川美也<br />
+◎主　　演　入野自由 Miyu Irino<br />
+　　　　　 &nbsp;坂本真绫 Maaya Sakamoto<br />
+　　　　　 &nbsp;日野聪 Satoshi Hino<br />
+　　　　　 &nbsp;松冈祯丞 Yoshitsugu Matsuoka<br />
+　　　　　 &nbsp;日笠阳子 Yoko Hikasa<br />
+　　　　　 &nbsp;茅野爱衣 Ai Kayano<br />
+　　　　　 &nbsp;甲斐田裕子 Yûko Kaida<br />
+　　　　　 &nbsp;藤原启治 Keiji Fujiwara<br />
+　　　　　 &nbsp;森久保祥太郎 Shotaro Morikubo<br />
+　　　　　 &nbsp;鸟海浩辅 Kosuke Toriumi<br />
+　　　　　 &nbsp;石冢运升 Unshô Ishizuka<br />
+　　　　　 &nbsp;川田绅司 Shinji Kawada<br />
+　　　　　 &nbsp;早见沙织 Saori Hayami<br />
+　　　　　 &nbsp;东山奈央 Nao Toyama<br />
+　　　　　 &nbsp;高森奈津美 Natsumi Takamori<br />
+　　　　　 &nbsp;伊濑茉莉也 Mariya Ise<br />
+　　　　　 &nbsp;濑户麻沙美 Asami Seto<br />
+　　　　　 &nbsp;小松未可子 Mikako Komatsu<br />
+　　　　　 &nbsp;松风雅也 Masaya Matsukaze<br />
+　　　　　 &nbsp;三宅健太 Kenta Miyake<br />
+　　　　　 &nbsp;子安武人 Takehito Koyasu<br />
+　　　　　 &nbsp;江口拓也 Takuya Eguchi<br />
+　　　　　 &nbsp;间宫康弘 Yasuhiro Mamiya<br />
+　　　　　 &nbsp;小西克幸 Katsuyuki Konishi<br />
+　　　　　 &nbsp;室元气 Genki Muro<br />
+　　　　　 &nbsp;岛崎信长 Nobunaga Shimazaki<br />
+　　　　　 &nbsp;内匠靖明 Takumi Yasuaki<br />
+　　　　　 &nbsp;石川界人 Kaito Ishikawa<br />
+　　　　　 &nbsp;武田幸史 Takeda Kouji<br />
+<br />
+<br />
+◎标　　签　反叛的鲁路修 | 日本动画 | 动画 | 日本 | 动漫 | 剧场版 | Anime | アニメ<br />
+<br />
+◎简　　介　<br />
+<br />
+　　E.U.联盟和布里塔利亚帝国旷日持久的战争在皇历2010年发生转机，帝国派出压倒性的兵力突袭远东日。在很短的时间内，日本这个国家不复存在，从此作为“11区”写入历史。旧日本人民流往世界各地，饱受歧视，心中满是愤懑和不甘。2017年，E.U.联军132部队向圣彼得堡挺进，但遭到帝国军队的围困，面临全军覆没的危险。联军少校蕾拉·玛露卡尔（坂本真绫 配音）将旧日本青年组成非正规军W Zero部队，并提出以这支部队营救132部队的建议。但是在最为凶险的前线，他们不过肩负着牺牲自己来营救友军的悲哀命运。惨烈的对决过后，W Zero部队的中尉日向瑛斗（入野自由 配音）成功完成任务。 <br />
+　　而战争还远远未曾结束，新的阴谋与危机浮出水面……<br />
+<br />
+<br />
+<br />
+<br />
+<fieldset><legend> 引用 </legend><br /><br />
+分工：<br />
+xx<a class="faqlink" href="https://tjupt.org/userdetails.php?username=VCB">@VCB</a>-S：特典压制。<br />
+Littlepox<a class="faqlink" href="https://tjupt.org/userdetails.php?username=VCB">@VCB</a>-S：VS脚本<br />
+fch1993<a class="faqlink" href="https://tjupt.org/userdetails.php?username=philosophy">@philosophy</a>-raws：正片压制，整理，发布等工作。<br />
+<br />
+——————————————————————————————————————————————<br />
+1.视频做了AA，降噪，deband处理，并以性价比很高的crf=17进行编码。<br />
+2.MKV内置2.0音轨和日英文字幕，mka外挂5.1音轨+评论音轨。<br />
+3.特典部分处于命名简便，将Trailer合并在PV中。Infomation合并在CM中。部分PV内置英文字幕。<br />
+4.扫图因找不到第三卷的，所以就只有1,2,4,5卷的扫图。<br />
+5.CD方面，这张专辑因为禁转请到如下地址下载。<br />
+坂本真綾 - FOLLOW ME UP [DVD付初回限定盤]<br />
+<a class="faqlink" href="https://www.astost.com/bbs/read.php?tid=10988003">https://www.astost.com/bbs/read.php?tid=10988003</a><br />
+坂本真綾 シングルコレクション+ミツバチ BD付初回限定盤 如果有需要主题歌1080p的MV可到如下地址下载BDMV。<br />
+<a class="faqlink" href="https://www.astost.com/bbs/read.php?tid=10925909">https://www.astost.com/bbs/read.php?tid=10925909</a><br />
+</fieldset><br /></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>字幕</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style="display:flex;flex-direction:column;"><div><div style='display:flex;flex-direction:row;align-items:center;margin-bottom:5px;'><img border="0" src="public/pic/flag/china.gif" alt="简体中文" title="简体中文"  />&nbsp;&nbsp;<a href="downloadsubs.php?torrentid=28902&subid=764"><u>反叛的鲁路修【亡国的阿基多01-05】【】【简】</u></a>匿名</div></div><div style="display: flex;flex-direction: row"><form method="post" action="subtitles.php"><input type="hidden" name="torrent_name" value="Code Geass Akito The Exiled 2012 BDRip 1080 TV Series VCB-S&philosophy-raws" /><input type="hidden" name="detail_torrent_id" value="28902" /><input type="hidden" name="in_detail" value="in_detail" /><input type="submit" value="上传字幕" /></form><form method="get" action="https://assrt.net/sub/" target="_blank"><input type="text" name="searchword" id="keyword" style="" value="コードギアス 亡国のアキト 第1章 翼竜は舞い降りた" /><input type="submit" value="搜索射手网" /></form><form method="get" action="https://www.opensubtitles.org/en/search2/" target="_blank"><input type="hidden" id="moviename" name="MovieName" /><input type="hidden" name="action" value="search" /><input type="hidden" name="SubLanguageID" value="all" /><input onclick="document.getElementById('moviename').value=document.getElementById('keyword').value;" type="submit" value="搜索Opensubtitles" /></form></div></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>截图区</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='white-space:nowrap;overflow-x:auto;overflow-y:hidden;'><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://i.loli.net/2021/11/23/IVicOaL5bRCBQje.jpg'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://i.loli.net/2021/11/23/avuJpYnKCS6Urx9.jpg'/></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>NFO</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<a href='viewnfo.php?id=28902&view=latin-1'>[所有模式]</a><div class='knfo' id='knfo'><pre style="font-size:10pt; font-family: 'Courier New', monospace; white-space: pre-wrap; word-wrap: break-word;">General
+Unique ID                                : 229228229441421644409931487864713001913 (0xAC73C049451920F38701768A3F123BB9)
+Complete name                            : E:\[VCB-S&amp;philosophy-raws][Code Geass Akito The Exiled]\[VCB-S&amp;philosophy-raws][Code Geass Akito The Exiled][01][BDRIP][HEVC Main10P FLAC][1920X1080].mkv
+Format                                   : Matroska
+Format version                           : Version 4 / Version 2
+File size                                : 2.18 GiB
+Duration                                 : 51mn 4s
+Overall bit rate mode                    : Variable
+Overall bit rate                         : 6 123 Kbps
+Encoded date                             : UTC 2016-06-05 10:11:43
+Writing application                      : mkvmerge v9.2.0 ('Photograph') 64bit
+Writing library                          : libebml v1.3.3 + libmatroska v1.4.4
+
+Video
+ID                                       : 1
+Format                                   : HEVC
+Format/Info                              : High Efficiency Video Coding
+Format profile                           : Main 10[url=https://tjupt.org/userdetails.php?username=L5]@L5[/url].1[url=https://tjupt.org/userdetails.php?username=Main]@Main[/url]
+Codec ID                                 : V_MPEGH/ISO/HEVC
+Duration                                 : 51mn 4s
+Width                                    : 1 920 pixels
+Height                                   : 1 080 pixels
+Display aspect ratio                     : 16:9
+Frame rate mode                          : Constant
+Frame rate                               : 23.976 (24000/1001) fps
+Color space                              : YUV
+Chroma subsampling                       : 4:2:0
+Bit depth                                : 10 bits
+Writing library                          : x265 1.9+5-20f14d78dbad:[Windows][MSVC 1900][64 bit] 10bit
+Encoding settings                        : wpp / ctu=32 / min-cu-size=8 / max-tu-size=16 / tu-intra-depth=2 / tu-inter-depth=2 / me=3 / subme=5 / merange=44 / rect / no-amp / max-merge=4 / temporal-mvp / no-early-skip / rdpenalty=2 / no-tskip / no-tskip-fast / no-strong-intra-smoothing / no-lossless / no-cu-lossless / no-constrained-intra / no-fast-intra / no-open-gop / no-temporal-layers / interlace=0 / keyint=480 / min-keyint=1 / scenecut=40 / rc-lookahead=72 / lookahead-slices=0 / bframes=6 / bframe-bias=-5 / b-adapt=2 / ref=6 / limit-refs=1 / limit-modes / weightp / weightb / aq-mode=1 / qg-size=16 / aq-strength=1.10 / cbqpoffs=0 / crqpoffs=0 / rd=5 / psy-rd=1.20 / rdoq-level=1 / psy-rdoq=2.50 / signhide / deblock=-2:-2 / no-sao / no-sao-non-deblock / b-pyramid / cutree / no-intra-refresh / rc=crf / crf=17.0 / qcomp=0.80 / qpmin=0 / qpmax=51 / qpstep=4 / vbv-maxrate=30720 / vbv-bufsize=40000 / crf-max=0.0 / ipratio=1.40 / pbratio=1.20
+Default                                  : Yes
+Forced                                   : No
+Color range                              : Limited
+Matrix coefficients                      : BT.709
+
+Audio
+ID                                       : 2
+Format                                   : FLAC
+Format/Info                              : Free Lossless Audio Codec
+Codec ID                                 : A_FLAC
+Duration                                 : 51mn 4s
+Bit rate mode                            : Variable
+Channel(s)                               : 2 channels
+Channel positions                        : Front: L R
+Sampling rate                            : 48.0 KHz
+Bit depth                                : 24 bits
+Writing library                          : libFLAC 1.3.1 (UTC 2014-11-25)
+Language                                 : Japanese
+Default                                  : Yes
+Forced                                   : No
+
+Text #1
+ID                                       : 3
+Format                                   : PGS
+Muxing mode                              : zlib
+Codec ID                                 : S_HDMV/PGS
+Codec ID/Info                            : Picture based subtitle format used on BDs/HD-DVDs
+Language                                 : English
+Default                                  : Yes
+Forced                                   : No
+
+Text #2
+ID                                       : 4
+Format                                   : PGS
+Muxing mode                              : zlib
+Codec ID                                 : S_HDMV/PGS
+Codec ID/Info                            : Picture based subtitle format used on BDs/HD-DVDs
+Language                                 : Japanese
+Default                                  : No
+Forced                                   : No
+
+Menu
+00:00:00.000                             : en:00:00:00.000
+00:01:55.115                             : en:00:01:55.115
+00:03:45.058                             : en:00:03:45.058
+00:09:46.461                             : en:00:09:46.461
+00:12:43.096                             : en:00:12:43.096
+00:18:01.414                             : en:00:18:01.414
+00:24:38.727                             : en:00:24:38.727
+00:28:47.601                             : en:00:28:47.601
+00:33:47.692                             : en:00:33:47.692
+00:40:11.909                             : en:00:40:11.909
+00:43:55.466                             : en:00:43:55.466
+00:46:13.270                             : en:00:46:13.270
+00:50:14.511                             : en:00:50:14.511</pre></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>同伴</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id="peercount_28902"><b>2个做种者</b> | <b>0个下载者</b></div><span class="medium"><div style="display: block" id="showpeer_28902"><a href='javascript: viewpeerlist(28902);'>[查看列表]</a></div><div id="hidepeer_28902" style="display: none;"><a href="javascript: hidepeerlist(28902);">[隐藏列表]</a></div></span><div id='peerlist_28902'></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>感谢者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div class="thanks-list"><span class="nowrap username-center"><a  href="userdetails.php?id=56394" class='VeteranUser_Name'><b>c851221297</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=61049" class='InsaneUser_Name'><b>bfjy2024</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=60876" class='InsaneUser_Name'><b>xinliank</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=43276" class='VeteranUser_Name'><b>yangchris4</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=42980" class='UltimateUser_Name'><b>Myhaidan</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=23886" class='NexusMaster_Name'><b>sniper9877</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=34521" class='VeteranUser_Name'><b>dyarthur</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=31522" class='VeteranUser_Name'><b>nashgoo</b></a></span>&nbsp;&nbsp;<span id='thank-self-28902' style='display:none'><span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></span><span id='thankCount-28902'>(8)</span></div><a id="saythanks-28902"  href="javascript: saythanks(28902);" >[说谢谢]</a>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>打赏者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div>暂无打赏者</div><div style="display:flex;flex-direction:row;"><div style='display:flex;flex-direction:row;'><form style='display:inline' method='POST' action='takereward.php'><input type='hidden' name='id' value='28902'> <input type='hidden' name='page' value='details.php' /> <input style="width:30px" type='text' name='reward' value='10'><input type='submit' class='btn' value='打赏'/></form></div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>种子文件</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='display: flex;flex-direction: column;'><div style='display: flex;flex-direction: column;align-items: flex-start;'><div><b>文件数量：</b>333</div><div><b>Hash：</b>2fc2f21fc64f6dd2d3affc898cfc378b20a08be1</div><div><span id="showfl_28902"><a href="javascript: viewfilelist(28902)" >[查看列表]</a></span><span id="hidefl_28902" style="display: none;"><a href="javascript: hidefilelist(28902)">[隐藏列表]</a></span><a href="torrent_info.php?id=28902">[查看结构]</a></div><div><span id='filelist_28902'></span></div></div></div>
+		</div>
+	</div>
+				</table>
+			</div>
+		</div>
+	</div>    <div class="torrent-wrap content-color">
+    	<a style='margin-left:10px; margin-top: 4px;' class='switch-button switch-btn-color' id='t-75407-switch-button' href='javascript: viewDetail(75407);'> <i id="img_minus_75407" class='fa fa-plus-square fa-lg'></i> </a>
+			<div class="torrent" id="torrent-75407">
+					<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=t-simple-info>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:20px;'> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;justify-content:flex-start'><div style='display:flex;flex-direction:row;align-items:center;'><div class="poster">        <progress value = "45" max="45" data-label="100%"></progress></div>    <div class="torrent_name_wrap">
+    <div class="torrent_name_col torrent_cell">
+        <a href="javascript: viewDetail(75407)">    <b class="episode">[全集]</b>&nbsp Blu-ray&nbsp;/&nbsp;H.264&nbsp;/&nbsp;1080p&nbsp;/&nbsp;DTS-HDMA&nbsp;/&nbsp;LuckAni&nbsp;</a>
+        <div></div>
+        <div class="sp">   <img class="pro_free" src="public/pic/trans.gif" alt="Free" title="免费" />&nbsp;     </div>
+        <div><label style='white-space: nowrap;background-color: #0000ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>中字</b></label>&nbsp;</div>
+    </div>
+    </div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'><div style='display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%; padding: 0 4px;'><a class='action_item copy-download-link clipboard' title="复制种子下载链接" href="javascript:;" data-clipboard-text="https://www.haidan.cc/download.php?id=75407&passkey=00000000000000000000000000000000"><i class="fa fa-copy fa-lg" aria-hidden="true" alt="copy"></i></a><a class='action_item' title="下载种子" href="download.php?id=75407&passkey=00000000000000000000000000000000"><i class="fa fa-download fa-lg" aria-hidden="true" alt="download"></i></a><a class='action_item' title="点击编辑或删除本种子" href="edit.php?id=75407"><i class="fa fa-pencil-square fa-lg" aria-hidden="true" alt="edit"></i></a><a class='action_item' title="举报该种子违反了规则" href="report.php?torrent=75407"><i class="fa fa-exclamation-triangle fa-lg" aria-hidden="true" alt="report" ></i></a>  <div class='action_item' style='display:flex;align-items:center;justify-content:center;'><a id="bookmark75407" href="javascript: bookmark(75407);"><i class="fa fa-star-o fa-lg" alt="Unbookmarked" title="收藏"></i></a></div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>4</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>0</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>10</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'>15.76 GB</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span>发布于<span title="2026-03-09 15:14:12">7月15天前</span></div> 
+			</div>
+		</div>
+			<div class="torrent-detail" id="t-75407-hidden-area">
+				<table style="width: 100%;border:none;">
+					<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>标题</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<b><span>Code Geass: Boukoku no Akito 1 - Yokuryuu wa Maiorita 2012 1080p Blu-ray AVC DTS-HD MA 5.1 2Audios-LuckAni</span></br><span>亡国的阿基德第1章：翼龙降临 [内封中字]</span></b>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>其他信息</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id='kdescr'><fieldset><legend> 引用 </legend><br /><b><span style="color: blue;"><font size="5">LuckPT官组作品，感谢原制作者发布。</font></span></b></fieldset><br /><br />
+<fieldset><legend> 引用 </legend><br />原盘来自天空：Code Geass: Boukoku no Akito ITA 2012-2016 Vol 1-Vol 5.1080p Blu-ray AVC DTS-HD MA5.1<br />
+字幕来自伪射手：Code Geass 亡国的阿基德/亡国的阿基德全5章</fieldset><br /><br />
+<br />
+<img alt="image" src="https://img2.pixhost.to/images/6295/702829853_ptgen_poster_7cppy8.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+<br />
+◎译　　名　亡国的阿基德第1章：翼龙降临 / Code Geass 亡国的阿基德 第一章「翼龙降临」<br />
+◎片　　名　コードギアス 亡国のアキト 第1章 翼竜は舞い降りた<br />
+◎年　　代　2012<br />
+◎产　　地　日本<br />
+◎类　　别　剧情 / 动作 / 科幻 / 动画 / 战争<br />
+◎语　　言　日语<br />
+◎上映日期　2012-08-04(日本)<br />
+◎IMDb链接 &nbsp;<a class="faqlink" href="https://www.imdb.com/title/tt3354096/">https://www.imdb.com/title/tt3354096/</a><br />
+◎IMDb评分 &nbsp;6.6/10 from 1267 users<br />
+◎豆瓣评分　7.0/10 from 5389 users<br />
+◎豆瓣链接　<a class="faqlink" href="https://movie.douban.com/subject/4830890/">https://movie.douban.com/subject/4830890/</a><br />
+◎片　　长　50分钟<br />
+◎导　　演　赤根和树<br />
+◎编　　剧　大河内一楼 / 谷口悟朗 / 赤根和树 / 浅川美也<br />
+◎主　　演　入野自由<br />
+　　　　　　坂本真绫<br />
+　　　　　　日野聪<br />
+　　　　　　松冈祯丞<br />
+　　　　　　日笠阳子<br />
+　　　　　　茅野爱衣<br />
+　　　　　　甲斐田裕子<br />
+　　　　　　藤原启治<br />
+　　　　　　森久保祥太郎<br />
+　　　　　　鸟海浩辅<br />
+　　　　　　石冢运升<br />
+　　　　　　川田绅司<br />
+　　　　　　早见沙织<br />
+　　　　　　东山奈央<br />
+　　　　　　高森奈津美<br />
+　　　　　　伊濑茉莉也<br />
+　　　　　　濑户麻沙美<br />
+　　　　　　小松未可子<br />
+　　　　　　松风雅也 Masaya Matsukaze<br />
+　　　　　　三宅健太<br />
+　　　　　　子安武人<br />
+　　　　　　江口拓也<br />
+　　　　　　间宫康弘<br />
+　　　　　　小西克幸<br />
+　　　　　　室元气<br />
+　　　　　　岛崎信长<br />
+　　　　　　内匠靖明<br />
+　　　　　　石川界人<br />
+　　　　　　武田幸史<br />
+◎简　　介<br />
+　　　　E.U.联盟和布里塔利亚帝国旷日持久的战争在皇历2010年发生转机，帝国派出压倒性的兵力突袭远东日。在很短的时间内，日本这个国家不复存在，从此作为“11区”写入历史。旧日本人民流往世界各地，饱受歧视，心中满是愤懑和不甘。2017年，E.U.联军132部队向圣彼得堡挺进，但遭到帝国军队的围困，面临全军覆没的危险。联军少校蕾拉·玛露卡尔（坂本真绫 配音）将旧日本青年组成非正规军W Zero部队，并提出以这支部队营救132部队的建议。但是在最为凶险的前线，他们不过肩负着牺牲自己来营救友军的悲哀命运。惨烈的对决过后，W Zero部队的中尉日向瑛斗（入野自由 配音）成功完成任务。<br />
+　　　　而战争还远远未曾结束，新的阴谋与危机浮出水面……</div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>字幕</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			该种子暂无字幕<div style="display: flex;flex-direction: row"><form method="post" action="subtitles.php"><input type="hidden" name="torrent_name" value="Code Geass: Boukoku no Akito 1 - Yokuryuu wa Maiorita 2012 1080p Blu-ray AVC DTS-HD MA 5.1 2Audios-LuckAni" /><input type="hidden" name="detail_torrent_id" value="75407" /><input type="hidden" name="in_detail" value="in_detail" /><input type="submit" value="上传字幕" /></form><form method="get" action="https://assrt.net/sub/" target="_blank"><input type="text" name="searchword" id="keyword" style="" value="コードギアス 亡国のアキト 第1章 翼竜は舞い降りた" /><input type="submit" value="搜索射手网" /></form><form method="get" action="https://www.opensubtitles.org/en/search2/" target="_blank"><input type="hidden" id="moviename" name="MovieName" /><input type="hidden" name="action" value="search" /><input type="hidden" name="SubLanguageID" value="all" /><input onclick="document.getElementById('moviename').value=document.getElementById('keyword').value;" type="submit" value="搜索Opensubtitles" /></form></div></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>截图区</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='white-space:nowrap;overflow-x:auto;overflow-y:hidden;'><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://img2.pixhost.to/images/6295/702829897_1.png'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://img2.pixhost.to/images/6295/702829900_2.png'/><img onclick='PreviewByJQuery(this);' style='width:200px;height: auto;margin-right:10px;' src='https://img2.pixhost.to/images/6295/702830263_3.png'/></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>NFO</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<a href='viewnfo.php?id=75407&view=latin-1'>[所有模式]</a><div class='knfo' id='knfo'><pre style="font-size:10pt; font-family: 'Courier New', monospace; white-space: pre-wrap; word-wrap: break-word;">DISC INFO:
+Disc Title:     &#x03a3;&#x2551;&#x00ed;&#x03c3;&#x00a2;&#x255c;&#x03c4;&#x00dc;&#x00e4;&#x0398;&#x00ff;&#x2510;&#x03c3;&#x0192;&#x2551;&#x03c3;&#x255b;&#x2556;&#x03c4;&#x00bc;&#x00bc;1&#x03c4;&#x00bd;&#x00e1;&#x2229;&#x255d;&#x00dc;&#x03c4;&#x2510;&#x255d;&#x0398;&#x255b;&#x00d6;&#x0398;&#x00d6;&#x00ec;&#x03a3;&#x2555;&#x2524;.Code Geass-Boukoku no Akito 1 - Yokuryuu wa Maiorita.2012.1080p.Blu-ray.AVC.DTS-HD MA 
+Disc Size:      16,921,592,288 bytes
+Protection:     AACS
+BDInfo:         0.7.6.1 (compatible layout created by DVDFab 13 13.0.1.1)
+PLAYLIST REPORT:
+Name:                   00000.MPLS  
+Length:                 0:51:04.561 (h:m:s.ms)
+Size:                   16,921,454,592 bytes
+Total Bitrate:          44.17 Mbps
+VIDEO:
+Codec                   Bitrate             Description     
+-----                   -------             -----------     
+MPEG-4 AVC Video        34692 kbps          1080p / 23.976 fps / 16:9 / High Profile 4.1
+AUDIO:
+Codec                           Language        Bitrate         Description     
+-----                           --------        -------         -----------     
+DTS-HD Master Audio             Italian         3942 kbps       5.1 / 48 kHz / 3942 kbps / 24-bit (DTS Core: 5.1 / 48 kHz / 1509 kbps / 24-bit)
+DTS-HD Master Audio             Japanese        3097 kbps       5.1 / 48 kHz / 3097 kbps / 24-bit (DTS Core: 5.1 / 48 kHz / 1509 kbps / 24-bit)
+SUBTITLES:
+Codec                           Language        Bitrate         Description     
+-----                           --------        -------         -----------     
+Presentation Graphics           Italian         38.428 kbps                     
+Presentation Graphics           Italian         0.701 kbps                      
+Presentation Graphics           Chinese         24.846 kbps                     
+FILES:
+Name            Time In         Length          Size            Total Bitrate   
+----            -------         ------          ----            -------------   
+00000.M2TS      0:00:00.000     0:51:04.561     16,921,454,592  44,173 kbps     
+CHAPTERS:
+Number          Time In         Length          Avg Video Rate  Max 1-Sec Rate  Max 1-Sec Time  Max 5-Sec Rate  Max 5-Sec Time  Max 10Sec Rate  Max 10Sec Time  Avg Frame Size  Max Frame Size  Max Frame Time  
+------          -------         ------          --------------  --------------  --------------  --------------  --------------  --------------  --------------  --------------  --------------  --------------  
+1               0:00:00.000     0:05:00.000     33,964 kbps     52,187 kbps     0:00:38.496     39,874 kbps     0:00:38.496     37,231 kbps     0:01:06.149     177,122 bytes   631,723 bytes   0:00:54.721     
+2               0:05:00.000     0:05:00.000     35,798 kbps     42,533 kbps     0:09:45.793     37,431 kbps     0:09:41.747     36,876 kbps     0:06:33.851     186,608 bytes   620,205 bytes   0:09:45.585     
+3               0:10:00.000     0:05:00.000     35,506 kbps     42,310 kbps     0:10:28.002     37,257 kbps     0:14:03.300     36,990 kbps     0:14:03.300     185,083 bytes   638,316 bytes   0:10:59.742     
+4               0:15:00.000     0:05:00.000     36,177 kbps     40,509 kbps     0:16:45.421     37,094 kbps     0:19:42.890     36,916 kbps     0:18:48.001     188,633 bytes   517,008 bytes   0:19:41.180     
+5               0:20:00.000     0:05:00.000     36,031 kbps     52,183 kbps     0:24:37.100     40,375 kbps     0:24:37.100     37,905 kbps     0:24:37.100     187,847 bytes   638,672 bytes   0:22:32.976     
+6               0:25:00.000     0:05:00.000     34,476 kbps     47,203 kbps     0:27:16.051     38,117 kbps     0:27:16.051     37,022 kbps     0:28:51.855     179,790 bytes   602,174 bytes   0:29:00.071     
+7               0:30:00.000     0:05:00.000     36,053 kbps     49,535 kbps     0:33:07.402     38,802 kbps     0:31:06.406     37,619 kbps     0:31:06.406     187,935 bytes   640,336 bytes   0:33:11.114     
+8               0:35:00.000     0:05:00.000     36,215 kbps     41,116 kbps     0:36:49.624     37,183 kbps     0:35:44.058     36,905 kbps     0:37:22.323     188,805 bytes   533,012 bytes   0:36:40.948     
+9               0:40:00.000     0:05:00.000     35,019 kbps     52,796 kbps     0:44:04.808     38,707 kbps     0:44:04.892     36,796 kbps     0:44:32.378     182,572 bytes   633,005 bytes   0:40:09.532     
+10              0:45:00.000     0:05:00.000     32,124 kbps     39,013 kbps     0:47:04.029     36,940 kbps     0:45:05.577     36,779 kbps     0:46:40.047     167,452 bytes   470,336 bytes   0:47:05.823     
+11              0:50:00.000     0:01:04.561     14,003 kbps     54,222 kbps     0:50:28.191     31,347 kbps     0:50:07.838     28,119 kbps     0:50:35.574     73,098 bytes    630,798 bytes   0:50:28.025     
+STREAM DIAGNOSTICS:
+File            PID             Type            Codec           Language                Seconds                 Bitrate                 Bytes           Packets         
+----            ---             ----            -----           --------                --------------          --------------          -------------   -----           
+00000.M2TS      4113 (0x1011)   0x1B            AVC                                     3064.52                 34692.1                 13,289,341,133  72,267,087      
+00000.M2TS      4352 (0x1100)   0x86            DTS-HD MA       ita (Italian)           3064.55                 3942.21                 1,510,138,324   8,685,656       
+00000.M2TS      4353 (0x1101)   0x86            DTS-HD MA       jpn (Japanese)          3064.55                 3097.27                 1,186,470,492   6,924,113       
+00000.M2TS      4608 (0x1200)   0x90            PGS             ita (Italian)           3064.52                 38.428                  14,720,509      83,608          
+00000.M2TS      4609 (0x1201)   0x90            PGS             ita (Italian)           3064.52                 0.701                   268,358         1,720           
+00000.M2TS      4610 (0x1202)   0x90            PGS             zho (Chinese)           3064.52                 24.846                  9,517,458       56,825</pre></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>同伴</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id="peercount_75407"><b>4个做种者</b> | <b>0个下载者</b></div><span class="medium"><div style="display: block" id="showpeer_75407"><a href='javascript: viewpeerlist(75407);'>[查看列表]</a></div><div id="hidepeer_75407" style="display: none;"><a href="javascript: hidepeerlist(75407);">[隐藏列表]</a></div></span><div id='peerlist_75407'></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>感谢者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div class="thanks-list"><span class="nowrap username-center"><a  href="userdetails.php?id=56394" class='VeteranUser_Name'><b>c851221297</b></a></span>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=61049" class='InsaneUser_Name'><b>bfjy2024</b></a></span>&nbsp;&nbsp;<span id='thank-self-75407' style='display:none'><span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></span><span id='thankCount-75407'>(2)</span></div><a id="saythanks-75407"  href="javascript: saythanks(75407);" >[说谢谢]</a>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>打赏者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div>暂无打赏者</div><div style="display:flex;flex-direction:row;"><div style='display:flex;flex-direction:row;'><form style='display:inline' method='POST' action='takereward.php'><input type='hidden' name='id' value='75407'> <input type='hidden' name='page' value='details.php' /> <input style="width:30px" type='text' name='reward' value='10'><input type='submit' class='btn' value='打赏'/></form></div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>种子文件</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='display: flex;flex-direction: column;'><div style='display: flex;flex-direction: column;align-items: flex-start;'><div><b>文件数量：</b>9</div><div><b>Hash：</b>b8c0f7c8c16e541853ae2ea68ce611e8a50ba196</div><div><span id="showfl_75407"><a href="javascript: viewfilelist(75407)" >[查看列表]</a></span><span id="hidefl_75407" style="display: none;"><a href="javascript: hidefilelist(75407)">[隐藏列表]</a></span><a href="torrent_info.php?id=75407">[查看结构]</a></div><div><span id='filelist_75407'></span></div></div></div>
+		</div>
+	</div>
+				</table>
+			</div>
+		</div>
+	</div>    <div class="torrent-wrap content-color">
+    	<a style='margin-left:10px; margin-top: 4px;' class='switch-button switch-btn-color' id='t-80106-switch-button' href='javascript: viewDetail(80106);'> <i id="img_minus_80106" class='fa fa-plus-square fa-lg'></i> </a>
+			<div class="torrent" id="torrent-80106">
+					<div style="border-radius: 7px; width: 100%;display:flex; flex-direction:row" class=t-simple-info>
+			<div class="" style='width:100%;display:flex;flex-direction:row;align-items:center; height:20px;'> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;;flex:1;justify-content:flex-start'><div style='display:flex;flex-direction:row;align-items:center;'><div class="poster">        <progress value = "45" max="45" data-label="100%"></progress></div>    <div class="torrent_name_wrap">
+    <div class="torrent_name_col torrent_cell">
+        <a href="javascript: viewDetail(80106)">    <b class="episode">[全集]</b>&nbsp Blu-ray&nbsp;/&nbsp;H.264&nbsp;/&nbsp;1080p&nbsp;/&nbsp;DTS-HDMA&nbsp;/&nbsp;LuckAni&nbsp;</a>
+        <div></div>
+        <div class="sp">   <img class="pro_free" src="public/pic/trans.gif" alt="Free" title="免费" />&nbsp;   <b>(<font class='new'>新</font>)</b>&nbsp;  </div>
+        <div><label style='white-space: nowrap;background-color: #0000ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>中字</b></label><label style='white-space: nowrap;background-color: #0080ff; color: #ffffff; border-radius: 3px; margin-left: 3px; padding: 1px 6px'><b>DIY</b></label>&nbsp;</div>
+    </div>
+    </div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'><div style='display:flex;flex-direction:row;align-items:center;justify-content:center;width:100%; padding: 0 4px;'><a class='action_item copy-download-link clipboard' title="复制种子下载链接" href="javascript:;" data-clipboard-text="https://www.haidan.cc/download.php?id=80106&passkey=00000000000000000000000000000000"><i class="fa fa-copy fa-lg" aria-hidden="true" alt="copy"></i></a><a class='action_item' title="下载种子" href="download.php?id=80106&passkey=00000000000000000000000000000000"><i class="fa fa-download fa-lg" aria-hidden="true" alt="download"></i></a><a class='action_item' title="点击编辑或删除本种子" href="edit.php?id=80106"><i class="fa fa-pencil-square fa-lg" aria-hidden="true" alt="edit"></i></a><a class='action_item' title="举报该种子违反了规则" href="report.php?torrent=80106"><i class="fa fa-exclamation-triangle fa-lg" aria-hidden="true" alt="report" ></i></a>  <div class='action_item' style='display:flex;align-items:center;justify-content:center;'><a id="bookmark80106" href="javascript: bookmark(80106);"><i class="fa fa-star-o fa-lg" alt="Unbookmarked" title="收藏"></i></a></div></div></div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>1</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>14</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:35px;'>0</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:60px;'>15.76 GB</div> 
+				<div class="" style='display:flex;align-items:center;justify-content:center; height:100%;width:200px;'>&nbsp;&nbsp;<span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span>发布于<span title="2026-10-20 21:40:37">23分前</span></div> 
+			</div>
+		</div>
+			<div class="torrent-detail" id="t-80106-hidden-area">
+				<table style="width: 100%;border:none;">
+					<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>标题</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<b><span>Code Geass: Boukoku no Akito 1 - Yokuryuu wa Maiorita 2012 1080p Blu-ray AVC DTS-HD MA 5.1-LuckAni</span></br><span>亡国的阿基德第1章：翼龙降临 [内封中字]</span></b>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>其他信息</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id='kdescr'><fieldset><legend> 引用 </legend><br /><br />
+转载自LuckPT，感谢发布者<br />
+原盘来自天空：Code Geass: Boukoku no Akito ITA 2012-2016 Vol 1-Vol 5.1080p Blu-ray AVC DTS-HD MA5.1<br />
+字幕来自伪射手：Code Geass 亡国的阿基德/亡国的阿基德全5章<br />
+</fieldset><br /><br />
+<img alt="image" src="https://img2.pixhost.to/images/6295/702829853_ptgen_poster_7cppy8.jpg" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+<br />
+◎译　　名　亡国的阿基德第1章：翼龙降临 / Code Geass 亡国的阿基德 第一章「翼龙降临」<br />
+◎片　　名　コードギアス 亡国のアキト 第1章 翼竜は舞い降りた<br />
+◎年　　代　2012<br />
+◎产　　地　日本<br />
+◎类　　别　剧情 / 动作 / 科幻 / 动画 / 战争<br />
+◎语　　言　日语<br />
+◎上映日期　2012-08-04(日本)<br />
+◎IMDb链接 <a class="faqlink" href="https://www.imdb.com/title/tt3354096/">https://www.imdb.com/title/tt3354096/</a><br />
+◎IMDb评分 6.6/10 from 1267 users<br />
+◎豆瓣评分　7.0/10 from 5389 users<br />
+◎豆瓣链接　<a class="faqlink" href="https://movie.douban.com/subject/4830890/">https://movie.douban.com/subject/4830890/</a><br />
+◎片　　长　50分钟<br />
+◎导　　演　赤根和树<br />
+◎编　　剧　大河内一楼 / 谷口悟朗 / 赤根和树 / 浅川美也<br />
+◎主　　演　入野自由<br />
+　　　　　　坂本真绫<br />
+　　　　　　日野聪<br />
+　　　　　　松冈祯丞<br />
+　　　　　　日笠阳子<br />
+　　　　　　茅野爱衣<br />
+　　　　　　甲斐田裕子<br />
+　　　　　　藤原启治<br />
+　　　　　　森久保祥太郎<br />
+　　　　　　鸟海浩辅<br />
+　　　　　　石冢运升<br />
+　　　　　　川田绅司<br />
+　　　　　　早见沙织<br />
+　　　　　　东山奈央<br />
+　　　　　　高森奈津美<br />
+　　　　　　伊濑茉莉也<br />
+　　　　　　濑户麻沙美<br />
+　　　　　　小松未可子<br />
+　　　　　　松风雅也 Masaya Matsukaze<br />
+　　　　　　三宅健太<br />
+　　　　　　子安武人<br />
+　　　　　　江口拓也<br />
+　　　　　　间宫康弘<br />
+　　　　　　小西克幸<br />
+　　　　　　室元气<br />
+　　　　　　岛崎信长<br />
+　　　　　　内匠靖明<br />
+　　　　　　石川界人<br />
+　　　　　　武田幸史<br />
+<br />
+◎简　　介<br />
+<br />
+　　　　E.U.联盟和布里塔利亚帝国旷日持久的战争在皇历2010年发生转机，帝国派出压倒性的兵力突袭远东日。在很短的时间内，日本这个国家不复存在，从此作为“11区”写入历史。旧日本人民流往世界各地，饱受歧视，心中满是愤懑和不甘。2017年，E.U.联军132部队向圣彼得堡挺进，但遭到帝国军队的围困，面临全军覆没的危险。联军少校蕾拉·玛露卡尔（坂本真绫 配音）将旧日本青年组成非正规军W Zero部队，并提出以这支部队营救132部队的建议。但是在最为凶险的前线，他们不过肩负着牺牲自己来营救友军的悲哀命运。惨烈的对决过后，W Zero部队的中尉日向瑛斗（入野自由 配音）成功完成任务。<br />
+　　　　而战争还远远未曾结束，新的阴谋与危机浮出水面……<br />
+<br />
+<fieldset><legend> 引用 </legend><br /><br />
+DISC INFO:<br />
+<br />
+Disc Title: &nbsp; &nbsp; 亡国的阿基德第1章：翼龙降临.Code Geass-Boukoku no Akito 1 - Yokuryuu wa Maiorita.2012.1080p.Blu-ray.AVC.DTS-HD MA <br />
+Disc Size: &nbsp; &nbsp; &nbsp;16,921,592,288 bytes<br />
+Protection: &nbsp; &nbsp; AACS<br />
+BDInfo: &nbsp; &nbsp; &nbsp; &nbsp; 0.7.6.1 (compatible layout created by DVDFab 13 13.0.1.1)<br />
+<br />
+PLAYLIST REPORT:<br />
+<br />
+Name: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 00000.MPLS &nbsp;<br />
+Length: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:51:04.561 (h:m:s.ms)<br />
+Size: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 16,921,454,592 bytes<br />
+Total Bitrate: &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;44.17 Mbps<br />
+<br />
+VIDEO:<br />
+<br />
+Codec &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Bitrate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Description &nbsp; &nbsp; <br />
+----- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ------- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ----------- &nbsp; &nbsp; <br />
+MPEG-4 AVC Video &nbsp; &nbsp; &nbsp; &nbsp;34692 kbps &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;1080p / 23.976 fps / 16:9 / High Profile 4.1<br />
+<br />
+AUDIO:<br />
+<br />
+Codec &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Language &nbsp; &nbsp; &nbsp; &nbsp;Bitrate &nbsp; &nbsp; &nbsp; &nbsp; Description &nbsp; &nbsp; <br />
+----- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -------- &nbsp; &nbsp; &nbsp; &nbsp;------- &nbsp; &nbsp; &nbsp; &nbsp; ----------- &nbsp; &nbsp; <br />
+DTS-HD Master Audio &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Italian &nbsp; &nbsp; &nbsp; &nbsp; 3942 kbps &nbsp; &nbsp; &nbsp; 5.1 / 48 kHz / 3942 kbps / 24-bit (DTS Core: 5.1 / 48 kHz / 1509 kbps / 24-bit)<br />
+DTS-HD Master Audio &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Japanese &nbsp; &nbsp; &nbsp; &nbsp;3097 kbps &nbsp; &nbsp; &nbsp; 5.1 / 48 kHz / 3097 kbps / 24-bit (DTS Core: 5.1 / 48 kHz / 1509 kbps / 24-bit)<br />
+<br />
+SUBTITLES:<br />
+<br />
+Codec &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Language &nbsp; &nbsp; &nbsp; &nbsp;Bitrate &nbsp; &nbsp; &nbsp; &nbsp; Description &nbsp; &nbsp; <br />
+----- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -------- &nbsp; &nbsp; &nbsp; &nbsp;------- &nbsp; &nbsp; &nbsp; &nbsp; ----------- &nbsp; &nbsp; <br />
+Presentation Graphics &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Italian &nbsp; &nbsp; &nbsp; &nbsp; 38.428 kbps &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />
+Presentation Graphics &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Italian &nbsp; &nbsp; &nbsp; &nbsp; 0.701 kbps &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />
+Presentation Graphics &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Chinese &nbsp; &nbsp; &nbsp; &nbsp; 24.846 kbps &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />
+<br />
+FILES:<br />
+<br />
+Name &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Time In &nbsp; &nbsp; &nbsp; &nbsp; Length &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Size &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Total Bitrate &nbsp; <br />
+---- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;------- &nbsp; &nbsp; &nbsp; &nbsp; ------ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;---- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;------------- &nbsp; <br />
+00000.M2TS &nbsp; &nbsp; &nbsp;0:00:00.000 &nbsp; &nbsp; 0:51:04.561 &nbsp; &nbsp; 16,921,454,592 &nbsp;44,173 kbps &nbsp; &nbsp; <br />
+<br />
+CHAPTERS:<br />
+<br />
+Number &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Time In &nbsp; &nbsp; &nbsp; &nbsp; Length &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Avg Video Rate &nbsp;Max 1-Sec Rate &nbsp;Max 1-Sec Time &nbsp;Max 5-Sec Rate &nbsp;Max 5-Sec Time &nbsp;Max 10Sec Rate &nbsp;Max 10Sec Time &nbsp;Avg Frame Size &nbsp;Max Frame Size &nbsp;Max Frame Time &nbsp;<br />
+------ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;------- &nbsp; &nbsp; &nbsp; &nbsp; ------ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;-------------- &nbsp;<br />
+1 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:00:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 33,964 kbps &nbsp; &nbsp; 52,187 kbps &nbsp; &nbsp; 0:00:38.496 &nbsp; &nbsp; 39,874 kbps &nbsp; &nbsp; 0:00:38.496 &nbsp; &nbsp; 37,231 kbps &nbsp; &nbsp; 0:01:06.149 &nbsp; &nbsp; 177,122 bytes &nbsp; 631,723 bytes &nbsp; 0:00:54.721 &nbsp; &nbsp; <br />
+2 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 35,798 kbps &nbsp; &nbsp; 42,533 kbps &nbsp; &nbsp; 0:09:45.793 &nbsp; &nbsp; 37,431 kbps &nbsp; &nbsp; 0:09:41.747 &nbsp; &nbsp; 36,876 kbps &nbsp; &nbsp; 0:06:33.851 &nbsp; &nbsp; 186,608 bytes &nbsp; 620,205 bytes &nbsp; 0:09:45.585 &nbsp; &nbsp; <br />
+3 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:10:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 35,506 kbps &nbsp; &nbsp; 42,310 kbps &nbsp; &nbsp; 0:10:28.002 &nbsp; &nbsp; 37,257 kbps &nbsp; &nbsp; 0:14:03.300 &nbsp; &nbsp; 36,990 kbps &nbsp; &nbsp; 0:14:03.300 &nbsp; &nbsp; 185,083 bytes &nbsp; 638,316 bytes &nbsp; 0:10:59.742 &nbsp; &nbsp; <br />
+4 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:15:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 36,177 kbps &nbsp; &nbsp; 40,509 kbps &nbsp; &nbsp; 0:16:45.421 &nbsp; &nbsp; 37,094 kbps &nbsp; &nbsp; 0:19:42.890 &nbsp; &nbsp; 36,916 kbps &nbsp; &nbsp; 0:18:48.001 &nbsp; &nbsp; 188,633 bytes &nbsp; 517,008 bytes &nbsp; 0:19:41.180 &nbsp; &nbsp; <br />
+5 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:20:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 36,031 kbps &nbsp; &nbsp; 52,183 kbps &nbsp; &nbsp; 0:24:37.100 &nbsp; &nbsp; 40,375 kbps &nbsp; &nbsp; 0:24:37.100 &nbsp; &nbsp; 37,905 kbps &nbsp; &nbsp; 0:24:37.100 &nbsp; &nbsp; 187,847 bytes &nbsp; 638,672 bytes &nbsp; 0:22:32.976 &nbsp; &nbsp; <br />
+6 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:25:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 34,476 kbps &nbsp; &nbsp; 47,203 kbps &nbsp; &nbsp; 0:27:16.051 &nbsp; &nbsp; 38,117 kbps &nbsp; &nbsp; 0:27:16.051 &nbsp; &nbsp; 37,022 kbps &nbsp; &nbsp; 0:28:51.855 &nbsp; &nbsp; 179,790 bytes &nbsp; 602,174 bytes &nbsp; 0:29:00.071 &nbsp; &nbsp; <br />
+7 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:30:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 36,053 kbps &nbsp; &nbsp; 49,535 kbps &nbsp; &nbsp; 0:33:07.402 &nbsp; &nbsp; 38,802 kbps &nbsp; &nbsp; 0:31:06.406 &nbsp; &nbsp; 37,619 kbps &nbsp; &nbsp; 0:31:06.406 &nbsp; &nbsp; 187,935 bytes &nbsp; 640,336 bytes &nbsp; 0:33:11.114 &nbsp; &nbsp; <br />
+8 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:35:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 36,215 kbps &nbsp; &nbsp; 41,116 kbps &nbsp; &nbsp; 0:36:49.624 &nbsp; &nbsp; 37,183 kbps &nbsp; &nbsp; 0:35:44.058 &nbsp; &nbsp; 36,905 kbps &nbsp; &nbsp; 0:37:22.323 &nbsp; &nbsp; 188,805 bytes &nbsp; 533,012 bytes &nbsp; 0:36:40.948 &nbsp; &nbsp; <br />
+9 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0:40:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 35,019 kbps &nbsp; &nbsp; 52,796 kbps &nbsp; &nbsp; 0:44:04.808 &nbsp; &nbsp; 38,707 kbps &nbsp; &nbsp; 0:44:04.892 &nbsp; &nbsp; 36,796 kbps &nbsp; &nbsp; 0:44:32.378 &nbsp; &nbsp; 182,572 bytes &nbsp; 633,005 bytes &nbsp; 0:40:09.532 &nbsp; &nbsp; <br />
+10 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0:45:00.000 &nbsp; &nbsp; 0:05:00.000 &nbsp; &nbsp; 32,124 kbps &nbsp; &nbsp; 39,013 kbps &nbsp; &nbsp; 0:47:04.029 &nbsp; &nbsp; 36,940 kbps &nbsp; &nbsp; 0:45:05.577 &nbsp; &nbsp; 36,779 kbps &nbsp; &nbsp; 0:46:40.047 &nbsp; &nbsp; 167,452 bytes &nbsp; 470,336 bytes &nbsp; 0:47:05.823 &nbsp; &nbsp; <br />
+11 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;0:50:00.000 &nbsp; &nbsp; 0:01:04.561 &nbsp; &nbsp; 14,003 kbps &nbsp; &nbsp; 54,222 kbps &nbsp; &nbsp; 0:50:28.191 &nbsp; &nbsp; 31,347 kbps &nbsp; &nbsp; 0:50:07.838 &nbsp; &nbsp; 28,119 kbps &nbsp; &nbsp; 0:50:35.574 &nbsp; &nbsp; 73,098 bytes &nbsp; &nbsp;630,798 bytes &nbsp; 0:50:28.025 &nbsp; &nbsp; <br />
+<br />
+STREAM DIAGNOSTICS:<br />
+<br />
+File &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PID &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Type &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Codec &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Language &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;Seconds &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Bitrate &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Bytes &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Packets &nbsp; &nbsp; &nbsp; &nbsp; <br />
+---- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;--- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ---- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;----- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; -------- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;-------------- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;-------------- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;------------- &nbsp; ----- &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4113 (0x1011) &nbsp; 0x1B &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;AVC &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3064.52 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 34692.1 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 13,289,341,133 &nbsp;72,267,087 &nbsp; &nbsp; &nbsp;<br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4352 (0x1100) &nbsp; 0x86 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;DTS-HD MA &nbsp; &nbsp; &nbsp; ita (Italian) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3064.55 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3942.21 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1,510,138,324 &nbsp; 8,685,656 &nbsp; &nbsp; &nbsp; <br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4353 (0x1101) &nbsp; 0x86 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;DTS-HD MA &nbsp; &nbsp; &nbsp; jpn (Japanese) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;3064.55 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3097.27 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 1,186,470,492 &nbsp; 6,924,113 &nbsp; &nbsp; &nbsp; <br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4608 (0x1200) &nbsp; 0x90 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PGS &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ita (Italian) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3064.52 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 38.428 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;14,720,509 &nbsp; &nbsp; &nbsp;83,608 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;<br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4609 (0x1201) &nbsp; 0x90 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PGS &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; ita (Italian) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3064.52 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 0.701 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 268,358 &nbsp; &nbsp; &nbsp; &nbsp; 1,720 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; <br />
+00000.M2TS &nbsp; &nbsp; &nbsp;4610 (0x1202) &nbsp; 0x90 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;PGS &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; zho (Chinese) &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 3064.52 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; 24.846 &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;9,517,458 &nbsp; &nbsp; &nbsp; 56,825<br />
+</fieldset><br /><br />
+<br />
+<img alt="image" src="https://img2.pixhost.to/images/6295/702829897_1.png" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+<img alt="image" src="https://img2.pixhost.to/images/6295/702829900_2.png" onload="Scale(this,700,0);" onclick="Preview(this);" /><br />
+<img alt="image" src="https://img2.pixhost.to/images/6295/702830263_3.png" onload="Scale(this,700,0);" onclick="Preview(this);" /></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>字幕</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			该种子暂无字幕<div style="display: flex;flex-direction: row"><form method="post" action="subtitles.php"><input type="hidden" name="torrent_name" value="Code Geass: Boukoku no Akito 1 - Yokuryuu wa Maiorita 2012 1080p Blu-ray AVC DTS-HD MA 5.1-LuckAni" /><input type="hidden" name="detail_torrent_id" value="80106" /><input type="hidden" name="in_detail" value="in_detail" /><input type="submit" value="上传字幕" /></form><form method="get" action="https://assrt.net/sub/" target="_blank"><input type="text" name="searchword" id="keyword" style="" value="コードギアス 亡国のアキト 第1章 翼竜は舞い降りた" /><input type="submit" value="搜索射手网" /></form><form method="get" action="https://www.opensubtitles.org/en/search2/" target="_blank"><input type="hidden" id="moviename" name="MovieName" /><input type="hidden" name="action" value="search" /><input type="hidden" name="SubLanguageID" value="all" /><input onclick="document.getElementById('moviename').value=document.getElementById('keyword').value;" type="submit" value="搜索Opensubtitles" /></form></div></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>同伴</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div id="peercount_80106"><b>1个做种者</b> | <b>14个下载者</b></div><span class="medium"><div style="display: block" id="showpeer_80106"><a href='javascript: viewpeerlist(80106);'>[查看列表]</a></div><div id="hidepeer_80106" style="display: none;"><a href="javascript: hidepeerlist(80106);">[隐藏列表]</a></div></span><div id='peerlist_80106'></div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>感谢者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div class="thanks-list"><span id='no-thank-text-80106'>暂无感谢者</span><span id='thank-self-80106' style='display:none'><span class="nowrap username-center"><a  href="userdetails.php?id=22440" class='UltimateUser_Name'><b>nandie</b></a></span></span></div><a id="saythanks-80106"  href="javascript: saythanks(80106);" >[说谢谢]</a>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>打赏者</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div>暂无打赏者</div><div style="display:flex;flex-direction:row;"><div style='display:flex;flex-direction:row;'><form style='display:inline' method='POST' action='takereward.php'><input type='hidden' name='id' value='80106'> <input type='hidden' name='page' value='details.php' /> <input style="width:30px" type='text' name='reward' value='10'><input type='submit' class='btn' value='打赏'/></form></div>&nbsp;&nbsp;&nbsp;&nbsp;</div>
+		</div>
+	</div>	<div class='detail-info-items-block2 detail-content-color'>
+		<div class='detail-info-items-block-desc detail-info-items-block-desc2 detail-content-head-color'>
+			<span class='detail-info-item-name'>种子文件</span>
+		</div>
+		<div class='detail-info-items-block-content detail-info-items-block-content2'>
+			<div style='display: flex;flex-direction: column;'><div style='display: flex;flex-direction: column;align-items: flex-start;'><div><b>文件数量：</b>9</div><div><b>Hash：</b>04910364217182f37f8c24fe98adee76c709b1b5</div><div><span id="showfl_80106"><a href="javascript: viewfilelist(80106)" >[查看列表]</a></span><span id="hidefl_80106" style="display: none;"><a href="javascript: hidefilelist(80106)">[隐藏列表]</a></span><a href="torrent_info.php?id=80106">[查看结构]</a></div><div><span id='filelist_80106'></span></div></div></div>
+		</div>
+	</div>
+				</table>
+			</div>
+		</div>
+	</div>	</div>
+</div>
+
+
+
+
+
+
+
+<br /><br /><table style='border-radius: 7px;'><tr><td class="text" align="center"><b>快速评论</b><br /><br /><form id="compose" name="comment" method="post" action="comment.php?action=add&amp;type=torrent&amp;group_id=26103" onsubmit="return postvalid(this);"><input type="hidden" name="pid" value="28902" /><br /><textarea name='body' cols="100" rows="8" style="width: 450px" onkeydown="ctrlenter(event,'compose','qr')"></textarea><div align="center"><a href="javascript: SmileIT('[em4]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/4.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/4.gif" alt="" /></a><a href="javascript: SmileIT('[em5]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/5.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/5.gif" alt="" /></a><a href="javascript: SmileIT('[em39]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/39.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/39.gif" alt="" /></a><a href="javascript: SmileIT('[em25]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/25.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/25.gif" alt="" /></a><a href="javascript: SmileIT('[em11]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/11.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/11.gif" alt="" /></a><a href="javascript: SmileIT('[em8]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/8.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/8.gif" alt="" /></a><a href="javascript: SmileIT('[em10]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/10.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/10.gif" alt="" /></a><a href="javascript: SmileIT('[em15]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/15.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/15.gif" alt="" /></a><a href="javascript: SmileIT('[em27]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/27.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/27.gif" alt="" /></a><a href="javascript: SmileIT('[em57]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/57.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/57.gif" alt="" /></a><a href="javascript: SmileIT('[em42]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/42.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/42.gif" alt="" /></a><a href="javascript: SmileIT('[em122]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/122.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/122.gif" alt="" /></a><a href="javascript: SmileIT('[em52]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/52.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/52.gif" alt="" /></a><a href="javascript: SmileIT('[em28]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/28.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/28.gif" alt="" /></a><a href="javascript: SmileIT('[em29]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/29.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/29.gif" alt="" /></a><a href="javascript: SmileIT('[em30]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/30.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/30.gif" alt="" /></a><a href="javascript: SmileIT('[em176]','comment','body')"  onmouseover="domTT_activate(this, event, 'content', '&lt;table&gt;&lt;tr&gt;&lt;td&gt;&lt;img src=\'public/pic/smilies/176.gif\' alt=\'\' /&gt;&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;', 'trail', false, 'delay', 0,'lifetime',10000,'styleClass','smilies','maxWidth', 400);"><img style="max-width: 25px;" src="public/pic/smilies/176.gif" alt="" /></a></div><br /><input type="submit" id="qr" class="btn" value="&nbsp;&nbsp;添加&nbsp;&nbsp;" /></form></td></tr></table><p align="center"><a class="index" href="comment.php?action=add&amp;pid=28902&amp;type=torrent&amp;group_id=26103">添加评论</a></p>
+</td></tr></table></div><div id="footer"><div style="margin-top: 10px; margin-bottom: 30px;" align="center"> (c)  <a href="https://www.haidan.cc" target="_self">HAIDAN</a> 2020-2026 Powered by <a href="aboutnexus.php">NexusPHP</a><br /><br />[page created in <b> 0.024397 </b> sec with <b>38</b> db queries, <b>30</b> reads and <b>1</b> writes of memcached and <b>2.41 MB</b> ram]</div>
+<div style="display: none;" id="lightbox" class="lightbox" onclick="Return()"></div><div style="display: none;" id="curtain" class="curtain" onclick="Return()"></div></div></body></html>

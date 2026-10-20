@@ -438,6 +438,24 @@ Windows 侧：
 - 踩坑记一笔：`replacingOccurrences(of:options:.regularExpression)` 对非法正则是**静默失败**
   （原串原样返回），`#"...["']…#` 少了个引号会让整段拼进一个原始字符串——两条都靠测试兜住了
 
+## 这一轮（海胆「已存在」推错种子：链接要按发布名认）
+
+- 现场：LuckPT 46566 转海胆，报「种子已存在」并把 `details.php?id=28902` 推给了下载器，
+  可 28902 是同片 2020 年的 VCB BDRip。海胆把同片每个版本并列在同一页里
+  （`torrent-wrap` 一块一块），排在最前的常是别人那条旧版本
+- 三处一起补：
+  1. `duplicateOutcome` 不再盲取页面上第一条 `download.php?id=`——并列多个 id 时只认
+     发布名对得上的那条（`duplicatePageTorrentID` + `torrentTitles`），认不出就不给链接，
+     交给流水线回站内按名重查（海胆真正的「该种子已存在！」页根本没有链接）
+  2. `verifiedDuplicate` 判成版本冲突时，先在**同一页**按发布名找回本次这条（海胆每个版本
+     一块，块里写着自己的标题）；只要判成「已存在」就一律存响应页，别再靠猜
+  3. 检索结果行不写发布名也不放详情链接的站（海胆是 `details.php?group_id=…&torrent_id=…`）：
+     按行内的 `download.php?id=` 逐条打开复核（≤3 条，站点负载可控），名称严格互含的那条
+     优先于词元放宽命中的那条——站内旧标题多一个 2Audios 备注时会选错
+- `conflictingVersion` 补「盘 vs 压制」这一档（`discForm`）：`medium()` 里 BDRip 仍按碟片系
+  算（各站发种选项就这么归），光看它认不出「1080p Blu-ray AVC」与「BDRip 1080」是两个版本
+- 测试 516 个全绿（新增 6 个：海胆真实多版本详情页 / 真实两版本检索页）
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

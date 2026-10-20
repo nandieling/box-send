@@ -596,19 +596,37 @@ class NexusPHPAdapter: SiteAdapter {
                 duplicateHitTitle = hit.text
                 return hit.href
             }
-            // 结果行根本不写发布名的站（海胆的结果行是「[全集] Blu-ray / H.264 / 1080p …」这种
-            // 拼装文案，详情链接也是 details.php?group_id=…&torrent_id=…）：名称匹配无从下手。
-            // 查询词本身就是发布名，结果页只有一条种子时它就是要找的那条——按行内的
-            // download.php?id=N 认 id，回详情页复核名称后才返回，避免把无关种子推下去。
-            if relaxed, detailHrefPattern.contains("details"),
-               let only = Self.singleResultTorrentID(html) {
-                let candidate = HTMLUtil.resolveURL("details.php?id=" + only, against: URL(string: url)!)
-                if let page = try? client.fetchHTML(candidate, referer: site.url),
-                   let found = (try? parseDetail(html: page, detailURL: candidate))?.name,
-                   Self.matchNames(target, releaseName: info.name)
-                       .contains(where: { Self.searchNamesMatch(found, $0, tokenTolerant: true) }) {
-                    duplicateHitTitle = found
-                    return candidate
+            // 页面能按版本块读出发布名的站（海胆的详情页/结果页并列同片多个版本）：块里的标题
+            // 就是发布名，直接按名定位，不看结果行那段拼装文案
+            if let hit = Self.matchingTorrentID(torrentTitles(on: html), releaseName: info.name),
+               let mine = detailURL(forID: hit.id) {
+                duplicateHitTitle = hit.title
+                return mine
+            }
+            // 结果行根本不写发布名、也不放详情链接的站（海胆的结果行是「[全集] Blu-ray / H.264 /
+            // 1080p …」这种拼装文案，详情链接是 details.php?group_id=…&torrent_id=…）：名称匹配
+            // 无从下手，只能拿行内的 download.php?id=N 逐条打开复核——同片多版本并列时排在最前的
+            // 常是别人的旧版本（实测海胆把 2020 年的 BDrip 推给了下载器），名称对上一才算找到
+            if detailHrefPattern.contains("details"),
+               Self.detailAnchors(html, hrefPattern: detailHrefPattern).isEmpty {
+                var loose: (url: String, title: String)?
+                for only in Self.resultTorrentIDs(html) {
+                    let candidate = HTMLUtil.resolveURL("details.php?id=" + only, against: URL(string: url)!)
+                    guard let page = try? client.fetchHTML(candidate, referer: site.url),
+                          let found = (try? parseDetail(html: page, detailURL: candidate))?.name,
+                          Self.matchNames(target, releaseName: info.name)
+                              .contains(where: { Self.searchNamesMatch(found, $0, tokenTolerant: true) })
+                    else { continue }
+                    // 名称严格互含的那条优先（同一条种子站内可能有带备注的旧标题）
+                    if Self.matchNames(target, releaseName: info.name).contains(where: { Self.searchNamesMatch(found, $0) }) {
+                        duplicateHitTitle = found
+                        return candidate
+                    }
+                    if loose == nil { loose = (candidate, found) }
+                }
+                if let loose {
+                    duplicateHitTitle = loose.title
+                    return loose.url
                 }
             }
         }
@@ -2192,7 +2210,8 @@ class NexusPHPAdapter: SiteAdapter {
         if Self.hasExistMarker(body), Self.looksLikeRejectedPage(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
                                            detailPattern: detailHrefPattern,
-                                           releaseName: info.name) {
+                                           releaseName: info.name,
+                                           torrentTitles: torrentTitles(on: body)) {
             return verifiedDuplicate(dup, info: info, body: body)
         }
         // 成功特征: 跳到新种子详情页 / 发布成功提示
@@ -2247,7 +2266,8 @@ class NexusPHPAdapter: SiteAdapter {
         if Self.hasExistMarker(msg) || Self.hasExistMarker(body),
            let dup = Self.duplicateOutcome(body: body, uploadURL: uploadURL,
                                            detailPattern: detailHrefPattern,
-                                           releaseName: info.name) {
+                                           releaseName: info.name,
+                                           torrentTitles: torrentTitles(on: body)) {
             return verifiedDuplicate(dup, info: info, body: body)
         }
         return UploadOutcome(success: false, message: msg, detailURL: nil)
@@ -2506,8 +2526,28 @@ class NexusPHPAdapter: SiteAdapter {
 
     /// 检索结果页只有一条种子时返回它的 id：结果行不写发布名的站（海胆）只能这样认
     static func singleResultTorrentID(_ html: String) -> String? {
-        let ids = Set(HTMLUtil.allGroups(html, #"download\.php\?id=(\d+)"#, group: 1))
+        let ids = resultTorrentIDs(html, limit: 2)
         return ids.count == 1 ? ids.first : nil
+    }
+
+    /// 检索结果页里出现的种子 id（按页面出现顺序，最多 3 条）：结果行不写发布名的站
+    /// 只能靠这些 id 逐条打开复核，限制条数免得给站点添负担
+    static func resultTorrentIDs(_ html: String, limit: Int = 3) -> [String] {
+        var seen = Set<String>(), out: [String] = []
+        for id in HTMLUtil.allGroups(html, #"download\.php\?id=(\d+)"#, group: 1) {
+            guard !seen.contains(id) else { continue }
+            seen.insert(id)
+            out.append(id)
+            if out.count >= limit { break }
+        }
+        return out
+    }
+
+    /// 结果行里的详情链接（userdetails 那种用户主页链接不算）：一行都没有，
+    /// 说明本站结果页不写详情链接，只能退到按种子 id 逐条复核
+    static func detailAnchors(_ html: String, hrefPattern: String) -> [(href: String, text: String)] {
+        HTMLUtil.anchorText(html, hrefPattern: hrefPattern, includeTitle: true)
+            .filter { !$0.href.contains("userdetails") && !$0.text.isEmpty }
     }
 
     /// 响应页讲的是哪条种子：NexusPHP 详情页不放指向自己的 details 链接，
@@ -2532,7 +2572,8 @@ class NexusPHPAdapter: SiteAdapter {
     /// detailPattern = 本站详情链接正则（TTG 是 /t/<id>/，默认 details.php?id=）。
     static func duplicateOutcome(body: String, uploadURL: String,
                                  detailPattern: String = "(?:details|torrents)\\.php\\?id=\\d+",
-                                 releaseName: String = "") -> UploadOutcome? {
+                                 releaseName: String = "",
+                                 torrentTitles: [String: String] = [:]) -> UploadOutcome? {
         let link = "(?:" + detailPattern + ")"
         // 注释块里常整段躺着横幅广告（实测猫站在页首注释着一条指向 Banner 图的 /details.php?id=2257）
         let page = HTMLUtil.stripComments(body)
@@ -2548,8 +2589,10 @@ class NexusPHPAdapter: SiteAdapter {
         take(Self.bestDetailAnchor(in: Self.existingTorrentBlock(page) ?? "",
                                    link: link, releaseName: releaseName))
         // 2) 提示页把已有种子展开成它自己的下载链接：织梦那次下载链接指向真种子 382434，
-        //    而页面上唯一的 details 链接是同剧另一版本 115285 WEB-DL
-        if existingURL == nil, detailPattern.contains("details"), let id = Self.pageTorrentID(page) {
+        //    而页面上唯一的 details 链接是同剧另一版本 115285 WEB-DL。页面并列多个 id 时
+        //    不能取排在最前那条（实测海胆推成了同片另一版本 28902）
+        if existingURL == nil, detailPattern.contains("details"),
+           let id = Self.duplicatePageTorrentID(page, releaseName: releaseName, titles: torrentTitles) {
             existingURL = HTMLUtil.resolveURL("details.php?id=" + id, against: URL(string: uploadURL)!)
         }
         // 3) 提示语之后那段里的详情链接，再退到整页：只认有锚文本的链接
@@ -2619,10 +2662,12 @@ class NexusPHPAdapter: SiteAdapter {
     /// 站内真正已有的那条是 382434 BD Remux——拿错就会把别的种子的 tracker 推给下载器。
     /// 版本对不上就把链接丢掉（流水线会回站内按名重查），实在查不到只报「没检索到」，不瞎推。
     func verifiedDuplicate(_ dup: UploadOutcome, info: ReleaseInfo, body: String) -> UploadOutcome {
+        // 只要判成「已存在」就存档：链接抓错时只有这一页能说明站方到底回了什么
+        let dump = dumpDebugHTML(body)
         guard let link = dup.detailURL, !link.isEmpty else {
             // 认不出已有种子是哪条：存下响应页（这类页各站长得不一样，没存档只能猜）
             var message = dup.message
-            if let dump = dumpDebugHTML(body) { message += "，响应页已存 \(dump)" }
+            if let dump { message += "，响应页已存 \(dump)" }
             return UploadOutcome(success: true, message: message, detailURL: nil, alreadyExists: true)
         }
         guard let page = try? client.fetchHTML(link, referer: site.url) else { return dup }
@@ -2631,9 +2676,55 @@ class NexusPHPAdapter: SiteAdapter {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if found.count >= 8 { duplicateHitTitle = found }
         guard found.count >= 8, Self.conflictingVersion(info.name, found) else { return dup }
+        // 版本对不上不等于这条不算：站方常把同片几个版本并列在一页里，按发布名在同一页找回本次这条
+        if let back = Self.matchingTorrentID(torrentTitles(on: page), releaseName: info.name),
+           let mine = detailURL(forID: back.id) {
+            duplicateHitTitle = back.title
+            return UploadOutcome(success: true,
+                                 message: "站点回「种子已存在」，本次未新发种（页面给的链接指向「\(found)」，"
+                                        + "已按本次发布名改认 \(back.id)）",
+                                 detailURL: mine, alreadyExists: true)
+        }
         var message = "站点回「种子已存在」，本次未新发种（页面给的链接指向「\(found)」，与本次版本不同）"
-        if let dump = dumpDebugHTML(body) { message += "，响应页已存 \(dump)" }
+        if let dump { message += "，响应页已存 \(dump)" }
         return UploadOutcome(success: true, message: message, detailURL: nil, alreadyExists: true)
+    }
+
+    /// 页面里「种子 id -> 该条种子的发布名」。默认空（多数站一页只讲一条种子）；
+    /// 站方把同片多版本并列在一页的（海胆）由子类逐块解析
+    func torrentTitles(on page: String) -> [String: String] { [:] }
+
+    /// 站点给的 id->发布名 表里挑与本次发布对得上的那条（同页其它版本不算）
+    static func matchingTorrentID(_ titles: [String: String], releaseName: String)
+            -> (id: String, title: String)? {
+        let usable = titles.filter { $0.value.count >= 8 }
+        // 同片多版本可能有两三条都对得上（旧的多了个 2Audios 备注）：先要严格互含的那条
+        if let exact = usable.first(where: { searchNamesMatch($0.value, releaseName) }) {
+            return (exact.key, exact.value)
+        }
+        guard let loose = usable.first(where: { searchNamesMatch($0.value, releaseName, tokenTolerant: true) })
+        else { return nil }
+        return (loose.key, loose.value)
+    }
+
+    /// 页面上出现的所有种子 id（与 `pageTorrentID` 同一批线索）
+    static func pageTorrentIDs(_ body: String) -> Set<String> {
+        var ids: Set<String> = []
+        for pat in [#"download\.php\?id=(\d+)"#, #"torrent_info\.php\?id=(\d+)"#] {
+            ids.formUnion(HTMLUtil.allGroups(body, pat, group: 1))
+        }
+        return ids
+    }
+
+    /// 「已存在」响应页里本次这条种子的 id：页面只有一条种子时就是它；并列多条
+    /// （同片多版本，实测海胆把 2020 年的 BDrip 排在最前）时只认发布名对得上的那条，
+    /// 认不出返回 nil，留给调用方回站内按名重查
+    static func duplicatePageTorrentID(_ page: String, releaseName: String,
+                                       titles: [String: String] = [:]) -> String? {
+        let ids = pageTorrentIDs(page)
+        guard !ids.isEmpty else { return nil }
+        if ids.count == 1 { return ids.first }
+        return matchingTorrentID(titles, releaseName: releaseName)?.id
     }
 
     /// 两个发布名是否明显指向不同版本：两边都声明了介质 / 分辨率 / 编码 / 音频中的某一项，
@@ -2644,11 +2735,25 @@ class NexusPHPAdapter: SiteAdapter {
             (QualityTokens.standard(from: ours), QualityTokens.standard(from: theirs)),
             (QualityTokens.codec(fromName: ours), QualityTokens.codec(fromName: theirs)),
             (QualityTokens.audio(from: ours), QualityTokens.audio(from: theirs)),
+            (discForm(ours), discForm(theirs)),
         ]
         return signals.contains { a, b in
             guard let a, let b else { return false }
             return a != b
         }
+    }
+
+    /// 名字里声明的介质形态：原盘/Remux 算 raw，BDRip/WebRip/HDTV 这类算 pressed。
+    /// medium() 里 BDRip 仍归碟片系（各站选项按碟片归类），这一档只给版本冲突判定用：
+    /// 「1080p Blu-ray AVC」与「BDRip 1080」是两条不同种子，别把别人的推给下载器
+    static func discForm(_ name: String) -> String? {
+        let n = name.lowercased()
+        if ["bdrip", "brrip", "bd-rip", "webrip", "web-rip", "web dl", "web-dl", "hdtv",
+            "dvdrip"].contains(where: { n.contains($0) }) { return "pressed" }
+        if ["remux", "bdmv", "bluray", "blu-ray", "bdiso", "blu-ray iso"].contains(where: { n.contains($0) }) {
+            return "raw"
+        }
+        return nil
     }
 
     /// 站点回「必填项目缺失」这类整份 POST 疑似未送达的签名

@@ -22,20 +22,39 @@ final class HaidanAdapter: NexusPHPAdapter {
     /// 刚发的新种因此被判成「不是本次发布的」，推给下载器的是同页另一条种子。
     /// 页面上找不到这个 id 时返回 nil，调用方退回整页（改版、只有一块等情况）
     static func torrentBlock(forID id: String, in html: String) -> String? {
+        torrentBlocks(in: html).first {
+            $0.contains("download.php?id=" + id) || $0.contains("edit.php?id=" + id)
+        }
+    }
+
+    /// 按版本块切页（详情页用 torrent-wrap、检索页用 torrent_wrap，都算一块）
+    static func torrentBlocks(in html: String) -> [String] {
         let ns = html as NSString
-        guard let re = try? NSRegularExpression(pattern: "class=['\"]torrent-wrap", options: [])
-        else { return nil }
+        guard let re = try? NSRegularExpression(pattern: "class=['\"]torrent[-_]wrap", options: [])
+        else { return [] }
         let marks = re.matches(in: html, range: NSRange(location: 0, length: ns.length))
             .map { $0.range.location }
-        guard !marks.isEmpty else { return nil }
-        for (i, start) in marks.enumerated() {
+        return marks.enumerated().map { i, start in
             let end = i + 1 < marks.count ? marks[i + 1] : ns.length
-            let chunk = ns.substring(with: NSRange(location: start, length: end - start))
-            if chunk.contains("download.php?id=" + id) || chunk.contains("edit.php?id=" + id) {
-                return chunk
-            }
+            return ns.substring(with: NSRange(location: start, length: end - start))
         }
-        return nil
+    }
+
+    /// 同一页并列几个版本时，每块各自写着本块的发布名：逐块读出 id -> 发布名，
+    /// 「已存在」响应页给的链接指向别的版本时靠它找回本次这条（见 verifiedDuplicate）
+    override func torrentTitles(on page: String) -> [String: String] {
+        var out: [String: String] = [:]
+        for block in Self.torrentBlocks(in: page) {
+            guard let id = HTMLUtil.group(block, #"download\.php\?id=(\d+)"#, group: 1),
+                  let raw = HTMLUtil.group(block,
+                          "detail-info-item-name'>\\s*标题\\s*</span>[\\s\\S]{0,400}?<b><span>([^<]+)</span>",
+                          group: 1) else { continue }
+            let name = HTMLUtil.stripTags(raw)
+                .replacingOccurrences(of: "&nbsp;", with: " ", options: .literal)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.count >= 8 { out[id] = name }
+        }
+        return out
     }
 
     /// 纯解析（供测试）
