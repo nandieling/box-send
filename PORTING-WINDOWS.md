@@ -456,6 +456,18 @@ Windows 侧：
   算（各站发种选项就这么归），光看它认不出「1080p Blu-ray AVC」与「BDRip 1080」是两个版本
 - 测试 516 个全绿（新增 6 个：海胆真实多版本详情页 / 真实两版本检索页）
 
+## 这一轮（观众的自定义下拉：读不到选项就选不到「Blu-ray DIY」）
+
+- LuckPT 46569 转观众，媒介选成「Blu-ray 原盘」，应为「Blu-ray DIY」。原因不在打分：
+  `applyQualitySelects` 早留了「值表写死 Blu-ray、本站另有 DIY 项且本次是 DIY 就改选 DIY」这条
+  退路，但观众的选项不写在 `<select>` 里，而是隐藏 `input[name=medium_sel]` + 紧随的
+  `<ul class="ui-dropdown-list">` 里 `<a data-value="14">Blu-ray DIY</a>`——`selectGroups`
+  读不到选项，那条退路根本没机会跑，值表的 `bluray: 1` 就直接发出去了
+- `HTMLUtil.selectGroups` 增读这类自定义下拉（`dropdownGroups`：按 input 名找紧随的 `<ul>`，
+  取 `data-value` + 文案），两端共用一份，前端不用动
+- 全站点回归：改动前后跑同一源站 76 站的字段审计，只有 `audiences.medium_sel` 从 1 变 14
+- 测试 519 个全绿（新增 3 个：下拉选项可读、内封中字蓝光选 DIY、无中字证据仍选原盘）
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

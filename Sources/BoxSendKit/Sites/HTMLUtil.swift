@@ -187,6 +187,29 @@ enum HTMLUtil {
             }
             out.append((mode, opts))
         }
+        out += dropdownGroups(html, name: name)
+        return out
+    }
+
+    /// 自定义下拉（观众：隐藏的 `input[name=x_sel]` + 紧随的 `<ul>` 里 `<a data-value="N">文案</a>`）：
+    /// 这类页面没有 `<select>`，读不到选项就只能照配置表写死值，站方的「Blu-ray DIY」这类
+    /// 更准的选项就永远选不到
+    static func dropdownGroups(_ html: String, name: String) -> [(mode: String?, options: [(value: String, label: String)])] {
+        let pat = "<input[^>]*name=['\"]" + NSRegularExpression.escapedPattern(for: name)
+            + "['\"][^>]*>[\\s\\S]{0,600}?<ul[^>]*>([\\s\\S]*?)</ul>"
+        guard let re = try? NSRegularExpression(pattern: pat, options: []) else { return [] }
+        let ns = NSRange(html.startIndex..., in: html)
+        var out: [(String?, [(String, String)])] = []
+        for m in re.matches(in: html, options: [], range: ns) {
+            guard m.numberOfRanges >= 2, let bodyR = Range(m.range(at: 1), in: html) else { continue }
+            var opts: [(String, String)] = []
+            for o in firstMatches(String(html[bodyR]),
+                                  "<a[^>]*data-value=['\"]([^'\"]*)['\"][^>]*>([\\s\\S]*?)</a>") {
+                guard !o.0.isEmpty else { continue }
+                opts.append((o.0, stripTags(o.1).trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
+            if !opts.isEmpty { out.append((nil, opts)) }
+        }
         return out
     }
 
