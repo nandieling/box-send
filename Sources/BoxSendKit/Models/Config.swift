@@ -74,6 +74,8 @@ public struct SiteOverride: Codable {
     var titleMode: String?
     /// 解析详情标题后剥离的站名后缀（城市 "<title>" 带品牌后缀）
     var titleStrip: String?
+    /// 主标题里的「.」改写成该串后再提交（套：点号要写 "{@}"，直接发点会被站点换成空格）
+    var titleDotAs: String?
     /// 本站追加的 Remux 主标题改写规则（"Blu-ray" -> "BluRay" 已全站点默认生效，见 ReleaseTitle）：
     /// 键 = 标题里的 token（不区分大小写，按 . _ - 空格 分词整词匹配），值 = 改写后的写法；
     /// 标题里没有独立的 Remux 段时不改
@@ -181,6 +183,7 @@ extension SiteOverride {
         if let v = titleField { out.titleField = v }
         if let v = titleMode { out.titleMode = v }
         if let v = titleStrip { out.titleStrip = v }
+        if let v = titleDotAs { out.titleDotAs = v }
         if let v = remuxTitleTokens { out.remuxTitleTokens = base.remuxTitleTokens?.merging(v) { _, new in new } }
         if let v = descrField { out.descrField = v }
         if let v = imdbField { out.imdbField = v }

@@ -150,6 +150,8 @@ extension SiteOverride {
         torrentLinkPattern: "/dl/\\d+/\\d+$",
         uploadActionPath: "takeupload.php",
         titleField: "name",
+        // 套的标题里点号要写 "{@}"：直接发 "." 会被站点换成空格（"DTS-HD MA 5.1" 存成 "MA 5 1"）
+        titleDotAs: "{@}",
         imdbField: "imdb_c",
         doubanField: "douban_id",
         categoryField: "type",

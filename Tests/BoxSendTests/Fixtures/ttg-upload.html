@@ -1,0 +1,687 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<link type="image/x-icon" href="/favicon.ico" rel="icon"/>
+<link type="image/x-icon" href="/favicon.ico" rel="shortcut icon"/>
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' 'unsafe-eval' *.cloudflare.com *.google-analytics.com *.cnzz.com; object-src 'none'; child-src https:">
+
+<script src="/js/jquery.min.js" type="text/javascript" /></script>
+<script>
+    function mobileplayer()
+    {
+        var platform = navigator.platform;
+        var ua = navigator.userAgent;
+        var ios = /iPhone|iPad|iPod/.test(platform) && ua.indexOf( "AppleWebKit" ) > -1;
+        var andriod = ua.indexOf( "Android" ) > -1;
+        if(ios || andriod) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    function AC_FL_RunContent() {
+        var str = '';
+        var ret = AC_GetArgs(arguments, "clsid:d27cdb6e-ae6d-11cf-96b8-444553540000", "application/x-shockwave-flash");
+        if($.browser.msie && !$.browser.opera) {
+            str += '<object ';
+            for (var i in ret.objAttrs) {
+                str += i + '="' + ret.objAttrs[i] + '" ';
+            }
+            str += '>';
+            for (var i in ret.params) {
+                str += '<param name="' + i + '" value="' + ret.params[i] + '" /> ';
+            }
+            str += '</object>';
+        } else {
+            str += '<embed ';
+            for (var i in ret.embedAttrs) {
+                str += i + '="' + ret.embedAttrs[i] + '" ';
+            }
+            str += '></embed>';
+        }
+        return str;
+    }
+    function AC_GetArgs(args, classid, mimeType) {
+        var ret = new Object();
+        ret.embedAttrs = new Object();
+        ret.params = new Object();
+        ret.objAttrs = new Object();
+        for (var i = 0; i < args.length; i = i + 2){
+            var currArg = args[i].toLowerCase();
+            switch (currArg){
+                case "classid":break;
+                case "pluginspage":ret.embedAttrs[args[i]] = 'http://www.macromedia.com/go/getflashplayer';break;
+                case "src":ret.embedAttrs[args[i]] = args[i+1];ret.params["movie"] = args[i+1];break;
+                case "codebase":ret.objAttrs[args[i]] = 'http://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0';break;
+                case "onafterupdate":case "onbeforeupdate":case "onblur":case "oncellchange":case "onclick":case "ondblclick":case "ondrag":case "ondragend":
+                case "ondragenter":case "ondragleave":case "ondragover":case "ondrop":case "onfinish":case "onfocus":case "onhelp":case "onmousedown":
+                case "onmouseup":case "onmouseover":case "onmousemove":case "onmouseout":case "onkeypress":case "onkeydown":case "onkeyup":case "onload":
+                case "onlosecapture":case "onpropertychange":case "onreadystatechange":case "onrowsdelete":case "onrowenter":case "onrowexit":case "onrowsinserted":case "onstart":
+                case "onscroll":case "onbeforeeditfocus":case "onactivate":case "onbeforedeactivate":case "ondeactivate":case "type":
+                case "id":ret.objAttrs[args[i]] = args[i+1];break;
+                case "width":case "height":case "align":case "vspace": case "hspace":case "class":case "title":case "accesskey":case "name":
+                case "tabindex":ret.embedAttrs[args[i]] = ret.objAttrs[args[i]] = args[i+1];break;
+                default:ret.embedAttrs[args[i]] = ret.params[args[i]] = args[i+1];
+            }
+        }
+        ret.objAttrs["classid"] = classid;
+        if(mimeType) {
+            ret.embedAttrs["type"] = mimeType;
+        }
+        return ret;
+    }
+</script>
+<script src="/js/zoom2.v.js" type="text/javascript" /></script>
+<!--[if IE 6]>
+<script src="js/DD_belatedPNG_0.0.8a-min.js"></script>
+<script>
+  DD_belatedPNG.fix('#site_logo');
+</script>
+<![endif]-->
+
+
+<script type="text/javascript" src="/js/klappe.js"></script>
+<script type="text/javascript" src="/js/ctrlent.js"></script>
+<script type="text/javascript" src="/js/facebox.js"></script>
+<title>TTG :: 上传</title>
+<meta name="keywords" content="TTG,套套哥,听听歌"/>
+<meta name="description" content="totheglory,套套哥,听听歌"/>
+<link rel="stylesheet" href="/css/default.css?221015" type="text/css">
+
+<script type="text/javascript">
+  //var _gaq = _gaq || [];
+  //_gaq.push(['_setAccount', 'UA-25606536-1']);
+  //_gaq.push(['_trackPageview']);
+
+  //(function() {
+  //  var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+  //  ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+  //  var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  //})();
+
+  function blink(selector){
+    $(selector).fadeOut('normal', function(){
+        $(this).fadeIn('normal', function(){
+            blink(this);
+        });
+    });
+  }
+
+  function goTop() {
+    $(window).scroll(function(e) {
+        if($(window).scrollTop()>300)
+            $("#gotop").fadeIn(300);
+        else
+            $("#gotop").fadeOut(300);
+    });
+  };
+  $(document).ready(function(){
+    $("a#signed").click(function(){
+        $.post("signed.php", {signed_timestamp: "1792503276", signed_token: "acf89be0aa4042a02cb6092567a00246"}, function(data) {
+            $('#sp_signed').html("<b style=\"color:green;\">已签到</b>");
+            alert(data);
+        });
+    });
+    $("a.nocheck").click(function(){
+        if (!confirm('确认使用此道具？'))
+            return false;
+        var tid=$(this).attr("tid");
+        var mid=$(this).attr("mid");
+        $.post("/usemall.php", {c: "nocheck", tid: tid, mid: mid}, function(data) {
+            alert(data);
+        });
+    });
+    $('a[rel*=modal_notice]').facebox();
+    blink('span#blink');
+
+    $("#gotop").click(function(e) {
+        $('body,html').animate({scrollTop:0},500);
+    });
+    goTop();
+  });
+</script>
+</head>
+<body>
+<table width="100%" cellspacing="0" cellpadding="0" style="background:transparent; min-width:1126px;">
+<tr>
+<td class="clear" width="49%">
+<div id="site_logo" style="margin-bottom: 6px;background:url('/pic/ttg_logo_1.png') no-repeat 0 0;width:429px;height:73px;"></div>
+</td>
+<td class=clear>
+</td>
+<td class=clear width=49% align=right>
+</td>
+</tr></table>
+<!-- /////// Added by hdmonster 2007-07-31 //////// -->
+<!-- /////// some vars for the statusbar;o) //////// -->
+
+
+<script>
+function showmenu(){
+	var targetMenu=$('#browse_menu');
+	var offset=$('#browseBtn').offset();
+	targetMenu.css('top',offset.top+40);
+	targetMenu.css('left',offset.left);
+	targetMenu.show()
+}
+function hidemenu(){
+var targetMenu=$('#browse_menu');
+	targetMenu.hide()
+}
+</script>
+<table cellpadding="4" cellspacing="1" border="0" style="width:100%; min-width:1126px;">
+<tr><td ><table style="width:100%" cellspacing="0" cellpadding="0" border="0">
+  <tr>
+  <td class="bottom" align="left">
+      <span class="smallfont">欢迎回来，<b><a href="/userdetails.php?id=159493">nan</a></b>
+&nbsp;&nbsp;&nbsp;
+[<span id="sp_signed"><b style="color:green;">已签到</b></span>]&nbsp;&nbsp;&nbsp;[<a href="/donate.php">捐助</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/my.php">控制面板</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/mycarts.php"><font color=purple><b>小货车</b></font></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/bookmarks.php">收藏夹</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/ndreports.php"><font color="#FF00BF"><b>禁转举报</b></font></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/invite.php">邀请：<span id='invites'>0</span></a>]
+&nbsp;&nbsp;&nbsp;[<a href="/rsstools.php">RSS订阅</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/logout.php">退出</a>]
+&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;[<a href="/blackjack.php">BlackJack</a>]
+&nbsp;&nbsp;&nbsp;[<a href="/bet.php">菠菜</a>]<br/>
+<font color=1900D1>分享率 :</font> <font color=#000000>5.040</font>&nbsp;&nbsp;<font color=green>上传量 : </font> <font color=black><a href="#" onclick="return false;" title="55,488,229.86 MB">52.918 TB</a></font>&nbsp;&nbsp;<font color=darkred>下载量 :</font> <font color=black><a href="#" onclick="return false;" title="11,009,229.44 MB">10.499 TB</a></font>&nbsp;&nbsp;&nbsp;&nbsp;<font color=1900D1>做种活动 :&nbsp;</font></span> <img alt="做种中" title="做种中" src="/pic/arrowup.gif">&nbsp;<font color=black><span class="smallfont">298</span></font>&nbsp;&nbsp;<img alt="下载中" title="下载中" src="/pic/arrowdown.gif">&nbsp;<font color=black><span class="smallfont">0</span></font>&nbsp;&nbsp;<font color=A83838>HP:&nbsp;</font>5&nbsp;&nbsp;积分 : <a href="/mybonus.php">615249.34</a>&nbsp;&nbsp;<a href="/mall.php"><b style="color:#FF8000;">积分商城</b></a>
+</td>
+<td class="bottom" align="right">
+    <a href="?&changelang=8"><img src="/pic/flag/china.gif" width="16" height="10" title="中文(Chinese)" border="0" alt="中文"></a>
+    <a href="?&changelang=12"><img src="/pic/flag/uk.gif" width="16" height="10" title="英文(English)" border="0" alt="英文"></a>
+    <a href="?&changelang=17"><img src="/pic/flag/japan.gif" width="16" height="10" title="日本語(japanese)" border="0" alt="日本語"></a>
+    <a href="?&changelang=30"><img src="/pic/flag/south_korea.gif" width="16" height="10" title="韩文(Korean)" border="0" alt="韩文"></a>
+    <span class="smallfont">当前时间 : 21:34<br/>
+<span class=smallfont><a href=/messages.php?action=viewmailbox&box=1><img height=14px style=border:none alt=inbox title='inbox (no new messages)' src=/pic/pn_inbox.gif></a> 97 (0 <b>新</b>)</span><span class=smallfont>&nbsp;&nbsp;<a href=/messages.php?action=viewmailbox&box=-1><img height=14px style=border:none alt="发件箱" title="发件箱" src=/pic/pn_sentbox.gif></a> 0</span>&nbsp;<a href=/friends.php><img style=border:none alt="好友列表" title="好友列表" src=/pic/buddylist.gif></a></span></td></tr></table></td></tr></table>
+<p>
+
+<div id="book_tools" style="width:100%; min-width:1126px;">
+<div class="inner clearfix">
+<table class=main style="width:95%" cellspacing="0" cellpadding="5" border="0" align="center" id="nav_table">
+<tr>
+<td align="center" class="navigation"><a href="/index.php">首页<br />Home</a></td>
+<!--<td align="center" class="navigation"><a href="http://totheglory.im/bbs" target="_blank"><font color=red><b>社区<br />Forum</b></font></a></td>-->
+<td align="center" class="navigation"><a href="/forums.php"><font color=red><b>社区<br />Forum</b></font></a></td>
+<td align="center" class="navigation"><a id="browseBtn" href="/browse.php?c=M">影视&音乐(<font color=red><b>新</b></font>)<br />Media</a></td>
+<td align="center" class="navigation"><a id="browseBtn" href="/browse.php?c=G">游戏&软件(<font color=red><b>新</b></font>)<br />Gamez&Warez</a></td><td align="center" class="navigation"><a href=/upload.php>上传<br />Upload</a></td><td align="center" class="navigation"><a href=/viewoffers.php>候选区(<font color=red><b>新</b></font>)<br />Offer</a></td><td align="center" class="navigation"><a href=/topten.php>排行<br />Top10</a></td><td align="center" class="navigation"><a href="/rules.php">规则<br />Rules</a></td>
+<td align="center" class="navigation"><a href="/faq.php">常见问题<br />FAQ</a></td>
+</tr>
+</table>
+</div>
+</div>
+<table class="mainouter" style="width:100%; min-width:1126px;table-layout: fixed;overflow: hidden;" border="1" cellspacing="0" cellpadding="10" id="main_table">
+<tr><td align=center class=outer style="padding-top: 20px; padding-bottom: 20px">
+<script>
+    function switchSSL(s){
+        var form=$('#upload');
+        if(s){
+            form.attr('action',form.attr('action').replace('https://','http://'));
+        }else{
+            form.attr('action',form.attr('action').replace('http://','https://'));
+        }
+
+    }
+    function checkSSL(obj){
+        obj.checked?switchSSL(false):switchSSL(true);
+    }
+    $(function(){
+        checkSSL(document.getElementById('ssl_check'));
+    });
+
+</script>
+<!-- 感谢https://api.iyuu.cn/ptgen/ -->
+<script>    // 脚本查询相关
+    function jsonp(url, arg, fn) {
+        let srpt = document.createElement('script');
+        let funName = 'fun_' + Math.random().toString().substr(3);
+
+        let queryString = '';
+        for (let key in arg) {
+            queryString += key + '=' + arg[key] + '&'
+        }
+        url += '?' + queryString + 'callback=' + funName;
+
+        window[funName] = fn;
+        srpt.src = url;
+        document.body.appendChild(srpt);
+    }
+    const doubanEntApiKeys = [
+        "0dad551ec0f84ed02907ff5c42e8ec70",
+        "02646d3fb69a52ff072d47bf23cef8fd"
+    ];
+
+    function getDoubanEntApiKey() {  // 随机获取一个key
+        return doubanEntApiKeys[Math.floor(Math.random() * doubanEntApiKeys.length)];
+    }
+
+    $(function () {
+        let input_btn = $("#input_value");
+        let query_btn = $("#query_btn");
+        let out_textarea = $("textarea[name='descr']");
+   
+        query_btn.disable = function () {
+            query_btn.attr("disabled", true);
+            query_btn.html("查询中");
+        };
+    
+        query_btn.enable = function () {
+            query_btn.removeAttr("disabled");
+            query_btn.html("查询");
+        };
+    
+        query_btn.click(function () {
+            let input_value = input_btn.val();
+            if (input_value.length === 0) {
+                alert("空字符，请检查输入");
+            } else if (/^\d+$/.test(input_value) || /^tt\d+/.test(input_value) || /^http/.test(input_value)) {
+                //纯数字、tt编号、url连接，进入此流程
+                // 当前使用的api
+                let api_point = "https://api.iyuu.cn/App.Movie.Ptgen";
+                query_btn.disable();
+                let param = {
+                    url: input_value
+                };
+                if ((input_value.match(/imdb\.com\/title\/tt\d+/) || input_value.match(/tt\d+/)) && $('#force_douban').prop('checked')) {
+                    if (api_point.match(/api\.iyuu\.cn/)) {
+                        param = {
+                            url: input_value,
+                            site: 'douban'
+                        }
+                    } else {
+                        let sid = input_value.match(/tt\d+/)[0];
+                        param = {
+                            site: 'douban',
+                            sid: sid
+                        }
+                    }
+                }
+                out_textarea.empty();
+                out_textarea.append("[size=4][b][color=green][font=Microsoft YaHei]本资源仅限会员测试带宽之用，严禁用于商业用途！\n对用于商业用途所产生的法律责任，由使用者自负！[/font][/color][/b][/size]\n\n\n");
+                // 请求
+                $.getJSON(api_point, param).success(function (data) {
+                    if (api_point.match(/api\.iyuu\.cn/)) {
+                        out_textarea.append(data["ret"] !== 200 ? data["msg"] : data.data["format"]);
+                    } else {
+                        out_textarea.append(data["success"] === false ? data["error"] : data["format"]);
+                    }
+                }).fail(function (jqXHR) {
+                    alert(jqXHR.ret === 429 ? 'Met Rate Limit, Retry later~' : "Error occured!");
+                }).complete(function () {
+                    query_btn.enable();
+                });
+            }
+        });
+    });
+</script>
+
+<div align=Center>
+    <form name="upload" id="upload" enctype="multipart/form-data" action="/takeupload.php" method="post">
+        <input type="hidden" name="MAX_FILE_SIZE" value="4000000" />
+        <input type="hidden" name="team" value="" />
+        <input type="hidden" name="hr" value="no" />        <p>Tracker 的发布地址是：<b>https://tracker.totheglory.im</b></p>
+        <p><b style="color:green">发布者的上传量全部为2x计算，希望您能踊跃发布 ^_^</b></p>
+        <p><label class=label-required>标记的为必填项</label></p>
+        <table border="1" cellspacing="0" cellpadding="10">
+            <tr><td class="heading" valign="top" align="right" nowrap><label class=label-required>种子文件</label></td><td valign="top" align=left><input type=file name=file size=100> <br />（<font color=red><b>做种前请务必设置UT关闭DHT公用网络，否则您的上传量将会传给外站用户！</b></font>）
+</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap><label class=label-required>类别</label></td><td valign="top" align=left><select name="type">
+<option value="0">（请选择一个）</option>
+<option value="47">MAC</option>
+<option value="28">PC</option>
+<option value="45">XBOX to XBOX360</option>
+<option value="49">XBLA</option>
+<option value="5">XBOX360</option>
+<option value="105">XBOX1</option>
+<option value="26">PS2</option>
+<option value="104">PS4</option>
+<option value="29">PSP</option>
+<option value="46">PS3</option>
+<option value="107">PSV</option>
+<option value="110">SWITCH</option>
+<option value="44">NDS</option>
+<option value="106">WIIU</option>
+<option value="27">WII</option>
+<option value="43">NGC</option>
+<option value="48">PSP兼容高清&amp;标清</option>
+<option value="33">PS3兼容高清</option>
+<option value="30">Game Video</option>
+<option value="31">XBOX360兼容高清</option>
+<option value="51">电影DVDRip</option>
+<option value="52">电影720p</option>
+<option value="53">电影1080i/p</option>
+<option value="54">BluRay原盘</option>
+<option value="108">影视2160p</option>
+<option value="109">UHD原盘</option>
+<option value="62">纪录片720p</option>
+<option value="63">纪录片1080i/p</option>
+<option value="67">纪录片BluRay原盘</option>
+<option value="69">欧美剧720p(单集)</option>
+<option value="70">欧美剧1080i/p(单集)</option>
+<option value="73">高清日剧</option>
+<option value="76">大陆港台剧720p(单集)</option>
+<option value="75">大陆港台剧1080i/p(单集)</option>
+<option value="74">高清韩剧</option>
+<option value="87">欧美剧包(全集)</option>
+<option value="88">日剧包</option>
+<option value="99">韩剧包</option>
+<option value="90">华语剧包(全集)</option>
+<option value="77">APPZ</option>
+<option value="32">Game Ebook</option>
+<option value="56">Ebook</option>
+<option value="82">(电影原声&amp;Game)OST</option>
+<option value="83">无损音乐FLAC&amp;APE</option>
+<option value="59">MV&amp;演唱会</option>
+<option value="57">高清体育节目</option>
+<option value="58">高清动漫</option>
+<option value="103">韩国综艺</option>
+<option value="101">日本综艺</option>
+<option value="60">高清综艺</option>
+<option value="91">MiniVideo</option>
+<option value="84">补充音轨</option>
+<option value="92">iPhone/iPad视频</option>
+<option value="93">iPhone/iPad游戏</option>
+<option value="94">iPad书籍</option>
+<option value="95">iPhone/iPad软件</option>
+<option value="111">动漫原盘</option>
+</select>
+</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap><label class=label-required>标题</label></td><td valign="top" align=left><input type="text" name="name" style="width:623px" placeholder="The Summit of the Gods 2021 1080p BluRay x264 DTS-WiKi"/> <br /><font color=red><b>须按规定命名，将加粗显示。</b></font><br/>如：<b>The Summit of the Gods 2021 1080p BluRay x264 DTS-WiKi</b>
+</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap>副标题</td><td valign="top" align=left><input type="text" name="subtitle" style="width:480px" placeholder="神之山岭/「第47届法国凯撒电影奖(2022)最佳动画片提名」" maxlength='55' /><input type="text" name="highlight" style="margin:0 0 0 3px;width:132px" placeholder="*内封简繁字幕" /> <br /><b>将在标题下显示，右侧框输入内容会加粗突出。<font color=red>此处不再需要加'['和']'来换行。</font><br/><font color=blue>（备注：副标题为非必填项！如填写请尽量精简，勿复制一堆无用信息）</font></b><br/>如：神之山岭/「第47届法国凯撒电影奖(2022)最佳动画片提名」<b>*内封简繁字幕</b>
+</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap>NFO 文件</td><td valign="top" align=left><input type=file name=nfo size=100> <br>（<b>选填</b>！最简单的方法是新建txt文本，输入内容，保存并更改后缀为.nfo格式
+</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap>辅助填写简介</td><td valign="top" align=left><input type="text" style="width:623px" placeholder="豆瓣号 / IMDb号；豆瓣 / IMDb / Bangumi / Steam / Epic / Indienova等资源链接" id="input_value"/>&nbsp;&nbsp;<button class="btn btn-success" id="query_btn">查询</button>
+</td></tr>
+            <tr><td class="heading" valign="top" align="right" nowrap=""><label class="label-required">简介</label></td><td align="left">
+            
+    <script language=javascript>
+        function insertAtCursor(myField, myValue) {
+//IE support
+            if (document.selection) {
+                myField.focus();
+                sel = document.selection.createRange();
+                sel.text = myValue;
+            }
+
+//MOZILLA/NETSCAPE support
+            else if (myField.selectionStart || myField.selectionStart == '0') {
+                var startPos = myField.selectionStart;
+                var endPos = myField.selectionEnd;
+                myField.value = myField.value.substring(0, startPos) + myValue + myField.value.substring(endPos, myField.value.length);
+                myField.selectionEnd = startPos + myValue.length;
+            } else {
+                myField.value += myValue;
+            }
+            myField.focus();
+        }
+
+        // calling the function
+        function SmileIT(smile, form, text) {
+            insertAtCursor(document.forms[form].elements[text], smile)
+        }
+
+        function PopMoreSmiles(form, name) {
+            link = 'smilies.php?form=' + form + '&text=' + name
+            newWin = window.open(link, 'moresmile', 'height=500,width=450,resizable=no,scrollbars=yes');
+            if (window.focus) {
+                newWin.focus()
+            }
+        }
+
+        function PopMoreTags(form, name) {
+            link = 'tags.php?form=' + form + '&text=' + name
+            newWin = window.open(link, 'moresmile', 'height=500,width=775,resizable=no,scrollbars=yes');
+            if (window.focus) {
+                newWin.focus()
+            }
+        }
+
+
+        function BBTag(tag, s, text, form) {
+            var df = document.forms[form].elements[s];
+            var ele = document.forms[form].elements[text];
+            var tval;
+            var ttag;
+            switch (tag) {
+                case '[quote]':
+                    tval = "QUOTE ";
+                    ttag = "[/quote]";
+                    if (df.value == "QUOTE ") {
+                        tval = "QUOTE*";
+                        ttag = "[quote]";
+                    }
+                    break;
+                case '[swf]':
+                    tval = "SWF ";
+                    ttag = "[/swf]";
+                    if (df.value == "SWF ") {
+                        tval = "SWF*";
+                        ttag = "[swf]";
+                    }
+                    break;
+                case '[img]':
+                    tval = "IMG ";
+                    ttag = "[/img]";
+                    if (df.value == "IMG ") {
+                        tval = "IMG*";
+                        ttag = "[img]";
+                    }
+                    break;
+
+                case '[url]':
+                    tval = "URL ";
+                    ttag = "[/url]";
+                    if (df.value == "URL ") {
+                        tval = "URL*";
+                        ttag = "[url]";
+                    }
+                    break;
+
+                case '[*]':
+                    tval = "List ";
+                    if (df.value == "List ") ttag = "[*]";
+                    break;
+
+                    insertAtCursor(ele, tag);
+                    df.elements[s].value = tval;
+                    break;
+
+                case '[hr]':
+                    tval = "Hr ";
+                    if (df.value == "HR ") {
+                        ttag = "[HR]";
+                    }
+                    insertAtCursor(ele, tag);
+                    df.elements[s].value = tval;
+                    break;
+
+                case '[center]':
+                    tval = "Center";
+                    ttag = "[/center]";
+                    if (df.value == "Center ") {
+                        tval = "Center* ";
+                        ttag = "[center]";
+                    }
+
+
+                    break;
+
+                case '[b]':
+                    tval = "B ";
+                    ttag = "[/b]";
+                    if (df.value == "B ") {
+                        tval = "B*";
+                        ttag = "[b]";
+                    }
+                    break;
+                case '[size]':
+                    tval = "Size ";
+                    ttag = "[/size]";
+                    if (df.value == "Size ") {
+                        size = prompt("请输入字体大小(1~7),例如\"1\"", "1");
+                        if (size == '' || Number(size) < 1 || Number(size) > 7) {
+                            ttag = "[size=1]";
+                            break;
+                        }
+                        tval = "Size*";
+                        ttag = "[size=" + size + "]";
+                    }
+                    break;
+                case '[color]':
+                    tval = "Color ";
+                    ttag = "[/color]";
+                    if (df.value == "Color ") {
+                        color = prompt("请输入指定的颜色，例如\"blue、red、yellow\"；或者RGB颜色，例如\"#FF0000\"", "black");
+                        if (color == '') {
+                            ttag = "[color=black]"
+                            break;
+                        }
+                        ttag = "[color=" + color + "]";
+                        tval = "Color*";
+                    }
+                    break;
+
+                case '[i]':
+                    tval = "I ";
+                    ttag = "[/i]";
+                    if (df.value == "I ") {
+                        tval = "I*";
+                        ttag = "[i]";
+                    }
+                    break;
+
+                case '[u]':
+                    tval = "U ";
+                    ttag = "[/u]";
+                    if (df.value == "U ") {
+                        tval = "U*";
+                        ttag = "[u]";
+                    }
+                    break;
+            }
+            if (tval != "") df.value = tval;
+            if (ttag != "") insertAtCursor(ele, ttag);
+        }
+
+    </script>
+
+    <table width="98%" style='margin: 3px' cellpadding="0" cellspacing="0">
+        <tr>
+            <td class=embedded colspan=2>
+                <table cellpadding="2" cellspacing="1">
+                    <tr>
+                        <td class=embedded><input style="font-weight: bold;" type="button" name="bold" value="B "
+                                                  onclick="javascript: BBTag('[b]','bold','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="size" value="Size "
+                                                  onclick="javascript: BBTag('[size]','size','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="color" value="Color "
+                                                  onclick="javascript: BBTag('[color]','color','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input style="font-style: italic;" type="button" name="italic" value="I "
+                                                  onclick="javascript: BBTag('[i]','italic','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input style="text-decoration: underline;" type="button" name="underline"
+                                                  value="U "
+                                                  onclick="javascript: BBTag('[u]','underline','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="li" value="List "
+                                                  onclick="javascript: BBTag('[*]','li','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="quote" value="QUOTE "
+                                                  onclick="javascript: BBTag('[quote]','quote','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="url" value="URL "
+                                                  onclick="javascript: BBTag('[url]','url','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="img" value="IMG "
+                                                  onclick="javascript: BBTag('[img]','img','descr','upload')"/>
+                        </td>
+                        <td class=embedded><input type="button" name="swf" value="SWF "
+                                                  onclick="javascript: BBTag('[swf]','swf','descr','upload')"/>
+                        </td>
+                        <!--
+      <td class=embedded><input type="button" name="hr" value="HR " onclick="javascript: BBTag('[hr]','hr','descr','upload')" /></td>
+      <td class=embedded><input type="button" name="center" value="Center " onclick="javascript: BBTag('[center]','center','descr','upload')" /></td>
+//-->
+                        <td class=embedded>&nbsp;<a
+                                    href="javascript: PopMoreTags('upload','descr')">更多标签</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <td class=embedded>
+                                    <textarea name="descr" rows="20" cols="100"
+                              onkeyup="javascript:return ctrlEnter(event);">[size=4][b][color=green][font=Microsoft YaHei]本资源仅限会员测试带宽之用，严禁用于商业用途！
+对用于商业用途所产生的法律责任，由使用者自负！[/font][/color][/b][/size]
+
+
+</textarea>
+                                </td>
+            <td class=embedded>
+                <table cellpadding="3" cellspacing="1">
+                    <tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-)','upload','descr')"><img border=0 src=/pic//smilies/smile1.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':smile:','upload','descr')"><img border=0 src=/pic//smilies/smile2.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-D','upload','descr')"><img border=0 src=/pic//smilies/grin.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':lol:','upload','descr')"><img border=0 src=/pic//smilies/laugh.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':w00t:','upload','descr')"><img border=0 src=/pic//smilies/w00t.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-P','upload','descr')"><img border=0 src=/pic//smilies/tongue.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(';-)','upload','descr')"><img border=0 src=/pic//smilies/wink.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-|','upload','descr')"><img border=0 src=/pic//smilies/noexpression.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-/','upload','descr')"><img border=0 src=/pic//smilies/confused.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-(','upload','descr')"><img border=0 src=/pic//smilies/sad.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':`-(','upload','descr')"><img border=0 src=/pic//smilies/cry.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':weep:','upload','descr')"><img border=0 src=/pic//smilies/weep.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':-O','upload','descr')"><img border=0 src=/pic//smilies/ohmy.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':o)','upload','descr')"><img border=0 src=/pic//smilies/clown.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT('8-)','upload','descr')"><img border=0 src=/pic//smilies/cool1.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT('|-)','upload','descr')"><img border=0 src=/pic//smilies/sleeping.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':innocent:','upload','descr')"><img border=0 src=/pic//smilies/innocent.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':whistle:','upload','descr')"><img border=0 src=/pic//smilies/whistle.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':unsure:','upload','descr')"><img border=0 src=/pic//smilies/unsure.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':closedeyes:','upload','descr')"><img border=0 src=/pic//smilies/closedeyes.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':cool:','upload','descr')"><img border=0 src=/pic//smilies/cool2.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':fun:','upload','descr')"><img border=0 src=/pic//smilies/fun.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':thumbsup:','upload','descr')"><img border=0 src=/pic//smilies/thumbsup.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':thumbsdown:','upload','descr')"><img border=0 src=/pic//smilies/thumbsdown.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':blush:','upload','descr')"><img border=0 src=/pic//smilies/blush.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':yes:','upload','descr')"><img border=0 src=/pic//smilies/yes.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':no:','upload','descr')"><img border=0 src=/pic//smilies/no.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':love:','upload','descr')"><img border=0 src=/pic//smilies/love.gif></a></td></tr><tr>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':?:','upload','descr')"><img border=0 src=/pic//smilies/question.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':!:','upload','descr')"><img border=0 src=/pic//smilies/excl.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':arrow:','upload','descr')"><img border=0 src=/pic//smilies/arrow.gif></a></td>
+<td class=embedded style='padding: 3px; margin: 2px'><a href="javascript: SmileIT(':idea:','upload','descr')"><img border=0 src=/pic//smilies/idea.gif></a></td></tr>                </table>
+
+                <center>&nbsp;<a
+                            href="javascript: PopMoreSmiles('upload','descr')">更多笑脸</a>
+                </center>
+            </td>
+        </tr>
+    </table>
+                </td></tr>
+            <tr><td class="heading" valign="top" align="right" nowrap>匿名发布</td><td valign="top" align=left><select name="anonymity" style="width:90px;"><option value="-1">请选择</option><option value="yes">是</option><option value="no">否</option></select> 非匿名发布后，无法转变为匿名发布！</td></tr>
+<tr><td class="heading" valign="top" align="right" nowrap>禁转</td><td valign="top" align=left><select name="nodistr" style="width:90px;"><option value="yes">是</option><option value="no" selected="selected">否</option></select>&nbsp;<font color=red><b>请确认所发布的为原创资源，才有权选择此项。恶意违反者将受到惩罚！</b></font><br/>禁转资源，请在种子简介醒目位置标明禁转，例如：<br /><font color="red">TTG限定独占发布！禁止转载~This is only for TTG,don‘t upload it anywhere else!</font></td></tr>
+            <tr><td valign="top" nowrap="" align="right" class="heading">IMDb</td><td valign="top" align="left"><input type="text" name="imdb_c" placeholder="tt0000000"/></td></tr>
+            <tr><td valign="top" nowrap="" align="right" class="heading">豆瓣</td><td valign="top" align="left"><input type="text" name="douban_id" placeholder="34967489"/></td></tr>
+            <tr><td valign="top" nowrap="" align="right" class="heading">使用SSL发布</td><td valign="top" align="left"><input onclick="checkSSL(this);this.blur();" type="checkbox" id="ssl_check"  /></td></tr>
+
+            <tr><td align="center" colspan="2"><input type="submit" class=btn value="发布" /></td></tr>
+        </table>
+    </form>
+    </td></tr><tr valign=top><td align="center" style="background-color:#E6E6FA;line-height:220%"><a href="/disclaimer.php" target="_blank">免责条款</a> | <script type="text/javascript">var cnzz_protocol = (("https:" == document.location.protocol) ? " https://" : " http://");document.write(unescape("%3Cspan id='cnzz_stat_icon_4085974'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "s94.cnzz.com/stat.php%3Fid%3D4085974%26show%3Dpic' type='text/javascript'%3E%3C/script%3E"));</script></td></tr></table><div id="gotop" title="回到顶部"></div>
+    <!--<script type="text/javascript">
+        (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)})(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+        ga('create', 'UA-50968028-1', 'totheglory.im');
+        ga('send', 'pageview');
+    </script>-->
+  <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"d96713e2f2e84d0ab3d8c51596434649","r":1,"spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4d866a35a6d6053',t:'MTc5MjUwMzI3Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body></html>

@@ -758,7 +758,36 @@ class NexusPHPAdapter: SiteAdapter {
         // 站点对 Remux 片源写法的硬性要求全站点通用（春天、青蛙：写 Blu-ray 直接拒收，必须 BluRay），
         // 本站 overrides 里追加的写法并进同一张表整词替换
         t = ReleaseTitle.rewrite(t, extraTokens: override?.remuxTitleTokens)
+        // 套：点号有保留写法（"{@}"），直接发点会被站方换成空格
+        if let dot = override?.titleDotAs, !dot.isEmpty {
+            t = t.replacingOccurrences(of: ".", with: dot)
+        }
         return t
+    }
+
+    /// 站方把方括号当排版时的副标题拆分（套：「此处不再需要加'['和']'」，另有 highlight 框）：
+    /// 括号里的说明（"[内封中字]"）挪去「加粗突出」框，副标题只留片名
+    static func splitSubtitleNote(_ subtitle: String) -> (main: String, note: String?) {
+        var notes: [String] = []
+        var main = subtitle
+        for pattern in [#"【([^【】]{1,30})】"#, #"\[([^\[\]]{1,30})\]"#] {
+            notes += HTMLUtil.allMatches(main, pattern).compactMap { HTMLUtil.group($0, pattern, group: 1) }
+            main = main.replacingOccurrences(of: pattern, with: " ", options: [.regularExpression])
+        }
+        main = main.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: [.regularExpression])
+            .trimmingCharacters(in: .whitespaces)
+        let note = notes.map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        guard !note.isEmpty else { return (main, nil) }
+        return (main, note.hasPrefix("*") ? note : "*" + note)
+    }
+
+    /// 输入框的 maxlength（站方限长的字段超了会被截，先按站方口径裁）
+    static func inputMaxlength(_ page: String, name: String) -> Int? {
+        let tagPattern = #"<input[^>]*name=["']"# + NSRegularExpression.escapedPattern(for: name) + #"[^>]*>"#
+        guard let tag = HTMLUtil.allMatches(page, tagPattern)
+            .first(where: { $0.range(of: "maxlength", options: .caseInsensitive) != nil }) else { return nil }
+        return HTMLUtil.group(tag, #"maxlength=["']?(\d+)"#, options: [.caseInsensitive]).flatMap(Int.init)
     }
 
     /// 发布名里是否有独立的 Remux 段（规则见 ReleaseTitle）
@@ -1848,8 +1877,18 @@ class NexusPHPAdapter: SiteAdapter {
 
         // 业务字段
         setField(titleField, resolvedTitle(info))
-        if let f = override?.subtitleField, !info.subtitle.isEmpty {
-            setField(f, info.subtitle)
+        if let f = override?.subtitleField, var sub = info.subtitle.isEmpty ? nil : info.subtitle {
+            // 站方自带方括号排版（套：副标题不需要加 [ ]）：括号里的说明挪到「加粗突出」框
+            if HTMLUtil.firstMatch(page, "<input[^>]*name=[\"']highlight[\"']", options: [.caseInsensitive]) != nil {
+                let (main, note) = Self.splitSubtitleNote(sub)
+                sub = main
+                if let note { setField("highlight", note) }
+            }
+            // 站方限长的字段按站方口径裁掉，免得服务端悄悄截断
+            if let max = Self.inputMaxlength(page, name: f), sub.count > max {
+                sub = String(sub.prefix(max))
+            }
+            if !sub.isEmpty { setField(f, sub) }
         }
         // 新版 NexusPHP 有独立 MediaInfo 文本域时不内嵌进简介（详情页分开渲染）
         // technical_info / media_info / media_bdinfo（cmct 的 "Media_BDInfo"）
