@@ -88,7 +88,28 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertEqual(again.prefix(2).map { $0 }, Array(pick.reversed()), "手动排序要顶到最前面")
     }
 
-    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）
+    /// 辅种弹窗的候选不受转种分组影响：已纳管的站照样能辅种，加过之后才从弹窗消失
+    func testAssistCandidatesIgnoreReseedGroups() throws {
+        let (svc, _) = try makeService()
+        let id = ((try svc.invoke("sites.candidates")["sites"] as! [[String: Any]])[0])["id"] as! String
+        _ = try svc.invoke("sites.add", ["ids": [id], "group": -1])
+
+        let plain = ((try svc.invoke("sites.candidates"))["sites"] as! [[String: Any]]).map { $0["id"] as! String }
+        XCTAssertFalse(plain.contains(id), "转种弹窗里已纳管的站照旧不重复出现")
+        let forAssist = ((try svc.invoke("sites.candidates", ["assist": true]))["sites"] as! [[String: Any]])
+            .map { $0["id"] as! String }
+        XCTAssertTrue(forAssist.contains(id), "辅种弹窗要能选到已在转种分组里的站")
+
+        _ = try svc.invoke("assist.addSites", ["ids": [id]])
+        let after = ((try svc.invoke("sites.candidates", ["assist": true]))["sites"] as! [[String: Any]])
+            .map { $0["id"] as! String }
+        XCTAssertFalse(after.contains(id), "已经加进辅种的站要从弹窗移除")
+        let group = (try svc.invoke("sites.add", ["ids": ["__none__"], "group": -1]))["sites"] as! [[String: Any]]
+        XCTAssertEqual(group.first(where: { ($0["id"] as? String) == id })?["managed"] as? Bool, true,
+                       "辅种不改动转种纳管状态")
+    }
+
+    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）
     func testAssistSitesJoinPoolWithoutGroup() throws {
         let (svc, dir) = try makeService()
         try clearGroups(svc)

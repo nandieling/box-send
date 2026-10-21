@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="添加转种分组和站点" FontWeight="SemiBold"
+                       Margin="0,0,0,8" Foreground="{DynamicResource TextMuted}" />
             <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                 <Label Content="分组名" VerticalAlignment="Center" />
                 <TextBox x:Name="NewGroupName" Width="190" VerticalAlignment="Center" />

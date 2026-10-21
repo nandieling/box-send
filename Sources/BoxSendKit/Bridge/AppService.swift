@@ -218,8 +218,10 @@ public final class AppService {
             let matched = cfg.site(forURL: params["url"] as? String ?? "")
             return ["id": matched?.id ?? "", "name": matched?.name ?? ""]
         case "sites.candidates":
-            // 批量添加站点弹窗：待添加的站点连同显示顺序一起由核心排好（含名称拼音默认序）
-            let rows: [[String: Any]] = cfg.unmanagedDisplayOrder().compactMap { id in
+            // 批量添加站点弹窗：待添加的站点连同显示顺序一起由核心排好（含名称拼音默认序）。
+            // assist=true 是辅种区块那份：不看转种分组，只排掉已在辅种名单里的站
+            let order = (params["assist"] as? Bool) == true ? cfg.assistDisplayOrder() : cfg.unmanagedDisplayOrder()
+            let rows: [[String: Any]] = order.compactMap { id in
                 guard let s = cfg.site(id) else { return nil }
                 return ["id": s.id, "name": s.name, "url": s.url]
             }

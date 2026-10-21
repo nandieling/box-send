@@ -227,7 +227,9 @@ public sealed class AddSitesWindow : Window
 
     private void LoadCandidates()
     {
-        var rows = _model.Api.Invoke("sites.candidates")["sites"]?.AsArray() ?? new JsonArray();
+        // 辅种那份不受转种分组影响：列全部站点，只排掉已经在辅种名单里的（规则在核心）
+        var rows = (_model.Api.Invoke("sites.candidates", new { assist = _assist })["sites"]?.AsArray()
+                    ?? new JsonArray());
         foreach (var n in rows)
         {
             _all.Add((n!["id"]?.GetValue<string>() ?? "",

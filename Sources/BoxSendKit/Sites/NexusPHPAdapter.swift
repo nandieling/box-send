@@ -917,7 +917,7 @@ class NexusPHPAdapter: SiteAdapter {
         // 动漫站点把剧场版/OVA 单列（蝴蝶 428=剧场OVA）：单片先按这些词找，再回到通用动漫词
         if kind == "anime", shape != "series",
            let hit = matchKeywords(["剧场版", "剧场", "ova", "电影版"]) { return hit }
-        if let hit = matchKeywords(Self.kindKeywords.first { $0.0 == kind }?.1 ?? []) { return hit }
+        if let hit = matchKeywords(Self.kindKeywordsFor(kind, shape: shape)) { return hit }
         // 站点没有动漫分区（观众这类只有电影/剧集/纪录片的站）：动画按本身形态落进剧集/电影，
         // 不退到「其他」——动画是标签，不该决定分区
         if kind == "anime" {
@@ -994,6 +994,17 @@ class NexusPHPAdapter: SiteAdapter {
         return (seriesWords + ["合集"] + (completed ? ["完结", "完結"] : []) + shapePrefer,
                 filmWords + (completed ? ["连载"] : []) + shapeAvoid,
                 completed ? ["合集"] : ["分集"])
+    }
+
+    /// 站把动画按形态拆成两个分类（藏宝阁 404「动画」= 电影 / 单集，405「动漫」= 整季番剧）：
+    /// 首选关键词要跟着发布形态换，否则通用顺序里排第一的「动漫」会把剧场版也抢走。
+    static func kindKeywordsFor(_ kind: String, shape: String) -> [String] {
+        guard kind == "anime", shape != "series",
+              let base = kindKeywords.first(where: { $0.0 == kind })?.1 else {
+            return kindKeywords.first { $0.0 == kind }?.1 ?? []
+        }
+        // 单片先看「动画」，站里没这一项再退回「动漫」及其余同义词
+        return ["动画", "动漫"] + base.filter { $0 != "动画" && $0 != "动漫" }
     }
 
     /// 分类选项打分：关键词越靠前、选项越短，越像"就是这个分类"；

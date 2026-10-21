@@ -48,11 +48,24 @@ public extension AppConfig {
     /// 「批量添加站点」弹窗的显示顺序：先按用户手动排过的那份，剩下的按名称默认序（拼音）追加。
     /// 排序规则放核心，界面两端只管显示与回写，不会出现 mac 排完 Windows 又排歪。
     public func unmanagedDisplayOrder() -> [String] {
-        let unmanaged = sourceSites.filter { !$0.managed }
-        let ids = Set(unmanaged.map(\.id))
+        dialogDisplayOrder(sourceSites.filter { !$0.managed }.map(\.id))
+    }
+
+    /// 辅种区块的待添加列表：不看转种分组（已纳管、已在分组里的站照样能拉来辅种），
+    /// 只排除已经在辅种名单里的——加过的就该从弹窗里消失
+    public var assistCandidateIDs: [String] {
+        let picked = Set(assist?.siteIDs ?? [])
+        return sourceSites.filter { !picked.contains($0.id) }.map(\.id)
+    }
+
+    public func assistDisplayOrder() -> [String] { dialogDisplayOrder(assistCandidateIDs) }
+
+    /// 弹窗显示顺序：手动排过的那份在前（两份名单共用同一份排序），其余按名称默认序
+    func dialogDisplayOrder(_ pool: [String]) -> [String] {
+        let ids = Set(pool)
         let saved = unmanagedSiteOrder.filter { ids.contains($0) }
         let placed = Set(saved)
-        let rest = unmanaged.map(\.id).filter { !placed.contains($0) }
+        let rest = pool.filter { !placed.contains($0) }
             .sorted { NameSort.isBefore(site($0)?.name ?? $0, site($1)?.name ?? $1) }
         return saved + rest
     }

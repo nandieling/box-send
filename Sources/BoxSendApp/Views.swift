@@ -545,7 +545,7 @@ struct SitesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("添加分组和站点").font(.headline)
+                    Text("添加转种分组和站点").font(.headline)
                     HStack(spacing: 10) {
                         Text("分组名").foregroundStyle(.secondary)
                         TextField("", text: $newGroupName, prompt: Text("分组名"))
@@ -976,8 +976,10 @@ struct AddSitesSheet: View {
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
 
+    /// 辅种那份不受转种分组影响：已纳管的站也能再拉来辅种，只排掉已经在辅种名单里的
     private var allCandidateIDs: [String] {
-        model.config.sourceSites.filter { !$0.managed }.map { $0.id }
+        assist ? model.config.assistCandidateIDs
+               : model.config.sourceSites.filter { !$0.managed }.map { $0.id }
     }
 
     private var displayIDs: [String] {
@@ -1040,7 +1042,7 @@ struct AddSitesSheet: View {
             }
             HStack {
                 Text(assist
-                     ? "点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后不参与转种分组，直接进辅种站点列表。"
+                     ? "点击卡片选中要添加的站点（加深色 = 已选中）；这里列全部站点，已在转种分组里的也能辅种，添加后直接进辅种区块。"
                      : "点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
@@ -1059,15 +1061,11 @@ struct AddSitesSheet: View {
         .padding()
         .frame(width: 640, height: 540)
         .onAppear {
-            // 优先沿用用户手动排序；未保存过的按名称默认排序（数字开头在前，其余拼音字母序）
-            let all = model.config.sourceSites.filter { !$0.managed }.map { $0.id }
-            let valid = Set(all)
-            let saved = model.config.unmanagedSiteOrder.filter { valid.contains($0) }
-            let rest = all.filter { !saved.contains($0) }
-                .sorted { a, b in NameSort.isBefore(model.config.site(a)?.name ?? a, model.config.site(b)?.name ?? b) }
-            order = saved + rest
+            // 优先沿用用户手动排序；未保存过的按名称默认排序（规则在核心，两端一份）
+            order = assist ? model.config.assistDisplayOrder() : model.config.unmanagedDisplayOrder()
         }
-        // 手动排序（拖拽 / 序号）持久化，关闭弹窗后不再恢复默认顺序
+        // 手动排序（拖拽 / 序号）持久化，关闭弹窗后不再恢复默认顺序。
+        // 辅种那份会把已纳管的站也列进来，这份顺序就是两份弹窗共用的「弹窗显示顺序」
         .onChange(of: order) { _ in
             model.config.unmanagedSiteOrder = order
             model.saveConfig()
