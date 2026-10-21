@@ -597,6 +597,8 @@ public sealed class SiteRow : INotifyPropertyChanged
     public string Framework { get; init; } = "";
     public bool Enabled { get; init; }
     public bool Managed { get; init; }
+    /// <summary>在辅种名单里（「站点分组」页底部的辅种区块显示）</summary>
+    public bool Assist { get; init; }
     public int Group { get; init; }
     public int IndexInBlock { get; init; }
     public int BlockSize { get; init; }
@@ -712,6 +714,7 @@ public sealed class SiteRow : INotifyPropertyChanged
             Framework = n["framework"]?.GetValue<string>() ?? "",
             Enabled = n["enabled"]?.GetValue<bool>() ?? false,
             Managed = n["managed"]?.GetValue<bool>() ?? false,
+            Assist = n["assist"]?.GetValue<bool>() ?? false,
             Group = n["group"]?.GetValue<int>() ?? -1,
             IndexInBlock = n["indexInBlock"]?.GetValue<int>() ?? -1,
             BlockSize = n["blockSize"]?.GetValue<int>() ?? 0,

@@ -88,6 +88,37 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertEqual(again.prefix(2).map { $0 }, Array(pick.reversed()), "手动排序要顶到最前面")
     }
 
+    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）
+    func testAssistSitesJoinPoolWithoutGroup() throws {
+        let (svc, dir) = try makeService()
+        try clearGroups(svc)
+        let id = ((try svc.invoke("sites.candidates")["sites"] as! [[String: Any]])[0])["id"] as! String
+
+        let rows = try svc.invoke("assist.addSites", ["ids": [id]])["sites"] as! [[String: Any]]
+        guard let row = rows.first(where: { ($0["id"] as? String) == id }) else {
+            return XCTFail("辅种站点应该在站点行里")
+        }
+        XCTAssertEqual(row["managed"] as? Bool, true, "辅种站点要进站点池，cookie 与限速才管得住")
+        XCTAssertEqual(row["group"] as? Int, -1, "辅种站点不进任何转种分组")
+        XCTAssertEqual(row["assist"] as? Bool, true, "行上要有辅种标记，界面才知道画进辅种区块")
+        // 两处区块的划分口径也在核心：辅种站点只出现在辅种区块，未分组区块不再列它
+        let saved = try XCTUnwrap(AppConfig.load(path: dir + "/boxsend.json"))
+        XCTAssertEqual(saved.assistManagedSites.map(\.id), [id])
+        XCTAssertTrue(saved.unassignedManagedSites.isEmpty, "辅种站点不该在未分组区块再列一遍")
+
+        let cfg = (try svc.invoke("config.get"))["config"] as! [String: Any]
+        let assistIDs = ((cfg["assist"] as? [String: Any])?["siteIDs"] as? [String]) ?? []
+        XCTAssertEqual(assistIDs, [id], "辅种白名单要落到配置里")
+
+        let after = try svc.invoke("assist.removeSite", ["id": id])["sites"] as! [[String: Any]]
+        let gone = after.first(where: { ($0["id"] as? String) == id })!
+        XCTAssertEqual(gone["managed"] as? Bool, false, "退出辅种又不在任何分组，应一并移出站点池")
+
+        let cfg2 = (try svc.invoke("config.get"))["config"] as! [String: Any]
+        XCTAssertEqual(((cfg2["assist"] as? [String: Any])?["siteIDs"] as? [String]) ?? [], [],
+                       "退出辅种要清掉白名单")
+    }
+
     /// 转种页那行「源站：自动（某站）」靠它，匹配规则必须留在核心（界面不自己抄一份）
     func testMatchURLIdentifiesSourceSite() throws {
         let (svc, _) = try makeService()

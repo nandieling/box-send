@@ -21,20 +21,18 @@ public partial class MainWindow : Window
 
         // 顶部页签：矢量图标 + 标题，配色跟随主题（样式在 App.xaml）
         TabRun.Header = TabIcons.Header(TabIcons.Run, "批量转种");
+        TabAssist.Header = TabIcons.Header(TabIcons.Assist, "辅种");
         TabSites.Header = TabIcons.Header(TabIcons.Sites, "站点分组");
         TabCookies.Header = TabIcons.Header(TabIcons.Cookie, "Cookie");
         TabDownloader.Header = TabIcons.Header(TabIcons.Downloader, "下载器");
-        TabAssist.Header = TabIcons.Header(TabIcons.Assist, "辅种");
-        TabLogs.Header = TabIcons.Header(TabIcons.Logs, "日志");
         TabSettings.Header = TabIcons.Header(TabIcons.Settings, "设置");
 
         // 六个区块在代码里装配（界面要读模型，XAML 里没法带构造参数）
         TabRun.Content = new RunView(model);
+        TabAssist.Content = new AssistView(model);
         TabSites.Content = new SitesView(model);
         TabCookies.Content = new CookiesView(model);
         TabDownloader.Content = new DownloaderView(model);
-        TabAssist.Content = new AssistView(model);
-        TabLogs.Content = new LogsView(model);
         TabSettings.Content = new SettingsView(model);
 
         _model.FullRefreshed += (_, _) => ReapplyTheme();

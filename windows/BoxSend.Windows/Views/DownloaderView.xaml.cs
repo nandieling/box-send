@@ -1,10 +1,12 @@
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>下载器页：qBittorrent / Transmission 连接信息、限速与推送策略。</summary>
+/// <summary>下载器页：每台一张卡片，添加后直接列出、直接改（与 mac 版一致，
+/// 不再需要先选「正在编辑哪一台」）；用途指派与 SSH 测速在顶部与底部。</summary>
 public partial class DownloaderView : UserControl
 {
     private readonly AppModel _model;
@@ -18,57 +20,189 @@ public partial class DownloaderView : UserControl
     }
 
     private bool _loading;
-    /// 表单当前编辑哪台（"main" = 主下载器）
-    private string _editingID = "main";
 
-    /// 快照回来就整页重填：列表、用途、表单都以核心库那份为准
+    /// 快照回来就整页重填：用途指派与每台一张卡片都以核心库那份为准
     private void Load()
     {
         _loading = true;
         Result.Text = _model.DownloaderMessage;
 
         var list = _model.Downloaders;
-        var picked = list.FirstOrDefault(d => d.Id == _editingID) ?? list.LastOrDefault();
-        if (picked == null)
-        {
-            _loading = false;
-            return;
-        }
-        _editingID = picked.Id;
-        DlPick.ItemsSource = list;
-        DlPick.SelectedValue = picked.Id;
-        DlName.Text = picked.Name;
-        BtnDelDl.IsEnabled = !picked.IsMain;
-        ConnCard.Header = $"连接（{picked.Label}）";
         RoleReseed.ItemsSource = list;
         RoleReseed.SelectedValue = _model.ReseedDownloaderID;
         RoleAssist.ItemsSource = list;
         RoleAssist.SelectedValue = _model.AssistDownloaderID;
 
-        Select(Type, picked.Type);
-        Url.Text = picked.Url;
-        User.Text = picked.Username;
-        Pass.Password = picked.Password;
-        SavePath.Text = picked.SavePath;
-        Category.Text = picked.Category;
-        SkipCheck.IsChecked = picked.SkipChecking;
-        DefaultLimit.Text = (picked.DefaultUpLimit / 1048576).ToString();
-        Select(PushPolicy, picked.PushPolicy);
-        Select(GuardMode, picked.SizeGuardMode);
-        GuardMargin.Text = picked.SizeGuardMarginGB.ToString();
-        VpsFree.Text = picked.VpsFreeGB > 0 ? picked.VpsFreeGB.ToString() : "";
+        BuildCards(list);
         LoadSSH();
         _loading = false;
     }
 
-    // MARK: 多台下载器
-
-    private void OnDownloaderPicked(object sender, SelectionChangedEventArgs e)
+    /// 一台一张卡片；重建会把正在输入的内容换掉，所以只在整份刷新时跑（与 mac 同一时机）
+    private void BuildCards(IReadOnlyList<DownloaderRow> list)
     {
-        if (_loading || DlPick.SelectedValue is not string id || id == _editingID) return;
-        _editingID = id;
-        Load();
+        DlCards.Children.Clear();
+        foreach (var d in list) DlCards.Children.Add(CardFor(d));
     }
+
+    private UIElement CardFor(DownloaderRow d)
+    {
+        var name = new TextBox { Text = d.Name };
+        var type = new ComboBox { MinHeight = 30 };
+        type.Items.Add(new ComboBoxItem { Content = "qBittorrent", Tag = "qbittorrent" });
+        type.Items.Add(new ComboBoxItem { Content = "Transmission", Tag = "transmission" });
+        Select(type, d.Type);
+        var url = new TextBox { Text = d.Url };
+        var user = new TextBox { Text = d.Username };
+        var pass = new TextBox { Text = d.Password };
+        var savePath = new TextBox { Text = d.SavePath };
+        var category = new TextBox { Text = d.Category };
+        var limit = new TextBox { Text = (d.DefaultUpLimit / 1048576).ToString(), Width = 60 };
+        var push = new ComboBox { MinHeight = 30, Width = 150 };
+        push.Items.Add(new ComboBoxItem { Content = "转种成功就推", Tag = "onSuccess" });
+        push.Items.Add(new ComboBoxItem { Content = "总是推", Tag = "always" });
+        Select(push, d.PushPolicy);
+        var skip = new CheckBox { Content = "跳过校验", IsChecked = d.SkipChecking, VerticalAlignment = VerticalAlignment.Center };
+        var vpsFree = new TextBox { Text = d.VpsFreeGB > 0 ? d.VpsFreeGB.ToString() : "", Width = 60 };
+        var guard = new ComboBox { MinHeight = 30, Width = 110 };
+        guard.Items.Add(new ComboBoxItem { Content = "只提示", Tag = "warn" });
+        guard.Items.Add(new ComboBoxItem { Content = "跳过推送", Tag = "skip" });
+        Select(guard, d.SizeGuardMode);
+        var margin = new TextBox { Text = d.SizeGuardMarginGB.ToString(), Width = 50 };
+        var status = new TextBlock
+        {
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)FindResource("TextMuted"),
+        };
+
+        JsonObject Collect()
+        {
+            var o = new JsonObject
+            {
+                ["id"] = d.Id,
+                ["name"] = string.IsNullOrWhiteSpace(name.Text) ? d.Label : name.Text.Trim(),
+                ["type"] = SelectedTag(type),
+                ["url"] = url.Text.Trim(),
+                ["username"] = user.Text,
+                ["password"] = pass.Text,
+                ["savePath"] = string.IsNullOrWhiteSpace(savePath.Text) ? null : savePath.Text.Trim(),
+                ["category"] = string.IsNullOrWhiteSpace(category.Text) ? null : category.Text.Trim(),
+                ["skipChecking"] = skip.IsChecked == true,
+                ["defaultUpLimit"] = Mb(limit, 10485760),
+                ["pushPolicy"] = SelectedTag(push),
+                ["sizeGuardMode"] = SelectedTag(guard),
+                ["sizeGuardMarginGB"] = int.TryParse(margin.Text.Trim(), out var g) ? g : 20,
+                ["vpsFreeGB"] = int.TryParse(vpsFree.Text.Trim(), out var free) ? free : (int?)null,
+            };
+            return o;
+        }
+
+        void Save()
+        {
+            if (_loading) return;
+            _model.SaveDownloader(Collect());
+            status.Text = "已保存";
+        }
+
+        async void Test()
+        {
+            Save();
+            status.Text = "测试中…";
+            // 连下载器要走网络：放在界面线程上，窗口会先「未响应」一下
+            var error = await _model.TestDownloaderAsync(d.Id);
+            status.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
+        }
+
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Put(grid, 0, 0, Labeled("名字（列表与用途下拉里显示）", name));
+        Put(grid, 0, 1, Labeled("类型", type));
+        Put(grid, 1, 0, Labeled("地址（VPS 隧道地址，如 http://127.0.0.1:8080）", url));
+        Put(grid, 1, 1, Two(
+            Labeled("用户名", user),
+            Labeled("密码", pass)));
+        Put(grid, 2, 0, Two(
+            Labeled("保存路径（留空用下载器默认）", savePath),
+            Labeled("qBittorrent 分类", category)));
+        Put(grid, 2, 1, Two(
+            Labeled("默认上传限速 MB/s", limit),
+            Two(Labeled("推送时机", push), skip)));
+
+        var guardRow = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), };
+        guardRow.Children.Add(Labeled("VPS 剩余空间（GB，留空不检查）", vpsFree));
+        guardRow.Children.Add(Labeled("不足时", guard));
+        guardRow.Children.Add(Labeled("余量 GB", margin));
+
+        var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var save = new Button
+        {
+            Content = "保存",
+            Style = (Style)FindResource("Primary"),
+        };
+        save.Click += (_, _) => Save();
+        buttons.Children.Add(save);
+        var test = new Button { Content = "测试连接", Margin = new Thickness(10, 0, 0, 0) };
+        test.Click += (_, _) => Test();
+        buttons.Children.Add(test);
+        var del = new Button
+        {
+            Content = "删除这台",
+            Margin = new Thickness(10, 0, 0, 0),
+            IsEnabled = !d.IsMain,
+            ToolTip = d.IsMain ? "主下载器不能删" : "删除这台下载器",
+        };
+        del.Click += (_, _) =>
+        {
+            var err = _model.RemoveDownloader(d.Id);
+            status.Text = err ?? "已删除，用途自动指回主下载器";
+        };
+        buttons.Children.Add(del);
+        buttons.Children.Add(status);
+
+        var body = new StackPanel();
+        body.Children.Add(grid);
+        body.Children.Add(guardRow);
+        body.Children.Add(buttons);
+        return new GroupBox
+        {
+            Header = d.IsMain ? $"{d.Label}（主）" : d.Label,
+            Margin = new Thickness(0, 0, 0, 10),
+            Content = body,
+        };
+    }
+
+    /// 两列里再并排两个小字段
+    private static UIElement Two(UIElement a, UIElement b)
+    {
+        var p = new WrapPanel();
+        p.Children.Add(a);
+        p.Children.Add(b);
+        return p;
+    }
+
+    private static UIElement Labeled(string text, FrameworkElement input)
+    {
+        var p = new StackPanel { Margin = new Thickness(0, 0, 8, 6) };
+        p.Children.Add(new Label { Content = text, Padding = new Thickness(0, 0, 0, 2) });
+        input.MinHeight = 30;
+        input.VerticalAlignment = VerticalAlignment.Center;
+        p.Children.Add(input);
+        return p;
+    }
+
+    private static void Put(Grid grid, int row, int col, UIElement child)
+    {
+        Grid.SetRow(child, row);
+        Grid.SetColumn(child, col);
+        grid.Children.Add(child);
+    }
+
+    // MARK: 多台下载器
 
     private void OnRoleChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -80,18 +214,6 @@ public partial class DownloaderView : UserControl
     }
 
     private void OnAddDownloader(object sender, RoutedEventArgs e) => _model.AddDownloader();
-
-    private void OnRemoveDownloader(object sender, RoutedEventArgs e)
-    {
-        var err = _model.RemoveDownloader(_editingID);
-        if (err != null)
-        {
-            Result.Text = err;
-            return;
-        }
-        _editingID = "main";
-        Result.Text = "已删除，用途自动指回主下载器";
-    }
 
     /// SSH 测速卡片：配置里没这一段时用默认值显示（密钥登录、每轮 64 MB、Cloudflare 接收端）
     private void LoadSSH()
@@ -119,42 +241,6 @@ public partial class DownloaderView : UserControl
 
     private static int Mb(TextBox box, int fallback) =>
         int.TryParse(box.Text.Trim(), out var mb) ? mb * 1048576 : fallback;
-
-    private void OnSave(object sender, RoutedEventArgs e) => Save();
-
-    /// 保存正在编辑的那台（按 id upsert；逐站限速由核心库原样保留）
-    private void Save()
-    {
-        if (_loading) return;
-        var s = new JsonObject
-        {
-            ["id"] = _editingID,
-            ["name"] = string.IsNullOrWhiteSpace(DlName.Text) ? "主下载器" : DlName.Text.Trim(),
-        };
-        s["type"] = SelectedTag(Type);
-        s["url"] = Url.Text.Trim();
-        s["username"] = User.Text;
-        s["password"] = Pass.Password;
-        s["savePath"] = string.IsNullOrWhiteSpace(SavePath.Text) ? null : SavePath.Text.Trim();
-        s["category"] = string.IsNullOrWhiteSpace(Category.Text) ? null : Category.Text.Trim();
-        s["skipChecking"] = SkipCheck.IsChecked == true;
-        s["defaultUpLimit"] = Mb(DefaultLimit, 10485760);
-        s["pushPolicy"] = SelectedTag(PushPolicy);
-        s["sizeGuardMode"] = SelectedTag(GuardMode);
-        s["sizeGuardMarginGB"] = int.TryParse(GuardMargin.Text.Trim(), out var g) ? g : 20;
-        if (int.TryParse(VpsFree.Text.Trim(), out var free)) s["vpsFreeGB"] = free;
-        else s["vpsFreeGB"] = null;
-        _model.SaveDownloader(s);
-    }
-
-    private async void OnTest(object sender, RoutedEventArgs e)
-    {
-        Save();
-        Result.Text = "测试中…";
-        // 连下载器要走网络：放在界面线程上，窗口会先「未响应」一下
-        var error = await _model.TestDownloaderAsync(_editingID);
-        Result.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
-    }
 
     private void OnTestSSH(object sender, RoutedEventArgs e) => _ = TestSSH();
 
@@ -207,11 +293,4 @@ public partial class DownloaderView : UserControl
 
     private static string Or(string text, string fallback) =>
         string.IsNullOrWhiteSpace(text) ? fallback : text.Trim();
-
-    private void OnReveal(object sender, RoutedEventArgs e)
-    {
-        PassPeek.Text = Pass.Password;
-        Pass.Visibility = Reveal.IsChecked == true ? Visibility.Collapsed : Visibility.Visible;
-        PassPeek.Visibility = Reveal.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-    }
 }

@@ -5,7 +5,7 @@ using System.Windows.Controls;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>辅种页：扫描下载器 → 每条种子 × 参与站点 → 站内检索 → 比对文件清单 →
+/// <summary>辅种页：扫描下载器 → 每条种子 × 辅种站点 → 站内检索 → 比对文件清单 →
 /// 先暂停加进下载器，校验到 100% 才算辅成。站点请求的节奏在核心库里收口，
 /// 这页只负责发起、以及把逐行进展显示出来（进展随快照回来）。</summary>
 public partial class AssistView : UserControl
@@ -14,8 +14,6 @@ public partial class AssistView : UserControl
     private readonly System.Collections.ObjectModel.ObservableCollection<Line> _candidates = new();
     private readonly System.Collections.ObjectModel.ObservableCollection<PlanItem> _plan = new();
     private bool _loading;
-    /// 站点勾选列表的重建签名：只有站点集合变了才重建，免得点一下勾选就丢焦点
-    private string _siteSignature = "";
 
     public AssistView(AppModel model)
     {
@@ -25,47 +23,29 @@ public partial class AssistView : UserControl
         PlanRows.ItemsSource = _plan;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(() =>
         {
-            RebuildSites();
+            ShowSites();
             LoadPace();
         });
         _model.Refreshed += (_, _) => Dispatcher.Invoke(RefreshProgress);
-        RebuildSites();
+        ShowSites();
         LoadPace();
         RefreshProgress();
     }
 
     // MARK: 左栏
 
-    private void RebuildSites()
+    /// <summary>辅种站点这一页只管显示：名单在「站点分组」页底部的辅种区块里改
+    /// （与 mac 版同一处）。</summary>
+    private void ShowSites()
     {
-        var sites = _model.Sites.Where(s => s.Enabled).ToList();
         var picked = AssistField("siteIDs");
-        var signature = string.Join(",", sites.Select(s => s.Id)) + "|" + string.Join(",", picked);
-        if (_siteSignature == signature) return;
-        _siteSignature = signature;
-
-        SiteList.Children.Clear();
-        foreach (var site in sites)
-        {
-            var box = new CheckBox
-            {
-                Content = site.Name,
-                FontSize = 13,
-                Margin = new Thickness(0, 2, 0, 2),
-                IsChecked = picked.Contains(site.Id),
-                Tag = site.Id,
-            };
-            box.Checked += OnSiteToggled;
-            box.Unchecked += OnSiteToggled;
-            SiteList.Children.Add(box);
-        }
-        if (sites.Count == 0)
-            SiteList.Children.Add(new TextBlock
-            {
-                Text = "先在「站点分组」里启用站点",
-                FontSize = 13,
-                Foreground = (System.Windows.Media.Brush)TryFindResource("TextMuted")!,
-            });
+        var names = picked
+            .Select(id => _model.Sites.FirstOrDefault(s => s.Id == id)?.Name ?? id)
+            .ToList();
+        SiteInfo.Text = names.Count == 0
+            ? "还没有辅种站点"
+            : $"共 {names.Count} 个：" + string.Join("、", names.Take(12))
+              + (names.Count > 12 ? $" 等 {names.Count} 个" : "");
     }
 
     private List<string> AssistField(string field)
@@ -75,25 +55,6 @@ public partial class AssistView : UserControl
             return arr.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")
                 .Where(s => s.Length > 0).ToList();
         return new List<string>();
-    }
-
-    private void OnSiteToggled(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-        var box = (CheckBox)sender;
-        var id = (string)box.Tag!;
-        _model.PatchSection("assist", o =>
-        {
-            var ids = (o["siteIDs"] as JsonArray ?? new JsonArray())
-                .Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")
-                .Where(s => s.Length > 0).ToList();
-            if (box.IsChecked == true)
-            {
-                if (!ids.Contains(id)) ids.Add(id);
-            }
-            else ids.Remove(id);
-            o["siteIDs"] = new JsonArray(ids.Select(s => (JsonNode)s).ToArray());
-        });
     }
 
     private void LoadPace()
@@ -140,8 +101,8 @@ public partial class AssistView : UserControl
 
     // MARK: 扫描与执行
 
-    private string[] CheckedSites() => SiteList.Children.OfType<CheckBox>()
-        .Where(c => c.IsChecked == true).Select(c => (string)c.Tag!).ToArray();
+    /// 参与站点 = 辅种名单（在「站点分组」页维护，这一页不再勾）
+    private string[] CheckedSites() => AssistField("siteIDs").ToArray();
 
     private async void OnScan(object sender, RoutedEventArgs e)
     {

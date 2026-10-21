@@ -9,8 +9,31 @@ public extension AppConfig {
 
     var managedSites: [SiteConfig] { sourceSites.filter { $0.managed } }
 
+    /// 未分组区块里的站点：只进辅种区块的辅种站点不算在这里，免得两个区块列同一张卡片
     var unassignedManagedSites: [SiteConfig] {
-        managedSites.filter { groupIndex(of: $0.id) < 0 }
+        let assist = Set(assist?.siteIDs ?? [])
+        return managedSites.filter { groupIndex(of: $0.id) < 0 && !assist.contains($0.id) }
+    }
+
+    /// 辅种区块里的站点（按加入顺序；站点被移出站点池就随之消失）
+    var assistManagedSites: [SiteConfig] {
+        let managed = Set(managedSites.map(\.id))
+        return (assist?.siteIDs ?? []).compactMap { managed.contains($0) ? site($0) : nil }
+    }
+
+    /// 辅种区块的「添加站点」：入站点池但不进分组，并记入辅种白名单
+    mutating func addAssistSites(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        addManagedSites(ids, group: -1)
+        var a = assist ?? AssistConfig()
+        for id in ids where !a.siteIDs.contains(id) { a.siteIDs.append(id) }
+        assist = a
+    }
+
+    /// 从辅种区块移除：退出辅种；站点不在任何分组时一并移出站点池
+    mutating func removeAssistSite(_ id: String) {
+        assist?.siteIDs.removeAll { $0 == id }
+        if groupIndex(of: id) < 0 { removeManagedSite(id) }
     }
 
     /// 老配置里只有一堆已纳管站点、一个分组都没有时，补一个「默认分组」把它们接住。
@@ -217,6 +240,7 @@ public extension AppConfig {
         guard let i = sourceSites.firstIndex(where: { $0.id == id }) else { return }
         sourceSites[i].managed = false
         for g in groups.indices { groups[g].sites.removeAll { $0 == id } }
+        assist?.siteIDs.removeAll { $0 == id }
         unselect(id)
         reinsertUnmanagedOrder([id])
     }

@@ -499,6 +499,31 @@ Windows 侧：
 - 配置里的 `ssh.enabled` 不再被这一页读写，字段留着只为兼容旧配置（`precheckActive` 同义保留给用例）。
 - 两端同源：测速本来就在核心 `SSHSpeedTest`，这轮只动两端界面与提示文案（卡片副标题、教程、说明段）。
 
+## 这一轮（界面重新归位：日志进运行记录、辅种进站点页、下载器全部摊开）
+
+- 日志不再单开一页。mac 删掉 `LogsView` 与那个 tab，`RunView` 的运行记录里补「最近一次运行」「运行日志」
+  两块（新增 `labeledBlock`），「清空日志」留在按钮行；Windows 同步删 `LogsView.xaml(.cs)`，`HistoryBox`
+  改成 StackPanel，`LogLines` 直接绑 `_model.Logs`，清空走 `logs.clear`。标签页顺序两端一致：
+  批量转种、辅种、站点分组、Cookie、下载器、设置。
+- 辅种站点挪到「站点分组」页：上半是转种分组，底下新增辅种区块，辅种站点不分组。规则收在核心
+  （`ConfigEdits.swift`）：`addAssistSites` 只纳管不写进任何分组并记入 `assist.siteIDs`，
+  `assistManagedSites` 给辅种区块，`unassignedManagedSites` 把辅种站点从未分组区块剔掉，
+  一张卡片只出现一次；`removeAssistSite` 退出辅种，站点不在任何分组时一并移出站点池。
+  已在转种分组里的站点两处各画一次（分组管发种与限速，辅种区块只管退出辅种）。
+  桥接新增 `assist.addSites` / `assist.removeSite`，站点行多带一个 `assist` 布尔，两端据此画卡片；
+  批量添加站点弹窗加 `assist` 形态（隐藏分组选择、标题写清是辅种站点）。
+- 辅种页去掉「参与站点」多选：mac 换成表头一行「辅种站点：N 个」，Windows 换成只读卡片，名单统一去
+  站点页改。检索节奏去掉步进器——mac 新增 `NumField`（只收数字、回车或失焦提交、占位显示推荐值），
+  Windows 沿用 TextBox 但把推荐值写进标签；`AssistConfig` 默认值就是推荐值（间隔 8 秒、抖动 3 秒、
+  单轮预算 200 次、查无保留 7 天），老配置不改也照样显示。
+- 下载器摊平成「一台一张卡片」，不再有「正在编辑哪一台」。mac `AppModel` 的编辑态从
+  `editingDownloaderID` 改为按 id 取用：`downloader(id)` / `canRemoveDownloader(id)` /
+  `updateDownloader(id:_:)` / `removeDownloader(id)` / `testDownloader(id)`，测试结果显示在
+  `downloaderTestResults[id]`；Windows 去掉「正在编辑」下拉与整块 `ConnCard`，`DlCards` 按
+  `_model.Downloaders` 逐台建卡片，每台自带保存 / 测试连接 / 删除这台。用途指派（发种用、辅种用）留在顶部。
+- 验证：`swift test` 527 绿（新增辅种区块桥接回归 1 条：入池不进组、不进未分组、退出辅种清名单）；
+  `dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

@@ -29,13 +29,16 @@ public partial class SitesView : UserControl
         Blocks.Children.Clear();
         _cards.Clear();
         foreach (var g in _model.Groups) Blocks.Children.Add(BlockFor(g));
-        var unassigned = _model.Sites.Where(s => s.Managed && s.Group < 0).ToList();
+        // 辅种站点单独成一块（不分组），不再混进「未分组」里重复出现
+        var assistSites = _model.Sites.Where(s => s.Managed && s.Assist).ToList();
+        var unassigned = _model.Sites.Where(s => s.Managed && s.Group < 0 && !s.Assist).ToList();
         // 只有真有没归组的站点才出现这一块，否则页面上会有一个去不掉的空「未分组」
         if (unassigned.Count > 0) Blocks.Children.Add(BlockFor(null, unassigned));
+        Blocks.Children.Add(AssistBlock(assistSites));
         if (!_model.Sites.Any(s => s.Managed))
             Blocks.Children.Add(new TextBlock
             {
-                Text = "还没有添加站点：点「批量添加站点」挑一批，或点分组上的「添加站点」。",
+                Text = "还没有添加站点：点分组上的「添加站点」挑一批，辅种用的站点在下面的辅种区块里加。",
                 FontSize = 12,
                 Margin = new Thickness(0, 4, 0, 0),
                 Foreground = (Brush)FindResource("TextMuted"),
@@ -52,6 +55,121 @@ public partial class SitesView : UserControl
         BtnCheckAll.IsEnabled = !_model.BusyCookieCheck;
         BtnSync.IsEnabled = !_model.BusyCookieSync;
         BtnSync.Content = _model.BusyCookieSync ? "同步中…" : "同步 Cookie";
+    }
+
+    /// <summary>辅种区块：不参与转种分组，加进来就直接进辅种名单；
+    /// 跑与节奏在「辅种」页，这里只管哪些站点参与。</summary>
+    private UIElement AssistBlock(List<SiteRow> sites)
+    {
+        var panel = new StackPanel();
+        var header = new WrapPanel();
+        header.Children.Add(new TextBlock
+        {
+            Text = $"辅种站点（{sites.Count}）",
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 14,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        header.Children.Add(SmallButton("添加站点", () =>
+            new Dialogs.AddSitesWindow(_model, -1, assist: true)
+            { Owner = Window.GetWindow(this) }.ShowDialog()));
+        header.Children.Add(new TextBlock
+        {
+            Text = "不进转种分组，加进来就参与辅种；站点请求节奏在「辅种」页设",
+            FontSize = 12,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource("TextMuted"),
+        });
+        panel.Children.Add(header);
+
+        var cards = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        foreach (var s in sites) cards.Children.Add(AssistCard(s));
+        panel.Children.Add(cards);
+        if (sites.Count == 0)
+            panel.Children.Add(new TextBlock
+            {
+                Text = "还没有辅种站点：点上面的「添加站点」批量选择。",
+                FontSize = 12,
+                Margin = new Thickness(0, 4, 0, 0),
+                Foreground = (Brush)FindResource("TextMuted"),
+            });
+
+        return new Border
+        {
+            Background = (Brush)FindResource("TextSurface"),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10),
+            Margin = new Thickness(0, 0, 0, 14),
+            Child = panel,
+        };
+    }
+
+    /// 辅种站点卡片：点名称区开 / 停，「退出辅种」只把它移出辅种（还在分组里的照旧参与转种）
+    private UIElement AssistCard(SiteRow s)
+    {
+        var title = new StackPanel { Cursor = Cursors.Hand, Background = Brushes.Transparent };
+        title.Children.Add(new TextBlock
+        {
+            Text = s.Name,
+            FontWeight = s.Enabled ? FontWeights.SemiBold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = (Brush)FindResource(s.Enabled ? "TextPrimary" : "TextMuted"),
+        });
+        title.Children.Add(new TextBlock
+        {
+            Text = s.Url,
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = (Brush)FindResource("TextMuted"),
+        });
+        title.MouseLeftButtonUp += (_, _) =>
+        {
+            if (CardDrag.JustDragged) return;
+            _model.Call("sites.setEnabled", new { ids = new[] { s.Id }, enabled = !s.Enabled });
+        };
+        title.ToolTip = s.Enabled ? "已开启，点击停用" : "未开启，点击开启";
+
+        var status = new TextBlock
+        {
+            Text = s.Enabled ? s.CredentialText : "未开启",
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = (Brush)FindResource(s.StatusTone),
+        };
+        if (s.CheckMessage.Length > 0) status.ToolTip = s.CheckMessage;
+        s.PropertyChanged += (_, _) => Dispatcher.Invoke(() =>
+        {
+            status.Text = s.Enabled ? s.CredentialText : "未开启";
+            status.Foreground = (Brush)FindResource(s.StatusTone);
+            if (s.CheckMessage.Length > 0) status.ToolTip = s.CheckMessage;
+        });
+
+        var body = new StackPanel();
+        body.Children.Add(title);
+        body.Children.Add(status);
+        body.Children.Add(new WrapPanel
+        {
+            Margin = new Thickness(0, 4, 0, 0),
+            Children =
+            {
+                TinyButton("退出辅种", () => _model.Call("assist.removeSite", new { id = s.Id }),
+                           danger: true),
+            },
+        });
+
+        return new Border
+        {
+            Width = 210,
+            Margin = new Thickness(0, 0, 8, 8),
+            Padding = new Thickness(8),
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)FindResource(s.Enabled ? "BlockSurface" : "TextSurface"),
+            BorderBrush = (Brush)FindResource(s.Enabled ? "Accent" : "Line"),
+            BorderThickness = new Thickness(s.Enabled ? 1.5 : 1),
+            Child = body,
+        };
     }
 
     private UIElement BlockFor(GroupRow? group, List<SiteRow>? overrideSites = null)

@@ -52,6 +52,8 @@ public partial class RunView : UserControl
         };
         LoadQuote();
         Rebuild();
+        // 日志页合并进「运行记录」：这一页直接跟着核心日志走
+        LogLines.ItemsSource = _model.Logs;
     }
 
     // MARK: 重建（刷新时要保住用户勾选）
@@ -494,6 +496,21 @@ public partial class RunView : UserControl
         SpeedResult.Text = (r.Ok ? "成功: " : "失败: ") + r.Text;
         SpeedResult.Foreground = (Brush)FindResource(r.Ok ? "Success" : "Warning");
         LoadSpeedButton();
+    }
+
+    private void OnClearLogs(object sender, RoutedEventArgs e) => _model.Call("logs.clear");
+
+    private void OnOpenDataDir(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "explorer.exe", $"\"{_model.DataDir}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(Window.GetWindow(this)!, ex.Message, "BoxSend");
+        }
     }
 
     private void OnHistory(object sender, RoutedEventArgs e)

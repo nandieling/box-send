@@ -93,6 +93,7 @@ public sealed class AddSitesWindow : Window
 {
     private readonly AppModel _model;
     private readonly int _group;
+    private readonly bool _assist;
     private readonly List<(string Id, string Name, string Url)> _all = new();
     private List<string> _order = new();                   // 当前完整排序（含未显示的）
     private readonly HashSet<string> _selected = new();
@@ -118,11 +119,13 @@ public sealed class AddSitesWindow : Window
     };
     private readonly WrapPanel _grid = new();
 
-    public AddSitesWindow(AppModel model, int fixedGroup)
+    public AddSitesWindow(AppModel model, int fixedGroup, bool assist = false)
     {
         _model = model;
         _group = fixedGroup;
-        Title = fixedGroup >= 0 && fixedGroup < model.Groups.Count
+        _assist = assist;
+        Title = assist ? "批量添加站点（辅种站点）"
+            : fixedGroup >= 0 && fixedGroup < model.Groups.Count
             ? $"批量添加站点（加入分组：{model.Groups[fixedGroup].Name}）"
             : "批量添加站点";
         Owner = Window.GetWindow(Application.Current.MainWindow);
@@ -482,7 +485,8 @@ public sealed class AddSitesWindow : Window
         // 按当前显示顺序提交，分组内的先后就跟卡片顺序一致
         var ids = _order.Where(_selected.Contains).ToArray();
         if (ids.Length == 0) return;
-        _model.Call("sites.add", new { ids, group = _group });
+        // 辅种模式：入站点池但不进分组（核心里那一份实现与 mac 共用）
+        _model.Call(_assist ? "assist.addSites" : "sites.add", new { ids, group = _group });
         Close();
     }
 

@@ -69,12 +69,26 @@
 
             <Button x:Name="BtnHistory" Content="运行记录" Margin="2,14,0,0"
                     HorizontalAlignment="Left" Click="OnHistory" />
-            <Border x:Name="HistoryBox" Visibility="Collapsed" Margin="0,8,0,0"
-                    Background="{DynamicResource TextSurface}" CornerRadius="8" Padding="12">
-                <TextBlock x:Name="HistoryText" FontFamily="Consolas, Microsoft YaHei" FontSize="12"
-                           TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"
-                           Text="（还没有运行记录）" />
-            </Border>
+            <!-- 日志不再单独一页：展开运行记录时一起看（最近一次运行 + 核心运行日志） -->
+            <StackPanel x:Name="HistoryBox" Visibility="Collapsed" Margin="0,8,0,0">
+                <TextBlock Text="最近一次运行" FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                <Border Background="{DynamicResource TextSurface}" CornerRadius="8" Padding="12" Margin="0,4,0,0">
+                    <TextBlock x:Name="HistoryText" FontFamily="Consolas, Microsoft YaHei" FontSize="12"
+                               TextWrapping="Wrap" Foreground="{DynamicResource TextPrimary}"
+                               Text="（还没有运行记录）" />
+                </Border>
+                <DockPanel LastChildFill="True" Margin="0,10,0,4">
+                    <Button Content="打开数据目录" DockPanel.Dock="Right" Margin="8,0,0,0" Click="OnOpenDataDir" />
+                    <Button Content="清空日志" DockPanel.Dock="Right" Click="OnClearLogs" />
+                    <TextBlock Text="运行日志" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextMuted}" />
+                </DockPanel>
+                <Border Background="{DynamicResource TextSurface}" CornerRadius="8" Padding="8">
+                    <ListBox x:Name="LogLines" Height="220" BorderThickness="0" Background="Transparent"
+                             FontFamily="Consolas, Microsoft YaHei" FontSize="12"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                </Border>
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

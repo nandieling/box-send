@@ -57,8 +57,10 @@ final class AppModel: ObservableObject {
     @Published var zipMessage: String? = nil
 
     // MARK: 下载器
-    @Published var testingDownloader = false
-    @Published var downloaderTestResult: String? = nil
+    /// 正在测哪一台（卡片上显示「测试中…」）
+    @Published var testingDownloaderID: String? = nil
+    /// 逐台连接检测结果：下载器 id -> 一句话
+    @Published var downloaderTestResults: [String: String] = [:]
     @Published var testingTMDB = false
     @Published var tmdbTestResult: String? = nil
 
@@ -510,10 +512,8 @@ final class AppModel: ObservableObject {
             + "两处都没有内容时该区块留空，可能被站方打回"
     }
 
-    /// 未分组的已添加站点
-    var unassignedManagedSites: [SiteConfig] {
-        managedSites.filter { groupIndex(of: $0.id) < 0 }
-    }
+    /// 未分组的已添加站点（辅种站点由核心一并排除）
+    var unassignedManagedSites: [SiteConfig] { config.unassignedManagedSites }
 
     /// 分组的已添加站点（按 group.sites 顺序）；gi = -1 返回未分组
     func groupMembers(_ gi: Int) -> [SiteConfig] {
@@ -557,6 +557,23 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
+    // MARK: 辅种站点（「站点分组」页底部的辅种区块，不进分组）
+
+    // 名单读写都在核心 AppConfig 里（Windows 走桥接调同一份实现）
+    var assistManagedSites: [SiteConfig] { config.assistManagedSites }
+
+    /// 辅种区块的「添加站点」：入站点池但不进分组，并记入辅种白名单
+    func addAssistSites(_ ids: [String]) {
+        config.addAssistSites(ids)
+        saveConfig()
+    }
+
+    /// 从辅种区块移除：退出辅种；站点不在任何分组时一并移出站点池
+    func removeAssistSite(_ id: String) {
+        config.removeAssistSite(id)
+        saveConfig()
+    }
+
     /// 分组内站点批量开启/关闭（gi = -1 未分组）
     func setGroupSitesEnabled(_ gi: Int, on: Bool) {
         for s in groupMembers(gi) where s.enabled != on {
@@ -577,6 +594,7 @@ final class AppModel: ObservableObject {
         guard let i = config.sourceSites.firstIndex(where: { $0.id == id }) else { return }
         config.sourceSites[i].managed = false
         for g in config.groups.indices { config.groups[g].sites.removeAll { $0 == id } }
+        config.assist?.siteIDs.removeAll { $0 == id }
         selectedTargets.remove(id)
         reinsertUnmanagedOrder([id])
         saveConfig()
@@ -1229,11 +1247,11 @@ final class AppModel: ObservableObject {
 
     // MARK: 下载器
 
-    func setVpsFreeGB(_ gb: Int?) {
-        updateEditingDownloader { $0.vpsFreeGB = (gb == nil || (gb ?? 0) <= 0) ? nil : gb }
+    func setVpsFreeGB(_ gb: Int?, downloaderID: String) {
+        updateDownloader(downloaderID) { $0.vpsFreeGB = (gb == nil || (gb ?? 0) <= 0) ? nil : gb }
     }
-    func setVpsFreeMargin(_ gb: Int?) {
-        updateEditingDownloader { $0.sizeGuardMarginGB = max(0, gb ?? 0) }
+    func setVpsFreeMargin(_ gb: Int?, downloaderID: String) {
+        updateDownloader(downloaderID) { $0.sizeGuardMarginGB = max(0, gb ?? 0) }
     }
 
     // MARK: 多下载器
@@ -1241,37 +1259,36 @@ final class AppModel: ObservableObject {
     // 发种推的那台和辅种扫的那台经常不是同一台机器：VPS 上只放正在做的片，家里那台存全量。
     // 主下载器一直存在 config.downloader（id = "main"），附加的进 config.downloaders。
 
-    /// 下载器页当前编辑哪一台
-    @Published var editingDownloaderID: String = "main"
-
     var downloaderList: [DownloaderConfig] { config.allDownloaders }
-    var editingDownloader: DownloaderConfig { config.downloaderEntry(id: editingDownloaderID) }
+    func downloader(_ id: String) -> DownloaderConfig { config.downloaderEntry(id: id) }
     /// 主下载器不可删（老配置就这一台，删了整个软件就没下载器了）
-    var canRemoveEditingDownloader: Bool { editingDownloaderID != config.downloader.id }
+    func canRemoveDownloader(_ id: String) -> Bool { id != config.downloader.id }
 
-    func updateEditingDownloader(_ change: (inout DownloaderConfig) -> Void) {
-        var d = config.downloaderEntry(id: editingDownloaderID)
+    /// 每台都直接显示、直接改，不再需要先选「正在编辑哪一台」
+    func updateDownloader(_ id: String, _ change: (inout DownloaderConfig) -> Void) {
+        var d = config.downloaderEntry(id: id)
         change(&d)
         config.updateDownloader(d)
         saveConfig()
     }
 
-    /// 新建一台：照当前这台抄一份骨架，地址与账号留空让人填
+    /// 新建一台：照主下载器抄一份骨架，地址与账号留空让人填（新卡片立刻出现在列表里）
     func addDownloader() {
         let id = "dl-" + String(Int(Date().timeIntervalSince1970 * 1000) % 1_000_000_000)
-        var d = editingDownloader.copiedAs(id: id, name: config.nextDownloaderName())
+        var d = config.downloader.copiedAs(id: id, name: config.nextDownloaderName())
         d.url = ""
         d.username = ""
         d.password = ""
         d.vpsFreeGB = nil
         config.updateDownloader(d)
-        editingDownloaderID = id
         saveConfig()
     }
 
-    func removeEditingDownloader() {
-        config.removeDownloader(id: editingDownloaderID)
-        editingDownloaderID = config.downloader.id
+    func removeDownloader(_ id: String) {
+        guard canRemoveDownloader(id) else { return }
+        config.removeDownloader(id: id)
+        downloaderTestResults[id] = nil
+        if testingDownloaderID == id { testingDownloaderID = nil }
         saveConfig()
     }
 
@@ -1286,20 +1303,22 @@ final class AppModel: ObservableObject {
         (role == "assist" ? config.assistDownloader : config.reseedDownloader).id
     }
 
-    func testDownloader() {
+    /// 逐台测连接：结果按下载器 id 存，卡片各显示各的
+    func testDownloader(_ id: String) {
         saveConfig()
-        testingDownloader = true
-        downloaderTestResult = nil
+        testingDownloaderID = id
+        downloaderTestResults[id] = nil
         Task {
             do {
                 let client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
-                let target = editingDownloader
+                let target = config.downloaderEntry(id: id)
                 let d = DownloaderFactory.make(target, client: client)
-                downloaderTestResult = "成功（\(target.label)）: " + (try d.testConnection())
+                downloaderTestResults[id] = "成功（\(target.label)）: " + (try d.testConnection())
             } catch {
-                downloaderTestResult = "失败（\(editingDownloader.label)）: " + error.localizedDescription
+                downloaderTestResults[id] = "失败（\(config.downloaderEntry(id: id).label)）: "
+                    + error.localizedDescription
             }
-            testingDownloader = false
+            testingDownloaderID = nil
         }
     }
 
@@ -1530,9 +1549,6 @@ final class AppModel: ObservableObject {
     private var assistAutoRun = AssistAutoRun()
     private var assistAutoTimer: Timer?
 
-    /// 可以参与辅种的站（已启用的那些）
-    var assistSiteOptions: [SiteConfig] { config.sourceSites.filter { $0.enabled } }
-
     var assistConfig: AssistConfig { config.assist ?? AssistConfig(siteIDs: []) }
 
     /// 辅种用的是哪台（没填地址时提示去「下载器」页补，免得扫描半天连不上）
@@ -1584,7 +1600,7 @@ final class AppModel: ObservableObject {
     func assistRun() {
         let ids = enabledAssistSites
         guard !ids.isEmpty else {
-            assistMessage = "先在左边勾选要辅种的站点"
+            assistMessage = "先在「站点分组」页的辅种区块添加站点"
             return
         }
         runAssist(siteIDs: ids, forceKeys: [])

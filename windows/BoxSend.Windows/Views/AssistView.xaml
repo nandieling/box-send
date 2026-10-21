@@ -9,15 +9,13 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- 左栏：参与站点 + 检索节奏 -->
+            <!-- 左栏：检索节奏（站点在「站点分组」页的辅种区块里加） -->
             <StackPanel Grid.Column="0">
-                <GroupBox Header="参与站点">
+                <GroupBox Header="辅种站点">
                     <StackPanel>
-                        <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto">
-                            <StackPanel x:Name="SiteList" />
-                        </ScrollViewer>
-                        <TextBlock Text="辅种要逐条种子去站内检索，站点先少而后多。" FontSize="12"
-                                   TextWrapping="Wrap" Margin="0,6,0,0"
+                        <TextBlock x:Name="SiteInfo" FontSize="13" TextWrapping="Wrap" />
+                        <TextBlock Text="在「站点分组」页底部的辅种区块里添加 / 退出。辅种要逐条种子去站内检索，站点先少而后多。"
+                                   FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
                                    Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
                 </GroupBox>
@@ -36,23 +34,23 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
-                                <Label Content="每站最小间隔（秒）" Padding="0,0,0,2" />
+                                <Label Content="每站最小间隔（秒，推荐 8）" Padding="0,0,0,2" />
                                 <TextBox x:Name="Interval" />
                             </StackPanel>
                             <StackPanel Grid.Row="0" Grid.Column="2">
-                                <Label Content="随机抖动（秒）" Padding="0,0,0,2" />
+                                <Label Content="随机抖动（秒，推荐 3）" Padding="0,0,0,2" />
                                 <TextBox x:Name="Jitter" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="0">
-                                <Label Content="单轮请求预算（次）" Padding="0,0,0,2" />
+                                <Label Content="单轮请求预算（次，推荐 200）" Padding="0,0,0,2" />
                                 <TextBox x:Name="Budget" />
                             </StackPanel>
                             <StackPanel Grid.Row="1" Grid.Column="2">
-                                <Label Content="查无结果保留（天）" Padding="0,0,0,2" />
+                                <Label Content="查无结果保留（天，推荐 7）" Padding="0,0,0,2" />
                                 <TextBox x:Name="MissTTL" />
                             </StackPanel>
                             <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,8,0,0">
-                                <Label Content="定时自动跑（分，0=关）" Padding="0,0,0,2" />
+                                <Label Content="定时自动跑（分，0=关，推荐 0）" Padding="0,0,0,2" />
                                 <TextBox x:Name="AutoRun" />
                             </StackPanel>
                             <TextBlock x:Name="AutoRunHint" Grid.Row="2" Grid.Column="2" FontSize="12"

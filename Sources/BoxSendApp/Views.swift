@@ -99,6 +99,8 @@ struct AddSitesRequest: Identifiable {
     let id = UUID()
     /// -1 = 未指定分组（弹窗内可选）；>=0 = 锁定该分组
     let group: Int
+    /// true = 辅种区块进来的：不加分组，添加即参与辅种
+    var assist = false
 }
 
 // MARK: - 主框架
@@ -112,6 +114,10 @@ struct ContentView: View {
             RunView()
                 .tabItem { Label("批量转种", systemImage: "paperplane.fill") }
                 .tag(0)
+            // 辅种紧跟批量转种：两件事都在「把种子铺到更多站」这条线上
+            AssistView()
+                .tabItem { Label("辅种", systemImage: "square.stack.3d.up.fill") }
+                .tag(6)
             SitesView()
                 .tabItem { Label("站点分组", systemImage: "server.rack") }
                 .tag(1)
@@ -121,12 +127,6 @@ struct ContentView: View {
             DownloaderView()
                 .tabItem { Label("下载器", systemImage: "arrow.down.circle") }
                 .tag(3)
-            LogsView()
-                .tabItem { Label("日志", systemImage: "list.bullet") }
-                .tag(4)
-            AssistView()
-                .tabItem { Label("辅种", systemImage: "square.stack.3d.up.fill") }
-                .tag(6)
             SettingsView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag(5)
@@ -389,26 +389,44 @@ struct RunView: View {
         .help(selected ? "已选中为转种目标，点击取消" : "点击选中为转种目标")
     }
 
-    // MARK: 运行记录（点开才显示）
+    // MARK: 运行记录（点开才显示：最近一次运行 + 运行日志，日志不再单独一页）
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button {
-                showHistory.toggle()
-            } label: {
-                Label(showHistory ? "收起运行记录" : "运行记录",
-                      systemImage: showHistory ? "chevron.up" : "chevron.down")
+            HStack(spacing: 10) {
+                Button {
+                    showHistory.toggle()
+                } label: {
+                    Label(showHistory ? "收起运行记录" : "运行记录",
+                          systemImage: showHistory ? "chevron.up" : "chevron.down")
+                }
+                .buttonStyle(.bordered)
+                if showHistory {
+                    Button("清空日志") { model.clearNotes() }
+                        .disabled(model.notes.isEmpty)
+                        .help("清掉界面上显示的这些日志行（不影响转种记录）")
+                }
+                Spacer()
             }
-            .buttonStyle(.bordered)
             if showHistory {
-                Text(model.lastReport.isEmpty ? "（还没有运行记录）" : model.lastReport)
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .blockSurface(true)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                labeledBlock("最近一次运行", model.lastReport.isEmpty ? "（还没有运行记录）" : model.lastReport)
+                labeledBlock("运行日志",
+                             model.notes.isEmpty ? "（暂无日志）"
+                                                 : model.notes.reversed().joined(separator: "\n"))
             }
+        }
+    }
+
+    private func labeledBlock(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(text)
+                .font(.system(.callout, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .blockSurface(true)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
     // MARK: 站点卡片状态
@@ -636,8 +654,32 @@ struct SitesView: View {
                     .runCard()
                 }
 
+                // 辅种站点：不进转种分组，加进来就直接参与辅种（跑与节奏在「辅种」页）
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Text("辅种站点").font(.headline)
+                        Button {
+                            addSheetReq = AddSitesRequest(group: -1, assist: true)
+                        } label: {
+                            Label("添加站点", systemImage: "plus")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("批量选择辅种站点（不进转种分组）")
+                        Spacer()
+                    }
+                    Text("\(model.assistManagedSites.count) 站 · 辅种要逐条种子去站内检索，站点先少而后多")
+                        .font(.caption).foregroundStyle(.secondary)
+                    LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 10) {
+                        ForEach(model.assistManagedSites, id: \.id) { site in
+                            assistSiteCard(site)
+                        }
+                    }
+                }
+                .runCard()
+
                 if model.managedSites.isEmpty {
-                    Text("还没有添加站点：点分组卡片上的「添加站点」批量选择。")
+                    Text("还没有添加站点：点分组卡片或辅种区块上的「添加站点」批量选择。")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .runCard()
@@ -646,7 +688,7 @@ struct SitesView: View {
             .padding(16)
         }
         .sheet(item: $addSheetReq) { req in
-            AddSitesSheet(fixedGroup: req.group)
+            AddSitesSheet(fixedGroup: req.group, assist: req.assist)
         }
         .sheet(item: $manualCookiePick) { pick in
             ManualCookieSheet(sites: pick.sites)
@@ -804,6 +846,37 @@ struct SitesView: View {
             onMove: { from, to in model.moveSite(from, before: to) }))
     }
 
+    /// 辅种站点卡片：点名字区开 / 停，「退出辅种」只把它移出辅种（还在分组里的照旧参与转种）
+    private func assistSiteCard(_ s: SiteConfig) -> some View {
+        let on = s.enabled
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(s.name).fontWeight(on ? .semibold : .medium).lineLimit(1)
+                        .foregroundStyle(on ? Color.primary : Color.secondary)
+                    Text(s.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture { model.setSiteEnabled(siteID: s.id, !on) }
+                Button("退出辅种") { model.removeAssistSite(s.id) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .tint(.red)
+                    .help("把这个站移出辅种；它若还在某个转种分组里，分组不受影响")
+            }
+            cookieStatusView(for: s)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            Color.blockSurface(model.theme.dark)
+            Color.accentColor.opacity(on ? 0.3 : 0)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .help(on ? "已开启（加深色），点击停用" : "未开启，点击开启")
+    }
+
     /// 卡片内 cookie 状态：未开启 / 无 cookie / 检测中 / 未检测 / 已登录 / 失效
     @ViewBuilder
     private func cookieStatusView(for s: SiteConfig) -> some View {
@@ -888,9 +961,12 @@ struct AddSitesSheet: View {
     @State private var order: [String] = []
     /// >= 0：从分组头部「添加站点」进入，弹窗锁定该分组，不再显示分组选择
     let fixedGroup: Int
+    /// true = 从辅种区块进来：没有分组可选，添加即参与辅种
+    let assist: Bool
 
-    init(fixedGroup: Int = -1) {
+    init(fixedGroup: Int = -1, assist: Bool = false) {
         self.fixedGroup = fixedGroup
+        self.assist = assist
         _targetGroup = State(initialValue: fixedGroup)
     }
     @State private var sortNum: [String: String] = [:]
@@ -924,7 +1000,8 @@ struct AddSitesSheet: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack {
-                Text(fixedGroup >= 0
+                Text(assist ? "批量添加站点（辅种站点）"
+                     : fixedGroup >= 0
                      ? "批量添加站点（加入分组：\(model.config.groups[fixedGroup].name)）"
                      : "批量添加站点").font(.headline)
                 Spacer()
@@ -937,7 +1014,7 @@ struct AddSitesSheet: View {
                 }
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 220)
-                if fixedGroup < 0 {
+                if fixedGroup < 0 && !assist {
                     Picker("加入分组", selection: $targetGroup) {
                         Text("无分组").tag(-1)
                         ForEach(model.config.groups.indices, id: \.self) { i in
@@ -962,13 +1039,17 @@ struct AddSitesSheet: View {
                 .padding(2)
             }
             HStack {
-                Text("点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
+                Text(assist
+                     ? "点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后不参与转种分组，直接进辅种站点列表。"
+                     : "点击卡片选中要添加的站点（加深色 = 已选中）；拖拽把手或输入序号排序；添加后默认开启（限速默认取分组上传限速，未设 = 10 MB/s）。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("添加 \(checked.count) 个站点") {
-                    model.addManagedSites(displayIDs.filter { checked.contains($0) }, group: targetGroup)
+                    let ids = displayIDs.filter { checked.contains($0) }
+                    if assist { model.addAssistSites(ids) }
+                    else { model.addManagedSites(ids, group: targetGroup) }
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -1474,10 +1555,16 @@ struct CookiesView: View {
 struct DownloaderView: View {
     @EnvironmentObject var model: AppModel
 
-    /// 改「正在编辑的那台」：可能是主下载器，也可能是附加的那台
-    private func dl<T>(_ kp: WritableKeyPath<DownloaderConfig, T>) -> Binding<T> {
-        Binding(get: { model.editingDownloader[keyPath: kp] },
-                set: { v in model.updateEditingDownloader { $0[keyPath: kp] = v } })
+    /// 改指定那台：每台都直接显示、直接改，不再需要先切「正在编辑哪一台」
+    private func dl<T>(_ id: String, _ kp: WritableKeyPath<DownloaderConfig, T>) -> Binding<T> {
+        Binding(get: { model.downloader(id)[keyPath: kp] },
+                set: { v in model.updateDownloader(id) { $0[keyPath: kp] = v } })
+    }
+
+    private func optBinding(_ id: String,
+                            _ kp: WritableKeyPath<DownloaderConfig, String?>) -> Binding<String> {
+        Binding(get: { model.downloader(id)[keyPath: kp] ?? "" },
+                set: { v in model.updateDownloader(id) { $0[keyPath: kp] = v.isEmpty ? nil : v } })
     }
 
     /// 某个用途用哪台
@@ -1491,23 +1578,11 @@ struct DownloaderView: View {
         .labelsHidden()
     }
 
-    private var downloadersCard: some View {
+    private var rolesCard: some View {
         CardSection("下载器（可以有多台）") {
             HStack(spacing: 10) {
-                Text("正在编辑").font(.callout)
-                Picker("", selection: Binding(get: { model.editingDownloaderID },
-                                              set: { model.editingDownloaderID = $0 })) {
-                    ForEach(model.downloaderList, id: \.id) { d in
-                        Text(d.label + (d.id == model.config.downloader.id ? "（主）" : ""))
-                            .tag(d.id)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 200)
                 Button("添加一台") { model.addDownloader() }
-                Button("删除这台") { model.removeEditingDownloader() }
-                    .disabled(!model.canRemoveEditingDownloader)
-                    .help("主下载器不能删")
+                Text("添加后立刻列在下面，直接改就行").font(.caption).foregroundStyle(.secondary)
                 Spacer()
             }
             HStack(alignment: .top, spacing: 24) {
@@ -1521,50 +1596,94 @@ struct DownloaderView: View {
         }
     }
 
+    /// 一台一张卡片：连接参数 + 种子大小检测 + 逐台测连接 + 删除（主下载器不可删）
+    private func downloaderCard(_ id: String) -> some View {
+        let d = model.downloader(id)
+        let testing = model.testingDownloaderID == id
+        return CardSection("\(d.label)（\(d.url.isEmpty ? "还没填地址" : d.url)）") {
+            HStack(alignment: .top, spacing: 12) {
+                LabeledRow("名字（列表与用途下拉里显示）") {
+                    TextField("如 VPS / 家里NAS", text: dl(id, \.name)).textFieldStyle(.roundedBorder)
+                }
+                LabeledRow("类型") {
+                    Picker("", selection: dl(id, \.type)) {
+                        Text("qBittorrent").tag(DownloaderType.qbittorrent)
+                        Text("Transmission").tag(DownloaderType.transmission)
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                .fixedSize()
+            }
+            LabeledRow("URL（VPS 隧道地址）") {
+                TextField("", text: dl(id, \.url)).textFieldStyle(.roundedBorder)
+            }
+            HStack(alignment: .top, spacing: 12) {
+                LabeledRow("用户名") {
+                    TextField("", text: dl(id, \.username)).textFieldStyle(.roundedBorder)
+                }
+                LabeledRow("密码") { RevealField(text: dl(id, \.password)) }
+            }
+            HStack(alignment: .top, spacing: 12) {
+                LabeledRow("保存路径（空 = 下载器默认）") {
+                    TextField("", text: optBinding(id, \.savePath)).textFieldStyle(.roundedBorder)
+                }
+                LabeledRow("分类（空 = 无）") {
+                    TextField("", text: optBinding(id, \.category)).textFieldStyle(.roundedBorder)
+                }
+            }
+            Toggle("添加后跳过校验（skipChecking）", isOn: dl(id, \.skipChecking))
+            Divider()
+            HStack(alignment: .top, spacing: 12) {
+                LabeledRow("VPS 剩余空间（GB，空 = 不做大小检测）") {
+                    IntLimitField(initial: d.vpsFreeGB ?? 0) { mb in
+                        model.setVpsFreeGB(mb, downloaderID: id)
+                    }.frame(width: 60)
+                }
+                .fixedSize()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("超过剩余空间时").font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Picker("", selection: dl(id, \.sizeGuardMode)) {
+                            Text("提醒（继续转种）").tag(SizeGuardMode.warn)
+                            Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
+                        }
+                        .labelsHidden()
+                        IntLimitField(initial: d.sizeGuardMarginGB) { gb in
+                            model.setVpsFreeMargin(gb, downloaderID: id)
+                        }.frame(width: 50)
+                        Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            Text("可用空间 = 剩余 - 边际；剩余空间需手动维护（qB WebAPI 无磁盘接口），空间变化大时记得更新。")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button(testing ? "测试中…" : "测试连接") { model.testDownloader(id) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(testing)
+                if testing { ProgressView() }
+                if let r = model.downloaderTestResults[id] {
+                    Text(r)
+                        .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
+                        .textSelection(.enabled)
+                }
+                Spacer()
+                Button("删除这台") { model.removeDownloader(id) }
+                    .disabled(!model.canRemoveDownloader(id))
+                    .help("主下载器不能删")
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                downloadersCard
-                CardSection("连接（\(model.editingDownloader.label)）") {
-                    LabeledRow("名字（列表与用途下拉里显示）") {
-                        TextField("如 VPS / 家里NAS", text: dl(\.name)).textFieldStyle(.roundedBorder)
-                    }
-                    LabeledRow("类型") {
-                        Picker("", selection: dl(\.type)) {
-                            Text("qBittorrent").tag(DownloaderType.qbittorrent)
-                            Text("Transmission").tag(DownloaderType.transmission)
-                        }
-                        .labelsHidden()
-                    }
-                    LabeledRow("URL（VPS 隧道地址）") {
-                        TextField("", text: dl(\.url)).textFieldStyle(.roundedBorder)
-                    }
-                    LabeledRow("用户名") {
-                        TextField("", text: dl(\.username)).textFieldStyle(.roundedBorder)
-                    }
-                    LabeledRow("密码") {
-                        RevealField(text: dl(\.password))
-                    }
-                    LabeledRow("保存路径（空 = 下载器默认）") {
-                        TextField("", text: optBinding(\.savePath)).textFieldStyle(.roundedBorder)
-                    }
-                    LabeledRow("分类（空 = 无）") {
-                        TextField("", text: optBinding(\.category)).textFieldStyle(.roundedBorder)
-                    }
-                    Toggle("添加后跳过校验（skipChecking）", isOn: dl(\.skipChecking))
-                }
-                CardSection("连接检测") {
-                    HStack(spacing: 12) {
-                        Button(model.testingDownloader ? "测试中…" : "测试连接") { model.testDownloader() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(model.testingDownloader)
-                        if model.testingDownloader { ProgressView() }
-                    }
-                    if let r = model.downloaderTestResult {
-                        Text(r)
-                            .foregroundStyle(r.hasPrefix("成功") ? .green : .red)
-                            .textSelection(.enabled)
-                    }
+                rolesCard
+                ForEach(model.downloaderList, id: \.id) { d in
+                    downloaderCard(d.id)
                 }
                 CardSection("转种服务器（SSH 上传测速）") {
                     Text("「测试上传速度」按钮在「批量转种」页「开始运行」左边")
@@ -1655,65 +1774,13 @@ struct DownloaderView: View {
                          + "测速在服务器上进行，每轮只多花一份测试流量的上行（默认 64 MB），不占用本机。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                CardSection("种子大小检测") {
-                    LabeledRow("VPS 剩余空间（GB，空 = 不做大小检测）") {
-                        IntLimitField(initial: model.editingDownloader.vpsFreeGB ?? 0) { model.setVpsFreeGB($0) }.frame(width: 60)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("超过剩余空间时").font(.caption).foregroundStyle(.secondary)
-                        HStack {
-                            Picker("", selection: dl(\.sizeGuardMode)) {
-                                Text("提醒（继续转种）").tag(SizeGuardMode.warn)
-                                Text("跳过（不转种不推送）").tag(SizeGuardMode.skip)
-                            }
-                            .labelsHidden()
-                            IntLimitField(initial: model.editingDownloader.sizeGuardMarginGB) { model.setVpsFreeMargin($0) }
-                                .frame(width: 50)
-                            Text("安全边际（GB）").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("可用空间 = 剩余 - 边际；剩余空间需手动维护（qB WebAPI 无磁盘接口），空间变化大时记得更新。")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             }
             .padding(20)
         }
     }
-
-
-    private func optBinding(_ kp: WritableKeyPath<DownloaderConfig, String?>) -> Binding<String> {
-        Binding(get: { model.editingDownloader[keyPath: kp] ?? "" },
-                set: { v in model.updateEditingDownloader { $0[keyPath: kp] = v.isEmpty ? nil : v } })
-    }
 }
 
-// MARK: - 日志
-
-struct LogsView: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("运行日志").font(.headline)
-                Spacer()
-                Button("清空显示") { model.clearNotes() }
-                    .disabled(model.notes.isEmpty)
-            }
-            ScrollView {
-                Text(model.notes.isEmpty ? "（暂无日志）" : model.notes.reversed().joined(separator: "\n"))
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
-            .blockSurface(true)
-        }
-        .padding()
-    }
-}
-
-// MARK: - 辅种
+// MARK: - 辅种（辅种站点在「站点分组」页的辅种区块里维护，这一页只管跑）
 
 extension AssistPipeline.PlanRow {
     /// 与 AssistPipeline.Status.rowKey 同一套拼法
@@ -1726,7 +1793,6 @@ struct AssistView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 14) {
-                sitesCard
                 paceCard
             }
             .frame(width: 300)
@@ -1745,43 +1811,24 @@ struct AssistView: View {
 
     // MARK: 左栏
 
-    private var sitesCard: some View {
-        CardSection("参与站点") {
-            if model.assistSiteOptions.isEmpty {
-                Text("先在「站点分组」里启用站点").font(.callout).foregroundStyle(.secondary)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(model.assistSiteOptions, id: \.id) { site in
-                            HStack(spacing: 6) {
-                                Toggle(isOn: siteBinding(site.id)) {
-                                    Text(site.name).font(.callout).lineLimit(1)
-                                }
-                                .toggleStyle(.checkbox)
-                                Spacer(minLength: 4)
-                                let n = model.assistSummary?.assistedBySite[site.id] ?? 0
-                                if n > 0 {
-                                    Text("辅过 \(n)").font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: 240)
-            }
-            Text("辅种要逐条种子去站内检索，站点先少而后多。")
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+    /// 逐站已辅数（站点本身在「站点分组」页的辅种区块里加）
+    private var assistedCountsLine: String {
+        let pairs = (model.assistSummary?.assistedBySite ?? [:])
+            .filter { $0.value > 0 }
+            .sorted { $0.key < $1.key }
+            .map { "\(model.config.site($0.key)?.name ?? $0.key) \($0.value)" }
+        return pairs.isEmpty ? "还没有辅成功的记录" : "已辅：" + pairs.joined(separator: " · ")
     }
 
     private var paceCard: some View {
         CardSection("检索节奏") {
-            numberedRow("每站最小间隔", dbl(\.perSiteIntervalSec, 0, 120), step: 1, unit: "秒")
-            numberedRow("随机抖动", dbl(\.jitterSec, 0, 30), step: 1, unit: "秒")
-            numberedRow("单轮请求预算", num(\.roundBudget, 1, 2000), step: 10, unit: "次")
-            numberedRow("查无结果保留", num(\.missTTLDays, 0, 90), step: 1, unit: "天")
-            numberedRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), step: 15, unit: "分钟")
+            typedRow("每站最小间隔", dbl(\.perSiteIntervalSec, 0, 120), recommend: 8, unit: "秒")
+            typedRow("随机抖动", dbl(\.jitterSec, 0, 30), recommend: 3, unit: "秒")
+            typedRow("单轮请求预算", num(\.roundBudget, 1, 2000), recommend: 200, unit: "次")
+            typedRow("查无结果保留", num(\.missTTLDays, 0, 90), recommend: 7, unit: "天")
+            typedRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), recommend: 0, unit: "分钟")
+            Text(assistedCountsLine).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(cfg.autoRunMinutes == 0
                  ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
                  : "约 \(model.assistAutoNext ?? 0) 分钟后自动跑下一轮，请求仍受单轮预算约束。")
@@ -1831,6 +1878,9 @@ struct AssistView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            Text("辅种站点：\(model.assistManagedSites.count) 个")
+                .font(.caption2).foregroundStyle(.secondary)
+                .help("在「站点分组」页底部的辅种区块里添加 / 退出")
             Text("辅种下载器：\(model.assistDownloaderName)")
                 .font(.caption2).foregroundStyle(.primary)
                 .help("在「下载器」页的「辅种扫描用」里换一台")
@@ -1943,19 +1993,6 @@ struct AssistView: View {
 
     // MARK: 绑定
 
-    private func siteBinding(_ id: String) -> Binding<Bool> {
-        Binding(get: { model.assistConfig.siteIDs.contains(id) },
-                set: { on in
-                    model.assistUpdate { a in
-                        if on {
-                            if !a.siteIDs.contains(id) { a.siteIDs.append(id) }
-                        } else {
-                            a.siteIDs.removeAll { $0 == id }
-                        }
-                    }
-                })
-    }
-
     private func num(_ keyPath: WritableKeyPath<AssistConfig, Int>, _ lo: Int,
                      _ hi: Int) -> Binding<Int> {
         Binding(get: { model.assistConfig[keyPath: keyPath] },
@@ -1973,24 +2010,66 @@ struct AssistView: View {
                 set: { v in model.assistUpdate { $0[keyPath: keyPath] = v } })
     }
 
-    private func numberedRow(_ label: String, _ value: Binding<Double>, step: Double,
-                             unit: String) -> some View {
+    private func typedRow(_ label: String, _ value: Binding<Double>, recommend: Double,
+                          unit: String) -> some View {
         HStack(spacing: 6) {
             Text(label).font(.callout)
             Spacer()
-            Stepper("\(Int(value.wrappedValue)) \(unit)", value: value, step: step)
-                .font(.callout.monospacedDigit())
+            NumField(value: value.wrappedValue, recommend: recommend) { value.wrappedValue = $0 }
+            Text(unit).font(.caption).foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
         }
     }
 
-    private func numberedRow(_ label: String, _ value: Binding<Int>, step: Int,
-                             unit: String) -> some View {
+    private func typedRow(_ label: String, _ value: Binding<Int>, recommend: Int,
+                          unit: String) -> some View {
         HStack(spacing: 6) {
             Text(label).font(.callout)
             Spacer()
-            Stepper("\(value.wrappedValue) \(unit)", value: value, step: step)
-                .font(.callout.monospacedDigit())
+            NumField(value: Double(value.wrappedValue), recommend: Double(recommend), integer: true) {
+                value.wrappedValue = Int($0.rounded())
+            }
+            Text(unit).font(.caption).foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
         }
+    }
+}
+
+/// 数值输入框：只收数字（小数点按需），空 = 0，回车或失焦提交；占位显示推荐值
+struct NumField: View {
+    @State private var text: String
+    @FocusState private var focused: Bool
+    private let commit: (Double) -> Void
+    private let integer: Bool
+    /// 清空后占位显示推荐值（默认值本身就是推荐值）
+    private let recommendText: String
+
+    init(value: Double, recommend: Double, integer: Bool = false,
+         commit: @escaping (Double) -> Void) {
+        self.commit = commit
+        self.integer = integer
+        self.recommendText = NumField.plain(recommend, integer: integer)
+        _text = State(initialValue: NumField.plain(value, integer: integer))
+    }
+
+    private static func plain(_ v: Double, integer: Bool) -> String {
+        if integer || v == v.rounded() { return String(Int(v)) }
+        return String(format: "%.1f", v)
+    }
+
+    var body: some View {
+        TextField("", text: $text, prompt: Text(recommendText))
+            .textFieldStyle(.roundedBorder)
+            .multilineTextAlignment(.center)
+            .frame(width: 64)
+            .focused($focused)
+            .onChange(of: text) { v in
+                let ok = CharacterSet(charactersIn: integer ? "0123456789" : "0123456789.")
+                let filtered = String(v.unicodeScalars.filter { ok.contains($0) })
+                if filtered != v { text = filtered }
+            }
+            .onSubmit { commit(Double(text) ?? 0) }
+            .onChange(of: focused) { f in if !f { commit(Double(text) ?? 0) } }
     }
 }
 

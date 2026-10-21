@@ -229,6 +229,15 @@ public final class AppService {
             mutate { for id in ids { self.cfg.removeManagedSite(id, unselect: { _ in }) } }
             save()
             return groupsAndSites()
+        case "assist.addSites":
+            // 辅种区块的「添加站点」：入站点池但不进分组
+            mutate { cfg.addAssistSites((params["ids"] as? [String]) ?? []) }
+            save()
+            return groupsAndSites()
+        case "assist.removeSite":
+            mutate { cfg.removeAssistSite(params["id"] as? String ?? "") }
+            save()
+            return groupsAndSites()
         case "sites.setEnabled":
             let ids = (params["ids"] as? [String]) ?? []
             let on = params["enabled"] as? Bool ?? true
@@ -1404,6 +1413,8 @@ public final class AppService {
                 "needsSourceQuote": SiteRegistry.needsSourceQuoteField(s),
                 "supportsAutoFree": c.siteSupportsAutoFree(s.id),
                 "autoFree": c.siteAutoFree(s.id),
+                // 辅种区块：managed 且在这个名单里的站点显示在「站点分组」页底部
+                "assist": c.assist?.siteIDs.contains(s.id) ?? false,
             ])
         }
         return out
