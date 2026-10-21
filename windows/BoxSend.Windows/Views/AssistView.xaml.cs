@@ -129,9 +129,13 @@ public partial class AssistView : UserControl
             _candidates.Add(new Line(n?["name"]?.GetValue<string>() ?? "",
                 $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站"));
         }
+        // 下载器里可能上万条：核心按体积裁成本轮要处理的那批，整份条数另给
+        var totalTorrents = result["torrentTotal"]?.GetValue<int>() ?? _candidates.Count;
         var delta = Text(result["summary"]?["deltaText"]);
         var dl = Text(result["downloader"]);
-        CandidateSummary.Text = $"{(delta.Length > 0 ? delta + "。" : $"共 {_candidates.Count} 条。")}"
+        CandidateSummary.Text = (totalTorrents > _candidates.Count
+                ? $"下载器里 {totalTorrents} 条符合，本轮按体积取前 {_candidates.Count} 条。"
+                : (delta.Length > 0 ? delta + "。" : $"共 {_candidates.Count} 条。"))
             + "没下完、或按大小/分类筛掉的不在这里。"
             + $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「下载器」页的「辅种扫描用」里换一台）";
 
@@ -150,11 +154,24 @@ public partial class AssistView : UserControl
                 Skip = skip,
             });
         }
+        // 计数按全量算（列表只回前几百行），跳过原因由核心汇总
+        var planTotal = result["planTotal"]?.GetValue<int>() ?? _plan.Count;
+        var skips = new List<string>();
+        if (result["planCounts"] is JsonObject counts)
+            foreach (var kv in counts)
+            {
+                var n = kv.Value?.GetValue<int>() ?? 0;
+                if (kv.Key == "会去站内检索") willSearch = n;
+                else skips.Add($"{kv.Key} {n}");
+            }
+        skips.Sort((a, b) => b.Split(' ').Last().CompareTo(a.Split(' ').Last()));
         var budget = result["budget"]?.GetValue<int>() ?? 0;
-        PlanSummary.Text = $"{_plan.Count} 个组合，其中 {willSearch} 个会去站内检索"
+        PlanSummary.Text = $"全量 {planTotal} 个组合，其中 {willSearch} 个会去站内检索"
             + $"（单轮预算 {_model.SectionInt("assist", "roundBudget", 200)} 次请求，用完下次接着跑）"
-            + $"；本轮剩余额度 {budget} 次。";
-        State.Text = $"参与站点 {sites} 个，候选 {_candidates.Count} 条";
+            + $"；本轮剩余额度 {budget} 次"
+            + (skips.Count > 0 ? "；跳过：" + string.Join(" · ", skips.Take(4)) : "")
+            + (planTotal > _plan.Count ? $"。下面列前 {_plan.Count} 行" : "");
+        State.Text = $"参与站点 {sites} 个，候选 {totalTorrents} 条（本轮 {_candidates.Count} 条）";
         RefreshProgress();
     }
 

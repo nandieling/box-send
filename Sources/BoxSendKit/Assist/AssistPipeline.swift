@@ -232,6 +232,37 @@ public final class AssistPipeline {
         public var skipReason: String?
     }
 
+    /// 一轮里最多看多少条种子。下载器里上万条 × 上百个站就是上百万个组合，
+    /// 界面和逐条预筛都会被钉住；按体积从大到小取前 N 条，收益也最大。
+    public static let roundTorrentCap = 200
+
+    /// 本轮实际要处理的候选（体积倒序裁到上限）
+    public static func roundCandidates(_ torrents: [LocalTorrent], cap: Int = roundTorrentCap)
+        -> [LocalTorrent] {
+        Array(torrents.sorted { $0.totalSize > $1.totalSize }.prefix(max(1, cap)))
+    }
+
+    /// 计划预览：行只留前 cap 条给人看，计数按全量算
+    /// （1.2 万条种子 × 115 站 = 138 万行，整份塞进界面会把界面钉死）
+    public struct PlanPreview {
+        public var rows: [PlanRow]
+        public var total: Int
+        public var willSearch: Int
+        /// 各类结论各有多少（含「会去站内检索」），按条数从多到少
+        public var counts: [(reason: String, count: Int)]
+    }
+
+    public func planPreview(torrents: [LocalTorrent], siteIDs: [String]? = nil,
+                            cap: Int = 400) -> PlanPreview {
+        let rows = plan(torrents: torrents, siteIDs: siteIDs)
+        var counts: [String: Int] = [:]
+        for row in rows { counts[row.skipReason ?? "会去站内检索", default: 0] += 1 }
+        return PlanPreview(rows: Array(rows.prefix(max(1, cap))), total: rows.count,
+                           willSearch: counts["会去站内检索", default: 0],
+                           counts: counts.sorted { $0.value > $1.value }
+                               .map { (reason: $0.key, count: $0.value) })
+    }
+
     public func plan(torrents: [LocalTorrent], siteIDs: [String]? = nil) -> [PlanRow] {
         guard let cfg = config.assist else { return [] }
         var rows: [PlanRow] = []

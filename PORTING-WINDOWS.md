@@ -540,6 +540,28 @@ Windows 侧：
 - 验证：`swift test` 531 绿（新增 `CangbaoCategoryTests` 3 条：剧场版进 404、整季进 405、其余体裁不变；
   辅种候选 1 条：不受分组影响、加过即消失）；`dotnet build` 0 错误。
 
+## 这一轮（辅种扫描 0 条：Transmission 的 RPC 响应读错了一层）
+
+- 现象：辅种站点与辅种下载器（Transmission，12470 条已下完种子）都配好了，点「扫描下载器」显示 0 条。
+  原因是 `Transmission.rpc` 把整包响应直接给上层，上层又把 `arguments` 当种子数组读——
+  TR 回的是 `{"arguments":{"torrents":[…]},"result":"success"}`，于是 `(arguments as? [[String:Any]])`
+  必然失败，`?? []` 之后就是 0 条。同一处错读还让 `torrent-add` 取不到 id、`testConnection` 永远报
+  「未知版本，登录成功」，连不上/超时也被吞成空清单。现在 `rpc` 只交 `arguments` 那一层，
+  解包抽成 `Transmission.arguments(of:method:status:)`（连不上与 result 非 success 都明确报错）。
+- Transmission 另外两处补齐：`torrentProgress` 之前用协议默认实现（每次拉整份 7 MB 清单轮询），
+  现在单条查询，并顺手把「暂停着加进来、TR 不会自己校验」这条补上——首次问到就 `torrent-start`，
+  status 2/3（排队校验/正在校验）映射成流水线认的 `checking`，否则一条大种子会被判成
+  「校验后只到 0%」直接删掉；`labels` 是数组，之前只把第一个当 category，其余标签丢了，
+  「只辅这些分类」在 TR 上会一条都匹配不上。
+- 一万条种子 × 115 站 = 143 万个组合（实测 `assist plan` 就是这个数），整份塞进界面会把界面钉死：
+  核心新增 `AssistPipeline.roundCandidates`（本轮按体积取前 200 条）与 `planPreview`（计数按全量、
+  行只留前 400 条 + 各结论条数）。桥接 `assist.scan` 多回 `torrentTotal` / `planTotal` / `planCounts`，
+  mac 与 Windows 都显示「下载器里 N 条符合，本轮按体积取前 M 条 / 全量 X 个组合，其中 Y 会去检索」。
+  单轮真正发出去的站点请求照旧由 `roundBudget` 兜住。
+- 验证：`swift test` 535 绿（新增 `TransmissionAssistTests` 4 条，用真机响应形状：整数 percentDone、
+  50 GB size、labels、tracker host 提取、校验状态映射、连不上报错）；`dotnet build` 0 错误；
+  真机 `box-send assist scan` 从 0 条变成 12470 条。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

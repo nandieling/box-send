@@ -701,13 +701,18 @@ public final class AppService {
         let (pipe, _) = try makeAssistPipeline(cfg)
         let picked = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
         let scan = try pipe.scanAndRecord()
-        let candidates = scan.torrents
-        let rows = pipe.plan(torrents: candidates, siteIDs: picked)
+        // 上万条种子 × 上百个站 = 上百万组合：本轮只挑体积最大的前 N 条，计划行也只回前几百条
+        let candidates = AssistPipeline.roundCandidates(scan.torrents)
+        let preview = pipe.planPreview(torrents: candidates, siteIDs: picked)
+        let rows = preview.rows
         let nameOf: (String) -> String = { id in
             guard let s = cfg.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
         }
         return [
+            "torrentTotal": scan.count,
+            "planTotal": preview.total,
+            "planCounts": Dictionary(uniqueKeysWithValues: preview.counts.map { ($0.reason, $0.count) }),
             "summary": [
                 "count": scan.count,
                 "previousCount": scan.previousCount as Any,
@@ -782,7 +787,8 @@ public final class AppService {
                 let scan = try pipe.scanAndRecord()
                 // 单条采纳：只跑被点名的那条，别顺带把整个下载器过一遍
                 let forceHashes = Set(force.compactMap { $0.split(separator: "|").last }.map(String.init))
-                let candidates = forceHashes.isEmpty ? scan.torrents
+                let candidates = forceHashes.isEmpty
+                    ? AssistPipeline.roundCandidates(scan.torrents)
                     : scan.torrents.filter { forceHashes.contains($0.hash) }
                 self.mutate { self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个" }
                 let report = pipe.run(torrents: candidates, opts: opts)

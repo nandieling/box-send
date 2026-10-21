@@ -1538,6 +1538,10 @@ final class AppModel: ObservableObject {
     @Published var assistSummary: AssistPipeline.ScanSummary? = nil
     /// 本轮计划（一条种子 × 一个站）
     @Published var assistPlan: [AssistPipeline.PlanRow] = []
+    /// 本轮计划的整份计数：assistPlan 只留前几百条给人看，计数按全量算
+    @Published var assistPreview: AssistPipeline.PlanPreview?
+    /// 下载器里全部候选条数（assistCandidates 只装本轮要处理的那批）
+    @Published var assistTorrentTotal = 0
     /// 逐行进展，key = 站点|种子 hash
     @Published var assistRows: [String: AssistPipeline.Status] = [:]
     @Published var assistScanning = false
@@ -1574,20 +1578,23 @@ final class AppModel: ObservableObject {
         let jar = cookies
         let st = state
         Task.detached(priority: .utility) {
-            let out: (AssistPipeline.ScanSummary?, [AssistPipeline.PlanRow], String)
+            let out: (AssistPipeline.ScanSummary?, AssistPipeline.PlanPreview?, String)
             let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
             let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
                                       downloader: DownloaderFactory.makeForAssist(cfg, client: client))
             do {
                 let scan = try pipe.scanAndRecord()
-                out = (scan, pipe.plan(torrents: scan.torrents), "")
+                let round = AssistPipeline.roundCandidates(scan.torrents)
+                out = (scan, pipe.planPreview(torrents: round), "")
             } catch {
-                out = (nil, [], "扫描下载器失败：\(error.localizedDescription)")
+                out = (nil, nil, "扫描下载器失败：\(error.localizedDescription)")
             }
             await MainActor.run {
                 self.assistSummary = out.0
-                self.assistCandidates = out.0?.torrents ?? []
-                self.assistPlan = out.1
+                self.assistCandidates = AssistPipeline.roundCandidates(out.0?.torrents ?? [])
+                self.assistTorrentTotal = out.0?.count ?? 0
+                self.assistPreview = out.1
+                self.assistPlan = out.1?.rows ?? []
                 self.assistRows = [:]
                 self.assistScanning = false
                 self.assistMessage = out.2.isEmpty ? out.0?.deltaText : out.2
@@ -1664,26 +1671,30 @@ final class AppModel: ObservableObject {
             let all: [LocalTorrent]
             do {
                 all = try pipe.scanCandidates()
-            } catch {
+            } catch {   // 整份清单只用来记账，本轮跑的是裁过的那批
                 await MainActor.run {
                     self.assistRunning = false
                     self.assistMessage = "扫描下载器失败：\(error.localizedDescription)"
                 }
                 return
             }
-            let picked = forceHashes.isEmpty ? all : all.filter { forceHashes.contains($0.hash) }
+            let round = AssistPipeline.roundCandidates(all)
+            let picked = forceHashes.isEmpty ? round : all.filter { forceHashes.contains($0.hash) }
             let report = pipe.run(torrents: picked, opts: o)
-            // 计划表按整批候选 + 勾选的站点重算：单条采纳不该把整表缩成一行
+            // 计划表按本轮候选 + 勾选的站点重算：单条采纳不该把整表缩成一行
             let planIDs = (cfg.assist?.siteIDs ?? ids).filter { cfg.site($0)?.enabled == true }
-            let plan = pipe.plan(torrents: all, siteIDs: planIDs)
+            let preview = pipe.planPreview(torrents: forceHashes.isEmpty ? round : picked,
+                                           siteIDs: planIDs)
             let summary = pipe.recordScan(torrents: all)
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
             await MainActor.run {
                 self.cookies.mergeFrom(jar)
-                self.assistCandidates = all
-                self.assistPlan = plan
+                self.assistCandidates = forceHashes.isEmpty ? round : picked
+                self.assistTorrentTotal = all.count
+                self.assistPreview = preview
+                self.assistPlan = preview.rows
                 self.assistSummary = summary
                 self.assistRunning = false
                 self.assistMessage = text

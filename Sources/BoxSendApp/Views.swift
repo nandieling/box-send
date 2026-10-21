@@ -1885,6 +1885,30 @@ struct AssistView: View {
         }
     }
 
+    /// 候选条数：下载器里可能上万条，本轮只处理体积最大的前 N 条
+    private var candidatesFootline: String {
+        let total = model.assistTorrentTotal
+        var line = total > model.assistCandidates.count
+            ? "下载器里 \(total) 条符合，本轮按体积取前 \(model.assistCandidates.count) 条"
+            : (model.assistSummary?.deltaText ?? "共 \(model.assistCandidates.count) 条")
+        line += "。没下完、或按大小/分类筛掉的不在这里。"
+        if let last = model.assistSummary?.lastScan {
+            line += "上次扫描 " + AppModel.dateText(last.timeIntervalSince1970)
+        }
+        return line
+    }
+
+    /// 计划计数按全量算，列出来的只是前几百行
+    private var planHeadline: String {
+        guard let preview = model.assistPreview else { return "" }
+        let shown = "全量 \(preview.total) 个组合，其中 \(preview.willSearch) 个会去站内检索"
+            + "（单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑）"
+        let skips = preview.counts.filter { $0.reason != "会去站内检索" }
+            .prefix(4).map { "\($0.reason) \($0.count)" }.joined(separator: " · ")
+        let cap = preview.total > preview.rows.count ? "下面列前 \(preview.rows.count) 行。" : ""
+        return shown + (skips.isEmpty ? "" : "；跳过：\(skips)") + cap
+    }
+
     private var candidatesCard: some View {
         CardSection("候选种子（下载器里已下完的）") {
             if model.assistCandidates.isEmpty {
@@ -1907,9 +1931,7 @@ struct AssistView: View {
                 }
                 .frame(maxHeight: 180)
             }
-            Text((model.assistSummary?.deltaText ?? "共 \(model.assistCandidates.count) 条")
-                 + "。没下完、或按大小/分类筛掉的不在这里。"
-                 + (model.assistSummary?.lastScan.map { "上次扫描 " + AppModel.dateText($0.timeIntervalSince1970) } ?? ""))
+            Text(candidatesFootline)
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1921,10 +1943,9 @@ struct AssistView: View {
                 Text("扫描后这里会列出每条种子在每个站的计划。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                let willSearch = model.assistPlan.filter { $0.skipReason == nil }.count
-                Text("\(model.assistPlan.count) 个组合，其中 \(willSearch) 个会去站内检索"
-                     + "（单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑）")
+                Text(planHeadline)
                     .font(.caption2).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 5) {
                         ForEach(model.assistPlan, id: \.rowKey) { row in
