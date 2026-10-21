@@ -60,7 +60,7 @@ public partial class RunView : UserControl
     {
         LoadQuote();
         ProbeSourceLabel();
-        LoadPrecheck();
+        LoadSpeedButton();
         RebuildSourcePick();
 
         if (!_seeded)
@@ -471,21 +471,30 @@ public partial class RunView : UserControl
     private void SaveQuote() =>
         _model.Call("sourceQuote.set", new { enabled = UseQuote.IsChecked == true, text = QuoteText.Text });
 
-    /// 「转种前先测上传速度」= 配置里 ssh.enabled。服务器没填全时勾了也测不成，直接禁掉并说明去哪儿填
-    private void LoadPrecheck()
+    /// 测速按钮只管手动测一次，不是「开始运行」的前置条件。
+    /// 服务器没填全时测不成，直接禁掉并说明去哪儿填
+    private void LoadSpeedButton()
     {
         var configured = _model.SectionText("ssh", "host").Trim().Length > 0
                          && _model.SectionText("ssh", "user").Trim().Length > 0;
-        SpeedPrecheck.IsEnabled = configured;
-        SpeedPrecheck.IsChecked = configured && _model.SectionFlag("ssh", "enabled");
-        SpeedPrecheck.ToolTip = configured
-            ? "点「开始运行」前先到服务器上量一次公网上行，弹窗把速度报给你，转不转由你定；"
-              + "服务器信息填在「下载器」页的「转种服务器」卡片里"
+        BtnSpeed.IsEnabled = configured && !_model.BusySSH;
+        BtnSpeed.ToolTip = configured
+            ? "到服务器上量一次公网上行，实测速度显示在下一行；不测也能直接开转"
             : "先到「下载器」页的「转种服务器」卡片填服务器地址与用户名，才能测速";
     }
 
-    private void OnPrecheckToggled(object sender, RoutedEventArgs e) =>
-        _model.PatchSection("ssh", s => s["enabled"] = SpeedPrecheck.IsChecked == true);
+    /// 点「测试上传速度」：核心库连服务器跑几十秒，结果写进按钮下面那一行（与 mac 版同一句文案）
+    private async void OnSpeedTest(object sender, RoutedEventArgs e)
+    {
+        BtnSpeed.IsEnabled = false;
+        SpeedResult.Visibility = Visibility.Visible;
+        SpeedResult.Foreground = (Brush)FindResource("TextMuted");
+        SpeedResult.Text = "正在测试服务器上传速度…";
+        var r = await _model.TestSSHAsync();
+        SpeedResult.Text = (r.Ok ? "成功: " : "失败: ") + r.Text;
+        SpeedResult.Foreground = (Brush)FindResource(r.Ok ? "Success" : "Warning");
+        LoadSpeedButton();
+    }
 
     private void OnHistory(object sender, RoutedEventArgs e)
     {
@@ -496,7 +505,7 @@ public partial class RunView : UserControl
 
     // MARK: 运行
 
-    private async void OnRun(object sender, RoutedEventArgs e)
+    private void OnRun(object sender, RoutedEventArgs e)
     {
         var url = DetailUrl.Text.Trim();
         if (url.Length == 0)
@@ -511,27 +520,7 @@ public partial class RunView : UserControl
             return;
         }
         SaveQuote();
-
-        // 服务器可能被限速：先测一次，把速度报出来，由人决定这一批转不转
-        if (SpeedPrecheck.IsChecked != true || await SpeedGateAsync()) Start(url, targets);
-    }
-
-    /// 返回 false = 用户看了测速结果后决定先不转
-    private async Task<bool> SpeedGateAsync()
-    {
-        BtnRun.IsEnabled = false;
-        RunStep.Text = "正在测试服务器上传速度…";
-        var r = await _model.TestSSHAsync();
-        RunStep.Text = "";
-        BtnRun.IsEnabled = true;
-        // 文案由核心给（一句测速信息），这里只决定按钮：继续转种 / 先不转种
-        var win = Window.GetWindow(this)!;
-        if (!r.Ok)
-            return MessageBox.Show(win, r.Text, "服务器测速没做成",
-                                   MessageBoxButton.OKCancel, MessageBoxImage.Warning)
-                   == MessageBoxResult.OK;
-        return MessageBox.Show(win, r.Text, $"服务器上传实测 {r.MBps:0.#} MB/s",
-                               MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+        Start(url, targets);
     }
 
     private void Start(string url, string[] targets)

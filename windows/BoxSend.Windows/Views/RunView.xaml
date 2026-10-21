@@ -40,13 +40,14 @@
                         <CheckBox x:Name="DoPush" Content="推送到下载器" IsChecked="True"
                                   VerticalAlignment="Center" />
                         <Border Width="14" Background="Transparent" />
-                        <!-- 开关在批次入口这里，服务器地址等仍填在「下载器」页那张卡片 -->
-                        <CheckBox x:Name="SpeedPrecheck" Content="转种前先测上传速度"
-                                  VerticalAlignment="Center" Click="OnPrecheckToggled"
-                                  ToolTip="点「开始运行」前先到服务器上量一次公网上行，弹窗把速度报给你，转不转由你定；服务器信息填在「下载器」页的「转种服务器」卡片里" />
+                        <!-- 测速按钮挨着「开始运行」：服务器地址等仍填在「下载器」页那张卡片 -->
+                        <Button x:Name="BtnSpeed" Content="测试上传速度" Click="OnSpeedTest"
+                                Padding="12,5,12,5"
+                                ToolTip="到服务器上量一次公网上行，实测速度显示在下一行；服务器信息填在「下载器」页的「转种服务器」卡片里" />
                         <Border Width="14" Background="Transparent" />
                         <Button x:Name="BtnRun" Content="开始运行" Style="{StaticResource Primary}"
-                                Click="OnRun" Padding="16,5,16,5" />
+                                Click="OnRun" Padding="16,5,16,5"
+                                ToolTip="测不测速都能直接开转；想知道服务器有没有被限速，点左边的「测试上传速度」" />
                         <Border Width="14" Background="Transparent" />
                         <TextBlock x:Name="BatchSummary" VerticalAlignment="Center" FontSize="13"
                                    Foreground="{DynamicResource TextMuted}" />
@@ -54,6 +55,9 @@
                         <TextBlock x:Name="RunStep" VerticalAlignment="Center" FontSize="12"
                                    Foreground="{DynamicResource TextMuted}" />
                     </WrapPanel>
+                    <!-- 测速结果单独一行：跑完就留在这儿，不弹窗挡「开始运行」 -->
+                    <TextBlock x:Name="SpeedResult" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                               Visibility="Collapsed" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
             </Border>
 

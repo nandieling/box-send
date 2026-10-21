@@ -249,22 +249,18 @@ struct RunView: View {
             HStack(spacing: 20) {
                 Toggle("转种到目标站", isOn: $model.doReseed)
                 Toggle("推送到下载器", isOn: $model.doPush)
-                // 开关放在批次入口上：这一批要不要先测速，就在按「开始运行」的手边上定
-                Toggle("转种前先测上传速度", isOn: Binding(
-                        get: { model.sshConfig.precheckActive },
-                        set: { on in model.updateSSH { $0.enabled = on } }))
+                // 测速按钮挨着「开始运行」：转之前手点一次看速度，不点也照样能开转
+                Button(model.testingSSH ? "测速中…" : "测试上传速度") { model.testSSH() }
                     .fixedSize()
-                    .disabled(!model.sshConfig.isConfigured)
+                    .disabled(model.testingSSH || model.running || !model.sshConfig.isConfigured)
                     .help(model.sshConfig.isConfigured
-                          ? "点「开始运行」前先到服务器上量一次公网上行，弹窗把速度报给你；"
+                          ? "到服务器上量一次公网上行，实测速度显示在下一行；"
                             + "服务器信息填在「下载器」页「转种服务器」卡片里"
                           : "先到「下载器」页的「转种服务器」卡片填服务器地址与用户名，才能测速")
-                Button(model.running ? "运行中…" : (model.speedChecking ? "测速中…" : "开始运行")) { model.run() }
+                Button(model.running ? "运行中…" : "开始运行") { model.run() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.running || model.speedChecking)
-                    .help(model.speedPrecheckWanted
-                          ? "运行前先测服务器上传速度并弹窗报告，转不转由你看速度决定（不设自动判定线）"
-                          : "")
+                    .disabled(model.running)
+                    .help("测不测速都能直接开转；想知道服务器有没有被限速，点左边的「测试上传速度」")
                 // 批次概览：本批会转哪几个分组、几站，免得勾错分组就跑
                 Text(model.runSelectionSummary)
                     .font(.callout)
@@ -274,24 +270,19 @@ struct RunView: View {
                           + "勾选的站点：\(model.runTargets.map(\.name).joined(separator: "、"))")
                 Spacer()
             }
+            // 按钮下面这一行：运行进度与测速结果共用（测速完就把速度留在这儿）
             if model.running {
                 Text(model.runningStep).font(.caption).foregroundStyle(.secondary)
-            } else if model.speedChecking {
+            } else if model.testingSSH {
                 Text("正在测试服务器上传速度…").font(.caption).foregroundStyle(.secondary)
+            } else if let r = model.sshTestResult {
+                Text(r).font(.caption)
+                    .foregroundStyle(r.hasPrefix("失败") ? Color.orange : Color.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .runCard()
-        // 服务器限速检查：测出低速（或测速本身失败）时由人决定这一批转不转
-        .alert(model.speedGate?.title ?? "服务器可能被限速",
-               isPresented: Binding(get: { model.speedGate != nil },
-                                    set: { if !$0 { model.speedGate = nil } }),
-               presenting: model.speedGate) { gate in
-            Button("继续转种") { model.run(skipSpeedCheck: true) }
-                .keyboardShortcut(.defaultAction)
-            Button("先不转种", role: .cancel) { }
-        } message: { gate in
-            Text(gate.message)
-        }
     }
 
     /// 源站菜单：默认按链接域名自动识别；站点分组里添加过的站点都能指定为源站
@@ -1576,7 +1567,7 @@ struct DownloaderView: View {
                     }
                 }
                 CardSection("转种服务器（SSH 上传测速）") {
-                    Text("「转种前先测上传速度」的开关在「批量转种」页「开始运行」左边")
+                    Text("「测试上传速度」按钮在「批量转种」页「开始运行」左边")
                         .font(.caption).foregroundStyle(.secondary)
                     HStack(alignment: .top, spacing: 12) {
                         LabeledRow("服务器地址") {
@@ -1659,8 +1650,8 @@ struct DownloaderView: View {
                             .textSelection(.enabled)
                     }
                     Text("部分服务器 24 小时上传流量到 2T 后会把上行压到 20 MB/s 左右，批量转种时整批都慢。"
-                         + "打开开关后，每次点「开始运行」会先用 SSH 连上这台服务器，往公网推两轮测试数据量，"
-                         + "然后弹窗把实测上传速度报给你，由你决定这一批转不转。"
+                         + "想确认这一批转不转，在「批量转种」页点「测试上传速度」：用 SSH 连上这台服务器，"
+                         + "往公网推两轮测试数据量，实测速度显示在按钮下面那一行，不做自动判定。"
                          + "测速在服务器上进行，每轮只多花一份测试流量的上行（默认 64 MB），不占用本机。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -2198,7 +2189,7 @@ struct TutorialSheet: View {
                         "部分服务器 24 小时上传流量到 2T 后，会把上行悄悄压到 20 MB/s 左右：站点照样能发种，但整批下载都变慢。",
                         "「下载器」页「转种服务器」卡片填写服务器地址、端口、用户名，选密钥或密码登录（密钥默认 ~/.ssh/id_ed25519，点「选择…」挑）。",
                         "「测试连接并测速」立刻连一次：显示服务器主机名、每轮实测速度。",
-                        "勾上「批量转种」页「开始运行」左边的「转种前先测上传速度」后，每次点「开始运行」会先测速再弹窗把速度报给你：觉得可以就点「继续转种」，觉得被限速了就点「先不转种」等一等，不设自动判定线。",
+                        "「批量转种」页「开始运行」左边有「测试上传速度」：随时点一下，实测速度显示在按钮下面那一行，不做自动判定——速度不理想就等一等再转，不测也能直接开转。",
                         "测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行；测速地址可换成自己的接收端。",
                     ])
                     section("6. TMDB 链接自动反查", image: nil, steps: [

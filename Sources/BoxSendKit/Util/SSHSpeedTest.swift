@@ -3,8 +3,9 @@ import Foundation
 /// 转种服务器的 SSH 登录信息与「批量转种前上传测速」参数。
 ///
 /// 部分 VPS 24 小时上传流量到 2T 后会静默把上行压到 20 MB/s 左右，批量转种时表现为
-/// 全站发种变慢、下载器长时间卡 0%。这里在跑批次前先到服务器上往公网推一块测试数据，
-/// 然后把实测速度弹窗报出来，转不转由人决定（软件不替用户设自动判定线）。
+/// 全站发种变慢、下载器长时间卡 0%。用户在「批量转种」页点「测试上传速度」时到服务器上往
+/// 公网推一块测试数据，把实测速度显示在按钮下面那一行，转不转由人决定
+/// （软件不替用户设自动判定线，也不拦着「开始运行」）。
 public struct SSHConfig: Codable, Equatable {
     /// 登录方式：密钥（BatchMode 免密，不弹任何框）或密码（临时 askpass 代填）
     public enum Auth: String, Codable {
@@ -15,7 +16,7 @@ public struct SSHConfig: Codable, Equatable {
     /// 默认测速接收端：Cloudflare 的测速上传口，收任意 POST Body，不计流量账单
     public static let defaultProbeURL = "https://speed.cloudflare.com/__up"
 
-    /// 批量转种前是否先测速（地址与用户名填全了才会真的去测）
+    /// 老配置里的「转种前先测上传速度」开关：界面上已改成手动按钮，这里留着只为读写旧配置
     public var enabled: Bool
     public var host: String
     public var port: Int
@@ -92,7 +93,7 @@ public struct SSHConfig: Codable, Equatable {
     /// 地址与用户名都填了才算配好
     public var isConfigured: Bool { !trimmedHost.isEmpty && !trimmedUser.isEmpty }
 
-    /// 这一批转种前要不要跑限速检查：开关开着且配置填全
+    /// 旧开关的语义（开着且配置填全）：现在测速靠手动按钮，留着给配置读写与用例核对
     public var precheckActive: Bool { enabled && isConfigured }
 
     /// 登录目标（提示文案用）
@@ -213,7 +214,7 @@ public enum SSHSpeedTest {
 
     // MARK: - 测速后给用户看的文案
 
-    /// 测速完的弹窗文案：只报测速信息本身，不写说明段——转不转由人看一眼速度就决定
+    /// 测速完给用户看的一句话：只报测速信息本身，不写说明段——转不转由人看一眼速度就决定
     public static func gateText(_ r: Result, loginTarget: String) -> (title: String, message: String) {
         let line = r.serverInfo.isEmpty ? "\(r.summaryLine)（\(loginTarget)）" : r.summaryLine
         return ("服务器上传实测 \(speedText(r.peakMBps)) MB/s", line)

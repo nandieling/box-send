@@ -486,6 +486,19 @@ Windows 侧：
 - 验证：`swift test` 525 绿（新增 `DeferredPushRetryTests` 6 条 + 馒头词元回退 1 条）；
   实测 `box-send info --site hdtime --detail .../id=231456` 已能解析出 `download.php?id=231456`。
 
+## 这一轮（测速改成手动按钮：不再拦「开始运行」）
+
+- 「转种前先测上传速度」勾选框 + 「开始运行」前弹窗放行，改成「开始运行」左边的「测试上传速度」按钮：
+  点一下测一次，结果显示在按钮下面那一行；测不测都能直接开转，也不再弹「继续转种 / 先不转种」。
+- mac：`AppModel.run()` 去掉 `skipSpeedCheck` 分支与 `speedGate`（`SpeedGate` 结构体一并删），
+  RunView 的测速按钮复用既有的 `testSSH()` / `sshTestResult`——和「下载器」页那张卡片同一条文案、
+  同一个 `testingSSH` 忙碌位，省掉第二套异步代码；结果行与运行进度行共用一行位置。
+- Windows：`RunView.xaml` 的 `SpeedPrecheck` 换成 `BtnSpeed` + 下一行的 `SpeedResult`，
+  code-behind 用 `_model.TestSSHAsync()`（核心 `ssh.test`）填那一句，配色走 `Success` / `Warning` 资源；
+  `OnRun` 去掉 `SpeedGateAsync()`，同步改回非 async，避免 CS1998。
+- 配置里的 `ssh.enabled` 不再被这一页读写，字段留着只为兼容旧配置（`precheckActive` 同义保留给用例）。
+- 两端同源：测速本来就在核心 `SSHSpeedTest`，这轮只动两端界面与提示文案（卡片副标题、教程、说明段）。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
