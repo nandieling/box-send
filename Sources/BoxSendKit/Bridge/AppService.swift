@@ -866,9 +866,13 @@ public final class AppService {
         if let data = cookies.exportBackupJSON() { _ = try? jar.replace(from: data) }
         lock.unlock()
         let client = HTTPClient(cookies: jar, userAgent: c.userAgent)
+        if let made = assistPipelineFactory?(c, client) { return (made, jar) }
         let downloader = DownloaderFactory.makeForAssist(c, client: client)
         return (AssistPipeline(config: c, cookies: jar, state: state, downloader: downloader), jar)
     }
+
+    /// 单测注入点：换掉整条辅种流水线（假下载器、假站点），扫描/计划/执行都能不发真请求
+    var assistPipelineFactory: ((AppConfig, HTTPClient) -> AssistPipeline)?
 
     private func assistState() -> [String: Any] {
         lock.lock()

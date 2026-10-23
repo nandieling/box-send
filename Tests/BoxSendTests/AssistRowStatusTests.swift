@@ -158,4 +158,94 @@ final class AssistSnapshotStatsTests: XCTestCase {
         XCTAssertTrue(lines?.allSatisfy { ($0["label"] as? String)?.isEmpty == false } ?? false,
                       "标签连文案一起给，两端显示同一套话")
     }
+
+    /// assist.scan 的整份载荷：列出的种子、每格结论、整轮计数，一次给全
+    func testScanPayloadCarriesCellsAndStats() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("boxsend-assist-scan-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let cfgPath = dir.appendingPathComponent("boxsend.json").path
+        var app = AppConfig.template()
+        app.sourceSites = (0..<2).map {
+            SiteConfig(id: "s\($0)", name: "站\($0)", url: "https://s\($0).invalid/",
+                       framework: .nexusPHP, enabled: true)
+        }
+        app.assist = AssistConfig(siteIDs: ["s0", "s1"], perSiteIntervalSec: 0, jitterSec: 0,
+                                  roundBudget: 50)
+        try JSONEncoder().encode(app).write(to: URL(fileURLWithPath: cfgPath))
+        let svc = try AppService(configPath: cfgPath, dataDir: dir.path)
+        let dl = SeededDownloader(hashes: ["h1", "h2", "h3"])
+        svc.assistPipelineFactory = { cfg, client in
+            AssistPipeline(config: cfg, cookies: CookieStore(), state: svc.state, downloader: dl)
+        }
+
+        let out = try svc.invoke("assist.scan", [:])
+        XCTAssertEqual((out["torrents"] as? [[String: Any]])?.count, 3, "列出的种子就是下载器里那几条")
+        let rows = (out["rows"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(rows.count, 6, "3 条种子 × 2 个站")
+        XCTAssertEqual(rows.first?["status"] as? String, "pending")
+        XCTAssertEqual(rows.first?["statusText"] as? String, "待辅种")
+        let stats = out["stats"] as? [String: Any]
+        let lines = (stats?["lines"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(lines.first { ($0["status"] as? String) == "pending" }?["count"] as? Int, 6)
+        XCTAssertEqual(stats?["total"] as? Int, 6)
+
+        // 同一份统计也要随快照回来：跑动中计数才会自己更新
+        let assist = svc.snapshot()["assist"] as? [String: Any]
+        let snapStats = assist?["stats"] as? [String: Any]
+        XCTAssertEqual(snapStats?["total"] as? Int, 6)
+    }
+
+    /// 实站验证（默认跳过，BOXSEND_LIVE=1 时跑）：拿本机真配置走一遍 assist.scan，
+    /// 上万条种子 + 上百个辅种站时载荷仍然只回「前若干条种子 × 全站格子」这一小块
+    func testLiveScanPayload() throws {
+        guard ProcessInfo.processInfo.environment["BOXSEND_LIVE"] != nil else {
+            throw XCTSkip("实站验证需 BOXSEND_LIVE=1")
+        }
+        let support = NSHomeDirectory() + "/Library/Application Support/BoxSend"
+        guard AppConfig.load(path: support + "/boxsend.json") != nil else {
+            throw XCTSkip("没有本机配置")
+        }
+        let svc = try AppService(configPath: support + "/boxsend.json", dataDir: support)
+        let out = try svc.invoke("assist.scan", [:])
+        let torrents = (out["torrents"] as? [[String: Any]]) ?? []
+        let rows = (out["rows"] as? [[String: Any]]) ?? []
+        let total = out["planTotal"] as? Int ?? 0
+        XCTAssertGreaterThan(out["torrentTotal"] as? Int ?? 0, 0, "下载器里应能读到种子")
+        XCTAssertLessThanOrEqual(torrents.count, AssistPipeline.planTorrentCap,
+                                 "界面只回裁好的那几条")
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertGreaterThan(total, rows.count, "计数按全量、行只回列出的那几条")
+        XCTAssertNotNil(rows.first?["statusText"] as? String)
+        let stats = out["stats"] as? [String: Any]
+        XCTAssertEqual(stats?["total"] as? Int, total)
+        NSLog("实站辅种计划：种子 %@ 条 / 列出 %@ 条 / 全量 %@ 格",
+              String(describing: out["torrentTotal"]), String(torrents.count), String(total))
+    }
+
+    /// 报几条种子的假下载器
+    private final class SeededDownloader: Downloader {
+        let torrents: [LocalTorrent]
+        init(hashes: [String]) {
+            torrents = hashes.enumerated().map { i, h in
+                LocalTorrent(hash: h, name: "T-\(h)", savePath: "/dl",
+                             totalSize: Int64(1_000 * (10 - i)), progress: 1,
+                             trackerHosts: ["elsewhere.invalid"])
+            }
+        }
+        func addTorrent(data: Data, filename: String, savePath: String?, category: String?,
+                        skipChecking: Bool, upLimit: Int64) throws -> AddTorrentResult {
+            AddTorrentResult(id: "")
+        }
+        func addTorrent(data: Data, filename: String, savePath: String?, category: String?,
+                        skipChecking: Bool, upLimit: Int64, paused: Bool) throws -> AddTorrentResult {
+            AddTorrentResult(id: "")
+        }
+        func testConnection() throws -> String { "fake" }
+        func listTorrents() throws -> [LocalTorrent] { torrents }
+        func torrentFiles(hash: String) throws -> [(path: String, size: Int64)] { [] }
+        func setPaused(hashes: [String], paused: Bool) throws {}
+        func removeTorrent(hash: String, keepFiles: Bool) throws {}
+    }
 }

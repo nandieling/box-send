@@ -247,7 +247,8 @@ public final class AssistPipeline {
 
     /// 界面上每条种子要摊开它在各站的格子，所以按「种子」裁行，不按「行」裁：
     /// 只裁行会让列出的种子摊不满站点，只列前几条种子才既看得清又跑得动。
-    public static let planTorrentCap = 24
+    /// 115 个辅种站 × 12 条种子 = 1380 格，已经是一屏翻不完的墙，再多只是白画。
+    public static let planTorrentCap = 12
 
     /// 计划预览：种子只列前 planTorrentCap 条，计数按全量算
     /// （1.2 万条种子 × 115 站 = 138 万行，整份塞进界面会把界面钉死）

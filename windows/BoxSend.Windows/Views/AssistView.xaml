@@ -64,9 +64,24 @@
                 <DockPanel>
                     <TextBlock x:Name="TorrentHint" DockPanel.Dock="Top" FontSize="12" Margin="0,0,0,6"
                                TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ItemsControl x:Name="Torrents">
-                            <ItemsControl.ItemTemplate>
+                    <!-- 自带滚动 + 按块虚拟化：115 站 × 若干条种子轻松上千格，
+                         整表一次画出来切个页签都要卡一下 -->
+                    <ListBox x:Name="Torrents" Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             KeyboardNavigation.IsTabStop="False">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="0,0,0,12">
                                         <DockPanel>
@@ -135,10 +150,9 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </GroupBox>
         </DockPanel>

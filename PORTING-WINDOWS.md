@@ -571,16 +571,23 @@ Windows 侧：
   跑过的行以进展为准、没跑过的按计划，两端不再各写一套判断。
   `AssistOutcome` 多一个 `failed`：真做砸（读不到站点那条、推下载器失败、校验不满被删）与
   「跳过」「还没轮到」分开，失败数才统计得出来。
-- `planPreview` 改成按**种子**裁（`planTorrentCap = 24`）而不是按行裁：界面一条种子要摊开它在全站的
+- `planPreview` 改成按**种子**裁（`planTorrentCap = 12`）而不是按行裁：界面一条种子要摊开它在全站的
   格子，只裁行会摊不满；`total` / `counts` 仍按全量算。`PlanRow` 自带 `rowKey`，mac 那份扩展删掉了。
+  115 个辅种站 × 12 条种子 = 1380 格，mac 靠 `LazyVGrid` 懒画，Windows 那份 `ItemsControl`+`WrapPanel`
+  不虚拟化，外层换成自带滚动、按块回收的 `ListBox`，否则切个页签都要等一下。
 - 桥接 `assist.scan` 与快照 `assist` 段多回 `stats`（`{total, lines:[{status,label,count}]}`），
   逐行多回 `status` / `statusText`：C# 侧只画不判。新增 `AppModel.AssistStats` / `AssistStatLine`，
   配色键走 `ThemeManager` 新加的 `DangerText`。
 - 辅种搜索节奏挪进「设置」（mac `SettingsView.paceCard`、WPF `SettingsView.xaml` 的 GroupBox），
   顶部去掉 Cookie / 下载器两个页签：`CookiesView` / `DownloaderView` 两个区块原样搬进设置页
   （mac 直接嵌进 `SettingsView`，WPF 用 `ContentControl` 宿主），输入框统一收窄一半。
-- 验证：`swift test` 542 绿（新增 `AssistRowStatusTests` 5 条 + `PlanPreviewCapTests` + 快照 stats 1 条）；
-  `dotnet build` 0 错误。
+- `AppService` 多一个 `assistPipelineFactory` 注入点：假下载器就能跑通 `assist.scan` 的整份载荷，
+  不必连真下载器。
+- 验证：`swift test` 544 绿（新增 `AssistRowStatusTests` 5 条 + `PlanPreviewCapTests` +
+  快照 / `assist.scan` 载荷 2 条：3 条种子 × 2 站 = 6 格、每格 `status`/`statusText`、`stats.total` 与
+  快照里的同一份计数）；`dotnet build` 0 错误。
+  实站（`BOXSEND_LIVE=1`，本机真配置）跑 `assist.scan`：下载器里 12490 条符合 → 界面回 12 条种子、
+  1380 格，计数按全量 23000 格（200 条候选 × 115 站），响应从「上百 MB」缩回一份能直接画的量。
 
 ## 踩过记在这儿
 
