@@ -78,13 +78,13 @@ public final class ReseedPipeline {
     private func pushTargetSite(siteID: String, detailURL: String, seedPreexisting: Bool,
                                 debugDir: String, opts: Options, report: inout Report) {
         let pushKey = "\(siteID)#\(detailURL)"
-        opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送中…", phase: .working))
+        opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送中…", phase: .working, url: detailURL))
         // 本次没新发种的站提示「推送已有种子」，让用户分清推的是刚发的还是站内现成的
         let pushedText = seedPreexisting ? "推送已有种子" : "已推送"
         if state.isPushed(key: pushKey) {
             report.pushes.append((siteID, true, "已推送过，跳过"))
             opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
-                                        detail: "此前已推送过"))
+                                        detail: "此前已推送过", url: detailURL))
             return
         }
         guard let ts = config.site(siteID) else {
@@ -118,7 +118,8 @@ public final class ReseedPipeline {
                 // 补没补上本站 tracker 全在这句话里，只写"已推送"会把没生效的推送看成成功
                 opts.onSitePush?(SiteStatus(siteID: siteID, text: pushedText, phase: .done,
                                             detail: result.note.isEmpty ? tInfo.name
-                                                                        : "\(tInfo.name)\n\(result.note)"))
+                                                                        : "\(tInfo.name)\n\(result.note)",
+                                            url: detailURL))
                 return
             } catch {
                 let text = error.localizedDescription
@@ -132,7 +133,8 @@ public final class ReseedPipeline {
                     ? "\(text)——站内可能仍在审核，稍后重跑本条即可补推送" : text
                 report.pushes.append((siteID, false, shown))
                 state.note("push[\(siteID)] FAIL \(detailURL): \(text)")
-                opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送失败", phase: .failed, detail: shown))
+                opts.onSitePush?(SiteStatus(siteID: siteID, text: "推送失败", phase: .failed,
+                                              detail: shown, url: detailURL))
                 return
             }
         }
@@ -211,12 +213,16 @@ public final class ReseedPipeline {
         public var text: String
         public var phase: Phase
         public var detail: String
+        /// 站内那条种子的详情页（已推送到下载器 / 站内已有时才有）：界面据此给一个跳转按钮
+        public var url: String
 
-        public init(siteID: String, text: String, phase: Phase, detail: String = "") {
+        public init(siteID: String, text: String, phase: Phase, detail: String = "",
+                    url: String = "") {
             self.siteID = siteID
             self.text = text
             self.phase = phase
             self.detail = detail
+            self.url = url
         }
     }
     public struct Options {
@@ -421,13 +427,14 @@ public final class ReseedPipeline {
                                                          detail: [wasExisting ? "此前已确认站内有这条种子"
                                                                               : "站内这条不是我发的（别人先发）",
                                                                   title, u].compactMap { $0 }
-                                                            .filter { !$0.isEmpty }.joined(separator: "\n")))
+                                                            .filter { !$0.isEmpty }.joined(separator: "\n"),
+                                                         url: u))
                             pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: true,
                                            debugDir: debugDir, opts: opts, report: &report)
                         } else if let u = found {
                             report.outcomes.append((tid, true, "转种成功（此前已转种）"))
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
-                                                         detail: "此前已转种过，本次跳过上传\n\(u)"))
+                                                         detail: "此前已转种过，本次跳过上传\n\(u)", url: u))
                             pushTargetSite(siteID: tid, detailURL: u, seedPreexisting: false,
                                            debugDir: debugDir, opts: opts, report: &report)
                         } else if duplicate {
@@ -471,9 +478,9 @@ public final class ReseedPipeline {
                             state.markTargetURL(site: tid, key: release.dedupKey, url: uAbs)
                             state.note("reseed EXIST \(tid): 站内已有该种子，跳过上传，已有种子 \(uAbs)")
                             opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
-                                                         detail: ["站内已有该种子（别人先发或此前已发）",
-                                                                  title, uAbs].compactMap { $0 }
-                                                            .filter { !$0.isEmpty }.joined(separator: "\n")))
+                                                         detail: [title, uAbs].compactMap { $0 }
+                                                            .filter { !$0.isEmpty }.joined(separator: "\n"),
+                                                         url: uAbs))
                             pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
                                            debugDir: debugDir, opts: opts, report: &report)
                             continue
@@ -496,7 +503,8 @@ public final class ReseedPipeline {
                                     state.note("reseed EXIST \(tid): 已存在（跳过上传），已有种子 \(u)")
                                     report.outcomes.append((tid, true, "种子已存在，跳过：\(uAbs)"))
                                     opts.onSiteEvent?(SiteStatus(siteID: tid, text: "种子已存在，跳过", phase: .exists,
-                                                                 detail: existingDetail(outcome.message, adapter: tAdapter, url: uAbs)))
+                                                                 detail: existingDetail(outcome.message, adapter: tAdapter, url: uAbs),
+                                                                 url: uAbs))
                                     pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: true,
                                                    debugDir: debugDir, opts: opts, report: &report)
                                 } else {
@@ -509,7 +517,10 @@ public final class ReseedPipeline {
                             } else {
                                 state.note("reseed OK \(tid) <- \(release.summary)")
                                 report.outcomes.append((tid, true, "转种成功"))
-                                opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done))
+                                // 站点回了新种子链接就把链接一起报出去：卡片上那个「种子页」按钮靠它
+                                opts.onSiteEvent?(SiteStatus(
+                                    siteID: tid, text: "转种成功", phase: .done,
+                                    url: outcome.detailURL.map { absoluteTargetURL(tid, $0) } ?? ""))
                                 // cmct / 劳改所：附加信息 = 手填源站引用 + 源简介自带引用块，
                                 // 两处都没有就提醒（不算失败）
                                 if SiteRegistry.reseedSourceText(for: release).isEmpty,
@@ -538,7 +549,8 @@ public final class ReseedPipeline {
                                         state.note("reseed \(tid): 站点未回新种子链接，站内回查命中 \(uAbs)")
                                         report.outcomes.append((tid, true, "转种成功（站内回查补到种子链接）"))
                                         opts.onSiteEvent?(SiteStatus(siteID: tid, text: "转种成功", phase: .done,
-                                                                     detail: "站点没回新种子链接，站内回查补到：\(uAbs)"))
+                                                                     detail: "站点没回新种子链接，站内回查补到：\(uAbs)",
+                                                                     url: uAbs))
                                         pushTargetSite(siteID: tid, detailURL: uAbs, seedPreexisting: false,
                                                        debugDir: debugDir, opts: opts, report: &report)
                                     } else {

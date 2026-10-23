@@ -172,6 +172,8 @@ public final class AssistPipeline {
             for t in torrents {
                 if opts.limit > 0, report.outcomes.count >= opts.limit { return report }
                 let out = attempt(t, site: site, adapter: adapter, cfg: cfg, opts: opts)
+                // 失败单独记一张表：不算「站内没有」，下轮还要再试，但界面要数得出失败几条
+                if out.failed { state.markAssistFail(site: id, hash: t.hash) }
                 report.outcomes.append(out)
                 emit(opts, Status(siteID: id, hash: t.hash, torrentName: t.name,
                                   text: textOf(out), phase: phaseOf(out),
@@ -231,52 +233,251 @@ public final class AssistPipeline {
         public var torrentName: String
         /// nil = 本轮会去站内检索；有值 = 直接跳过及原因
         public var skipReason: String?
+        /// 计划阶段的结论。有它就以它为准：「上次失败」这类既不算跳过、又不是待辅种
+        public var planned: RowStatus?
         /// 与 Status.rowKey 同一套拼法
         public var rowKey: String { "\(siteID)|\(hash)" }
+
+        public init(siteID: String, hash: String, torrentName: String,
+                    skipReason: String? = nil, planned: RowStatus? = nil) {
+            self.siteID = siteID
+            self.hash = hash
+            self.torrentName = torrentName
+            self.skipReason = skipReason
+            self.planned = planned
+        }
     }
 
-    /// 一轮里最多看多少条种子。下载器里上万条 × 上百个站就是上百万个组合，
-    /// 界面和逐条预筛都会被钉住；按体积从大到小取前 N 条，收益也最大。
+    /// 「自动整轮」一次最多处理多少条种子（体积倒序取前 N 条）。
+    /// 界面翻页不受这个数限制：整库都要能翻到，这只是后台整轮的处理量上限。
     public static let roundTorrentCap = 200
 
-    /// 本轮实际要处理的候选（体积倒序裁到上限）
+    /// 本轮实际要处理的候选（去重后按体积倒序裁到上限）
     public static func roundCandidates(_ torrents: [LocalTorrent], cap: Int = roundTorrentCap)
         -> [LocalTorrent] {
-        Array(torrents.sorted { $0.totalSize > $1.totalSize }.prefix(max(1, cap)))
+        Array(catalog(torrents).prefix(max(1, cap)))
     }
 
-    /// 界面上每条种子要摊开它在各站的格子，所以按「种子」裁行，不按「行」裁：
-    /// 只裁行会让列出的种子摊不满站点，只列前几条种子才既看得清又跑得动。
-    /// 115 个辅种站 × 12 条种子 = 1380 格，已经是一屏翻不完的墙，再多只是白画。
-    public static let planTorrentCap = 12
+    // MARK: - 种子目录（去重）
 
-    /// 计划预览：种子只列前 planTorrentCap 条，计数按全量算
-    /// （1.2 万条种子 × 115 站 = 138 万行，整份塞进界面会把界面钉死）
-    public struct PlanPreview {
-        /// 界面上列出的种子（与 rows 对得上）
+    /// 同一份文件在下载器里常常有好几份：各站的 .torrent tracker 不同 → info hash 不同，
+    /// 名字与体积却一样。整库列出来就是一片重复，按 hash 与名字各去一次重，留体积最大的那条。
+    public static func dedupe(_ torrents: [LocalTorrent]) -> [LocalTorrent] {
+        var byHash: [String: LocalTorrent] = [:]
+        for t in torrents {
+            let h = t.hash.lowercased()
+            if let old = byHash[h], old.totalSize >= t.totalSize { continue }
+            byHash[h] = t
+        }
+        var kept: [LocalTorrent] = []
+        var byName: [String: LocalTorrent] = [:]
+        for t in byHash.values.sorted(by: { $0.totalSize > $1.totalSize }) {
+            let key = nameKey(t.name)
+            // 名字归一化后相同、体积也差不到 1 MiB：站点重新打包只会多几 KB 说明文件
+            if let old = byName[key], abs(old.totalSize - t.totalSize) <= nameSizeTolerance { continue }
+            byName[key] = t
+            kept.append(t)
+        }
+        return kept
+    }
+
+    /// 界面上的种子目录：去重 + 体积倒序
+    public static func catalog(_ torrents: [LocalTorrent]) -> [LocalTorrent] {
+        dedupe(torrents)
+    }
+
+    /// 重名判定用的大小容差：重新打包时多几 KB 的 .nfo / 说明文件
+    static let nameSizeTolerance: Int64 = 1_048_576
+
+    /// 种子名归一化：去掉容器后缀与分隔符，只留字母数字
+    /// （同一条种子在不同站常被加上各自的后缀，空格/点/方括号都不该影响判重）
+    static func nameKey(_ name: String) -> String {
+        var s = Substring(name[...])
+        if let dot = s.lastIndex(of: "."), containers.contains(String(s[s.index(after: dot)...]).lowercased()) {
+            s = s[..<dot]
+        }
+        return String(s.unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }).lowercased()
+    }
+
+    private static let containers: Set<String> = [
+        "mkv", "mp4", "avi", "m2ts", "ts", "m4v", "mov", "webm", "wmv", "iso", "img", "bin", "mks",
+    ]
+
+    // MARK: - 全量目录计划
+
+    /// 一个站的分桶集合。整库 × 全站一条条问状态会是上百万次查表，
+    /// 所以每个站只取一次表，之后全是集合运算。
+    struct SiteBucket {
+        var unsupported = false
+        var seeding: Set<String> = []
+        var assisted: Set<String> = []
+        var missing: Set<String> = []
+        var failed: Set<String> = []
+    }
+
+    /// 全量种子目录 × 辅种站点的计划：计数按全量算，格子按页摊。
+    /// 1.2 万条种子 × 115 站 = 138 万格，整表摊开会把手绘端钉死，
+    /// 所以这里存的是「每个站的分桶集合」，界面翻到某一页时只算那一页的格子。
+    public struct CatalogPlan {
+        /// 去重、体积倒序后的全量目录
         public var torrents: [LocalTorrent]
-        /// 这些种子的计划行
-        public var rows: [PlanRow]
-        /// 全量计划行：统计按它算，界面不整份显示
-        public var allRows: [PlanRow]
+        public var siteIDs: [String]
+        public var missTTLDays: Int
+        /// 组合总数（种子 × 站点）
         public var total: Int
+        /// 会真去站内检索的格子数
         public var willSearch: Int
         /// 各类结论各有多少（含「会去站内检索」），按条数从多到少
         public var counts: [(reason: String, count: Int)]
+        /// 整轮计数（不含本轮已发生的进展）
+        public var tally: Tally
+
+        var buckets: [String: SiteBucket]
+        var byHash: [String: LocalTorrent]
+
+        init(torrents: [LocalTorrent] = [], siteIDs: [String] = [], missTTLDays: Int = 7,
+                    total: Int = 0, willSearch: Int = 0, counts: [(reason: String, count: Int)] = [],
+                    tally: Tally = Tally(), buckets: [String: SiteBucket] = [:],
+                    byHash: [String: LocalTorrent] = [:]) {
+            self.torrents = torrents
+            self.siteIDs = siteIDs
+            self.missTTLDays = missTTLDays
+            self.total = total
+            self.willSearch = willSearch
+            self.counts = counts
+            self.tally = tally
+            self.buckets = buckets
+            self.byHash = byHash
+        }
+
+        /// 某一页的格子（一条种子 × 一个站，站点为外层，与执行顺序一致）
+        public func rows(_ page: [LocalTorrent]) -> [PlanRow] {
+            var out: [PlanRow] = []
+            out.reserveCapacity(page.count * siteIDs.count)
+            for id in siteIDs {
+                guard let b = buckets[id] else { continue }
+                for t in page {
+                    let st = status(torrent: t, siteID: id)
+                    out.append(PlanRow(siteID: id, hash: t.hash, torrentName: t.name,
+                                       skipReason: skipText(st, bucket: b), planned: st))
+                }
+            }
+            return out
+        }
+
+        /// 一格在计划阶段的结论
+        public func status(torrent t: LocalTorrent, siteID: String) -> RowStatus {
+            guard let b = buckets[siteID] else { return .pending }
+            let h = t.hash.lowercased()
+            if b.unsupported { return .unsupported }
+            if b.seeding.contains(h) { return .seeding }
+            if b.assisted.contains(h) { return .assisted }
+            if b.missing.contains(h) { return .missing }
+            if b.failed.contains(h) { return .failed }
+            return .pending
+        }
+
+        /// 全量计数 + 当前进展：跑过的格子按计划改记成进展那一类
+        public func adjusted(live: [String: LiveRow]) -> Tally {
+            var t = tally
+            for (key, row) in live {
+                let parts = key.split(separator: "|", maxSplits: 1)
+                guard parts.count == 2,
+                      let torrent = byHash[parts[1].lowercased()],
+                      let now = AssistPipeline.status(live: row),
+                      buckets[String(parts[0])] != nil else { continue }
+                let planned = status(torrent: torrent, siteID: String(parts[0]))
+                if planned == now { continue }
+                t.decrease(planned)
+                t.increase(now)
+            }
+            return t
+        }
+
+        private func skipText(_ st: RowStatus, bucket b: SiteBucket) -> String? {
+            if b.unsupported { return "该站暂不支持站内检索" }
+            switch st {
+            case .seeding: return "已在该站做种"
+            case .assisted: return "此前已辅过"
+            case .missing: return "站内没有（\(missTTLDays) 天内查过）"
+            default: return nil      // 失败的那格本轮还会再试，不算「跳过」
+            }
+        }
     }
 
-    public func planPreview(torrents: [LocalTorrent], siteIDs: [String]? = nil,
-                            torrentCap: Int = planTorrentCap) -> PlanPreview {
-        let all = plan(torrents: torrents, siteIDs: siteIDs)
-        let shown = Array(torrents.prefix(max(1, torrentCap)))
-        let keep = Set(shown.map { $0.hash })
+    /// 建全量目录计划
+    public func planCatalog(_ torrents: [LocalTorrent], siteIDs: [String]? = nil) -> CatalogPlan {
+        let list = Self.catalog(torrents)
+        guard let cfg = config.assist else { return CatalogPlan(torrents: list) }
+        var ids: [String] = []
+        var seen = Set<String>()
+        for id in (siteIDs ?? cfg.siteIDs) where config.site(id) != nil && !seen.contains(id) {
+            seen.insert(id)
+            ids.append(id)
+        }
+        let hashSet = Set(list.map { $0.hash.lowercased() })
+        // tracker host → 站点：一遍种子就能给各站分出「已在该站做种」
+        var hostsToSites: [String: [String]] = [:]
+        for id in ids {
+            if let s = config.site(id), let host = AssistConfig.announceHost(of: s) {
+                hostsToSites[host.lowercased(), default: []].append(id)
+            }
+        }
+        var seeding: [String: Set<String>] = [:]
+        for t in list {
+            for host in t.trackerHosts {
+                for id in hostsToSites[host.lowercased()] ?? [] {
+                    seeding[id, default: []].insert(t.hash.lowercased())
+                }
+            }
+        }
+        let missTTL = Double(cfg.missTTLDays) * 86_400
+        var buckets: [String: SiteBucket] = [:]
         var counts: [String: Int] = [:]
-        for row in all { counts[row.skipReason ?? "会去站内检索", default: 0] += 1 }
-        return PlanPreview(torrents: shown, rows: all.filter { keep.contains($0.hash) },
-                           allRows: all, total: all.count,
+        var tally = Tally()
+        for id in ids {
+            guard let site = config.site(id) else { continue }
+            var b = SiteBucket()
+            b.seeding = seeding[id] ?? []
+            if !adapterFactory(SiteRegistry.effectiveSite(site), client).canPrecheckDuplicate {
+                b.unsupported = true
+            } else {
+                // 优先级与 preSkip 一致：已做种 > 已辅过 > 站内没有 > 上次失败
+                b.assisted = state.assistedHashes(site: id).intersection(hashSet).subtracting(b.seeding)
+                b.missing = state.assistMissHashes(site: id, ttlSeconds: missTTL)
+                    .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
+                b.failed = state.assistFailHashes(site: id)
+                    .intersection(hashSet).subtracting(b.seeding)
+                    .subtracting(b.assisted).subtracting(b.missing)
+            }
+            buckets[id] = b
+            if b.unsupported {
+                counts["该站暂不支持站内检索", default: 0] += list.count
+                tally.increase(.unsupported, list.count)
+                continue
+            }
+            let pending = list.count - b.seeding.count - b.assisted.count
+                - b.missing.count - b.failed.count
+            tally.increase(.seeding, b.seeding.count)
+            tally.increase(.assisted, b.assisted.count)
+            tally.increase(.missing, b.missing.count)
+            tally.increase(.failed, b.failed.count)
+            tally.increase(.pending, max(0, pending))
+            counts["已在该站做种", default: 0] += b.seeding.count
+            counts["此前已辅过", default: 0] += b.assisted.count
+            counts["站内没有（\(cfg.missTTLDays) 天内查过）", default: 0] += b.missing.count
+            counts["上次检索失败", default: 0] += b.failed.count
+            counts["会去站内检索", default: 0] += max(0, pending)
+        }
+        return CatalogPlan(torrents: list, siteIDs: ids, missTTLDays: cfg.missTTLDays,
+                           total: list.count * ids.count,
                            willSearch: counts["会去站内检索", default: 0],
                            counts: counts.sorted { $0.value > $1.value }
-                               .map { (reason: $0.key, count: $0.value) })
+                               .map { (reason: $0.key, count: $0.value) },
+                           tally: tally, buckets: buckets,
+                           byHash: Dictionary(list.map { ($0.hash.lowercased(), $0) },
+                                             uniquingKeysWith: { a, _ in a }))
     }
 
     public func plan(torrents: [LocalTorrent], siteIDs: [String]? = nil) -> [PlanRow] {
@@ -294,7 +495,7 @@ public final class AssistPipeline {
                     reason = preSkip(t, site: site, cfg: cfg)?.why
                 }
                 rows.append(PlanRow(siteID: site.id, hash: t.hash, torrentName: t.name,
-                                    skipReason: reason))
+                                    skipReason: reason, planned: Self.status(skipReason: reason)))
             }
         }
         return rows

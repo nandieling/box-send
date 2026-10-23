@@ -104,6 +104,7 @@ public partial class SettingsView : UserControl
         Budget.Text = ((int)PaceNum("roundBudget", 200)).ToString();
         MissTTL.Text = ((int)PaceNum("missTTLDays", 7)).ToString();
         AutoRun.Text = ((int)PaceNum("autoRunMinutes", 0)).ToString();
+        ListPageSize.Text = ((int)PaceNum("listPageSize", 10)).ToString();
         AutoAccept.IsChecked = _model.SectionFlag("assist", "autoAcceptSameFiles", true);
         RemoveOnFail.IsChecked = _model.SectionFlag("assist", "removeOnVerifyFail", true);
         LoadPaceHint();
@@ -138,6 +139,7 @@ public partial class SettingsView : UserControl
             o["autoAcceptSameFiles"] = AutoAccept.IsChecked == true;
             o["removeOnVerifyFail"] = RemoveOnFail.IsChecked == true;
             if (int.TryParse(AutoRun.Text, out var ar)) o["autoRunMinutes"] = Math.Max(0, Math.Min(1440, ar));
+            if (int.TryParse(ListPageSize.Text, out var ps)) o["listPageSize"] = Math.Max(1, Math.Min(200, ps));
         });
         LoadPace();
     }

@@ -1533,17 +1533,16 @@ final class AppModel: ObservableObject {
     // 站点请求节奏由 AssistPipeline 里的节流器统一收口，界面只负责发起与显示。
 
     /// 下载器里扫出来的候选种子
-    @Published var assistCandidates: [LocalTorrent] = []
     /// 最近一次扫描的摘要（种子集合变化、各站已辅数）
     @Published var assistSummary: AssistPipeline.ScanSummary? = nil
-    /// 本轮计划（一条种子 × 一个站）
-    @Published var assistPlan: [AssistPipeline.PlanRow] = []
-    /// 本轮计划的整份计数：assistPlan 只留前几百条给人看，计数按全量算
-    @Published var assistPreview: AssistPipeline.PlanPreview?
-    /// 下载器里全部候选条数（assistCandidates 只装本轮要处理的那批）
-    @Published var assistTorrentTotal = 0
-    /// 界面列出的种子（体积倒序裁一批，站点格子跟着这几条走）
-    @Published var assistShownTorrents: [LocalTorrent] = []
+    /// 本轮计划（当前这一页的格子：一条种子 × 一个站）
+    @Published var assistCells: [AssistPipeline.PlanRow] = []
+    /// 全量目录计划：去重后的种子目录、各站分桶与整轮计数都在里面
+    @Published var assistPlan: AssistPipeline.CatalogPlan?
+    /// 界面当前页（0 起）
+    @Published var assistPage = 0
+    /// 去重前的候选条数（提示「下载器里 N 条，去掉重复后 M 条」）
+    @Published var assistTorrentRaw = 0
     /// 逐行进展，key = 站点|种子 hash
     @Published var assistRows: [String: AssistPipeline.Status] = [:]
     @Published var assistScanning = false
@@ -1562,9 +1561,51 @@ final class AppModel: ObservableObject {
         assistRows.mapValues { $0.liveRow }
     }
 
-    /// 顶部那几个数：按全量计划 × 当前进展算
+    /// 顶部那几个数：全量目录 × 当前进展
     var assistStats: AssistPipeline.Tally {
-        AssistPipeline.tally(rows: assistPreview?.allRows ?? [], live: assistLive)
+        assistPlan?.adjusted(live: assistLive) ?? AssistPipeline.Tally()
+    }
+
+    /// 一列几条（设置里改）
+    var assistPageSize: Int { max(1, assistConfig.listPageSize) }
+
+    var assistPageCount: Int {
+        max(1, ((assistPlan?.torrents.count ?? 0) + assistPageSize - 1) / assistPageSize)
+    }
+
+    /// 整库候选条数（去重后）
+    var assistTorrentTotal: Int { assistPlan?.torrents.count ?? 0 }
+
+    /// 这一页列出的种子
+    var assistShownTorrents: [LocalTorrent] {
+        guard let plan = assistPlan else { return [] }
+        return Array(plan.torrents.dropFirst(assistPage * assistPageSize).prefix(assistPageSize))
+    }
+
+    /// 翻到某一页：只换格子，不重读下载器（上万条要好几秒）
+    func assistGoPage(_ page: Int) {
+        guard let plan = assistPlan else { return }
+        assistPage = min(max(0, page), assistPageCount - 1)
+        assistCells = plan.rows(Array(plan.torrents
+            .dropFirst(assistPage * assistPageSize).prefix(assistPageSize)))
+    }
+
+    /// 改「单页列表条数」并就地重算这一页的格子
+    func assistSetPageSize(_ n: Int) {
+        assistUpdate { $0.listPageSize = max(1, min(200, n)) }
+        assistGoPage(assistPage)
+    }
+
+    /// 扫描完 / 跑完一轮后统一发布：目录、页码、这一页的格子
+    private func publishAssist(_ plan: AssistPipeline.CatalogPlan, page: Int, raw: Int,
+                               summary: AssistPipeline.ScanSummary? = nil) {
+        assistPlan = plan
+        assistTorrentRaw = raw
+        if let summary { assistSummary = summary }
+        assistPage = min(max(0, page),
+                         max(0, (plan.torrents.count + assistPageSize - 1) / assistPageSize))
+        assistCells = plan.rows(Array(plan.torrents
+            .dropFirst(assistPage * assistPageSize).prefix(assistPageSize)))
     }
 
     /// 一格（一条种子 × 一个站）在界面上的结论
@@ -1595,24 +1636,21 @@ final class AppModel: ObservableObject {
         let jar = cookies
         let st = state
         Task.detached(priority: .utility) {
-            let out: (AssistPipeline.ScanSummary?, AssistPipeline.PlanPreview?, String)
+            let out: (AssistPipeline.ScanSummary?, AssistPipeline.CatalogPlan?, String)
             let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
             let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
                                       downloader: DownloaderFactory.makeForAssist(cfg, client: client))
             do {
+                // 整库都要能翻，所以目录不裁条数；计数走集合运算，上万条也不慢
                 let scan = try pipe.scanAndRecord()
-                let round = AssistPipeline.roundCandidates(scan.torrents)
-                out = (scan, pipe.planPreview(torrents: round), "")
+                out = (scan, pipe.planCatalog(scan.torrents), "")
             } catch {
                 out = (nil, nil, "扫描下载器失败：\(error.localizedDescription)")
             }
             await MainActor.run {
-                self.assistSummary = out.0
-                self.assistCandidates = AssistPipeline.roundCandidates(out.0?.torrents ?? [])
-                self.assistTorrentTotal = out.0?.count ?? 0
-                self.assistPreview = out.1
-                self.assistPlan = out.1?.rows ?? []
-                self.assistShownTorrents = out.1?.torrents ?? []
+                if let scan = out.0, let plan = out.1 {
+                    self.publishAssist(plan, page: 0, raw: scan.count, summary: scan)
+                }
                 self.assistRows = [:]
                 self.assistScanning = false
                 self.assistMessage = out.2.isEmpty ? out.0?.deltaText : out.2
@@ -1628,7 +1666,8 @@ final class AppModel: ObservableObject {
             assistMessage = "先在「站点分组」页的辅种区块添加站点"
             return
         }
-        runAssist(siteIDs: ids, forceKeys: [])
+        // 只跑当前这一页：整库上万条一次跑不完，跑眼前这批更可控
+        runAssist(siteIDs: ids, forceKeys: [], scope: assistShownTorrents)
     }
 
     /// 人工采纳一条「待人工确认」：只重跑被点名的这一条，负缓存与「已辅过」预筛都让路
@@ -1665,7 +1704,8 @@ final class AppModel: ObservableObject {
     }
 
     /// forceKeys 非空 = 人工采纳的单条重跑：不清空别的行进展，也不重画整表计划
-    private func runAssist(siteIDs ids: [String], forceKeys: Set<String>) {
+    private func runAssist(siteIDs ids: [String], forceKeys: Set<String>,
+                           scope: [LocalTorrent]? = nil) {
         guard !assistRunning, !assistScanning else { return }
         assistRunning = true
         assistMessage = forceKeys.isEmpty ? nil : "已采纳，重新核对这一条…"
@@ -1696,32 +1736,26 @@ final class AppModel: ObservableObject {
                 }
                 return
             }
-            let round = AssistPipeline.roundCandidates(all)
-            let picked = forceHashes.isEmpty ? round : all.filter { forceHashes.contains($0.hash) }
-            // 先按计划铺一版计划表：跑的过程中进展就往格子上盖
-            let opening = pipe.planPreview(torrents: picked, siteIDs: ids)
-            Task { @MainActor in
-                self.assistPreview = opening
-                self.assistPlan = opening.rows
-                self.assistShownTorrents = opening.torrents
-            }
+            let picked: [LocalTorrent] = forceHashes.isEmpty
+                ? (scope ?? AssistPipeline.roundCandidates(all))
+                : all.filter { forceHashes.contains($0.hash) }
+            // 格子始终按配置里的辅种站点铺（单条采纳也只重跑一条，不该把表缩成一个站）
+            var planIDs = cfg.assist?.siteIDs ?? ids
+            for id in ids where !planIDs.contains(id) { planIDs.append(id) }
+            planIDs = planIDs.filter { cfg.site($0)?.enabled == true }
+            // 先按计划铺一版目录：跑的过程中进展就往格子上盖
+            let opening = pipe.planCatalog(all, siteIDs: planIDs)
+            Task { @MainActor in self.publishAssist(opening, page: self.assistPage, raw: all.count) }
             let report = pipe.run(torrents: picked, opts: o)
-            // 计划表按本轮候选 + 勾选的站点重算：单条采纳不该把整表缩成一行
-            let planIDs = (cfg.assist?.siteIDs ?? ids).filter { cfg.site($0)?.enabled == true }
-            let preview = pipe.planPreview(torrents: forceHashes.isEmpty ? round : picked,
-                                           siteIDs: planIDs)
+            // 目录按新状态重算：已辅过 / 站内没有 这两张表都会变，页码原地不动
+            let fresh = pipe.planCatalog(all, siteIDs: planIDs)
             let summary = pipe.recordScan(torrents: all)
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
             await MainActor.run {
                 self.cookies.mergeFrom(jar)
-                self.assistCandidates = forceHashes.isEmpty ? round : picked
-                self.assistTorrentTotal = all.count
-                self.assistPreview = preview
-                self.assistPlan = preview.rows
-                self.assistShownTorrents = preview.torrents
-                self.assistSummary = summary
+                self.publishAssist(fresh, page: self.assistPage, raw: all.count, summary: summary)
                 self.assistRunning = false
                 self.assistMessage = text
                 self.notes = st.recentNotes

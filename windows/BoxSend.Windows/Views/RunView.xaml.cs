@@ -23,6 +23,7 @@ public partial class RunView : UserControl
         public required TextBlock ReseedText { get; init; }
         public required Border Push { get; init; }
         public required TextBlock PushText { get; init; }
+        public required Button Seed { get; init; }
         public required TextBlock Detail { get; init; }
     }
 
@@ -269,6 +270,17 @@ public partial class RunView : UserControl
         });
         body.Children.Add(reseed);
         body.Children.Add(push);
+        // 站内那条种子的详情页：已推送 / 站内已有时给一个跳转，省得回站内搜
+        var seed = new Button
+        {
+            Content = "种子页",
+            FontSize = 11,
+            Padding = new Thickness(6, 1, 6, 1),
+            Margin = new Thickness(0, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Visibility = Visibility.Collapsed,
+        };
+        body.Children.Add(seed);
         body.Children.Add(detail);
 
         var card = new Border
@@ -288,7 +300,7 @@ public partial class RunView : UserControl
         _cards[s.Id] = new CardRefs
         {
             Name = name, Reseed = reseed, ReseedText = reseedText,
-            Push = push, PushText = pushText, Detail = detail,
+            Push = push, PushText = pushText, Seed = seed, Detail = detail,
         };
         return card;
     }
@@ -350,11 +362,36 @@ public partial class RunView : UserControl
         SetChip(r.Reseed, r.ReseedText, reseed);
         SetChip(r.Push, r.PushText, push);
         var warning = _model.Sites.FirstOrDefault(s => s.Id == id)?.Warning ?? "";
+        var link = push?.Url ?? "";
+        if (link.Length == 0) link = reseed?.Url ?? "";
+        r.Seed.Visibility = link.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (link.Length > 0)
+        {
+            r.Seed.ToolTip = "在浏览器里打开站内那条种子\n" + link;
+            r.Seed.Click -= OpenSeed;
+            r.Seed.Tag = link;
+            r.Seed.Click += OpenSeed;
+        }
         var (text, key) = CardDetail(reseed, push, warning);
         r.Detail.Text = text;
         r.Detail.Foreground = (Brush)FindResource(key);
         r.Detail.ToolTip = text;
         r.Detail.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// 卡片本身点击是「选为转种目标」，跳站内链接得单独一个按钮
+    private static void OpenSeed(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string url } || url.Length == 0) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url)
+            { UseShellExecute = true });
+        }
+        catch
+        {
+            // 没设默认浏览器之类的环境问题：按钮点了没反应就够，不必弹错误框
+        }
     }
 
     private void SetChip(Border box, TextBlock text, RunRow? e)

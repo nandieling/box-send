@@ -66,7 +66,13 @@ extension AssistPipeline {
     public struct Tally: Equatable {
         public var counts: [RowStatus: Int] = [:]
         public init() {}
-        public mutating func increase(_ status: RowStatus) { counts[status, default: 0] += 1 }
+        public mutating func increase(_ status: RowStatus, _ n: Int = 1) {
+            counts[status, default: 0] += n
+        }
+
+        public mutating func decrease(_ status: RowStatus, _ n: Int = 1) {
+            counts[status, default: 0] = max(0, counts[status, default: 0] - n)
+        }
         public func count(_ status: RowStatus) -> Int { counts[status, default: 0] }
         public var total: Int { counts.values.reduce(0, +) }
         /// 固定顺序，0 也列出来：只列非零项会让人以为某一类还没开始跑
@@ -77,7 +83,9 @@ extension AssistPipeline {
 
     /// 一行在界面上的结论：跑过的以进展为准，没跑过的按计划
     public static func status(of row: PlanRow, live: LiveRow?) -> RowStatus {
-        status(live: live) ?? status(plan: row)
+        if let now = status(live: live) { return now }
+        if let planned = row.planned { return planned }
+        return status(plan: row)
     }
 
     /// 只有进展、没有计划行时（计划表之外的行）

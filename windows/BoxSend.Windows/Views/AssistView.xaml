@@ -62,8 +62,19 @@
             <!-- 一条种子一张卡，卡里是它在各辅种站的格子：站名 + 已辅种 / 待辅种 / 不存在 -->
             <GroupBox Header="种子与站点" Margin="0,12,0,0">
                 <DockPanel>
-                    <TextBlock x:Name="TorrentHint" DockPanel.Dock="Top" FontSize="12" Margin="0,0,0,6"
-                               TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock x:Name="TorrentHint" FontSize="12" Margin="0,0,0,4"
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
+                        <!-- 整库种子按体积倒序摊开，一列几条在「设置 → 辅种」里改 -->
+                        <DockPanel Margin="0,0,0,6">
+                            <Button x:Name="BtnPrev" Content="上一页" DockPanel.Dock="Left"
+                                    FontSize="12" Padding="9,1" Click="OnPrevPage" />
+                            <Button x:Name="BtnNext" Content="下一页" DockPanel.Dock="Right"
+                                    FontSize="12" Padding="9,1" Click="OnNextPage" />
+                            <TextBlock x:Name="Pager" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                        </DockPanel>
+                    </StackPanel>
                     <!-- 自带滚动 + 按块虚拟化：115 站 × 若干条种子轻松上千格，
                          整表一次画出来切个页签都要卡一下 -->
                     <ListBox x:Name="Torrents" Background="Transparent" BorderThickness="0"

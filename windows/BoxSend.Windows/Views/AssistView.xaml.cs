@@ -13,6 +13,9 @@ public partial class AssistView : UserControl
 {
     private readonly AppModel _model;
     private readonly ObservableCollection<TorrentBlock> _torrents = new();
+    /// 界面当前页与总页数（核心库按设置里的「单页列表条数」切页）
+    private int _page;
+    private int _pageCount = 1;
 
     public AssistView(AppModel model)
     {
@@ -69,13 +72,38 @@ public partial class AssistView : UserControl
         Fill(node!.AsObject());
     }
 
+    /// 翻页只换这一页的格子：目录与计数还在核心库里，不必重读上万条种子
+    private async void OnPrevPage(object sender, RoutedEventArgs e) => await GoPage(_page - 1);
+    private async void OnNextPage(object sender, RoutedEventArgs e) => await GoPage(_page + 1);
+
+    private async Task GoPage(int page)
+    {
+        if (page < 0 || page >= _pageCount) return;
+        var (node, error) = await _model.AssistPageAsync(page);
+        if (node == null)
+        {
+            State.Text = error ?? "翻页失败";
+            return;
+        }
+        Fill(node!.AsObject());
+    }
+
     private void Fill(JsonObject result)
     {
         var totalTorrents = result["torrentTotal"]?.GetValue<int>() ?? 0;
+        var rawTorrents = result["torrentRaw"]?.GetValue<int>() ?? totalTorrents;
+        _page = result["page"]?.GetValue<int>() ?? 0;
+        _pageCount = Math.Max(1, result["pageCount"]?.GetValue<int>() ?? 1);
+        var pageSize = result["pageSize"]?.GetValue<int>() ?? 10;
         var dl = Text(result["downloader"]);
-        TorrentHint.Text = $"下面列出体积最大的 {result["torrents"]?.AsArray()?.Count ?? 0} 条种子，"
-            + $"摊开它在各站的格子（本轮候选按体积取，下载器里共 {totalTorrents} 条符合）。"
-            + $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「设置」页的「辅种扫描用」里换一台）";
+        // 同一条片子在各站各有一份 .torrent（tracker 不同 → hash 不同）：先去重再列，不然满屏重复
+        TorrentHint.Text = rawTorrents > totalTorrents
+            ? $"下载器里 {rawTorrents} 条符合，去掉各站重复后 {totalTorrents} 条。"
+            : $"下载器里 {totalTorrents} 条符合。";
+        TorrentHint.Text += $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「设置」页的「辅种扫描用」里换一台）";
+        Pager.Text = $"第 {_page + 1} / {_pageCount} 页（共 {totalTorrents} 条，每页 {pageSize} 条）";
+        BtnPrev.IsEnabled = _page > 0;
+        BtnNext.IsEnabled = _page < _pageCount - 1;
 
         // 行按种子归堆：一条种子一张卡，卡里是它在各站的小格子
         _torrents.Clear();
@@ -147,7 +175,9 @@ public partial class AssistView : UserControl
         }
         _model.ClearAssistRows();
         BtnStart.IsEnabled = false;
-        var err = await _model.AssistStartAsync(ids, DryRun.IsChecked == true);
+        // 只跑界面上这一页：整库上万条一次跑不完，跑眼前这批更可控
+        var err = await _model.AssistStartAsync(ids, DryRun.IsChecked == true, null,
+            _torrents.Select(t => t.Hash).ToArray());
         BtnStart.IsEnabled = true;
         if (err != null) State.Text = err;
         RefreshProgress();
@@ -175,7 +205,9 @@ public partial class AssistView : UserControl
         }
         BtnScan.IsEnabled = !_model.BusyAssist;
         BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
-        BtnStart.Content = DryRun.IsChecked == true ? "开始预演" : "开始辅种";
+        BtnPrev.IsEnabled = _page > 0 && !_model.BusyAssist;
+        BtnNext.IsEnabled = _page < _pageCount - 1 && !_model.BusyAssist;
+        BtnStart.Content = DryRun.IsChecked == true ? "预演本页" : "辅种本页";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
     }

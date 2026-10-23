@@ -57,6 +57,12 @@ public enum SiteRegistry {
         return parts.joined(separator: "\n")
     }
 
+    /// 换过域名的站：老配置里存的还是旧域名，按 id 认回新地址。
+    /// 不改配置文件，只在读取时替换，用户自己填过的第三方镜像地址不受影响。
+    static let legacyHosts: [String: [String]] = [
+        "hddolby": ["www.hddolby.com", "hddolby.com"],
+    ]
+
     public static func effectiveSite(_ site: SiteConfig) -> SiteConfig {
         let builtinSite = prioritySites.first(where: { $0.id == site.id })
         var s = site
@@ -64,6 +70,10 @@ public enum SiteRegistry {
         // POST 跟 301 跳转时请求体会被丢掉，站点只收到空表单，报「请填写必填项目」
         if let b = builtinSite, s.url.hasPrefix("http://"), b.url.hasPrefix("https://"),
            URL(string: s.url)?.host == URL(string: b.url)?.host {
+            s.url = b.url
+        }
+        if let b = builtinSite, let hosts = legacyHosts[site.id],
+           let host = URL(string: s.url)?.host?.lowercased(), hosts.contains(host) {
             s.url = b.url
         }
         guard let builtin = builtinSite?.overrides else {
@@ -115,7 +125,7 @@ public enum SiteRegistry {
         SiteConfig(id: "ggpt", name: "GGPT", url: "https://www.gamegamept.com/", framework: .nexusPHP, enabled: false, overrides: .ggpt),
         SiteConfig(id: "hdarea", name: "高清视界", url: "https://hdarea.club/", framework: .nexusPHP, enabled: false, overrides: .hdarea),
         SiteConfig(id: "hdbao", name: "海德堡", url: "https://hdbao.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "hddolby", name: "杜比", url: "https://www.hddolby.com/", framework: .nexusPHP, enabled: false, overrides: .hddolby),
+        SiteConfig(id: "hddolby", name: "杜比", url: "https://www.uhddolby.com/", framework: .nexusPHP, enabled: false, overrides: .hddolby),
         SiteConfig(id: "hdfans", name: "红豆饭", url: "http://hdfans.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "qilin", name: "麒麟", url: "https://www.hdkyl.in/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdtime", name: "时光", url: "https://hdtime.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),

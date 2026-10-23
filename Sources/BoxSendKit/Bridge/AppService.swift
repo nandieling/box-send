@@ -29,6 +29,8 @@ public final class AppService {
         public var time: Double
         /// 辅种行定位键（站点|种子 hash）；其他动作留空
         public var key: String = ""
+        /// 站内种子详情页（转种/推送事件带）：界面给一个「打开种子页」按钮
+        public var url: String = ""
     }
 
     public let configPath: String
@@ -60,8 +62,13 @@ public final class AppService {
     private var siteWarnings: [String: String] = [:]
     /// 辅种逐行状态（key = 站点|种子 hash）
     private var assistRows: [String: Event] = [:]
-    /// 本轮计划行（key 同上）：统计与「这格算什么」都按它 + 实时进展算
-    private var assistPlanByKey: [String: AssistPipeline.PlanRow] = [:]
+    /// 全量目录计划（去重后的种子目录 + 各站分桶）：统计按它算，翻页也只问它
+    private var assistPlan: AssistPipeline.CatalogPlan?
+    /// 界面当前停在哪一页（翻页只换这一页的格子，不重扫下载器）
+    private var assistPage = 0
+    /// 去重前的候选条数与上次扫描摘要：翻页时复用，不必重扫
+    private var assistTorrentRaw = 0
+    private var assistScanInfo: [String: Any] = [:]
     private var assistStep = ""
     private var assistReport = ""
     /// 定时自动跑的钟（从进程起来算第一轮的起点）
@@ -373,6 +380,8 @@ public final class AppService {
 
         case "assist.scan":
             return try assistScan(params)
+        case "assist.page":
+            return try assistGoPage(params)
         case "assist.start":
             return try startAssist(params)
         case "assist.confirm":
@@ -559,13 +568,13 @@ public final class AppService {
         mutate {
             if push { self.pushEvents[e.siteID] = ev } else { self.siteEvents[e.siteID] = ev }
         }
-        emit(kind, e.siteID, e.text, e.detail, phase: Self.phaseName(e.phase), ok: nil)
+        emit(kind, e.siteID, e.text, e.detail, phase: Self.phaseName(e.phase), ok: nil, url: e.url)
     }
 
     private func makeEvent(_ e: ReseedPipeline.SiteStatus, kind: String) -> Event {
         Event(seq: nextSeq(), kind: kind, siteID: e.siteID, text: e.text,
               detail: e.detail, phase: Self.phaseName(e.phase), ok: nil,
-              time: Date().timeIntervalSince1970)
+              time: Date().timeIntervalSince1970, url: e.url)
     }
 
     /// 逐站阶段名（界面据此配图标/颜色）
@@ -695,7 +704,7 @@ public final class AppService {
     // 与转种分开一套：辅种不发新种，只是把站内已有的那条挂到自己账号下做种。
     // 站点请求的节奏由 AssistPipeline 里的 SiteThrottle 收口，界面只管发起与显示。
 
-    /// 扫描下载器 + 生成本轮计划。只读，不动下载器，也不发站点请求。
+    /// 扫描下载器 + 生成全量目录计划，回第一页。只读，不动下载器，也不发站点请求。
     private func assistScan(_ params: [String: Any]) throws -> [String: Any] {
         lock.lock()
         let cfg = self.cfg
@@ -703,36 +712,62 @@ public final class AppService {
         let (pipe, _) = try makeAssistPipeline(cfg)
         let picked = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
         let scan = try pipe.scanAndRecord()
-        // 上万条种子 × 上百个站 = 上百万组合：本轮只挑体积最大的前 N 条，计划行也只回前几百条
-        let candidates = AssistPipeline.roundCandidates(scan.torrents)
-        let preview = pipe.planPreview(torrents: candidates, siteIDs: picked)
-        let rows = preview.rows
+        let plan = pipe.planCatalog(scan.torrents, siteIDs: picked)
+        let summary = Self.summaryJSON(scan)
         mutate {
-            self.assistPlanByKey = Dictionary(uniqueKeysWithValues:
-                preview.allRows.map { ($0.rowKey, $0) })
+            self.assistPlan = plan
+            self.assistPage = 0
+            self.assistTorrentRaw = scan.count
+            self.assistScanInfo = summary
         }
+        return assistPayload(plan: plan, page: 0, cfg: cfg, downloader: pipe.downloaderLabel,
+                             raw: scan.count, budget: pipe.throttle.remaining, summary: summary)
+    }
+
+    /// 翻页：目录与计数都在上次扫描里，换一页不必再读一遍下载器（上万条要好几秒）
+    private func assistGoPage(_ params: [String: Any]) throws -> [String: Any] {
+        lock.lock()
+        let cfg = self.cfg
+        let plan = self.assistPlan
+        let raw = self.assistTorrentRaw
+        let summary = self.assistScanInfo
+        let downloader = cfg.assistDownloader.label
+        let budget = cfg.assist?.roundBudget ?? 0
+        lock.unlock()
+        guard let plan, !plan.siteIDs.isEmpty || !plan.torrents.isEmpty else {
+            throw Failure("先扫描下载器")
+        }
+        let page = int(params["page"]) ?? 0
+        mutate { self.assistPage = page }
+        return assistPayload(plan: plan, page: page, cfg: cfg, downloader: downloader,
+                             raw: raw, budget: budget, summary: summary.isEmpty ? nil : summary)
+    }
+
+    /// 扫描与翻页共用的载荷：这一页的种子 + 这一页的格子 + 全量计数
+    private func assistPayload(plan: AssistPipeline.CatalogPlan, page: Int, cfg: AppConfig,
+                               downloader: String, raw: Int, budget: Int,
+                               summary: [String: Any]?) -> [String: Any] {
+        let size = max(1, cfg.assist?.listPageSize ?? 10)
+        let pageCount = max(1, (plan.torrents.count + size - 1) / size)
+        let current = min(max(0, page), pageCount - 1)
+        let pageTorrents = Array(plan.torrents.dropFirst(current * size).prefix(size))
         let live = assistLive()
-        let stats = AssistPipeline.tally(rows: preview.allRows, live: live)
+        let stats = plan.adjusted(live: live)
         let nameOf: (String) -> String = { id in
             guard let s = cfg.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
         }
         return [
-            "torrentTotal": scan.count,
-            "planTotal": preview.total,
-            "planCounts": Dictionary(uniqueKeysWithValues: preview.counts.map { ($0.reason, $0.count) }),
-            "summary": [
-                "count": scan.count,
-                "previousCount": scan.previousCount as Any,
-                "changed": scan.changed,
-                "deltaText": scan.deltaText,
-                "lastScan": scan.lastScan.map { Self.dateText($0.timeIntervalSince1970) } ?? "从未",
-                "assistedBySite": scan.assistedBySite,
-            ],
-            "downloader": pipe.downloaderLabel,
+            // 去重后的目录条数（同一条种子在各站各有一份 .torrent，hash 不同、内容一样）
+            "torrentTotal": plan.torrents.count,
+            "torrentRaw": raw,
+            "page": current, "pageSize": size, "pageCount": pageCount,
+            "planTotal": plan.total,
+            "planCounts": Dictionary(uniqueKeysWithValues: plan.counts.map { ($0.reason, $0.count) }),
+            "summary": summary ?? [:],
+            "downloader": downloader,
             "stats": Self.statsJSON(stats),
-            // 界面列出的种子：与下面 rows 里的站点格子一一对得上
-            "torrents": preview.torrents.map { t in
+            "torrents": pageTorrents.map { t in
                 [
                     "hash": t.hash,
                     "name": t.name,
@@ -742,7 +777,7 @@ public final class AppService {
                     "trackers": t.trackerHosts,
                 ]
             },
-            "rows": rows.map { r -> [String: Any] in
+            "rows": plan.rows(pageTorrents).map { r -> [String: Any] in
                 let st = AssistPipeline.status(of: r, live: live[r.rowKey])
                 return [
                     "key": r.rowKey,
@@ -755,8 +790,19 @@ public final class AppService {
                     "statusText": st.label,
                 ]
             },
-            "sites": (picked ?? cfg.assist?.siteIDs ?? []).map { ["id": $0, "name": nameOf($0)] },
-            "budget": pipe.throttle.remaining,
+            "sites": plan.siteIDs.map { ["id": $0, "name": nameOf($0)] },
+            "budget": budget,
+        ]
+    }
+
+    static func summaryJSON(_ s: AssistPipeline.ScanSummary) -> [String: Any] {
+        [
+            "count": s.count,
+            "previousCount": s.previousCount as Any,
+            "changed": s.changed,
+            "deltaText": s.deltaText,
+            "lastScan": s.lastScan.map { dateText($0.timeIntervalSince1970) } ?? "从未",
+            "assistedBySite": s.assistedBySite,
         ]
     }
 
@@ -782,6 +828,8 @@ public final class AppService {
         opts.dryRun = params["dryRun"] as? Bool ?? false
         opts.limit = int(params["limit"]) ?? 0
         opts.forceKeys = Set(force)
+        // 界面点「开始辅种」时只跑当前这一页：整库上万条，一次跑不完，跑眼前这批更可控
+        let onlyHashes = Set(((params["torrentHashes"] as? [String]) ?? []).map { $0.lowercased() })
         opts.onEvent = { [weak self] st in
             guard let self else { return }
             let ev = Event(seq: self.nextSeq(), kind: "assist", siteID: st.siteID,
@@ -798,18 +846,31 @@ public final class AppService {
             var failure = ""
             do {
                 let scan = try pipe.scanAndRecord()
-                // 单条采纳：只跑被点名的那条，别顺带把整个下载器过一遍
-                let forceHashes = Set(force.compactMap { $0.split(separator: "|").last }.map(String.init))
-                let candidates = forceHashes.isEmpty
-                    ? AssistPipeline.roundCandidates(scan.torrents)
-                    : scan.torrents.filter { forceHashes.contains($0.hash) }
-                let planRows = pipe.plan(torrents: candidates, siteIDs: picked)
+                let catalog = AssistPipeline.catalog(scan.torrents)
+                // 单条采纳只跑被点名的那条；界面发起只跑当前页；定时整轮按体积取前 N 条
+                let forceHashes = Set(force.compactMap { $0.split(separator: "|").last }
+                    .map { $0.lowercased() })
+                let candidates: [LocalTorrent]
+                if !forceHashes.isEmpty {
+                    candidates = catalog.filter { forceHashes.contains($0.hash.lowercased()) }
+                } else if !onlyHashes.isEmpty {
+                    candidates = catalog.filter { onlyHashes.contains($0.hash.lowercased()) }
+                } else {
+                    candidates = AssistPipeline.roundCandidates(catalog)
+                }
                 self.mutate {
                     self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个"
-                    self.assistPlanByKey = Dictionary(uniqueKeysWithValues:
-                        planRows.map { ($0.rowKey, $0) })
                 }
                 let report = pipe.run(torrents: candidates, opts: opts)
+                // 跑完按新状态重算全量计数：已辅过 / 站内没有 这两张表都会变
+                var planIDs = cfg.assist?.siteIDs ?? picked
+                for id in picked where !planIDs.contains(id) { planIDs.append(id) }
+                let fresh = pipe.planCatalog(scan.torrents, siteIDs: planIDs)
+                self.mutate {
+                    self.assistPlan = fresh
+                    self.assistTorrentRaw = scan.count
+                    self.assistScanInfo = Self.summaryJSON(scan)
+                }
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                     + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
             } catch {
@@ -883,13 +944,11 @@ public final class AppService {
     /// 快照里也带一份：Windows 端按快照轮询刷新，不必另开一条轮询
     private func assistStateLocked() -> [String: Any] {
         let live = assistLiveLocked()
-        let stats = AssistPipeline.tally(rows: Array(assistPlanByKey.values), live: live)
+        let stats = assistPlan?.adjusted(live: live) ?? AssistPipeline.Tally()
         let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map { e -> [String: Any] in
             var d = Self.eventJSON(e)
-            // 结论由核心库给：两端不必自己从文案里猜
-            let st = assistPlanByKey[e.key].map { AssistPipeline.status(of: $0, live: live[e.key]) }
-                ?? live[e.key].map { AssistPipeline.status(ofLive: $0) }
-                ?? .pending
+            // 结论由核心库给：两端不必自己从文案里猜。跑过的以进展为准，没跑过的按计划
+            var st = AssistPipeline.status(live: live[e.key]) ?? assistPlannedStatus(e.key) ?? .pending
             d["status"] = st.rawValue
             d["statusText"] = st.label
             return d
@@ -900,6 +959,14 @@ public final class AppService {
                 "autoRun": ["minutes": minutes,
                             "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
                             "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]
+    }
+
+    /// 某一格在计划里的结论（拿上次扫描的分桶回查，不重新问状态）
+    private func assistPlannedStatus(_ key: String) -> AssistPipeline.RowStatus? {
+        guard let plan = assistPlan else { return nil }
+        let parts = key.split(separator: "|", maxSplits: 1)
+        guard parts.count == 2, let t = plan.byHash[parts[1].lowercased()] else { return nil }
+        return plan.status(torrent: t, siteID: String(parts[0]))
     }
 
     private func assistLive() -> [String: AssistPipeline.LiveRow] {
@@ -1358,12 +1425,12 @@ public final class AppService {
     }
 
     private func emit(_ kind: String, _ siteID: String?, _ text: String, _ detail: String,
-                      phase: String?, ok: Bool?) {
+                      phase: String?, ok: Bool?, url: String = "") {
         lock.lock()
         eventSeq += 1
         eventLog.append(Event(seq: eventSeq, kind: kind, siteID: siteID, text: text,
                               detail: detail, phase: phase, ok: ok,
-                              time: Date().timeIntervalSince1970))
+                              time: Date().timeIntervalSince1970, url: url))
         if eventLog.count > 500 { eventLog.removeFirst(eventLog.count - 500) }
         lock.unlock()
     }
@@ -1490,6 +1557,7 @@ public final class AppService {
                                 "detail": e.detail, "time": e.time]
         d["site"] = e.siteID ?? ""
         d["key"] = e.key
+        d["url"] = e.url
         d["phase"] = e.phase ?? ""
         d["ok"] = e.ok ?? NSNull()
         return d

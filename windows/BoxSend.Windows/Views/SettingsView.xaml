@@ -82,6 +82,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
                                 <Label Content="每站最小间隔（秒，推荐 8）" Padding="0,0,0,2" />
@@ -103,7 +104,11 @@
                                 <Label Content="定时自动跑（分，0=关，推荐 0）" Padding="0,0,0,2" />
                                 <TextBox x:Name="AutoRun" MaxWidth="200" HorizontalAlignment="Left" />
                             </StackPanel>
-                            <TextBlock x:Name="AutoRunHint" Grid.Row="2" Grid.Column="2" FontSize="12"
+                            <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,8">
+                                <Label Content="辅种页单页条数（推荐 10）" Padding="0,0,0,2" />
+                                <TextBox x:Name="ListPageSize" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <TextBlock x:Name="AutoRunHint" Grid.Row="3" Grid.Column="2" FontSize="12"
                                        TextWrapping="Wrap" VerticalAlignment="Bottom"
                                        Foreground="{DynamicResource TextMuted}" />
                         </Grid>

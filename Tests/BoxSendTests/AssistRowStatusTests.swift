@@ -85,7 +85,7 @@ final class AssistRowStatusTests: XCTestCase {
     }
 }
 
-/// 计划预览：按「种子」裁行，计数仍按全量
+/// 全量目录计划：计数按全量算，格子按页摊
 final class PlanPreviewCapTests: XCTestCase {
     private func torrent(_ hash: String, _ size: Int64) -> LocalTorrent {
         LocalTorrent(hash: hash, name: "T-\(hash)", savePath: "/dl", totalSize: size,
@@ -107,17 +107,19 @@ final class PlanPreviewCapTests: XCTestCase {
                                   state: StateStore(dataDir: "/tmp/boxsend-plan-\(UUID().uuidString)"),
                                   downloader: EmptyDownloader())
 
-        // 40 条种子 × 3 站：界面只列体积最大的 5 条，但摊开的格子要全
+        // 40 条种子 × 3 站：目录整份留着（体积倒序），格子按页摊，计数仍按全量
         let torrents = (0..<40).map { torrent("h\($0)", Int64(1_000 * (40 - $0))) }
-        let preview = pipe.planPreview(torrents: torrents, torrentCap: 5)
+        let plan = pipe.planCatalog(torrents)
 
-        XCTAssertEqual(preview.torrents.map(\.hash), ["h0", "h1", "h2", "h3", "h4"],
-                       "按体积倒序裁，收益最大的先做")
-        XCTAssertEqual(Set(preview.rows.map(\.hash)).count, 5)
-        XCTAssertEqual(preview.rows.count, 15, "列出的每条种子要摊开它在全站的格子")
-        XCTAssertEqual(preview.total, 120, "计数按全量算")
-        XCTAssertEqual(preview.allRows.count, 120)
-        XCTAssertEqual(preview.willSearch, 120)
+        XCTAssertEqual(plan.torrents.prefix(5).map(\.hash), ["h0", "h1", "h2", "h3", "h4"],
+                       "按体积倒序排，收益最大的先做")
+        XCTAssertEqual(plan.torrents.count, 40, "目录不裁条数：整库都要能翻到")
+        let firstPage = plan.rows(Array(plan.torrents.prefix(5)))
+        XCTAssertEqual(Set(firstPage.map(\.hash)).count, 5)
+        XCTAssertEqual(firstPage.count, 15, "列出的每条种子要摊开它在全站的格子")
+        XCTAssertEqual(plan.total, 120, "计数按全量算")
+        XCTAssertEqual(plan.willSearch, 120)
+        XCTAssertEqual(plan.tally.count(.pending), 120)
     }
 
     /// 只为了满足 Downloader 协议：计划预览不读下载器
@@ -172,7 +174,7 @@ final class AssistSnapshotStatsTests: XCTestCase {
                        framework: .nexusPHP, enabled: true)
         }
         app.assist = AssistConfig(siteIDs: ["s0", "s1"], perSiteIntervalSec: 0, jitterSec: 0,
-                                  roundBudget: 50)
+                                  roundBudget: 50, listPageSize: 2)
         try JSONEncoder().encode(app).write(to: URL(fileURLWithPath: cfgPath))
         let svc = try AppService(configPath: cfgPath, dataDir: dir.path)
         let dl = SeededDownloader(hashes: ["h1", "h2", "h3"])
@@ -181,24 +183,59 @@ final class AssistSnapshotStatsTests: XCTestCase {
         }
 
         let out = try svc.invoke("assist.scan", [:])
-        XCTAssertEqual((out["torrents"] as? [[String: Any]])?.count, 3, "列出的种子就是下载器里那几条")
+        XCTAssertEqual((out["torrents"] as? [[String: Any]])?.count, 2, "第一页只回这一页的种子")
+        XCTAssertEqual(out["torrentTotal"] as? Int, 3, "目录条数按全量报，不按这一页报")
+        XCTAssertEqual(out["pageCount"] as? Int, 2, "每页 2 条 → 3 条种子两页")
+        XCTAssertEqual(out["pageSize"] as? Int, 2)
         let rows = (out["rows"] as? [[String: Any]]) ?? []
-        XCTAssertEqual(rows.count, 6, "3 条种子 × 2 个站")
+        XCTAssertEqual(rows.count, 4, "这一页 2 条种子 × 2 个站")
         XCTAssertEqual(rows.first?["status"] as? String, "pending")
         XCTAssertEqual(rows.first?["statusText"] as? String, "待辅种")
         let stats = out["stats"] as? [String: Any]
         let lines = (stats?["lines"] as? [[String: Any]]) ?? []
         XCTAssertEqual(lines.first { ($0["status"] as? String) == "pending" }?["count"] as? Int, 6)
-        XCTAssertEqual(stats?["total"] as? Int, 6)
+        XCTAssertEqual(stats?["total"] as? Int, 6, "整份计数 = 3 条种子 × 2 站")
 
         // 同一份统计也要随快照回来：跑动中计数才会自己更新
         let assist = svc.snapshot()["assist"] as? [String: Any]
         let snapStats = assist?["stats"] as? [String: Any]
         XCTAssertEqual(snapStats?["total"] as? Int, 6)
+
+        // 翻页：换一页只换格子，目录与计数不动，也不必再读一遍下载器
+        let page2 = try svc.invoke("assist.page", ["page": 1])
+        XCTAssertEqual(page2["page"] as? Int, 1)
+        XCTAssertEqual(page2["torrentTotal"] as? Int, 3)
+        XCTAssertEqual((page2["torrents"] as? [[String: Any]])?.count, 1, "第二页只剩一条")
+        XCTAssertEqual((page2["rows"] as? [[String: Any]])?.count, 2, "1 条种子 × 2 个站")
+        XCTAssertEqual((page2["stats"] as? [String: Any])?["total"] as? Int, 6, "计数按全量，不随页变化")
+    }
+
+    /// 分段计时（BOXSEND_LIVE=1）：读下载器 vs 建全量目录计划，各花多久
+    func testLiveScanBreakdown() throws {
+        guard ProcessInfo.processInfo.environment["BOXSEND_LIVE"] != nil else {
+            throw XCTSkip("实站验证需 BOXSEND_LIVE=1")
+        }
+        let support = NSHomeDirectory() + "/Library/Application Support/BoxSend"
+        guard let cfg = AppConfig.load(path: support + "/boxsend.json") else {
+            throw XCTSkip("没有本机配置")
+        }
+        let jar = CookieStore()
+        let pipe = AssistPipeline(
+            config: cfg, cookies: jar, state: StateStore(dataDir: support),
+            downloader: DownloaderFactory.makeForAssist(cfg,
+                client: HTTPClient(cookies: jar, userAgent: cfg.userAgent)))
+        let t0 = Date()
+        let all = try pipe.scanCandidates()
+        let t1 = Date().timeIntervalSince(t0)
+        let plan = pipe.planCatalog(all)
+        let t2 = Date().timeIntervalSince(t0)
+        XCTAssertFalse(plan.torrents.isEmpty)
+        NSLog("实站分段：读下载器 %.1fs（%@ 条）/ 建计划 %.1fs（去重后 %@ 条、%@ 格）",
+              t1, String(all.count), t2 - t1, String(plan.torrents.count), String(plan.total))
     }
 
     /// 实站验证（默认跳过，BOXSEND_LIVE=1 时跑）：拿本机真配置走一遍 assist.scan，
-    /// 上万条种子 + 上百个辅种站时载荷仍然只回「前若干条种子 × 全站格子」这一小块
+    /// 上万条种子 + 上百个辅种站时载荷仍然只回「这一页种子 × 全站格子」这一小块
     func testLiveScanPayload() throws {
         guard ProcessInfo.processInfo.environment["BOXSEND_LIVE"] != nil else {
             throw XCTSkip("实站验证需 BOXSEND_LIVE=1")
@@ -208,20 +245,37 @@ final class AssistSnapshotStatsTests: XCTestCase {
             throw XCTSkip("没有本机配置")
         }
         let svc = try AppService(configPath: support + "/boxsend.json", dataDir: support)
+        let began = Date()
         let out = try svc.invoke("assist.scan", [:])
+        let scanned = Date().timeIntervalSince(began)
         let torrents = (out["torrents"] as? [[String: Any]]) ?? []
         let rows = (out["rows"] as? [[String: Any]]) ?? []
         let total = out["planTotal"] as? Int ?? 0
         XCTAssertGreaterThan(out["torrentTotal"] as? Int ?? 0, 0, "下载器里应能读到种子")
-        XCTAssertLessThanOrEqual(torrents.count, AssistPipeline.planTorrentCap,
-                                 "界面只回裁好的那几条")
+        XCTAssertLessThanOrEqual(torrents.count,
+                                 (out["pageSize"] as? Int) ?? 10,
+                                 "界面只回这一页的种子")
         XCTAssertFalse(rows.isEmpty)
         XCTAssertGreaterThan(total, rows.count, "计数按全量、行只回列出的那几条")
         XCTAssertNotNil(rows.first?["statusText"] as? String)
         let stats = out["stats"] as? [String: Any]
         XCTAssertEqual(stats?["total"] as? Int, total)
-        NSLog("实站辅种计划：种子 %@ 条 / 列出 %@ 条 / 全量 %@ 格",
-              String(describing: out["torrentTotal"]), String(torrents.count), String(total))
+
+        // 翻页不许再读一遍下载器：上万条要好几秒，翻一页应该几乎是瞬时
+        let pageCount = out["pageCount"] as? Int ?? 1
+        if pageCount > 1 {
+            let paged = try svc.invoke("assist.page", ["page": 1])
+            XCTAssertEqual(paged["page"] as? Int, 1, "回到第 2 页")
+            XCTAssertEqual(paged["torrentTotal"] as? Int, out["torrentTotal"] as? Int,
+                           "目录不因翻页而变")
+            XCTAssertFalse(((paged["rows"] as? [[String: Any]]) ?? []).isEmpty)
+        }
+        let paged = try svc.invoke("assist.page", ["page": 0])
+        let pagedAt = Date().timeIntervalSince(began) - scanned
+        XCTAssertLessThan(pagedAt, 1.0, "翻页耗时应该只跟一页的行数有关：\(pagedAt)s")
+        NSLog("实站辅种计划：种子 %@ 条（去重前 %@）/ 本页 %@ 条 / 全量 %@ 格 / 扫描 %.1fs / 翻页 %.2fs",
+              String(describing: out["torrentTotal"]), String(describing: out["torrentRaw"]),
+              String(torrents.count), String(total), scanned, pagedAt)
     }
 
     /// 报几条种子的假下载器

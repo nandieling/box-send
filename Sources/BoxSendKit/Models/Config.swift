@@ -785,6 +785,8 @@ public struct AssistConfig: Codable {
     /// 等校验的最长时间（秒）与轮询间隔：大种子校验要几分钟，等不到就转「待复核」
     public var verifyWaitSec: Int
     public var verifyPollSec: Int
+    /// 辅种页一列多少条种子（分页用）。上万条种子整页摊开会把界面钉住。
+    public var listPageSize: Int
     /// 隔这么多分钟自动跑一轮（0 = 不自动跑）。到点是「扫描 + 辅种」整套，
     /// 站点请求仍受单轮预算与逐站间隔约束，不会把检索打在站点脸上。
     public var autoRunMinutes: Int
@@ -793,7 +795,7 @@ public struct AssistConfig: Codable {
                 roundBudget: Int = 200, missTTLDays: Int = 7, autoAcceptSameFiles: Bool = true,
                 removeOnVerifyFail: Bool = true, minSizeGB: Double = 0, maxSizeGB: Double = 0,
                 categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10,
-                autoRunMinutes: Int = 0) {
+                autoRunMinutes: Int = 0, listPageSize: Int = 10) {
         self.siteIDs = siteIDs
         self.perSiteIntervalSec = perSiteIntervalSec
         self.jitterSec = jitterSec
@@ -807,6 +809,7 @@ public struct AssistConfig: Codable {
         self.verifyWaitSec = verifyWaitSec
         self.verifyPollSec = verifyPollSec
         self.autoRunMinutes = autoRunMinutes
+        self.listPageSize = listPageSize
     }
 
     public init(from decoder: Decoder) throws {
@@ -824,12 +827,13 @@ public struct AssistConfig: Codable {
         verifyWaitSec = try c.decodeIfPresent(Int.self, forKey: .verifyWaitSec) ?? 600
         verifyPollSec = try c.decodeIfPresent(Int.self, forKey: .verifyPollSec) ?? 10
         autoRunMinutes = try c.decodeIfPresent(Int.self, forKey: .autoRunMinutes) ?? 0
+        listPageSize = max(1, try c.decodeIfPresent(Int.self, forKey: .listPageSize) ?? 10)
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteIDs, perSiteIntervalSec, jitterSec, roundBudget, missTTLDays, autoAcceptSameFiles,
              removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec,
-             autoRunMinutes
+             autoRunMinutes, listPageSize
     }
 
     /// 节流参数（SiteThrottle 用）

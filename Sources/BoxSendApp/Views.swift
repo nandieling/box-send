@@ -361,6 +361,15 @@ struct RunView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if let e = model.reseedEvents[s.id] { eventChip(e) }
             if let e = model.pushEvents[s.id] { eventChip(e) }
+            if let link = seedPageURL(s) {
+                Button {
+                    model.openURL(link)
+                } label: {
+                    Label("种子页", systemImage: "arrow.up.forward.app").font(.caption)
+                }
+                .buttonStyle(.bordered).controlSize(.mini)
+                .help("在浏览器里打开站内那条种子：\(link)")
+            }
             detailLine(s)
         }
         .padding(10)
@@ -380,6 +389,13 @@ struct RunView: View {
             model.saveConfig()
         }
         .help(selected ? "已选中为转种目标，点击取消" : "点击选中为转种目标")
+    }
+
+    /// 站内那条种子的详情页：推送事件优先（它带的就是刚推的那条）
+    private func seedPageURL(_ s: SiteConfig) -> String? {
+        for e in [model.pushEvents[s.id], model.reseedEvents[s.id]].compactMap({ $0 })
+        where !e.url.isEmpty { return e.url }
+        return nil
     }
 
     // MARK: 运行记录（点开才显示：最近一次运行 + 运行日志，日志不再单独一页）
@@ -1789,7 +1805,7 @@ struct AssistView: View {
 
     /// 一条种子的站点格子按 hash 归堆
     private var rowsByHash: [String: [AssistPipeline.PlanRow]] {
-        Dictionary(grouping: model.assistPlan, by: { $0.hash })
+        Dictionary(grouping: model.assistCells, by: { $0.hash })
     }
 
     private var header: some View {
@@ -1804,10 +1820,12 @@ struct AssistView: View {
             Button {
                 model.assistRun()
             } label: {
-                Label(model.assistDryRun ? "开始预演" : "开始辅种", systemImage: "square.stack.3d.up.fill")
+                Label(model.assistDryRun ? "预演本页" : "辅种本页",
+                      systemImage: "square.stack.3d.up.fill")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.assistScanning || model.assistRunning || model.assistCandidates.isEmpty)
+            .disabled(model.assistScanning || model.assistRunning || model.assistCells.isEmpty)
+            .help("只处理这一页列出的种子；整库定时那轮按体积自己取前若干条")
 
             Toggle("只预演", isOn: $model.assistDryRun)
                 .toggleStyle(.switch)
@@ -1838,7 +1856,7 @@ struct AssistView: View {
     private var statsCard: some View {
         let tally = model.assistStats
         return CardSection("辅种统计") {
-            if model.assistPreview == nil {
+            if model.assistPlan == nil {
                 Text("扫描下载器后，这里按「一条种子 × 一个站」给出已完成、待辅种、失败等计数。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
@@ -1867,13 +1885,12 @@ struct AssistView: View {
     /// 一行说清本轮规模：全量组合、会检索多少、预算、上次扫描
     private func footline(_ tally: AssistPipeline.Tally) -> String {
         var parts: [String] = []
-        if let preview = model.assistPreview {
-            parts.append("全量 \(preview.total) 个组合，其中 \(preview.willSearch) 个会去站内检索")
+        if let plan = model.assistPlan {
+            parts.append("全量 \(plan.total) 个组合，其中 \(plan.willSearch) 个会去站内检索")
         }
         parts.append("单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑")
-        let total = model.assistTorrentTotal
-        if total > model.assistCandidates.count {
-            parts.append("下载器里 \(total) 条符合，本轮按体积取前 \(model.assistCandidates.count) 条")
+        if model.assistTorrentRaw > model.assistTorrentTotal {
+            parts.append("下载器里 \(model.assistTorrentRaw) 条符合，去掉各站重复后 \(model.assistTorrentTotal) 条")
         }
         if let last = model.assistSummary?.lastScan {
             parts.append("上次扫描 " + AppModel.dateText(last.timeIntervalSince1970))
@@ -1890,8 +1907,7 @@ struct AssistView: View {
                 Text(model.assistScanning ? "正在读下载器…" : "（还没扫描，或下载器里没有可辅的种子）")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                Text("下面列体积最大的 \(model.assistShownTorrents.count) 条种子，每条摊开它在各站的格子。")
-                    .font(.caption2).foregroundStyle(.secondary)
+                pager
                 ForEach(model.assistShownTorrents, id: \.hash) { t in
                     torrentBlock(t)
                     if t.hash != model.assistShownTorrents.last?.hash {
@@ -1899,6 +1915,28 @@ struct AssistView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 分页条：整库按体积倒序摊开，一列几条在「设置 → 辅种搜索节奏」里改
+    private var pager: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.assistGoPage(model.assistPage - 1)
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(model.assistPage == 0)
+            Text("第 \(model.assistPage + 1) / \(model.assistPageCount) 页"
+                 + "（共 \(model.assistTorrentTotal) 条，每页 \(model.assistPageSize) 条）")
+                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+            Button {
+                model.assistGoPage(model.assistPage + 1)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(model.assistPage >= model.assistPageCount - 1)
+            Spacer()
         }
     }
 
@@ -2176,6 +2214,9 @@ struct SettingsView: View {
             paceRow("单轮请求预算", num(\.roundBudget, 1, 2000), recommend: 200, unit: "次")
             paceRow("查无结果保留", num(\.missTTLDays, 0, 90), recommend: 7, unit: "天")
             paceRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), recommend: 0, unit: "分钟")
+            paceRow("辅种页单页条数", Binding(get: { cfg.listPageSize },
+                                             set: { model.assistSetPageSize($0) }),
+                    recommend: 10, unit: "条")
             Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
                 .font(.callout)
             Toggle("校验不满 100% 时删掉刚加的种子", isOn: flag(\.removeOnVerifyFail))

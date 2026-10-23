@@ -518,8 +518,19 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         return (node, node == null ? error ?? "扫描下载器失败" : null);
     }
 
-    public Task<string?> AssistStartAsync(string[] siteIDs, bool dryRun, string[]? forceKeys = null) =>
-        TryAsync("assist.start", new { siteIDs, dryRun, forceKeys });
+    /// 开始辅种：默认只跑界面上这一页（torrentHashes），整库一轮交给定时任务
+    public Task<string?> AssistStartAsync(string[] siteIDs, bool dryRun, string[]? forceKeys = null,
+                                         string[]? torrentHashes = null) =>
+        TryAsync("assist.start", new { siteIDs, dryRun, forceKeys, torrentHashes });
+
+    /// 翻页：核心库里存着上次扫描的目录与计数，换一页不必重读下载器
+    public async Task<(JsonNode? Node, string? Error)> AssistPageAsync(int page)
+    {
+        string? error = null;
+        var node = await Task.Run(() => _api.TryInvoke("assist.page", out error, new { page }));
+        await RefreshAsync(full: false);
+        return (node, node == null ? error ?? "翻页失败" : null);
+    }
 
     /// 人工采纳一条「待人工确认」：只重跑这一条，负缓存与「已辅过」预筛都让路
     public Task<string?> AssistConfirmAsync(string key) =>
@@ -942,6 +953,8 @@ public sealed class RunRow
     public string Text { get; init; } = "";
     public string Detail { get; init; } = "";
     public string Phase { get; init; } = "";
+    /// 站内那条种子的详情页（转种成功 / 已推送 / 站内已有时才有）
+    public string Url { get; init; } = "";
 
     public string PhaseText => Phase switch
     {
@@ -960,5 +973,6 @@ public sealed class RunRow
         Text = n["text"]?.GetValue<string>() ?? "",
         Detail = n["detail"]?.GetValue<string>() ?? "",
         Phase = n["phase"]?.GetValue<string>() ?? "",
+        Url = n["url"]?.GetValue<string>() ?? "",
     };
 }

@@ -31,6 +31,9 @@ public final class StateStore {
         /// 辅种负缓存：站点 -> hash -> 站内没检索到的时间。没找到也要记，
         /// 否则每轮都替站点重搜一遍同一条，纯属白跑（站点还嫌你烦）
         var assistMiss: [String: [String: Double]] = [:]
+        /// 辅种失败：站点 -> hash -> 上次失败时间。失败不算「站内没有」，下轮还要再试，
+        /// 但界面要能数出「失败辅种」有多少，所以单独记一张表。
+        var assistFail: [String: [String: Double]] = [:]
         /// 上次扫描下载器的时间与当时的 hash 集合摘要（增量扫描用）
         var assistScanTime: Double?
         var assistScanDigest: String?
@@ -52,6 +55,7 @@ public final class StateStore {
             cookieChecks = try c.decodeIfPresent([String: CookieCheckRec].self, forKey: .cookieChecks) ?? [:]
             assisted = try c.decodeIfPresent([String: [String: AssistRec]].self, forKey: .assisted) ?? [:]
             assistMiss = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistMiss) ?? [:]
+            assistFail = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistFail) ?? [:]
             assistScanTime = try c.decodeIfPresent(Double.self, forKey: .assistScanTime)
             assistScanDigest = try c.decodeIfPresent(String.self, forKey: .assistScanDigest)
             assistScanCount = try c.decodeIfPresent(Int.self, forKey: .assistScanCount)
@@ -201,6 +205,7 @@ public final class StateStore {
         snapshot.assisted[site, default: [:]][hash.lowercased()] =
             AssistRec(time: Date().timeIntervalSince1970, url: url, level: level)
         snapshot.assistMiss[site]?.removeValue(forKey: hash.lowercased())
+        snapshot.assistFail[site]?.removeValue(forKey: hash.lowercased())
         saveLocked()
     }
 
@@ -215,7 +220,42 @@ public final class StateStore {
     public func markAssistMiss(site: String, hash: String) {
         lock.lock(); defer { lock.unlock() }
         snapshot.assistMiss[site, default: [:]][hash.lowercased()] = Date().timeIntervalSince1970
+        snapshot.assistFail[site]?.removeValue(forKey: hash.lowercased())
         saveLocked()
+    }
+
+    /// 记一次辅种失败（检索到了但读不下来 / 加进下载器失败）：下轮还会再试
+    public func markAssistFail(site: String, hash: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assistFail[site, default: [:]][hash.lowercased()] = Date().timeIntervalSince1970
+        saveLocked()
+    }
+
+    public func assistFailedAt(site: String, hash: String) -> Date? {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assistFail[site]?[hash.lowercased()].map { Date(timeIntervalSince1970: $0) }
+    }
+
+    // MARK: 辅种批量取表（全量目录算计数用：上万种子 × 上百个站不能一条条问）
+
+    /// 这个站已辅过的全部 hash
+    public func assistedHashes(site: String) -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return Set(snapshot.assisted[site]?.keys ?? [:].keys)
+    }
+
+    /// 这个站「站内没有」还在负缓存期内的 hash
+    public func assistMissHashes(site: String, ttlSeconds: TimeInterval) -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        guard let table = snapshot.assistMiss[site] else { return [] }
+        let cutoff = Date().timeIntervalSince1970 - ttlSeconds
+        return Set(table.filter { $0.value >= cutoff }.map { $0.key })
+    }
+
+    /// 这个站上轮失败的 hash
+    public func assistFailHashes(site: String) -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return Set(snapshot.assistFail[site]?.keys ?? [:].keys)
     }
 
     /// 记一次扫描（增量扫描靠它：种子集合没变、站点也没新增，就没什么可搜的）
