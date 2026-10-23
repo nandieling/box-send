@@ -70,6 +70,57 @@
                     </StackPanel>
                 </GroupBox>
 
+                <GroupBox Header="辅种搜索节奏">
+                    <StackPanel>
+                        <Grid MaxWidth="620" HorizontalAlignment="Left">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                                <Label Content="每站最小间隔（秒，推荐 8）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Interval" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <Label Content="随机抖动（秒，推荐 3）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Jitter" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0">
+                                <Label Content="单轮请求预算（次，推荐 200）" Padding="0,0,0,2" />
+                                <TextBox x:Name="Budget" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="2">
+                                <Label Content="查无结果保留（天，推荐 7）" Padding="0,0,0,2" />
+                                <TextBox x:Name="MissTTL" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,8,0,0">
+                                <Label Content="定时自动跑（分，0=关，推荐 0）" Padding="0,0,0,2" />
+                                <TextBox x:Name="AutoRun" MaxWidth="200" HorizontalAlignment="Left" />
+                            </StackPanel>
+                            <TextBlock x:Name="AutoRunHint" Grid.Row="2" Grid.Column="2" FontSize="12"
+                                       TextWrapping="Wrap" VerticalAlignment="Bottom"
+                                       Foreground="{DynamicResource TextMuted}" />
+                        </Grid>
+                        <CheckBox x:Name="AutoAccept" Content="站点重打包（文件全等）自动采纳"
+                                  FontSize="12" Margin="0,4,0,0" />
+                        <CheckBox x:Name="RemoveOnFail" Content="校验不满 100% 时删掉刚加的种子"
+                                  FontSize="12" Margin="0,4,0,0" />
+                        <Button Content="保存节奏" Margin="0,8,0,0" HorizontalAlignment="Left" Click="OnSavePace" />
+                        <TextBlock Text="一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。辅种站点在「站点分组」页底部的辅种区块里添加。"
+                                   FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <ContentControl x:Name="CookieHost" Margin="0,18,0,0" />
+                <ContentControl x:Name="DownloaderHost" Margin="0,18,0,0" />
+
                 <GroupBox Header="软件更新">
                     <StackPanel>
                         <WrapPanel>

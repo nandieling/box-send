@@ -92,15 +92,20 @@ public struct AssistOutcome: Equatable {
     /// 已推送 / 已跳过 / 待人工确认 / 失败
     public var done: Bool
     public var message: String
+    /// 真做砸了（读不到站点种子、推下载器失败、校验不满被删）。
+    /// 与「跳过」「还没跑完」分开：界面要单独统计失败数，光看 done 分不出来。
+    public var failed: Bool
 
     public init(siteID: String, torrentName: String, level: AssistLevel,
-                detailURL: String? = nil, done: Bool = false, message: String = "") {
+                detailURL: String? = nil, done: Bool = false, message: String = "",
+                failed: Bool = false) {
         self.siteID = siteID
         self.torrentName = torrentName
         self.level = level
         self.detailURL = detailURL
         self.done = done
         self.message = message
+        self.failed = failed
     }
 }
 

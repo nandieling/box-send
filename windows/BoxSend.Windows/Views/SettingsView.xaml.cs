@@ -17,7 +17,11 @@ public partial class SettingsView : UserControl
     {
         _model = model;
         InitializeComponent();
+        // Cookie 与下载器两页并进设置：区块本身还是原来那两个，只是不再各占一个页签
+        CookieHost.Content = new CookiesView(model);
+        DownloaderHost.Content = new DownloaderView(model);
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
+        _model.Refreshed += (_, _) => Dispatcher.Invoke(LoadPaceHint);
         Load();
     }
 
@@ -87,7 +91,55 @@ public partial class SettingsView : UserControl
         TmdbOn.IsChecked = _model.SectionFlag("tmdb", "enabled");
         About.Text = $"BoxSend {_model.CoreVersion} · 核心库 {_model.CoreVersion} · 平台 {_model.Platform}";
         ConfigPath.Text = $"配置：{_model.ConfigPath}\n数据：{_model.DataDir}";
+        LoadPace();
         _loading = false;
+    }
+
+    // MARK: 辅种搜索节奏（站点在「站点分组」页的辅种区块里加）
+
+    private void LoadPace()
+    {
+        Interval.Text = PaceNum("perSiteIntervalSec", 8).ToString("0.#");
+        Jitter.Text = PaceNum("jitterSec", 3).ToString("0.#");
+        Budget.Text = ((int)PaceNum("roundBudget", 200)).ToString();
+        MissTTL.Text = ((int)PaceNum("missTTLDays", 7)).ToString();
+        AutoRun.Text = ((int)PaceNum("autoRunMinutes", 0)).ToString();
+        AutoAccept.IsChecked = _model.SectionFlag("assist", "autoAcceptSameFiles", true);
+        RemoveOnFail.IsChecked = _model.SectionFlag("assist", "removeOnVerifyFail", true);
+        LoadPaceHint();
+    }
+
+    private void LoadPaceHint()
+    {
+        AutoRunHint.Text = AutoRun.Text == "0" || AutoRun.Text.Length == 0
+            ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
+            : $"约 {_model.AssistAutoNextMinutes} 分钟后自动跑下一轮。";
+    }
+
+    private double PaceNum(string field, double fallback)
+    {
+        if (_model.Config?["assist"]?[field] is JsonValue v)
+        {
+            if (v.TryGetValue<double>(out var d)) return d;
+            if (v.TryGetValue<int>(out var i)) return i;
+            if (v.TryGetValue<long>(out var l)) return l;
+        }
+        return fallback;
+    }
+
+    private void OnSavePace(object sender, RoutedEventArgs e)
+    {
+        _model.PatchSection("assist", o =>
+        {
+            if (double.TryParse(Interval.Text, out var iv)) o["perSiteIntervalSec"] = Math.Max(0, Math.Min(120, iv));
+            if (double.TryParse(Jitter.Text, out var jt)) o["jitterSec"] = Math.Max(0, Math.Min(30, jt));
+            if (int.TryParse(Budget.Text, out var bd)) o["roundBudget"] = Math.Max(1, Math.Min(2000, bd));
+            if (int.TryParse(MissTTL.Text, out var tt)) o["missTTLDays"] = Math.Max(0, Math.Min(90, tt));
+            o["autoAcceptSameFiles"] = AutoAccept.IsChecked == true;
+            o["removeOnVerifyFail"] = RemoveOnFail.IsChecked == true;
+            if (int.TryParse(AutoRun.Text, out var ar)) o["autoRunMinutes"] = Math.Max(0, Math.Min(1440, ar));
+        });
+        LoadPace();
     }
 
     private static LinearGradientBrush Gradient(string[] hexes)

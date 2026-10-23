@@ -121,12 +121,6 @@ struct ContentView: View {
             SitesView()
                 .tabItem { Label("站点分组", systemImage: "server.rack") }
                 .tag(1)
-            CookiesView()
-                .tabItem { Label("Cookie", systemImage: "key.fill") }
-                .tag(2)
-            DownloaderView()
-                .tabItem { Label("下载器", systemImage: "arrow.down.circle") }
-                .tag(3)
             SettingsView()
                 .tabItem { Label("设置", systemImage: "gearshape") }
                 .tag(5)
@@ -378,8 +372,7 @@ struct RunView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(selected ? Color.accentColor : Color(nsColor: .separatorColor),
-                              lineWidth: selected ? 1.5 : 1)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .onTapGesture {
@@ -837,8 +830,9 @@ struct SitesView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(on || draggingSite == s.id ? Color.accentColor : Color(nsColor: .separatorColor),
-                              lineWidth: on || draggingSite == s.id ? 1.5 : 1)
+                .strokeBorder(draggingSite == s.id ? Color.accentColor
+                                                   : Color(nsColor: .separatorColor),
+                              lineWidth: draggingSite == s.id ? 1.5 : 1)
         )
         .opacity(draggingSite == s.id ? 0.4 : 1)
         .help(on ? "已开启（加深色），点击停用" : "未开启，点击开启")
@@ -1123,8 +1117,9 @@ struct AddSitesSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder((checked.contains(id) || dragging == id) ? Color.accentColor : Color(nsColor: .separatorColor),
-                                      lineWidth: (checked.contains(id) || dragging == id) ? 1.5 : 1)
+                        .strokeBorder(dragging == id ? Color.accentColor
+                                                     : Color(nsColor: .separatorColor),
+                                      lineWidth: dragging == id ? 1.5 : 1)
                 )
             }
         }
@@ -1384,7 +1379,7 @@ private struct LabeledRow<Field: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             field
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: 320, alignment: .leading)
         }
     }
 }
@@ -1396,8 +1391,8 @@ struct CookiesView: View {
     @State private var zipPassword = ""
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Cookie 同步与导入").font(.title3.weight(.semibold)).padding(.leading, 4)
                 CardSection("PT-depiler Gist 同步") {
                     LabeledRow("gistID") {
                         TextField("", text: gistStringBinding(\.gistID)).textFieldStyle(.roundedBorder)
@@ -1487,11 +1482,8 @@ struct CookiesView: View {
                     Text("目录出现新的 PTD_backup*.zip 时自动导入（整体替换本地 cookie），失败的下次重试。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            }
-            .padding(20)
         }
     }
-
 
     private func pickZip() {
         let panel = NSOpenPanel()
@@ -1677,8 +1669,8 @@ struct DownloaderView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("下载器").font(.title3.weight(.semibold)).padding(.leading, 4)
                 rolesCard
                 ForEach(model.downloaderList, id: \.id) { d in
                     downloaderCard(d.id)
@@ -1772,78 +1764,33 @@ struct DownloaderView: View {
                          + "测速在服务器上进行，每轮只多花一份测试流量的上行（默认 64 MB），不占用本机。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            }
-            .padding(20)
         }
     }
 }
 
 // MARK: - 辅种（辅种站点在「站点分组」页的辅种区块里维护，这一页只管跑）
 
-extension AssistPipeline.PlanRow {
-    /// 与 AssistPipeline.Status.rowKey 同一套拼法
-    var rowKey: String { "\(siteID)|\(hash)" }
-}
-
 struct AssistView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                paceCard
-            }
-            .frame(width: 300)
-
+        ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
-                candidatesCard
-                planCard
+                statsCard
+                torrentsCard
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
     }
 
     private var cfg: AssistConfig { model.assistConfig }
 
-    // MARK: 左栏
-
-    /// 逐站已辅数（站点本身在「站点分组」页的辅种区块里加）
-    private var assistedCountsLine: String {
-        let pairs = (model.assistSummary?.assistedBySite ?? [:])
-            .filter { $0.value > 0 }
-            .sorted { $0.key < $1.key }
-            .map { "\(model.config.site($0.key)?.name ?? $0.key) \($0.value)" }
-        return pairs.isEmpty ? "还没有辅成功的记录" : "已辅：" + pairs.joined(separator: " · ")
+    /// 一条种子的站点格子按 hash 归堆
+    private var rowsByHash: [String: [AssistPipeline.PlanRow]] {
+        Dictionary(grouping: model.assistPlan, by: { $0.hash })
     }
-
-    private var paceCard: some View {
-        CardSection("检索节奏") {
-            typedRow("每站最小间隔", dbl(\.perSiteIntervalSec, 0, 120), recommend: 8, unit: "秒")
-            typedRow("随机抖动", dbl(\.jitterSec, 0, 30), recommend: 3, unit: "秒")
-            typedRow("单轮请求预算", num(\.roundBudget, 1, 2000), recommend: 200, unit: "次")
-            typedRow("查无结果保留", num(\.missTTLDays, 0, 90), recommend: 7, unit: "天")
-            typedRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), recommend: 0, unit: "分钟")
-            Text(assistedCountsLine).font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(cfg.autoRunMinutes == 0
-                 ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
-                 : "约 \(model.assistAutoNext ?? 0) 分钟后自动跑下一轮，请求仍受单轮预算约束。")
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Divider()
-            Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
-                .font(.callout)
-            Toggle("校验不满 100% 时删掉刚加的种子", isOn: flag(\.removeOnVerifyFail))
-                .font(.callout)
-            Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。")
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    // MARK: 右栏
 
     private var header: some View {
         HStack(spacing: 10) {
@@ -1881,175 +1828,161 @@ struct AssistView: View {
                 .help("在「站点分组」页底部的辅种区块里添加 / 退出")
             Text("辅种下载器：\(model.assistDownloaderName)")
                 .font(.caption2).foregroundStyle(.primary)
-                .help("在「下载器」页的「辅种扫描用」里换一台")
+                .help("在「设置」页的「辅种扫描用」里换一台")
         }
     }
 
-    /// 候选条数：下载器里可能上万条，本轮只处理体积最大的前 N 条
-    private var candidatesFootline: String {
-        let total = model.assistTorrentTotal
-        var line = total > model.assistCandidates.count
-            ? "下载器里 \(total) 条符合，本轮按体积取前 \(model.assistCandidates.count) 条"
-            : (model.assistSummary?.deltaText ?? "共 \(model.assistCandidates.count) 条")
-        line += "。没下完、或按大小/分类筛掉的不在这里。"
-        if let last = model.assistSummary?.lastScan {
-            line += "上次扫描 " + AppModel.dateText(last.timeIntervalSince1970)
-        }
-        return line
-    }
+    // MARK: 统计
 
-    /// 计划计数按全量算，列出来的只是前几百行
-    private var planHeadline: String {
-        guard let preview = model.assistPreview else { return "" }
-        let shown = "全量 \(preview.total) 个组合，其中 \(preview.willSearch) 个会去站内检索"
-            + "（单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑）"
-        let skips = preview.counts.filter { $0.reason != "会去站内检索" }
-            .prefix(4).map { "\($0.reason) \($0.count)" }.joined(separator: " · ")
-        let cap = preview.total > preview.rows.count ? "下面列前 \(preview.rows.count) 行。" : ""
-        return shown + (skips.isEmpty ? "" : "；跳过：\(skips)") + cap
-    }
-
-    private var candidatesCard: some View {
-        CardSection("候选种子（下载器里已下完的）") {
-            if model.assistCandidates.isEmpty {
-                Text(model.assistScanning ? "正在读下载器…" : "（还没扫描）")
+    /// 已完成 / 待辅种 / 失败三个主数打头，其余几类跟着列（0 也留着，免得看着像没跑）
+    private var statsCard: some View {
+        let tally = model.assistStats
+        return CardSection("辅种统计") {
+            if model.assistPreview == nil {
+                Text("扫描下载器后，这里按「一条种子 × 一个站」给出已完成、待辅种、失败等计数。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(model.assistCandidates, id: \.hash) { t in
-                            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                Text(t.name).font(.callout).lineLimit(1)
-                                Spacer(minLength: 8)
-                                Text(String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824))
-                                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                                Text("已做种 \(t.trackerHosts.count) 站")
-                                    .font(.caption2).foregroundStyle(.secondary)
-                            }
-                        }
+                HStack(alignment: .top, spacing: 20) {
+                    ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
+                        statBlock(line.status, line.count)
                     }
+                    Spacer(minLength: 8)
                 }
-                .frame(maxHeight: 180)
-            }
-            Text(candidatesFootline)
-                .font(.caption2).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var planCard: some View {
-        CardSection("本轮计划与进展") {
-            if model.assistPlan.isEmpty {
-                Text("扫描后这里会列出每条种子在每个站的计划。")
-                    .font(.callout).foregroundStyle(.secondary)
-            } else {
-                Text(planHeadline)
-                    .font(.caption2).foregroundStyle(.secondary)
+                Text(footline(tally)).font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 5) {
-                        ForEach(model.assistPlan, id: \.rowKey) { row in
-                            planRow(row)
-                        }
-                    }
-                }
-                .frame(maxHeight: 300)
             }
         }
     }
 
-    @ViewBuilder
-    private func planRow(_ row: AssistPipeline.PlanRow) -> some View {
-        let live = model.assistRows[row.rowKey]
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: chipIcon(live?.phase, skip: row.skipReason))
-                .foregroundStyle(chipColor(live?.phase, skip: row.skipReason))
-            Text(model.siteName(row.siteID))
-                .font(.callout.weight(.medium))
-                .frame(width: 72, alignment: .leading)
-            Text(row.torrentName).font(.callout).lineLimit(1)
-            Spacer(minLength: 8)
-            Text(live?.text ?? row.skipReason ?? "待检索")
-                .font(.caption2).foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: 260, alignment: .trailing)
-            // 人比对过觉得是同一种子，就按人的判断走一遍推送（校验不满照样回滚）
-            if live?.text.hasPrefix("待人工确认") == true {
-                Button("采纳") { model.assistConfirm(key: row.rowKey) }
-                    .controlSize(.mini)
-                    .disabled(model.assistRunning)
-                    .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
+    private func statBlock(_ status: AssistPipeline.RowStatus, _ count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(count)")
+                .font(.title2.weight(.semibold)).monospacedDigit()
+                .foregroundStyle(tintColor(status))
+            Text(status.statLabel).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 76, alignment: .leading)
+    }
+
+    /// 一行说清本轮规模：全量组合、会检索多少、预算、上次扫描
+    private func footline(_ tally: AssistPipeline.Tally) -> String {
+        var parts: [String] = []
+        if let preview = model.assistPreview {
+            parts.append("全量 \(preview.total) 个组合，其中 \(preview.willSearch) 个会去站内检索")
+        }
+        parts.append("单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑")
+        let total = model.assistTorrentTotal
+        if total > model.assistCandidates.count {
+            parts.append("下载器里 \(total) 条符合，本轮按体积取前 \(model.assistCandidates.count) 条")
+        }
+        if let last = model.assistSummary?.lastScan {
+            parts.append("上次扫描 " + AppModel.dateText(last.timeIntervalSince1970))
+        }
+        return parts.joined(separator: "；") + "。"
+    }
+
+    // MARK: 种子 × 站点
+
+    /// 一条种子一张卡：卡里是它在各辅种站的格子（站名 + 已辅种 / 待辅种 / 不存在…）
+    private var torrentsCard: some View {
+        CardSection("种子与站点") {
+            if model.assistShownTorrents.isEmpty {
+                Text(model.assistScanning ? "正在读下载器…" : "（还没扫描，或下载器里没有可辅的种子）")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Text("下面列体积最大的 \(model.assistShownTorrents.count) 条种子，每条摊开它在各站的格子。")
+                    .font(.caption2).foregroundStyle(.secondary)
+                ForEach(model.assistShownTorrents, id: \.hash) { t in
+                    torrentBlock(t)
+                    if t.hash != model.assistShownTorrents.last?.hash {
+                        Divider()
+                    }
+                }
             }
         }
-        .help([row.torrentName, live?.detail ?? row.skipReason ?? ""]
+    }
+
+    private func torrentBlock(_ t: LocalTorrent) -> some View {
+        let rows = rowsByHash[t.hash] ?? []
+        let tally = AssistPipeline.tally(rows: rows, live: model.assistLive)
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(t.name).font(.callout).lineLimit(1)
+                Spacer(minLength: 8)
+                Text(String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text("已做种 \(t.trackerHosts.count) 站")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            .help(t.name)
+            if rows.isEmpty {
+                Text("这条不在本轮计划里").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6),
+                          alignment: .leading, spacing: 6) {
+                    ForEach(rows, id: \.rowKey) { row in
+                        siteCell(row)
+                    }
+                }
+                Text("已辅 \(tally.count(.assisted)) · 待辅 \(tally.count(.pending))"
+                     + " · 失败 \(tally.count(.failed)) · 不存在 \(tally.count(.missing))")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 一格：站名 + 结论；「待确认」的格子上带一个「采纳」
+    private func siteCell(_ row: AssistPipeline.PlanRow) -> some View {
+        let status = model.assistStatus(row)
+        let live = model.assistRows[row.rowKey]
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: cellIcon(status)).foregroundStyle(tintColor(status))
+                Text(model.siteName(row.siteID)).font(.caption).lineLimit(1)
+            }
+            HStack(spacing: 4) {
+                Text(status.label).font(.caption2).foregroundStyle(tintColor(status))
+                if status == .manual {
+                    Button("采纳") { model.assistConfirm(key: row.rowKey) }
+                        .controlSize(.mini)
+                        .disabled(model.assistRunning)
+                        .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
+                }
+            }
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { Color.blockSurface(model.theme.dark) }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+        .help([model.siteName(row.siteID), row.torrentName,
+               live?.detail ?? row.skipReason ?? ""]
             .filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
-    private func chipIcon(_ phase: AssistPipeline.Status.Phase?, skip: String?) -> String {
-        guard phase == nil else { return chipPhaseIcon(phase!) }
-        return skip == nil ? "circle" : "circle.slash"
-    }
-
-    private func chipPhaseIcon(_ p: AssistPipeline.Status.Phase) -> String {
-        switch p {
-        case .working: return "circle.dashed"
+    private func cellIcon(_ status: AssistPipeline.RowStatus) -> String {
+        switch status {
+        case .assisted: return "checkmark.circle.fill"
+        case .pending: return "circle"
+        case .failed: return "xmark.circle.fill"
         case .verifying: return "hourglass"
-        case .done: return "checkmark.circle"
-        case .failed: return "xmark.circle"
-        case .skipped: return "circle.slash"
+        case .manual: return "questionmark.circle"
+        case .missing: return "circle.slash"
+        case .seeding: return "checkmark.seal"
+        case .unsupported: return "minus.circle"
         }
     }
 
-    private func chipColor(_ phase: AssistPipeline.Status.Phase?, skip: String?) -> Color {
-        guard let phase else { return skip == nil ? .secondary : Color.secondary.opacity(0.6) }
-        switch phase {
-        case .working, .verifying: return .secondary
-        case .done: return .green
+    private func tintColor(_ status: AssistPipeline.RowStatus) -> Color {
+        switch status {
+        case .assisted: return .green
         case .failed: return .red
-        case .skipped: return Color.secondary.opacity(0.6)
-        }
-    }
-
-    // MARK: 绑定
-
-    private func num(_ keyPath: WritableKeyPath<AssistConfig, Int>, _ lo: Int,
-                     _ hi: Int) -> Binding<Int> {
-        Binding(get: { model.assistConfig[keyPath: keyPath] },
-                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
-    }
-
-    private func dbl(_ keyPath: WritableKeyPath<AssistConfig, Double>, _ lo: Double,
-                     _ hi: Double) -> Binding<Double> {
-        Binding(get: { model.assistConfig[keyPath: keyPath] },
-                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
-    }
-
-    private func flag(_ keyPath: WritableKeyPath<AssistConfig, Bool>) -> Binding<Bool> {
-        Binding(get: { model.assistConfig[keyPath: keyPath] },
-                set: { v in model.assistUpdate { $0[keyPath: keyPath] = v } })
-    }
-
-    private func typedRow(_ label: String, _ value: Binding<Double>, recommend: Double,
-                          unit: String) -> some View {
-        HStack(spacing: 6) {
-            Text(label).font(.callout)
-            Spacer()
-            NumField(value: value.wrappedValue, recommend: recommend) { value.wrappedValue = $0 }
-            Text(unit).font(.caption).foregroundStyle(.secondary)
-                .frame(width: 28, alignment: .leading)
-        }
-    }
-
-    private func typedRow(_ label: String, _ value: Binding<Int>, recommend: Int,
-                          unit: String) -> some View {
-        HStack(spacing: 6) {
-            Text(label).font(.callout)
-            Spacer()
-            NumField(value: Double(value.wrappedValue), recommend: Double(recommend), integer: true) {
-                value.wrappedValue = Int($0.rounded())
-            }
-            Text(unit).font(.caption).foregroundStyle(.secondary)
-                .frame(width: 28, alignment: .leading)
+        case .verifying: return Color.accentColor
+        case .manual: return .orange
+        case .seeding: return .teal
+        case .pending: return .secondary
+        case .missing, .unsupported: return Color.secondary.opacity(0.6)
         }
     }
 }
@@ -2179,6 +2112,9 @@ struct SettingsView: View {
                          + "网关地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写软件会自动补一次再试。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                paceCard
+                CookiesView()
+                DownloaderView()
                 CardSection("主题（渐变色）") {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(AppTheme.all) { t in
@@ -2213,10 +2149,92 @@ struct SettingsView: View {
                 }
             }
             .padding(20)
+            .frame(maxWidth: 820, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .sheet(isPresented: $showTutorial) {
             TutorialSheet()
         }
+    }
+
+    private var cfg: AssistConfig { model.assistConfig }
+
+    /// 逐站已辅数（站点本身在「站点分组」页的辅种区块里加）
+    private var assistedCountsLine: String {
+        let pairs = (model.assistSummary?.assistedBySite ?? [:])
+            .filter { $0.value > 0 }
+            .sorted { $0.key < $1.key }
+            .map { "\(model.config.site($0.key)?.name ?? $0.key) \($0.value)" }
+        return pairs.isEmpty ? "还没有辅成功的记录" : "已辅：" + pairs.joined(separator: " · ")
+    }
+
+    /// 站点请求的节奏：所有对站点的请求都从这一个节流器过，界面只负责填数
+    private var paceCard: some View {
+        CardSection("辅种搜索节奏") {
+            paceRow("每站最小间隔", dbl(\.perSiteIntervalSec, 0, 120), recommend: 8, unit: "秒")
+            paceRow("随机抖动", dbl(\.jitterSec, 0, 30), recommend: 3, unit: "秒")
+            paceRow("单轮请求预算", num(\.roundBudget, 1, 2000), recommend: 200, unit: "次")
+            paceRow("查无结果保留", num(\.missTTLDays, 0, 90), recommend: 7, unit: "天")
+            paceRow("定时自动跑", num(\.autoRunMinutes, 0, 1440), recommend: 0, unit: "分钟")
+            Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
+                .font(.callout)
+            Toggle("校验不满 100% 时删掉刚加的种子", isOn: flag(\.removeOnVerifyFail))
+                .font(.callout)
+            Text(assistedCountsLine).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(cfg.autoRunMinutes == 0
+                 ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
+                 : "约 \(model.assistAutoNext ?? 0) 分钟后自动跑下一轮，请求仍受单轮预算约束。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。"
+                 + "辅种站点在「站点分组」页底部的辅种区块里添加。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func num(_ keyPath: WritableKeyPath<AssistConfig, Int>, _ lo: Int,
+                     _ hi: Int) -> Binding<Int> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
+    }
+
+    private func dbl(_ keyPath: WritableKeyPath<AssistConfig, Double>, _ lo: Double,
+                     _ hi: Double) -> Binding<Double> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = min(hi, max(lo, v)) } })
+    }
+
+    private func flag(_ keyPath: WritableKeyPath<AssistConfig, Bool>) -> Binding<Bool> {
+        Binding(get: { model.assistConfig[keyPath: keyPath] },
+                set: { v in model.assistUpdate { $0[keyPath: keyPath] = v } })
+    }
+
+    private func paceRow(_ label: String, _ value: Binding<Double>, recommend: Double,
+                         unit: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.callout)
+            Spacer()
+            NumField(value: value.wrappedValue, recommend: recommend) { value.wrappedValue = $0 }
+            Text(unit).font(.caption).foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+        }
+        .frame(maxWidth: 360, alignment: .leading)
+    }
+
+    private func paceRow(_ label: String, _ value: Binding<Int>, recommend: Int,
+                         unit: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.callout)
+            Spacer()
+            NumField(value: Double(value.wrappedValue), recommend: Double(recommend), integer: true) {
+                value.wrappedValue = Int($0.rounded())
+            }
+            Text(unit).font(.caption).foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+        }
+        .frame(maxWidth: 360, alignment: .leading)
     }
 
         /// 更新结果文案的配色：失败红、有新版本橙、其余（已最新）绿

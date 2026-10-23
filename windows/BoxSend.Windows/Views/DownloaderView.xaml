@@ -1,10 +1,9 @@
 <UserControl x:Class="BoxSend.Windows.Views.DownloaderView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
-                <GroupBox Header="下载器（可以有多台：发种与辅种各用一台）">
+    <StackPanel>
+            <TextBlock Text="下载器" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <GroupBox Header="下载器（可以有多台：发种与辅种各用一台）">
                     <StackPanel>
                         <WrapPanel>
                             <Button Content="添加一台" Click="OnAddDownloader" />
@@ -50,7 +49,7 @@
                                 <PasswordBox x:Name="SshPass" />
                             </StackPanel>
                         </Grid>
-                        <Grid Margin="0,8,0,0">
+                        <Grid Margin="0,8,0,0" MaxWidth="620" HorizontalAlignment="Left">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="90" />
@@ -69,7 +68,7 @@
                                 <TextBox x:Name="SshUser" />
                             </StackPanel>
                         </Grid>
-                        <Grid Margin="0,8,0,0">
+                        <Grid Margin="0,8,0,0" MaxWidth="620" HorizontalAlignment="Left">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="2*" />
                                 <ColumnDefinition Width="90" />
@@ -101,10 +100,8 @@
                     </StackPanel>
                 </GroupBox>
 
-                <TextBlock x:Name="Result" Margin="0,12,0,0" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextMuted}" FontSize="12"
-                           TextWrapping="Wrap" />
-            </StackPanel>
-        </ScrollViewer>
-    </Border>
+            <TextBlock x:Name="Result" Margin="0,12,0,0" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextMuted}" FontSize="12"
+                       TextWrapping="Wrap" />
+    </StackPanel>
 </UserControl>

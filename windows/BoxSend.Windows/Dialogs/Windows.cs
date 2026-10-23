@@ -381,14 +381,14 @@ public sealed class AddSitesWindow : Window
             ? a
             : (Brush)Application.Current.Resources["Line"];
 
-    /// 选中态：强调色描边 + 一层淡淡的强调色底（与 mac 版「加深色 = 已选中」一致）
+    /// 选中态：只铺一层淡淡的强调色底（蓝框线去掉：整屏卡片都在描边，反而看不出选了谁）
     private void RefreshCard(string id)
     {
         if (!_cards.TryGetValue(id, out var refs)) return;
         var on = _selected.Contains(id);
-        refs.Card.BorderBrush = on || CardDrag.DraggingId == id ? AccentBrush()
+        refs.Card.BorderBrush = CardDrag.DraggingId == id ? AccentBrush()
             : (Brush)Application.Current.Resources["Line"];
-        refs.Card.BorderThickness = new Thickness(on ? 1.5 : 1);
+        refs.Card.BorderThickness = new Thickness(1);
         refs.Card.Background = on ? TintedAccent() : PromptWindow.Themed("BlockSurface", "#61000000");
         refs.Title.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
         refs.Num.ToolTip = $"当前第 {_order.IndexOf(id) + 1} 位；输入新序号回车排到该位置";

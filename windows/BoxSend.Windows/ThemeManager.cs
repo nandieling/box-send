@@ -26,6 +26,8 @@ public static class ThemeManager
         res["DialogBackground"] = Brush(theme.Dark ? "#1E252E" : "#F3F7FC");
         res["Warning"] = Brush(theme.Dark ? "#FFC46B" : "#B45309");
         res["Success"] = Brush(theme.Dark ? "#7BD88F" : "#15803D");
+        // 红字（辅种失败、检测失效）：按钮的 Danger 样式只管按钮，文字得单独给一支笔
+        res["DangerText"] = Brush(theme.Dark ? "#FF8A8A" : "#B91C1C");
         // 下拉框选中项、批量添加站点里「已选中」卡片用的淡强调色
         res["AccentSoft"] = Tint(theme.Accent, 0.28);
         // 选中卡片的底色：比 AccentSoft 更淡一层，压住站点名就看不清了

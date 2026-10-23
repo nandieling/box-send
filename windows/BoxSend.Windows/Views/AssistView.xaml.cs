@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -5,34 +6,25 @@ using System.Windows.Controls;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>辅种页：扫描下载器 → 每条种子 × 辅种站点 → 站内检索 → 比对文件清单 →
-/// 先暂停加进下载器，校验到 100% 才算辅成。站点请求的节奏在核心库里收口，
-/// 这页只负责发起、以及把逐行进展显示出来（进展随快照回来）。</summary>
+/// <summary>辅种页：两块信息 —— 一条种子 × 各辅种站的格子（站名 + 已辅种/待辅种/不存在），
+/// 以及整轮的已完成 / 待辅种 / 失败计数。分类与计数都在核心库里算，
+/// 这页只画格子；搜索节奏挪到了「设置」页。</summary>
 public partial class AssistView : UserControl
 {
     private readonly AppModel _model;
-    private readonly System.Collections.ObjectModel.ObservableCollection<Line> _candidates = new();
-    private readonly System.Collections.ObjectModel.ObservableCollection<PlanItem> _plan = new();
-    private bool _loading;
+    private readonly ObservableCollection<TorrentBlock> _torrents = new();
 
     public AssistView(AppModel model)
     {
         _model = model;
         InitializeComponent();
-        Candidates.ItemsSource = _candidates;
-        PlanRows.ItemsSource = _plan;
-        _model.FullRefreshed += (_, _) => Dispatcher.Invoke(() =>
-        {
-            ShowSites();
-            LoadPace();
-        });
+        Torrents.ItemsSource = _torrents;
+        Stats.ItemsSource = _model.AssistStats;
+        _model.FullRefreshed += (_, _) => Dispatcher.Invoke(ShowSites);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(RefreshProgress);
         ShowSites();
-        LoadPace();
         RefreshProgress();
     }
-
-    // MARK: 左栏
 
     /// <summary>辅种站点这一页只管显示：名单在「站点分组」页底部的辅种区块里改
     /// （与 mac 版同一处）。</summary>
@@ -43,8 +35,8 @@ public partial class AssistView : UserControl
             .Select(id => _model.Sites.FirstOrDefault(s => s.Id == id)?.Name ?? id)
             .ToList();
         SiteInfo.Text = names.Count == 0
-            ? "还没有辅种站点"
-            : $"共 {names.Count} 个：" + string.Join("、", names.Take(12))
+            ? "还没有辅种站点：在「站点分组」页底部的辅种区块里添加。"
+            : $"辅种站点 {names.Count} 个：" + string.Join("、", names.Take(12))
               + (names.Count > 12 ? $" 等 {names.Count} 个" : "");
     }
 
@@ -55,48 +47,6 @@ public partial class AssistView : UserControl
             return arr.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")
                 .Where(s => s.Length > 0).ToList();
         return new List<string>();
-    }
-
-    private void LoadPace()
-    {
-        _loading = true;
-        Interval.Text = Num("perSiteIntervalSec", 8).ToString("0.#");
-        Jitter.Text = Num("jitterSec", 3).ToString("0.#");
-        Budget.Text = ((int)Num("roundBudget", 200)).ToString();
-        MissTTL.Text = ((int)Num("missTTLDays", 7)).ToString();
-        AutoAccept.IsChecked = _model.SectionFlag("assist", "autoAcceptSameFiles", true);
-        RemoveOnFail.IsChecked = _model.SectionFlag("assist", "removeOnVerifyFail", true);
-        AutoRun.Text = ((int)Num("autoRunMinutes", 0)).ToString();
-        AutoRunHint.Text = AutoRun.Text == "0"
-            ? "0 = 不自动跑。设成 60 之类，到点自己扫描并辅一轮。"
-            : $"约 {_model.AssistAutoNextMinutes} 分钟后自动跑下一轮。";
-        _loading = false;
-    }
-
-    private double Num(string field, double fallback)
-    {
-        if (_model.Config?["assist"]?[field] is JsonValue v)
-        {
-            if (v.TryGetValue<double>(out var d)) return d;
-            if (v.TryGetValue<int>(out var i)) return i;
-            if (v.TryGetValue<long>(out var l)) return l;
-        }
-        return fallback;
-    }
-
-    private void OnSavePace(object sender, RoutedEventArgs e)
-    {
-        _model.PatchSection("assist", o =>
-        {
-            if (double.TryParse(Interval.Text, out var iv)) o["perSiteIntervalSec"] = Math.Max(0, Math.Min(120, iv));
-            if (double.TryParse(Jitter.Text, out var jt)) o["jitterSec"] = Math.Max(0, Math.Min(30, jt));
-            if (int.TryParse(Budget.Text, out var bd)) o["roundBudget"] = Math.Max(1, Math.Min(2000, bd));
-            if (int.TryParse(MissTTL.Text, out var tt)) o["missTTLDays"] = Math.Max(0, Math.Min(90, tt));
-            o["autoAcceptSameFiles"] = AutoAccept.IsChecked == true;
-            o["removeOnVerifyFail"] = RemoveOnFail.IsChecked == true;
-            if (int.TryParse(AutoRun.Text, out var ar)) o["autoRunMinutes"] = Math.Max(0, Math.Min(1440, ar));
-        });
-        LoadPace();
     }
 
     // MARK: 扫描与执行
@@ -121,57 +71,64 @@ public partial class AssistView : UserControl
 
     private void Fill(JsonObject result)
     {
-        _candidates.Clear();
+        var totalTorrents = result["torrentTotal"]?.GetValue<int>() ?? 0;
+        var dl = Text(result["downloader"]);
+        TorrentHint.Text = $"下面列出体积最大的 {result["torrents"]?.AsArray()?.Count ?? 0} 条种子，"
+            + $"摊开它在各站的格子（本轮候选按体积取，下载器里共 {totalTorrents} 条符合）。"
+            + $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「设置」页的「辅种扫描用」里换一台）";
+
+        // 行按种子归堆：一条种子一张卡，卡里是它在各站的小格子
+        _torrents.Clear();
+        var byHash = new Dictionary<string, TorrentBlock>();
         foreach (var n in result["torrents"]?.AsArray() ?? new JsonArray())
         {
+            var hash = Text(n?["hash"]);
             var size = n?["size"]?.GetValue<double>() ?? 0;
             var trackers = n?["trackers"]?.AsArray()?.Count ?? 0;
-            _candidates.Add(new Line(n?["name"]?.GetValue<string>() ?? "",
-                $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站"));
+            var block = new TorrentBlock
+            {
+                Hash = hash,
+                Left = Text(n?["name"]),
+                SizeText = $"{size / 1073741824.0:0.0} GiB",
+                Right = $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站",
+            };
+            byHash[hash] = block;
+            _torrents.Add(block);
         }
-        // 下载器里可能上万条：核心按体积裁成本轮要处理的那批，整份条数另给
-        var totalTorrents = result["torrentTotal"]?.GetValue<int>() ?? _candidates.Count;
-        var delta = Text(result["summary"]?["deltaText"]);
-        var dl = Text(result["downloader"]);
-        CandidateSummary.Text = (totalTorrents > _candidates.Count
-                ? $"下载器里 {totalTorrents} 条符合，本轮按体积取前 {_candidates.Count} 条。"
-                : (delta.Length > 0 ? delta + "。" : $"共 {_candidates.Count} 条。"))
-            + "没下完、或按大小/分类筛掉的不在这里。"
-            + $"辅种下载器：{(dl.Length > 0 ? dl : "未配置")}（在「下载器」页的「辅种扫描用」里换一台）";
-
-        _plan.Clear();
-        var sites = result["sites"]?.AsArray()?.Count ?? 0;
-        var willSearch = 0;
         foreach (var n in result["rows"]?.AsArray() ?? new JsonArray())
         {
+            var hash = Text(n?["hash"]);
+            if (!byHash.TryGetValue(hash, out var block)) continue;
             var skip = Text(n?["skip"]);
-            if (skip.Length == 0) willSearch++;
-            _plan.Add(new PlanItem
+            block.Cells.Add(new Cell
             {
                 Key = Text(n?["key"]),
                 SiteName = Text(n?["siteName"]),
-                TorrentName = Text(n?["torrentName"]),
                 Skip = skip,
+                Hash = hash,
+                Status = Text(n?["status"]),
+                StatusText = Text(n?["statusText"]),
+                Tip = Text(n?["siteName"]) + "\n" + Text(n?["torrentName"])
+                    + (skip.Length > 0 ? "\n" + skip : ""),
             });
         }
-        // 计数按全量算（列表只回前几百行），跳过原因由核心汇总
-        var planTotal = result["planTotal"]?.GetValue<int>() ?? _plan.Count;
+        var planTotal = result["planTotal"]?.GetValue<int>() ?? 0;
+        var willSearch = 0;
         var skips = new List<string>();
         if (result["planCounts"] is JsonObject counts)
             foreach (var kv in counts)
             {
-                var n = kv.Value?.GetValue<int>() ?? 0;
-                if (kv.Key == "会去站内检索") willSearch = n;
-                else skips.Add($"{kv.Key} {n}");
+                var c = kv.Value?.GetValue<int>() ?? 0;
+                if (kv.Key == "会去站内检索") willSearch = c;
+                else skips.Add($"{kv.Key} {c}");
             }
         skips.Sort((a, b) => b.Split(' ').Last().CompareTo(a.Split(' ').Last()));
         var budget = result["budget"]?.GetValue<int>() ?? 0;
         PlanSummary.Text = $"全量 {planTotal} 个组合，其中 {willSearch} 个会去站内检索"
             + $"（单轮预算 {_model.SectionInt("assist", "roundBudget", 200)} 次请求，用完下次接着跑）"
             + $"；本轮剩余额度 {budget} 次"
-            + (skips.Count > 0 ? "；跳过：" + string.Join(" · ", skips.Take(4)) : "")
-            + (planTotal > _plan.Count ? $"。下面列前 {_plan.Count} 行" : "");
-        State.Text = $"参与站点 {sites} 个，候选 {totalTorrents} 条（本轮 {_candidates.Count} 条）";
+            + (skips.Count > 0 ? "；跳过：" + string.Join(" · ", skips.Take(4)) : "");
+        State.Text = $"参与站点 {CheckedSites().Length} 个";
         RefreshProgress();
     }
 
@@ -180,16 +137,14 @@ public partial class AssistView : UserControl
         var ids = CheckedSites();
         if (ids.Length == 0)
         {
-            State.Text = "先在左边勾选要辅种的站点";
+            State.Text = "先在「站点分组」页的辅种区块添加站点";
             return;
         }
-        if (_plan.Count == 0)
+        if (_torrents.Count == 0)
         {
             State.Text = "先扫描下载器";
             return;
         }
-        foreach (var item in _plan.Where(p => !ids.Contains(p.Key.Split('|')[0])).ToList())
-            _plan.Remove(item);
         _model.ClearAssistRows();
         BtnStart.IsEnabled = false;
         var err = await _model.AssistStartAsync(ids, DryRun.IsChecked == true);
@@ -198,83 +153,122 @@ public partial class AssistView : UserControl
         RefreshProgress();
     }
 
+    /// 逐格结论由核心库算好随快照回来，这里只把文本与配色搬过去（整表不重建，滚动位置不动）
     private void RefreshProgress()
     {
-        foreach (var item in _plan)
+        foreach (var block in _torrents)
         {
-            var live = _model.AssistRows.FirstOrDefault(r => r.Key == item.Key);
-            if (live != null)
+            foreach (var cell in block.Cells)
             {
-                // 核心库把「种子名｜进展」拼成一句，这行左边已经有种子名了，只留进展
-                var text = live.Text;
-                var at = text.IndexOf('｜');
-                item.Status = (live.PhaseText.Length > 0 ? live.PhaseText + "：" : "")
-                    + (at >= 0 ? text[(at + 1)..] : text);
-                item.Tip = live.Detail;
-                item.NeedConfirm = live.Text.Contains("待人工确认");
+                var live = _model.AssistRows.FirstOrDefault(r => r.Key == cell.Key);
+                if (live == null) continue;
+                cell.Status = live.Status;
+                cell.StatusText = live.StatusText;
+                // 详情里带上跳过原因或站点那条种子链接，悬停能看清为什么
+                cell.Tip = cell.SiteName + "\n" + block.Left
+                    + (live.Detail.Length > 0 ? "\n" + live.Detail : "");
+                cell.NeedConfirm = live.Status == "manual";
             }
-            else
-            {
-                item.Status = item.Skip.Length > 0 ? item.Skip : (_model.AssistRunning ? "排队中" : "待检索");
-                item.Tip = item.Skip;
-                item.NeedConfirm = false;
-            }
+            block.Right = $"{block.SizeText} · 已辅 {block.Cells.Count(c => c.Status == "assisted")}"
+                + $" · 待辅 {block.Cells.Count(c => c.Status is "pending" or "verifying")}"
+                + $" · 失败 {block.Cells.Count(c => c.Status == "failed")}";
         }
         BtnScan.IsEnabled = !_model.BusyAssist;
-        BtnStart.IsEnabled = !_model.BusyAssist && _plan.Count > 0;
+        BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
         BtnStart.Content = DryRun.IsChecked == true ? "开始预演" : "开始辅种";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
-        if (_model.SectionInt("assist", "autoRunMinutes", 0) > 0)
-            AutoRunHint.Text = $"约 {_model.AssistAutoNextMinutes} 分钟后自动跑下一轮。";
     }
 
     /// 人工采纳一条：只重跑这一条，负缓存与「已辅过」预筛都让路
     private async void OnAdopt(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button btn || btn.DataContext is not PlanItem item) return;
-        item.Status = "已采纳，重新核对这一条…";
-        var err = await _model.AssistConfirmAsync(item.Key);
-        if (err != null) item.Status = err;
+        if (sender is not Button btn || btn.DataContext is not Cell cell) return;
+        cell.StatusText = "核对中…";
+        var err = await _model.AssistConfirmAsync(cell.Key);
+        if (err != null) cell.StatusText = err;
         RefreshProgress();
     }
 
     private static string Text(JsonNode? n) =>
         n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
 
-    /// 候选种子的两列文本
-    public sealed record Line(string Left, string Right);
+    /// 一条种子一张卡
+    public sealed class TorrentBlock : INotifyPropertyChanged
+    {
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-    /// 计划/进展的一行：文本随快照原地更新，整表不重建（滚动位置不动）
-    public sealed class PlanItem : INotifyPropertyChanged
+        public string Hash { get; init; } = "";
+        public string Left { get; init; } = "";
+        public string SizeText { get; set; } = "";
+
+        public ObservableCollection<Cell> Cells { get; } = new();
+
+        private string _right = "";
+        public string Right
+        {
+            get => _right;
+            set { if (_right == value) return; _right = value; Raise(nameof(Right)); }
+        }
+
+        public string Tip => Left;
+
+        private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    /// 一格 = 一条种子在一个站的结论
+    public sealed class Cell : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public string Key { get; init; } = "";
         public string SiteName { get; init; } = "";
-        public string TorrentName { get; init; } = "";
         public string Skip { get; init; } = "";
+        public string Hash { get; init; } = "";
 
-        private string _status = "待检索";
+        private string _status = "";
+        private string _statusText = "";
         private string _tip = "";
         private bool _needConfirm;
-
-        /// 这行是不是「待人工确认」：是才显示「采纳」按钮
-        public bool NeedConfirm
-        {
-            get => _needConfirm;
-            set { if (_needConfirm == value) return; _needConfirm = value; Raise(nameof(NeedConfirm)); }
-        }
 
         public string Status
         {
             get => _status;
-            set { if (_status == value) return; _status = value; Raise(nameof(Status)); }
+            set
+            {
+                if (_status == value) return;
+                _status = value;
+                Raise(nameof(Status));
+                Raise(nameof(Tone));
+            }
         }
+
+        /// 计划阶段先按计划显示（待辅种 / 不支持检索…），跑起来后由核心库的结论覆盖
+        public string StatusText
+        {
+            get => _statusText;
+            set { if (_statusText == value) return; _statusText = value; Raise(nameof(StatusText)); }
+        }
+
+        public string Tone => Status switch
+        {
+            "assisted" or "seeding" => "Success",
+            "failed" => "DangerText",
+            "verifying" => "Accent",
+            "manual" => "Warning",
+            _ => "TextMuted",
+        };
+
         public string Tip
         {
             get => _tip;
             set { if (_tip == value) return; _tip = value; Raise(nameof(Tip)); }
+        }
+
+        public bool NeedConfirm
+        {
+            get => _needConfirm;
+            set { if (_needConfirm == value) return; _needConfirm = value; Raise(nameof(NeedConfirm)); }
         }
 
         private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

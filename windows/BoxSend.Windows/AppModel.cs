@@ -245,6 +245,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         AssistStep = Str(assist?["step"]);
         AssistReport = Str(assist?["report"]);
         ApplyAssistRows(assist?["rows"]);
+        ApplyAssistStats(assist?["stats"]);
 
         var logs = snap["logs"]?.AsArray();
         if (logs != null && (Logs.Count != logs.Count || full))
@@ -469,7 +470,25 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 逐行进展（按「站点|种子 hash」定位），扫描出的计划行由此上色
     public ObservableCollection<AssistRow> AssistRows { get; } = new();
 
+    /// 整轮统计（核心库算好连标签一起给）：已完成辅种 / 待辅种 / 失败辅种…
+    public ObservableCollection<AssistStatLine> AssistStats { get; } = new();
+    public int AssistStatTotal { get; private set; }
+
     public void ClearAssistRows() => AssistRows.Clear();
+
+    private void ApplyAssistStats(JsonNode? node)
+    {
+        if (node is not JsonObject obj) return;
+        var lines = obj["lines"]?.AsArray();
+        if (lines == null) return;
+        var parsed = lines.OfType<JsonObject>().Select(o => (
+            Status: Text(o["status"]), Label: Text(o["label"]), Count: Num(o["count"]))).ToList();
+        AssistStatTotal = Num(obj["total"]);
+        // 顺序固定、只改数字：整表重建会让界面在跑动中闪一下
+        while (AssistStats.Count < parsed.Count) AssistStats.Add(new AssistStatLine());
+        while (AssistStats.Count > parsed.Count) AssistStats.RemoveAt(AssistStats.Count - 1);
+        for (var i = 0; i < parsed.Count; i++) AssistStats[i].Apply(parsed[i].Status, parsed[i].Label, parsed[i].Count);
+    }
 
     private void ApplyAssistRows(JsonNode? array)
     {
@@ -829,6 +848,33 @@ public sealed class AssistRow : INotifyPropertyChanged
         }
     }
 
+    private string _status = "";
+    private string _statusText = "";
+
+    /// 这一格的归类（assisted / pending / failed…），界面按它上色
+    public string Status
+    {
+        get => _status;
+        private set { if (_status == value) return; _status = value; Raise(nameof(Status)); Raise(nameof(Tone)); }
+    }
+
+    /// 归类对应的两个字（已辅种 / 待辅种 / 不存在…）：核心库给的，不在这里另翻一套
+    public string StatusText
+    {
+        get => _statusText;
+        private set { if (_statusText == value) return; _statusText = value; Raise(nameof(StatusText)); }
+    }
+
+    /// 该用哪个配色键
+    public string Tone => Status switch
+    {
+        "assisted" or "seeding" => "Success",
+        "failed" => "DangerText",
+        "verifying" => "Accent",
+        "manual" => "Warning",
+        _ => "TextMuted",
+    };
+
     public string PhaseText => Phase switch
     {
         "working" => "检索中",
@@ -844,6 +890,45 @@ public sealed class AssistRow : INotifyPropertyChanged
         Text = o["text"]?.GetValue<string>() ?? "";
         Detail = o["detail"]?.GetValue<string>() ?? "";
         Phase = o["phase"]?.GetValue<string>() ?? "";
+        Status = o["status"]?.GetValue<string>() ?? "";
+        StatusText = o["statusText"]?.GetValue<string>() ?? "";
+    }
+
+    private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// 统计行：一行一个归类，标签由核心库给（mac 与 Windows 同一份文案）
+public sealed class AssistStatLine : INotifyPropertyChanged
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Status { get; private set; } = "";
+    public string Label { get; private set; } = "";
+
+    private int _count;
+    public int Count
+    {
+        get => _count;
+        private set { if (_count == value) return; _count = value; Raise(nameof(Count)); }
+    }
+
+    public string Tone => Status switch
+    {
+        "assisted" or "seeding" => "Success",
+        "failed" => "DangerText",
+        "verifying" => "Accent",
+        "manual" => "Warning",
+        _ => "TextMuted",
+    };
+
+    public void Apply(string status, string label, int count)
+    {
+        Status = status;
+        Label = label;
+        Count = count;
+        Raise(nameof(Status));
+        Raise(nameof(Label));
+        Raise(nameof(Tone));
     }
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

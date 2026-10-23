@@ -195,6 +195,7 @@ public final class AssistPipeline {
 
     private func phaseOf(_ o: AssistOutcome) -> Status.Phase {
         if o.done { return .done }
+        if o.failed { return .failed }
         switch o.level {
         case .sameHash, .sameFiles: return o.done ? .done : .verifying
         case .nameOnly: return .skipped
@@ -230,6 +231,8 @@ public final class AssistPipeline {
         public var torrentName: String
         /// nil = 本轮会去站内检索；有值 = 直接跳过及原因
         public var skipReason: String?
+        /// 与 Status.rowKey 同一套拼法
+        public var rowKey: String { "\(siteID)|\(hash)" }
     }
 
     /// 一轮里最多看多少条种子。下载器里上万条 × 上百个站就是上百万个组合，
@@ -242,10 +245,19 @@ public final class AssistPipeline {
         Array(torrents.sorted { $0.totalSize > $1.totalSize }.prefix(max(1, cap)))
     }
 
-    /// 计划预览：行只留前 cap 条给人看，计数按全量算
+    /// 界面上每条种子要摊开它在各站的格子，所以按「种子」裁行，不按「行」裁：
+    /// 只裁行会让列出的种子摊不满站点，只列前几条种子才既看得清又跑得动。
+    public static let planTorrentCap = 24
+
+    /// 计划预览：种子只列前 planTorrentCap 条，计数按全量算
     /// （1.2 万条种子 × 115 站 = 138 万行，整份塞进界面会把界面钉死）
     public struct PlanPreview {
+        /// 界面上列出的种子（与 rows 对得上）
+        public var torrents: [LocalTorrent]
+        /// 这些种子的计划行
         public var rows: [PlanRow]
+        /// 全量计划行：统计按它算，界面不整份显示
+        public var allRows: [PlanRow]
         public var total: Int
         public var willSearch: Int
         /// 各类结论各有多少（含「会去站内检索」），按条数从多到少
@@ -253,11 +265,14 @@ public final class AssistPipeline {
     }
 
     public func planPreview(torrents: [LocalTorrent], siteIDs: [String]? = nil,
-                            cap: Int = 400) -> PlanPreview {
-        let rows = plan(torrents: torrents, siteIDs: siteIDs)
+                            torrentCap: Int = planTorrentCap) -> PlanPreview {
+        let all = plan(torrents: torrents, siteIDs: siteIDs)
+        let shown = Array(torrents.prefix(max(1, torrentCap)))
+        let keep = Set(shown.map { $0.hash })
         var counts: [String: Int] = [:]
-        for row in rows { counts[row.skipReason ?? "会去站内检索", default: 0] += 1 }
-        return PlanPreview(rows: Array(rows.prefix(max(1, cap))), total: rows.count,
+        for row in all { counts[row.skipReason ?? "会去站内检索", default: 0] += 1 }
+        return PlanPreview(torrents: shown, rows: all.filter { keep.contains($0.hash) },
+                           allRows: all, total: all.count,
                            willSearch: counts["会去站内检索", default: 0],
                            counts: counts.sorted { $0.value > $1.value }
                                .map { (reason: $0.key, count: $0.value) })
@@ -287,10 +302,10 @@ public final class AssistPipeline {
     /// 一条种子 × 一个站
     private func attempt(_ t: LocalTorrent, site: SiteConfig, adapter: any SiteAdapter,
                          cfg: AssistConfig, opts: Options) -> AssistOutcome {
-        func out(_ level: AssistLevel, _ msg: String, url: String? = nil, done: Bool = false)
-            -> AssistOutcome {
+        func out(_ level: AssistLevel, _ msg: String, url: String? = nil, done: Bool = false,
+                 failed: Bool = false) -> AssistOutcome {
             AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
-                          detailURL: url, done: done, message: msg)
+                          detailURL: url, done: done, message: msg, failed: failed)
         }
         // 人工点了「采纳」：就算在负缓存期内、或此前辅过，也照着人的判断再走一遍
         let forced = opts.forceKeys.contains("\(site.id)|\(t.hash)")
@@ -310,7 +325,8 @@ public final class AssistPipeline {
               let info = try? adapter.fetchDetail(detailURL: detail),
               throttle.acquire(site.id),
               let (data, _) = try? adapter.downloadTorrentFile(info) else {
-            return out(.skip("站点那条读不下来"), "详情或 .torrent 下载失败（cookie 可能失效）")
+            return out(.skip("站点那条读不下来"), "详情或 .torrent 下载失败（cookie 可能失效）",
+                       failed: true)
         }
         guard let localFiles = try? downloader.torrentFiles(hash: t.hash), !localFiles.isEmpty else {
             return out(.nameOnly(info.name), "读不到本地种子的文件清单，没法逐文件比对")
@@ -376,7 +392,9 @@ public final class AssistPipeline {
                                           skipChecking: false, upLimit: limit, paused: true)
         } catch {
             return AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
-                                 detailURL: detail, message: "加进下载器失败：\(error.localizedDescription)")
+                                 detailURL: detail,
+                                 message: "加进下载器失败：\(error.localizedDescription)",
+                                 failed: true)
         }
         // 记进「已辅过」表的级别：人工采纳的那种单标出来，日后好回看是怎么过的
         func levelTag() -> String {
@@ -404,12 +422,14 @@ public final class AssistPipeline {
                         return AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
                                              detailURL: detail,
                                              message: "校验后只到 \(Int(p.progress * 100))%，已删掉刚加的种子"
-                                                    + "（文件保留）：内层路径与本地对不上")
+                                                    + "（文件保留）：内层路径与本地对不上",
+                                             failed: true)
                     }
                     return AssistOutcome(siteID: site.id, torrentName: t.name, level: level,
                                          detailURL: detail,
                                          message: "校验后只到 \(Int(p.progress * 100))%，种子保持暂停："
-                                                + "文件对不上，别让它开始重下")
+                                                + "文件对不上，别让它开始重下",
+                                         failed: true)
                 }
             }
             opts.sleep(poll)
@@ -418,6 +438,28 @@ public final class AssistPipeline {
         return AssistOutcome(siteID: site.id, torrentName: t.name, level: level, detailURL: detail,
                              message: "校验还没跑完（等了 \(cfg.verifyWaitSec) 秒），"
                                     + "种子先留在下载器里暂停着，稍后回来看结果")
+    }
+
+    /// 阶段名（桥接层与界面按这个名字比对，别随意改）
+    public static func phaseName(_ p: Status.Phase) -> String {
+        switch p {
+        case .working: return "working"
+        case .verifying: return "verifying"
+        case .done: return "done"
+        case .failed: return "failed"
+        case .skipped: return "skipped"
+        }
+    }
+
+    public static func phase(_ name: String) -> Status.Phase? {
+        switch name {
+        case "working": return .working
+        case "verifying": return .verifying
+        case "done": return .done
+        case "failed": return .failed
+        case "skipped": return .skipped
+        default: return nil
+        }
     }
 
     private func isChecking(_ state: String) -> Bool {

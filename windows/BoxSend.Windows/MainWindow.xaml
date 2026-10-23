@@ -23,8 +23,6 @@
             <TabItem x:Name="TabRun" />
             <TabItem x:Name="TabAssist" />
             <TabItem x:Name="TabSites" />
-            <TabItem x:Name="TabCookies" />
-            <TabItem x:Name="TabDownloader" />
             <TabItem x:Name="TabSettings" />
         </TabControl>
 

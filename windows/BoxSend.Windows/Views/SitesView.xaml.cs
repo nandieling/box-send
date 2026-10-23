@@ -165,9 +165,9 @@ public partial class SitesView : UserControl
             Margin = new Thickness(0, 0, 8, 8),
             Padding = new Thickness(8),
             CornerRadius = new CornerRadius(6),
-            Background = (Brush)FindResource(s.Enabled ? "BlockSurface" : "TextSurface"),
-            BorderBrush = (Brush)FindResource(s.Enabled ? "Accent" : "Line"),
-            BorderThickness = new Thickness(s.Enabled ? 1.5 : 1),
+            Background = (Brush)FindResource(s.Enabled ? "AccentFaint" : "TextSurface"),
+            BorderBrush = (Brush)FindResource("Line"),
+            BorderThickness = new Thickness(1),
             Child = body,
         };
     }
@@ -432,9 +432,9 @@ public partial class SitesView : UserControl
 
         var card = new Border
         {
-            BorderBrush = (Brush)FindResource(s.Enabled ? "Accent" : "Line"),
-            BorderThickness = new Thickness(s.Enabled ? 1.5 : 1),
-            Background = (Brush)FindResource("BlockSurface"),
+            BorderBrush = (Brush)FindResource("Line"),
+            BorderThickness = new Thickness(1),
+            Background = (Brush)FindResource(s.Enabled ? "AccentFaint" : "BlockSurface"),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 8, 8),

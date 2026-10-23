@@ -23,16 +23,12 @@ public partial class MainWindow : Window
         TabRun.Header = TabIcons.Header(TabIcons.Run, "批量转种");
         TabAssist.Header = TabIcons.Header(TabIcons.Assist, "辅种");
         TabSites.Header = TabIcons.Header(TabIcons.Sites, "站点分组");
-        TabCookies.Header = TabIcons.Header(TabIcons.Cookie, "Cookie");
-        TabDownloader.Header = TabIcons.Header(TabIcons.Downloader, "下载器");
         TabSettings.Header = TabIcons.Header(TabIcons.Settings, "设置");
 
         // 六个区块在代码里装配（界面要读模型，XAML 里没法带构造参数）
         TabRun.Content = new RunView(model);
         TabAssist.Content = new AssistView(model);
         TabSites.Content = new SitesView(model);
-        TabCookies.Content = new CookiesView(model);
-        TabDownloader.Content = new DownloaderView(model);
         TabSettings.Content = new SettingsView(model);
 
         _model.FullRefreshed += (_, _) => ReapplyTheme();

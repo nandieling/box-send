@@ -562,6 +562,26 @@ Windows 侧：
   50 GB size、labels、tracker host 提取、校验状态映射、连不上报错）；`dotnet build` 0 错误；
   真机 `box-send assist scan` 从 0 条变成 12470 条。
 
+### 辅种页摊成「种子 × 站点」格子，Cookie / 下载器并进设置
+
+- 选中态去掉蓝框：mac 三处卡片（批量转种目标卡、站点分组卡、批量添加弹窗卡）只留淡强调色底，
+  Windows 同一处改 `AccentFaint` 底 + `Line` 边框。两端仍然一眼看出选了谁，但不再满屏描边。
+- 归类挪进核心库（`Assist/AssistRowStatus.swift`）：`RowStatus`（已辅种 / 待辅种 / 失败 / 校验中 /
+  待确认 / 不存在 / 已做种 / 不支持检索）＋ `status(of:live:)` ＋ `Tally` ＋ `tally(rows:live:)`。
+  跑过的行以进展为准、没跑过的按计划，两端不再各写一套判断。
+  `AssistOutcome` 多一个 `failed`：真做砸（读不到站点那条、推下载器失败、校验不满被删）与
+  「跳过」「还没轮到」分开，失败数才统计得出来。
+- `planPreview` 改成按**种子**裁（`planTorrentCap = 24`）而不是按行裁：界面一条种子要摊开它在全站的
+  格子，只裁行会摊不满；`total` / `counts` 仍按全量算。`PlanRow` 自带 `rowKey`，mac 那份扩展删掉了。
+- 桥接 `assist.scan` 与快照 `assist` 段多回 `stats`（`{total, lines:[{status,label,count}]}`），
+  逐行多回 `status` / `statusText`：C# 侧只画不判。新增 `AppModel.AssistStats` / `AssistStatLine`，
+  配色键走 `ThemeManager` 新加的 `DangerText`。
+- 辅种搜索节奏挪进「设置」（mac `SettingsView.paceCard`、WPF `SettingsView.xaml` 的 GroupBox），
+  顶部去掉 Cookie / 下载器两个页签：`CookiesView` / `DownloaderView` 两个区块原样搬进设置页
+  （mac 直接嵌进 `SettingsView`，WPF 用 `ContentControl` 宿主），输入框统一收窄一半。
+- 验证：`swift test` 542 绿（新增 `AssistRowStatusTests` 5 条 + `PlanPreviewCapTests` + 快照 stats 1 条）；
+  `dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

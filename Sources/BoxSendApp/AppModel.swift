@@ -1542,6 +1542,8 @@ final class AppModel: ObservableObject {
     @Published var assistPreview: AssistPipeline.PlanPreview?
     /// 下载器里全部候选条数（assistCandidates 只装本轮要处理的那批）
     @Published var assistTorrentTotal = 0
+    /// 界面列出的种子（体积倒序裁一批，站点格子跟着这几条走）
+    @Published var assistShownTorrents: [LocalTorrent] = []
     /// 逐行进展，key = 站点|种子 hash
     @Published var assistRows: [String: AssistPipeline.Status] = [:]
     @Published var assistScanning = false
@@ -1554,6 +1556,21 @@ final class AppModel: ObservableObject {
     private var assistAutoTimer: Timer?
 
     var assistConfig: AssistConfig { config.assist ?? AssistConfig(siteIDs: []) }
+
+    /// 逐行进展（交给核心库归类用）
+    var assistLive: [String: AssistPipeline.LiveRow] {
+        assistRows.mapValues { $0.liveRow }
+    }
+
+    /// 顶部那几个数：按全量计划 × 当前进展算
+    var assistStats: AssistPipeline.Tally {
+        AssistPipeline.tally(rows: assistPreview?.allRows ?? [], live: assistLive)
+    }
+
+    /// 一格（一条种子 × 一个站）在界面上的结论
+    func assistStatus(_ row: AssistPipeline.PlanRow) -> AssistPipeline.RowStatus {
+        AssistPipeline.status(of: row, live: assistRows[row.rowKey]?.liveRow)
+    }
 
     /// 辅种用的是哪台（没填地址时提示去「下载器」页补，免得扫描半天连不上）
     var assistDownloaderName: String {
@@ -1595,6 +1612,7 @@ final class AppModel: ObservableObject {
                 self.assistTorrentTotal = out.0?.count ?? 0
                 self.assistPreview = out.1
                 self.assistPlan = out.1?.rows ?? []
+                self.assistShownTorrents = out.1?.torrents ?? []
                 self.assistRows = [:]
                 self.assistScanning = false
                 self.assistMessage = out.2.isEmpty ? out.0?.deltaText : out.2
@@ -1680,6 +1698,13 @@ final class AppModel: ObservableObject {
             }
             let round = AssistPipeline.roundCandidates(all)
             let picked = forceHashes.isEmpty ? round : all.filter { forceHashes.contains($0.hash) }
+            // 先按计划铺一版计划表：跑的过程中进展就往格子上盖
+            let opening = pipe.planPreview(torrents: picked, siteIDs: ids)
+            Task { @MainActor in
+                self.assistPreview = opening
+                self.assistPlan = opening.rows
+                self.assistShownTorrents = opening.torrents
+            }
             let report = pipe.run(torrents: picked, opts: o)
             // 计划表按本轮候选 + 勾选的站点重算：单条采纳不该把整表缩成一行
             let planIDs = (cfg.assist?.siteIDs ?? ids).filter { cfg.site($0)?.enabled == true }
@@ -1695,6 +1720,7 @@ final class AppModel: ObservableObject {
                 self.assistTorrentTotal = all.count
                 self.assistPreview = preview
                 self.assistPlan = preview.rows
+                self.assistShownTorrents = preview.torrents
                 self.assistSummary = summary
                 self.assistRunning = false
                 self.assistMessage = text

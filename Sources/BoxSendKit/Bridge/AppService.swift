@@ -60,6 +60,8 @@ public final class AppService {
     private var siteWarnings: [String: String] = [:]
     /// 辅种逐行状态（key = 站点|种子 hash）
     private var assistRows: [String: Event] = [:]
+    /// 本轮计划行（key 同上）：统计与「这格算什么」都按它 + 实时进展算
+    private var assistPlanByKey: [String: AssistPipeline.PlanRow] = [:]
     private var assistStep = ""
     private var assistReport = ""
     /// 定时自动跑的钟（从进程起来算第一轮的起点）
@@ -705,6 +707,12 @@ public final class AppService {
         let candidates = AssistPipeline.roundCandidates(scan.torrents)
         let preview = pipe.planPreview(torrents: candidates, siteIDs: picked)
         let rows = preview.rows
+        mutate {
+            self.assistPlanByKey = Dictionary(uniqueKeysWithValues:
+                preview.allRows.map { ($0.rowKey, $0) })
+        }
+        let live = assistLive()
+        let stats = AssistPipeline.tally(rows: preview.allRows, live: live)
         let nameOf: (String) -> String = { id in
             guard let s = cfg.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
@@ -722,7 +730,9 @@ public final class AppService {
                 "assistedBySite": scan.assistedBySite,
             ],
             "downloader": pipe.downloaderLabel,
-            "torrents": candidates.map { t in
+            "stats": Self.statsJSON(stats),
+            // 界面列出的种子：与下面 rows 里的站点格子一一对得上
+            "torrents": preview.torrents.map { t in
                 [
                     "hash": t.hash,
                     "name": t.name,
@@ -732,14 +742,17 @@ public final class AppService {
                     "trackers": t.trackerHosts,
                 ]
             },
-            "rows": rows.map { r in
-                [
-                    "key": "\(r.siteID)|\(r.hash)",
+            "rows": rows.map { r -> [String: Any] in
+                let st = AssistPipeline.status(of: r, live: live[r.rowKey])
+                return [
+                    "key": r.rowKey,
                     "siteID": r.siteID,
                     "siteName": nameOf(r.siteID),
                     "hash": r.hash,
                     "torrentName": r.torrentName,
                     "skip": r.skipReason ?? "",
+                    "status": st.rawValue,
+                    "statusText": st.label,
                 ]
             },
             "sites": (picked ?? cfg.assist?.siteIDs ?? []).map { ["id": $0, "name": nameOf($0)] },
@@ -773,7 +786,7 @@ public final class AppService {
             guard let self else { return }
             let ev = Event(seq: self.nextSeq(), kind: "assist", siteID: st.siteID,
                            text: "\(st.torrentName)｜\(st.text)", detail: st.detail,
-                           phase: Self.assistPhaseName(st.phase), ok: nil,
+                           phase: AssistPipeline.phaseName(st.phase), ok: nil,
                            time: Date().timeIntervalSince1970, key: st.rowKey)
             self.mutate { self.assistRows[st.rowKey] = ev }
             self.emit("assist", st.siteID, ev.text, st.detail, phase: ev.phase, ok: nil)
@@ -790,7 +803,12 @@ public final class AppService {
                 let candidates = forceHashes.isEmpty
                     ? AssistPipeline.roundCandidates(scan.torrents)
                     : scan.torrents.filter { forceHashes.contains($0.hash) }
-                self.mutate { self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个" }
+                let planRows = pipe.plan(torrents: candidates, siteIDs: picked)
+                self.mutate {
+                    self.assistStep = "候选 \(candidates.count) 条 × 站点 \(picked.count) 个"
+                    self.assistPlanByKey = Dictionary(uniqueKeysWithValues:
+                        planRows.map { ($0.rowKey, $0) })
+                }
                 let report = pipe.run(torrents: candidates, opts: opts)
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                     + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
@@ -860,22 +878,48 @@ public final class AppService {
 
     /// 快照里也带一份：Windows 端按快照轮询刷新，不必另开一条轮询
     private func assistStateLocked() -> [String: Any] {
-        let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map(Self.eventJSON)
+        let live = assistLiveLocked()
+        let stats = AssistPipeline.tally(rows: Array(assistPlanByKey.values), live: live)
+        let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map { e -> [String: Any] in
+            var d = Self.eventJSON(e)
+            // 结论由核心库给：两端不必自己从文案里猜
+            let st = assistPlanByKey[e.key].map { AssistPipeline.status(of: $0, live: live[e.key]) }
+                ?? live[e.key].map { AssistPipeline.status(ofLive: $0) }
+                ?? .pending
+            d["status"] = st.rawValue
+            d["statusText"] = st.label
+            return d
+        }
         let minutes = cfg.assist?.autoRunMinutes ?? 0
-        return ["running": busyAssist, "step": assistStep, "report": assistReport, "rows": rows,
+        return ["running": busyAssist, "step": assistStep, "report": assistReport,
+                "rows": rows, "stats": Self.statsJSON(stats),
                 "autoRun": ["minutes": minutes,
                             "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
                             "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]
     }
 
-    static func assistPhaseName(_ p: AssistPipeline.Status.Phase) -> String {
-        switch p {
-        case .working: return "working"
-        case .verifying: return "verifying"
-        case .done: return "done"
-        case .failed: return "failed"
-        case .skipped: return "skipped"
+    private func assistLive() -> [String: AssistPipeline.LiveRow] {
+        lock.lock()
+        defer { lock.unlock() }
+        return assistLiveLocked()
+    }
+
+    /// 事件 → 归类用的实时进展
+    private func assistLiveLocked() -> [String: AssistPipeline.LiveRow] {
+        var out: [String: AssistPipeline.LiveRow] = [:]
+        for (key, e) in assistRows {
+            guard let phase = AssistPipeline.phase(e.phase ?? "") else { continue }
+            out[key] = AssistPipeline.LiveRow(phase: phase, text: e.text)
         }
+        return out
+    }
+
+    /// 统计给界面的形状：连标签一起给，两端渲染同一份文案
+    static func statsJSON(_ t: AssistPipeline.Tally) -> [String: Any] {
+        ["total": t.total,
+         "lines": t.lines.map {
+            ["status": $0.status.rawValue, "label": $0.status.statLabel, "count": $0.count]
+         }]
     }
 
     // MARK: cookie 同步
