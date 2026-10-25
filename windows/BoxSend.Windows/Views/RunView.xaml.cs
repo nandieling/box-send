@@ -273,11 +273,15 @@ public partial class RunView : UserControl
         // 站内那条种子的详情页：已推送 / 站内已有时给一个跳转，省得回站内搜
         var seed = new Button
         {
-            Content = "种子页",
+            Content = "种子页 ↗",
             FontSize = 11,
-            Padding = new Thickness(6, 1, 6, 1),
+            Padding = new Thickness(8, 2, 8, 2),
             Margin = new Thickness(0, 4, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
+            // 卡片底本身就是 TextSurface / AccentFaint：按钮用主色薄底才分得出来
+            Background = Tinted("Accent", 0.18),
+            BorderBrush = (Brush)FindResource("Accent"),
+            Foreground = (Brush)FindResource("Accent"),
             Visibility = Visibility.Collapsed,
         };
         body.Children.Add(seed);
@@ -423,7 +427,7 @@ public partial class RunView : UserControl
         foreach (var e in new[] { reseed, push })
             if (e?.Phase == "failed" && e.Detail.Length > 0) return (Short(e.Detail), "Warning");
         if (warning.Length > 0) return (warning, "Warning");
-        if (reseed?.Phase == "exists" && reseed.Detail.Length > 0) return (Short(reseed.Detail), "TextMuted");
+        // 「站内已有」不再单独铺一行：卡片上那个「种子页」按钮带的就是那条种子，详情留在胶囊提示里
         return ("", "TextMuted");
     }
 

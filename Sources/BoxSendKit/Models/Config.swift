@@ -703,7 +703,14 @@ public struct AppConfig: Codable {
             guard let decoded = try? JSONDecoder().decode(AppConfig.self, from: data) else { continue }
             var cfg = decoded
             cfg.seedDefaultGroupIfNeeded()
-            return cfg.mergedWithRoster()
+            let merged = cfg.mergedWithRoster()
+            // 自动修正（改名、换域名、补新增站）顺手写回：否则界面看到的新地址只活在内存里，
+            // 下次换域名时又得从最老的那份配置重算一遍
+            if let updated = try? JSONEncoder().encode(merged),
+               (try? JSONEncoder().encode(decoded)) != updated {
+                try? updated.write(to: URL(fileURLWithPath: p), options: .atomic)
+            }
+            return merged
         }
         return nil
     }
@@ -714,17 +721,26 @@ public struct AppConfig: Codable {
         let roster = Dictionary(uniqueKeysWithValues: SiteRegistry.prioritySites.map { ($0.id, $0) })
         var cfg = self
         var renamed = false
+        var relocated = false
         cfg.sourceSites = sourceSites.map { site in
             var site = site
             if let r = roster[site.id], site.name != r.name {
                 site.name = r.name
                 renamed = true
             }
+            // 换过域名的站：把配置里存的旧地址就地改写，界面上才会看到新网址
+            // （只认那张旧域名表，用户自己填的第三方镜像不动）
+            if let hosts = SiteRegistry.legacyHosts[site.id],
+               let host = URL(string: site.url)?.host?.lowercased(), hosts.contains(host),
+               let b = roster[site.id], b.url != site.url {
+                site.url = b.url
+                relocated = true
+            }
             return site
         }
         let existing = Set(sourceSites.map(\.id))
         let added = SiteRegistry.prioritySites.filter { !existing.contains($0.id) }
-        guard renamed || !added.isEmpty else { return self }
+        guard renamed || relocated || !added.isEmpty else { return self }
         cfg.sourceSites += added.map { s in
             var s = s
             s.managed = s.enabled   // 优先站并入时默认已添加，其余站待用户批量添加

@@ -108,7 +108,7 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Border Width="152" Margin="0,0,8,8" Padding="8,6"
+                                                    <Border MinWidth="96" MaxWidth="132" Margin="0,0,8,8" Padding="8,6"
                                                             CornerRadius="6"
                                                             Background="{DynamicResource BlockSurface}"
                                                             BorderBrush="{DynamicResource Line}"

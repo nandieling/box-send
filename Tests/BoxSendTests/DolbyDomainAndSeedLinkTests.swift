@@ -24,6 +24,35 @@ final class DolbyDomainAndSeedLinkTests: XCTestCase {
         XCTAssertEqual(SiteRegistry.effectiveSite(saved).url, "https://mirror.example/")
     }
 
+    /// 站点分组里显示的网址来自配置文件：光在读取时改写不够，那份配置本身也得换过来
+    func testStoredLegacyURLIsRewritten() throws {
+        var cfg = AppConfig.template()
+        cfg.sourceSites = [SiteConfig(id: "hddolby", name: "杜比", url: "https://www.hddolby.com/",
+                                      framework: .nexusPHP, enabled: true)]
+        XCTAssertEqual(cfg.mergedWithRoster().site("hddolby")?.url, "https://www.uhddolby.com/")
+        // 用户自己填的第三方镜像不动
+        cfg.sourceSites[0].url = "https://mirror.example/"
+        XCTAssertEqual(cfg.mergedWithRoster().site("hddolby")?.url, "https://mirror.example/")
+    }
+
+    /// 改写要落盘：否则下次启动还是老地址，界面上永远显示旧域名
+    func testRewrittenURLIsSavedBack() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("boxsend-relocate-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        var cfg = AppConfig.template()
+        cfg.sourceSites = [SiteConfig(id: "hddolby", name: "杜比", url: "https://www.hddolby.com/",
+                                      framework: .nexusPHP, enabled: true)]
+        let file = dir.appendingPathComponent("boxsend.json")
+        try JSONEncoder().encode(cfg).write(to: file)
+
+        XCTAssertNotNil(AppConfig.load(path: file.path))
+        let saved = String(data: try Data(contentsOf: file), encoding: .utf8) ?? ""
+        XCTAssertTrue(saved.contains("www.uhddolby.com"), saved.prefix(200).description)
+        XCTAssertFalse(saved.contains("www.hddolby.com"), saved.prefix(200).description)
+    }
+
     // MARK: 2. 逐站事件带站内链接
 
     /// 上传前查重命中：卡片上那句「站内已有该种子（别人先发或此前已发）」去掉，

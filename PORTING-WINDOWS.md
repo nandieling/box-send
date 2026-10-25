@@ -620,6 +620,26 @@ Windows 侧：
   读下载器 10.2s、建计划 0.2s、翻页 0.14s；mac 界面显示「第 1 / 332 页（共 3319 条，每页 10 条）」，
   翻到第 2 页换的是另一批种子。
 
+## 这一轮（旧域名落地成配置、卡片少一行字、辅种格子减半）
+
+四条都是界面边角，跨边界契约没动。
+
+- 杜比域名只在上一次「读取时改写」，配置文件里存的还是 `www.hddolby.com`，站点分组照旧显示老网址。
+  这轮把改写挪进 `AppConfig.mergedWithRoster()`：按 `SiteRegistry.legacyHosts` 认旧域名，
+  就地改 `site.url`，用户自填的第三方镜像不动；`load(path:)` 顺带把改写后的配置写回文件，
+  两端（mac 直接读、Windows 走 `snapshot`）看到的都是新地址。
+  cookie 仍按 host 存，旧域名那份作废，去新站重新同步一次。
+- 站点卡片少一行：`.exists` 那条事件的详情（「站点回「种子已存在」，本次未新发种，响应页已存 …」）
+  不再在卡片下面铺一行——卡片上那个「种子页」按钮带的就是同一条种子，全文还在胶囊的悬浮提示里。
+  mac 的 `detailText` 与 WPF 的 `CardDetail` 同步删掉这一支，失败原因与警告照旧显示。
+- 「种子页」按钮跟界面其余小按钮一套样式：mac 用 `.bordered` + `.controlSize(.small)` + `Color.accentColor`，
+  WPF 用主色薄底（`Tinted("Accent", 0.18)`）+ Accent 描边与文字，落在卡片上不再是一块灰。
+- 辅种格子收窄：mac 从固定 6 列改成 `GridItem(.adaptive(minimum: 96, maximum: 140))`，
+  WPF 那条 `Width="152"` 改成 `MinWidth="96" MaxWidth="132"`；一行放得下的站名多了一倍，
+  站名和结论都不截断（长说明仍在格子提示里）。
+- 验证：`swift test` 558 绿（`DolbyDomainAndSeedLinkTests` 加两条：配置里的旧域名被改写、
+  改写结果落盘；镜像地址不被改写那条照旧）；`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

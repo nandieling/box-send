@@ -367,7 +367,8 @@ struct RunView: View {
                 } label: {
                     Label("种子页", systemImage: "arrow.up.forward.app").font(.caption)
                 }
-                .buttonStyle(.bordered).controlSize(.mini)
+                .buttonStyle(.bordered).controlSize(.small)
+                .tint(Color.accentColor)
                 .help("在浏览器里打开站内那条种子：\(link)")
             }
             detailLine(s)
@@ -497,9 +498,7 @@ struct RunView: View {
             return Detail(display: shortDetail(e.detail), full: e.detail, tint: .red)
         }
         if let w = model.siteWarnings[s.id] { return Detail(display: w, full: w, tint: .orange) }
-        if let e = model.reseedEvents[s.id], e.phase == .exists, !e.detail.isEmpty {
-            return Detail(display: shortDetail(e.detail), full: e.detail, tint: .secondary)
-        }
+        // 「站内已有」不再单独铺一行：卡片上那个「种子页」按钮带的就是那条种子，详情留在胶囊提示里
         return nil
     }
 
@@ -1956,7 +1955,7 @@ struct AssistView: View {
             if rows.isEmpty {
                 Text("这条不在本轮计划里").font(.caption2).foregroundStyle(.secondary)
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6),
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 6)],
                           alignment: .leading, spacing: 6) {
                     ForEach(rows, id: \.rowKey) { row in
                         siteCell(row)
