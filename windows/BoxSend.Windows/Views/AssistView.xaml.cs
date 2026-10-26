@@ -25,6 +25,7 @@ public partial class AssistView : UserControl
         Torrents.ItemsSource = _torrents;
         Stats.ItemsSource = _model.AssistStats;
         Queue.ItemsSource = _model.AssistQueue;
+        SiteProgressList.ItemsSource = _model.AssistSiteProgress;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(ShowSites);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(RefreshProgress);
         ShowSites();
@@ -229,11 +230,34 @@ public partial class AssistView : UserControl
         BtnScan.IsEnabled = !_model.BusyAssist;
         BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
         BtnRecheck.IsEnabled = !_model.BusyAssist;
+        BtnStop.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
+        SiteBox.Visibility = _model.AssistSiteProgress.Count == 0
+            ? Visibility.Collapsed : Visibility.Visible;
         BtnPrev.IsEnabled = _page > 0 && !_model.BusyAssist;
         BtnNext.IsEnabled = _page < _pageCount - 1 && !_model.BusyAssist;
         BtnStart.Content = DryRun.IsChecked == true ? "预演本页" : "辅种本页";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
+    }
+
+    /// 停止本轮：核心库处理完手头那一格才收摊，中途打断不会把推一半的种子扔下
+    private async void OnStop(object sender, RoutedEventArgs e) => await _model.AssistStopAsync();
+
+    /// 暂停 / 取消暂停一个辅种站：写 assist.pausedSites，进度行跟着下一次快照变灰
+    private void OnPauseSite(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { Tag: string id } box) return;
+        var on = box.IsChecked == true;
+        _model.PatchSection("assist", o =>
+        {
+            var keep = (o["pausedSites"] as JsonArray ?? new JsonArray())
+                .Select(x => x?.GetValue<string>() ?? "")
+                .Where(x => x.Length > 0 && x != id).ToList();
+            if (on) keep.Add(id);
+            var arr = new JsonArray();
+            foreach (var k in keep) arr.Add(JsonValue.Create(k));
+            o["pausedSites"] = arr;
+        });
     }
 
     /// 全展开 / 全收起：切完每张卡重算一遍可见格子
@@ -319,7 +343,7 @@ public partial class AssistView : UserControl
         private static readonly string[] Order =
         {
             "assisted", "pending", "verifying", "review", "manual",
-            "failed", "rejected", "missing", "seeding", "unsupported", "filtered",
+            "failed", "rejected", "missing", "seeding", "unsupported", "filtered", "paused",
         };
 
         /// 默认就摊开的：问题不该要人先去点计数牌才看得见

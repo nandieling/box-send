@@ -52,6 +52,8 @@ public final class AppService {
     private var busyUpdate = false
     private var busySSH = false
     private var busyAssist = false
+    /// 正在跑的那条流水线：「停止本轮」要给它递个话
+    private var assistRunner: AssistPipeline?
     private var checkGeneration = 0
     private var running = false
     private var runningStep = ""
@@ -390,6 +392,8 @@ public final class AppService {
             return try recheckAssist(params)
         case "assist.reject":
             return try rejectAssist(params)
+        case "assist.stop":
+            return stopAssist()
         case "assist.tick":
             return tickAssist()
         case "assist.status":
@@ -804,6 +808,7 @@ public final class AppService {
         let live = assistLiveLocked()
         let cov = plan.coverage(live: live)
         let conf = cfg
+        let pausedIDs = Set(cfg.assist?.pausedSites ?? [])
         let nameOf: (String) -> String = { id in
             guard let s = conf.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
@@ -816,8 +821,17 @@ public final class AppService {
                 "total": cov.total, "resolved": cov.resolved, "unresolved": cov.unresolved,
                 "percent": cov.percent, "needsAction": cov.needsAction,
                 "searchesLeft": cov.searchesLeft, "roundsLeft": cov.roundsLeft,
-                "line": cov.line,
+                "paused": cov.paused, "line": cov.line,
             ],
+            "siteProgress": plan.siteProgress(live: live).map { sp -> [String: Any] in
+                ["siteID": sp.siteID, "siteName": nameOf(sp.siteID),
+                 "total": sp.total, "resolved": sp.resolved, "percent": sp.percent,
+                 "searches": sp.searches, "assisted": sp.assisted, "seeding": sp.seeding,
+                 "review": sp.review, "rejected": sp.rejected, "missing": sp.missing,
+                 "failed": sp.failed, "filtered": sp.filtered, "paused": sp.paused,
+                 "pending": sp.pending, "unsupported": sp.unsupported,
+                 "pausedSite": pausedIDs.contains(sp.siteID)]
+            },
             "queue": items.map { item -> [String: Any] in
                 ["key": item.key, "siteID": item.siteID, "siteName": item.siteName,
                  "hash": item.hash, "torrentName": item.torrentName,
@@ -858,6 +872,7 @@ public final class AppService {
         lock.unlock()
 
         let (pipe, jar) = try makeAssistPipeline(cfg)
+        mutate { self.assistRunner = pipe }
         var opts = AssistPipeline.Options()
         opts.siteIDs = (params["siteIDs"] as? [String])?.isEmpty == false ? (params["siteIDs"] as? [String]) : nil
         opts.dryRun = params["dryRun"] as? Bool ?? false
@@ -908,11 +923,13 @@ public final class AppService {
                 }
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                     + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+                    + (report.stopped ? "（已手动停止本轮）" : "")
             } catch {
                 failure = error.localizedDescription
             }
             self.mutate {
                 self.busyAssist = false
+                self.assistRunner = nil
                 self.assistStep = failure.isEmpty ? "完成" : "失败"
                 self.assistReport = failure.isEmpty ? reportText : failure
             }
@@ -952,6 +969,16 @@ public final class AppService {
         } catch {
             return ["started": false, "minutes": minutes, "error": error.localizedDescription]
         }
+    }
+
+    /// 「停止本轮」：给正在跑的那条流水线递个话，没在跑就是空操作。
+    /// 只停「这一轮」：状态表原样留着，下一轮从没跑过的格子接着铺。
+    private func stopAssist() -> [String: Any] {
+        lock.lock()
+        let runner = assistRunner
+        lock.unlock()
+        runner?.requestStop()
+        return ["stopped": runner != nil]
     }
 
     /// 辅种用的流水线：每次新建 cookie 罐与下载器，跑完把 Set-Cookie 并回主罐

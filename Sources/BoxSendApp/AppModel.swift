@@ -1572,6 +1572,17 @@ final class AppModel: ObservableObject {
         assistPlan?.adjusted(live: assistLive) ?? AssistPipeline.Tally()
     }
 
+    /// 逐站进度：一站一行（铺了多少格、判定多少、还要检索几次、是不是暂停）
+    var assistSiteProgress: [AssistPipeline.CatalogPlan.SiteProgress] {
+        assistPlan?.siteProgress(live: assistLive) ?? []
+    }
+
+    /// 正在跑的那条流水线：「停止本轮」按钮拿它递话
+    private var assistRunner: AssistPipeline?
+
+    /// 停止本轮：处理完手头这一格就收摊，状态表原样留着
+    func assistStop() { assistRunner?.requestStop() }
+
     /// 覆盖率与预计：把「还剩多少」翻成「照现在这个节奏还要跑多久」
     var assistCoverage: AssistPipeline.Coverage? {
         guard let plan = assistPlan else { return nil }
@@ -1791,10 +1802,10 @@ final class AppModel: ObservableObject {
         let st = state
         let dry = assistDryRun
         let forceHashes = Set(forceKeys.compactMap { $0.split(separator: "|").last }.map(String.init))
+        // 流水线在主线程建好并记下来：跑到一半时「停止本轮」才找得到它
+        let pipe = assistPipe(cfg, jar)
+        assistRunner = pipe
         Task.detached(priority: .utility) {
-            let client = HTTPClient(cookies: jar, userAgent: cfg.userAgent)
-            let pipe = AssistPipeline(config: cfg, cookies: jar, state: st,
-                                      downloader: DownloaderFactory.makeForAssist(cfg, client: client))
             var o = AssistPipeline.Options()
             o.siteIDs = ids
             o.dryRun = dry
@@ -1808,6 +1819,7 @@ final class AppModel: ObservableObject {
             } catch {   // 整份清单只用来记账，本轮跑的是裁过的那批
                 await MainActor.run {
                     self.assistRunning = false
+                    self.assistRunner = nil
                     self.assistMessage = "扫描下载器失败：\(error.localizedDescription)"
                 }
                 return
@@ -1829,10 +1841,12 @@ final class AppModel: ObservableObject {
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+                + (report.stopped ? "（已手动停止本轮）" : "")
             await MainActor.run {
                 self.cookies.mergeFrom(jar)
                 self.publishAssist(fresh, page: self.assistPage, raw: all.count, summary: summary)
                 self.assistRunning = false
+                self.assistRunner = nil
                 self.assistMessage = text
                 self.notes = st.recentNotes
                 if let data = self.cookies.exportBackupJSON() {

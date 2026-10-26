@@ -811,14 +811,18 @@ public struct AssistConfig: Codable {
     /// 隔这么多分钟自动跑一轮（0 = 不自动跑）。到点是「扫描 + 辅种」整套，
     /// 站点请求仍受单轮预算与逐站间隔约束，不会把检索打在站点脸上。
     public var autoRunMinutes: Int
+    /// 暂停的辅种站点：格子还是「没结论」，但这一轮不去敲它们的门。
+    /// 与逐站筛选分开——筛选是「这站本来就不辅这类」，暂停是「先别动这站，回头再看」。
+    public var pausedSites: [String]
 
     public init(siteIDs: [String] = [], perSiteIntervalSec: Double = 8, jitterSec: Double = 3,
                 roundBudget: Int = 200, missTTLDays: Int = 7, autoAcceptSameFiles: Bool = true,
                 removeOnVerifyFail: Bool = true, minSizeGB: Double = 0, maxSizeGB: Double = 0,
                 categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10,
                 autoRunMinutes: Int = 0, listPageSize: Int = 10,
-                siteFilters: [String: SiteFilter] = [:]) {
+                siteFilters: [String: SiteFilter] = [:], pausedSites: [String] = []) {
         self.siteIDs = siteIDs
+        self.pausedSites = pausedSites
         self.siteFilters = siteFilters
         self.perSiteIntervalSec = perSiteIntervalSec
         self.jitterSec = jitterSec
@@ -852,12 +856,13 @@ public struct AssistConfig: Codable {
         autoRunMinutes = try c.decodeIfPresent(Int.self, forKey: .autoRunMinutes) ?? 0
         listPageSize = max(1, try c.decodeIfPresent(Int.self, forKey: .listPageSize) ?? 10)
         siteFilters = try c.decodeIfPresent([String: SiteFilter].self, forKey: .siteFilters) ?? [:]
+        pausedSites = try c.decodeIfPresent([String].self, forKey: .pausedSites) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteIDs, perSiteIntervalSec, jitterSec, roundBudget, missTTLDays, autoAcceptSameFiles,
              removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec,
-             autoRunMinutes, listPageSize, siteFilters
+             autoRunMinutes, listPageSize, siteFilters, pausedSites
     }
 
     /// 一个站的辅种筛选规则
@@ -909,6 +914,9 @@ public struct AssistConfig: Codable {
             list.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         }
     }
+
+    /// 这个站是否被暂停（暂停 = 这一轮不检索，但不算有结论）
+    public func isPaused(_ siteID: String) -> Bool { pausedSites.contains(siteID) }
 
     /// 这个站的筛选规则（没设过返回 nil）
     public func assistFilter(_ siteID: String) -> SiteFilter? {

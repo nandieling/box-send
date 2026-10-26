@@ -451,3 +451,139 @@ private final class RDLStub: Downloader {
     func removeTorrent(hash: String, keepFiles: Bool) throws {}
     func torrentProgress(hash: String) throws -> (progress: Double, state: String)? { nil }
 }
+
+/// 暂停单站、逐站进度、停止本轮：这三件事都只关状态与节奏，不关站点返回什么
+final class AssistPauseProgressTests: XCTestCase {
+    private func site(_ id: String) -> SiteConfig {
+        SiteConfig(id: id, name: id, url: "https://\(id).invalid/",
+                   framework: .nexusPHP, enabled: true)
+    }
+
+    private func torrent(_ hash: String, gb: Double = 10) -> LocalTorrent {
+        LocalTorrent(hash: hash, name: "Movie.\(hash).1080p", savePath: "/dl",
+                     totalSize: Int64(gb * 1_073_741_824), progress: 1,
+                     trackerHosts: ["elsewhere.invalid"])
+    }
+
+    private func pipe(_ app: AppConfig, _ state: StateStore) -> AssistPipeline {
+        AssistPipeline(config: app, cookies: CookieStore(), state: state, downloader: RDLStub())
+    }
+
+    private func cfg(ids: [String], paused: [String]) -> AppConfig {
+        var app = AppConfig.template()
+        app.sourceSites = ids.map { site($0) }
+        app.assist = AssistConfig(siteIDs: ids, perSiteIntervalSec: 0, jitterSec: 0,
+                                  roundBudget: 50, pausedSites: paused)
+        return app
+    }
+
+    /// 暂停的站：格子还欠着（不算已判定），但这一轮不计检索，覆盖率那句要说明
+    func testPausedSiteHoldsCellsBack() {
+        let state = StateStore(dataDir: "/tmp/boxsend-p1-\(UUID().uuidString)")
+        let p = pipe(cfg(ids: ["s1", "s2"], paused: ["s1"]), state)
+        let list = [torrent("h1"), torrent("h2")]
+        let plan = p.planCatalog(list)
+        XCTAssertEqual(plan.status(torrent: list[0], siteID: "s1"), .paused)
+        XCTAssertEqual(plan.status(torrent: list[0], siteID: "s2"), .pending)
+        let cov = plan.coverage()
+        XCTAssertEqual(cov.total, 4)
+        XCTAssertEqual(cov.resolved, 0, "暂停不算有结论")
+        XCTAssertEqual(cov.searchesLeft, 2, "暂停那一站不计检索")
+        XCTAssertEqual(cov.paused, 2)
+        XCTAssertEqual(cov.siteCount, 1, "暂停的站不该算在「在跑的站」里")
+        XCTAssertTrue(cov.line.contains("暂停站里压着 2 格"), cov.line)
+    }
+
+    /// 暂停的站一次请求都不发：白敲门既慢又给站点添负载
+    func testPausedSiteSendsNoRequest() throws {
+        let state = StateStore(dataDir: "/tmp/boxsend-p2-\(UUID().uuidString)")
+        let p = pipe(cfg(ids: ["s1"], paused: ["s1"]), state)
+        let fake = StopProbeSite(site: site("s1"),
+                                 client: HTTPClient(cookies: CookieStore(), userAgent: "t"))
+        p.adapterFactory = { _, _ in fake }
+        var skipped: [String] = []
+        var o = AssistPipeline.Options()
+        o.sleep = { _ in }
+        o.onEvent = { skipped.append($0.text) }
+        let report = p.run(torrents: [torrent("h1")], opts: o)
+        XCTAssertEqual(fake.searches, 0)
+        XCTAssertTrue(report.outcomes.isEmpty, "整站跳过，不该逐格发事件")
+        XCTAssertTrue(skipped.contains("跳过：本站已暂停"), "\(skipped)")
+    }
+
+    /// 逐站进度：正常站、暂停站、不支持检索的站各算各的，实时进展会推动那一站的百分比
+    func testSiteProgressTracksLiveProgress() throws {
+        let state = StateStore(dataDir: "/tmp/boxsend-p3-\(UUID().uuidString)")
+        let p = pipe(cfg(ids: ["s1", "s2", "s3"], paused: ["s2"]), state)
+        let client = HTTPClient(cookies: CookieStore(), userAgent: "t")
+        let probes = ["s1": StopProbeSite(site: site("s1"), client: client),
+                      "s2": StopProbeSite(site: site("s2"), client: client),
+                      "s3": { () -> StopProbeSite in
+                          let sp = StopProbeSite(site: site("s3"), client: client)
+                          sp.canPrecheckDuplicate = false
+                          return sp
+                      }()]
+        // 建计划会问每站「有没有检索入口」，工厂按站返回对应探针
+        p.adapterFactory = { s, _ in probes[s.id]! }
+        var live: [String: AssistPipeline.LiveRow] = [:]
+        let plan = p.planCatalog([torrent("h1"), torrent("h2")])
+        let byID = Dictionary(uniqueKeysWithValues: plan.siteProgress().map { ($0.siteID, $0) })
+        XCTAssertEqual(byID["s1"]?.total, 2)
+        XCTAssertEqual(byID["s1"]?.pending, 2)
+        XCTAssertEqual(byID["s1"]?.searches, 2)
+        XCTAssertEqual(byID["s2"]?.paused, 2, "暂停站那些格子记在暂停那一栏")
+        XCTAssertEqual(byID["s2"]?.pending, 0)
+        XCTAssertEqual(byID["s2"]?.searches, 0)
+        XCTAssertEqual(byID["s3"]?.unsupported, true)
+        live["s1|h1"] = AssistPipeline.LiveRow(phase: .done, text: "辅种成功")
+        let after = plan.siteProgress(live: live).first { $0.siteID == "s1" }
+        XCTAssertEqual(after?.resolved, 1)
+        XCTAssertEqual(after?.pending, 1)
+        XCTAssertEqual(after?.percent ?? -1, 0.5, accuracy: 0.0001)
+    }
+
+    /// 停止本轮：手头这一格跑完就收摊，剩下的格子留给下一轮
+    func testStopEndsRoundAfterCurrentCell() throws {
+        let state = StateStore(dataDir: "/tmp/boxsend-p4-\(UUID().uuidString)")
+        let p = pipe(cfg(ids: ["s1"], paused: []), state)
+        let fake = StopProbeSite(site: site("s1"),
+                                 client: HTTPClient(cookies: CookieStore(), userAgent: "t"))
+        fake.onSearch = { p.requestStop() }
+        p.adapterFactory = { _, _ in fake }
+        var o = AssistPipeline.Options()
+        o.sleep = { _ in }
+        let report = p.run(torrents: [torrent("h1"), torrent("h2"), torrent("h3")], opts: o)
+        XCTAssertEqual(fake.searches, 1, "停在本格之后，不再开下一格")
+        XCTAssertEqual(report.outcomes.count, 1)
+        XCTAssertTrue(report.stopped)
+    }
+}
+
+/// 站内检索返回「没这条」的假站点：路径最短，够测节奏与暂停了
+private final class StopProbeSite: SiteAdapter {
+    let site: SiteConfig
+    let client: HTTPClient
+    var override: SiteOverride? { site.overrides }
+    var canPrecheckDuplicate = true
+    var searches = 0
+    var onSearch: (() -> Void)?
+    init(site: SiteConfig, client: HTTPClient) {
+        self.site = site; self.client = client
+    }
+    func fetchTorrentList() throws -> [ReleaseInfo] { [] }
+    func fetchDetail(detailURL: String) throws -> ReleaseInfo {
+        ReleaseInfo(siteID: site.id, detailURL: detailURL, name: "站内那条",
+                    torrentURL: site.url + "download.php?id=1")
+    }
+    func downloadTorrentFile(_ info: ReleaseInfo) throws -> (data: Data, filename: String) {
+        (Data([0x64, 0x65, 0x65, 0x64]), "site.torrent")
+    }
+    func searchExists(_ info: ReleaseInfo) throws -> String? {
+        searches += 1
+        onSearch?()
+        return nil
+    }
+    func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
+        UploadOutcome(success: false, message: "", detailURL: nil)
+    }
+}

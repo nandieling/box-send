@@ -6,6 +6,15 @@ import Foundation
 /// 与转种的分工：转种要发新种，辅种只是把站内已有的那条挂到本账号下做种。
 /// 站点侧负载由 `SiteThrottle` 统一收口 —— 所有对站点的请求（检索、详情、下载种子文件）
 /// 都要先领号，一次领号算一次，不按「是不是搜索页」区别对待。
+/// 「停止本轮」用的标志：界面线程写、跑轮的线程读
+final class StopFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var on: Bool
+    init(_ on: Bool) { self.on = on }
+    func set(_ v: Bool) { lock.lock(); on = v; lock.unlock() }
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return on }
+}
+
 public final class AssistPipeline {
     let config: AppConfig
     let cookies: CookieStore
@@ -73,6 +82,8 @@ public final class AssistPipeline {
         }
         /// 推进了下载器但没等到校验结果的条数
         public var reviewCount: Int { outcomes.filter { $0.review }.count }
+        /// 中途被「停止本轮」打断（剩下的格子原样留着，下轮接着跑）
+        public var stopped = false
     }
 
     /// 站点适配器工厂（默认走内置注册表；单测注入假适配器，不发真请求）
@@ -156,14 +167,29 @@ public final class AssistPipeline {
     // MARK: - 执行
 
     @discardableResult
+    /// 界面上的「停止本轮」：在处理下一条格子时生效，不会把手头那条推一半的扔下
+    public func requestStop() { stopFlag.set(true) }
+    public var stopRequested: Bool { stopFlag.value }
+    private let stopFlag = StopFlag(false)
+
+    /// 那个标志：界面线程写、跑轮的线程读，裸 Bool 算数据竞争，套一层锁
+
     public func run(torrents: [LocalTorrent], opts: Options = Options()) -> Report {
         var report = Report()
         guard let cfg = config.assist else { return report }
         let ids = opts.siteIDs ?? cfg.siteIDs
+        stopFlag.set(false)
         // 站点在外层：一个站连着处理多条种子，间隔才有意义（种子在外层会变成
         // 一条种子挨个站敲一遍，每站各敲一次，节奏全废）
         for id in ids {
+            if stopRequested { report.stopped = true; break }
             guard let site = config.site(id) else { continue }
+            if cfg.isPaused(id) {
+                emit(opts, Status(siteID: id, hash: "", torrentName: "",
+                                  text: "跳过：本站已暂停", phase: .skipped,
+                                  detail: "在「辅种」页的「按站点」里取消暂停"))
+                continue
+            }
             let adapter = adapterFactory(SiteRegistry.effectiveSite(site), client)
             if !adapter.canPrecheckDuplicate {
                 emit(opts, Status(siteID: id, hash: "", torrentName: "",
@@ -172,6 +198,7 @@ public final class AssistPipeline {
                 continue
             }
             for t in torrents {
+                if stopRequested { report.stopped = true; break }
                 if opts.limit > 0, report.outcomes.count >= opts.limit { return report }
                 let out = attempt(t, site: site, adapter: adapter, cfg: cfg, opts: opts)
                 // 失败单独记一张表：不算「站内没有」，下轮还要再试，
@@ -419,6 +446,8 @@ public final class AssistPipeline {
         var failed: Set<String> = []
         var filtered: Set<String> = []
         var filteredReason: [String: String] = [:]
+        /// 整站暂停：本该「待辅种」的格子改标「已暂停」
+        var pausedSite = false
     }
 
     /// 全量种子目录 × 辅种站点的计划：计数按全量算，格子按页摊。
@@ -492,6 +521,7 @@ public final class AssistPipeline {
             if b.missing.contains(h) { return .missing }
             if b.failed.contains(h) { return .failed }
             if b.filtered.contains(h) { return .filtered }
+            if b.pausedSite { return .paused }
             return .pending
         }
 
@@ -521,6 +551,8 @@ public final class AssistPipeline {
             c.unresolved = t.unresolved
             c.searchesLeft = t.searchesLeft
             c.needsAction = t.needsAction
+            c.paused = t.paused
+            _ = siteProgress(live: live)      // 逐站进度与这段用的是同一次实时表
             // 执行是按站轮着来的，不是并发：逐站间隔乘以各自还要检索的次数，再累加
             let per = pace.interval + pace.jitter / 2
             var seconds: TimeInterval = 0
@@ -537,6 +569,88 @@ public final class AssistPipeline {
             return c
         }
 
+        /// 一个站的辅种进度：整站格子数、已判定、还要检索、是不是暂停/不支持检索。
+        /// 「按站点」那张卡与覆盖率那句用的是同一份数。
+        public struct SiteProgress: Equatable {
+            public var siteID: String
+            public var total: Int
+            public var assisted = 0
+            public var seeding = 0
+            public var review = 0
+            public var rejected = 0
+            public var missing = 0
+            public var failed = 0
+            public var filtered = 0
+            public var paused = 0
+            public var pending = 0
+            public var unsupported = false
+            /// 不用再去站内敲门的格子
+            public var resolved: Int { assisted + seeding + missing + rejected + filtered }
+            /// 这一轮还会发几次检索
+            public var searches: Int { pending + failed }
+            public var percent: Double { total == 0 ? 1 : Double(resolved) / Double(total) }
+        }
+
+        /// 逐站进度（叠加本轮已发生的进展）
+        public func siteProgress(live: [String: LiveRow] = [:]) -> [SiteProgress] {
+            var out: [SiteProgress] = []
+            for id in siteIDs {
+                guard let b = buckets[id] else { continue }
+                var sp = SiteProgress(siteID: id, total: torrents.count)
+                if b.unsupported {
+                    sp.unsupported = true
+                    out.append(sp)
+                    continue
+                }
+                sp.seeding = b.seeding.count
+                sp.assisted = b.assisted.count
+                sp.review = b.review.count
+                sp.rejected = b.rejected.count
+                sp.missing = b.missing.count
+                sp.failed = b.failed.count
+                sp.filtered = b.filtered.count
+                let known = sp.seeding + sp.assisted + sp.review + sp.rejected
+                    + sp.missing + sp.failed + sp.filtered
+                let left = max(0, torrents.count - known)
+                if b.pausedSite { sp.paused = left } else { sp.pending = left }
+                out.append(sp)
+            }
+            var pos: [String: Int] = [:]
+            for (i, sp) in out.enumerated() { pos[sp.siteID] = i }
+            for (key, row) in live {
+                let parts = key.split(separator: "|", maxSplits: 1)
+                guard parts.count == 2, let i = pos[String(parts[0])],
+                      let torrent = byHash[parts[1].lowercased()],
+                      let now = AssistPipeline.status(live: row) else { continue }
+                let planned = status(torrent: torrent, siteID: String(parts[0]))
+                if planned == now { continue }
+                Self.shift(&out[i], from: planned, to: now)
+            }
+            return out
+        }
+
+        /// 把一格从计划的结论挪到实际的结论：暂停、待辅种、校验中都算「还欠着」，
+        /// 所以只有真有了结论才会推动那一站的百分比
+        private static func shift(_ sp: inout SiteProgress, from: RowStatus, to: RowStatus) {
+            add(&sp, from, -1)
+            add(&sp, to, 1)
+        }
+
+        private static func add(_ sp: inout SiteProgress, _ st: RowStatus, _ n: Int) {
+            switch st {
+            case .assisted: sp.assisted += n
+            case .seeding: sp.seeding += n
+            case .review: sp.review += n
+            case .rejected: sp.rejected += n
+            case .missing: sp.missing += n
+            case .failed: sp.failed += n
+            case .filtered: sp.filtered += n
+            case .paused: sp.paused += n
+            case .pending, .verifying, .manual: sp.pending += n
+            case .unsupported: break
+            }
+        }
+
         private func skipText(_ st: RowStatus, bucket b: SiteBucket) -> String? {
             if b.unsupported { return "该站暂不支持站内检索" }
             switch st {
@@ -546,6 +660,7 @@ public final class AssistPipeline {
             case .rejected: return "人工判定不是同一种子"
             case .missing: return "站内没有（\(missTTLDays) 天内查过）"
             case .filtered: return "按本站筛选不辅（\(b.filteredReason[st.rawValue] ?? "")）"
+            case .paused: return "本站已暂停（在「按站点」里取消暂停）"
             default: return nil      // 失败的那格本轮还会再试，不算「跳过」
             }
         }
@@ -615,6 +730,7 @@ public final class AssistPipeline {
                     .subtracting(b.assisted).subtracting(b.missing)
                     .subtracting(b.review).subtracting(b.rejected).subtracting(b.filtered)
             }
+            b.pausedSite = cfg.isPaused(id)
             buckets[id] = b
             if b.unsupported {
                 counts["该站暂不支持站内检索", default: 0] += list.count
@@ -624,6 +740,13 @@ public final class AssistPipeline {
             let pending = list.count - b.seeding.count - b.assisted.count
                 - b.review.count - b.rejected.count - b.missing.count - b.failed.count
                 - b.filtered.count
+            if b.pausedSite {
+                // 暂停：格子还欠着，但这一轮不算要检索的量
+                tally.increase(.paused, max(0, pending))
+                counts["本站已暂停", default: 0] += max(0, pending)
+                pendingBySite[id] = 0
+                continue
+            }
             pendingBySite[id] = max(0, pending)
             tally.increase(.seeding, b.seeding.count)
             tally.increase(.assisted, b.assisted.count)

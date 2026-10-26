@@ -341,8 +341,7 @@ struct RunView: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 8)],
-                      alignment: .leading, spacing: 8) {
+            SiteFlow(minWidth: 104, maxWidth: 150, spacing: 8) {
                 ForEach(members, id: \.id) { s in
                     targetSiteCard(s)
                 }
@@ -359,14 +358,12 @@ struct RunView: View {
             Text(s.name).fontWeight(selected ? .semibold : .medium).lineLimit(1)
             Text(limit > 0 ? "上传限速 \(Int((Double(limit) / 1048576.0).rounded())) MB/s" : "上传限速 不限速")
                 .font(.caption).foregroundStyle(.secondary)
-            // 三格都是先占好再填：LazyVGrid 的行高只在排版那一刻算，卡片中途长高
-            // 会把下面那排顶歪（卡片互相遮挡），所以高度必须运行前后一致
-            // 只有跑起来才铺占位：空卡片也占一格会把网格顶出大片空白；
-            // 运行时整排一起变高，行高照样只在排版那一刻算一次
-            chipSlot(model.reseedEvents[s.id], reserve: model.running)
-            chipSlot(model.pushEvents[s.id], reserve: model.running)
-            seedSlot(seedPageURL(s), reserve: model.running)
-            detailSlot(s, reserve: model.running)
+            // 有转种信息才多占那一格：SiteFlow 每排都按当排最高的卡片重算行高，
+            // 中途长高会把整排和分组外框一起顶开，不会盖到下面那排
+            if let e = model.reseedEvents[s.id] { eventChip(e) }
+            if let e = model.pushEvents[s.id] { eventChip(e) }
+            if let link = seedPageURL(s) { seedButton(link) }
+            detailLine(s)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -442,16 +439,6 @@ struct RunView: View {
                  tip: e.detail.isEmpty ? e.text : e.detail)
     }
 
-    /// 胶囊那一格：底下永远铺一个两行的隐形胶囊，真胶囊盖在上面。
-    /// 有没有事件、文案长短都不改卡片高度，网格排版才不会错位。
-    @ViewBuilder
-    private func chipSlot(_ e: AppModel.TargetEvent?, reserve: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
-            if reserve { chipView(Text(" \n "), .primary, "circle", tip: "").opacity(0) }
-            if let e { eventChip(e) }
-        }
-    }
-
     private func chipView(_ text: Text, _ tint: Color, _ icon: String, tip: String) -> some View {
         HStack(alignment: .center, spacing: 3) {
             Image(systemName: icon).font(.system(size: 9))
@@ -466,25 +453,15 @@ struct RunView: View {
         .help(tip)
     }
 
-    /// 种子页那一格：没链接时留一个同样高的隐形按钮占位
-    @ViewBuilder
-    private func seedSlot(_ link: String?, reserve: Bool) -> some View {
-        ZStack(alignment: .leading) {
-            if reserve { seedButton(nil).opacity(0) }
-            if let link { seedButton(link) }
-        }
-    }
-
-    private func seedButton(_ link: String?) -> some View {
+    private func seedButton(_ link: String) -> some View {
         Button {
-            if let link { model.openURL(link) }
+            model.openURL(link)
         } label: {
-            Label(link == nil ? "" : "种子页", systemImage: "arrow.up.forward.app").font(.caption)
+            Label("种子页", systemImage: "arrow.up.forward.app").font(.caption)
         }
         .buttonStyle(.bordered).controlSize(.small)
         .tint(Color.accentColor)
-        .disabled(link == nil)
-        .help(link.map { "在浏览器里打开站内那条种子：\($0)" } ?? "")
+        .help("在浏览器里打开站内那条种子：\(link)")
     }
 
     private func chipTint(_ p: AppModel.TargetEvent.Phase) -> Color {
@@ -505,24 +482,17 @@ struct RunView: View {
         }
     }
 
-    /// 卡片下方的说明行那一格：先铺三行隐形文字占位。
-    /// 失败原因允许换行（不截断成「…」），更长的尾巴在悬浮提示与运行记录里。
+    /// 卡片下方的说明行：失败原因允许换行（不截断成「…」），
+    /// 更长的尾巴在悬浮提示与运行记录里。没有内容就不占高。
     @ViewBuilder
-    private func detailSlot(_ s: SiteConfig, reserve: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
-            if reserve { Text(" \n \n \n ")
-                .font(.caption2)
+    private func detailLine(_ s: SiteConfig) -> some View {
+        if let d = detailText(s) {
+            Text(d.display).font(.caption2).foregroundStyle(d.tint)
+                .lineLimit(4)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .opacity(0) }
-            if let d = detailText(s) {
-                Text(d.display).font(.caption2).foregroundStyle(d.tint)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .help(d.full)
-            }
+                .textSelection(.enabled)
+                .help(d.full)
         }
     }
 
@@ -542,6 +512,63 @@ struct RunView: View {
     private func shortDetail(_ s: String) -> String {
         guard let r = s.range(of: "（页面已存") else { return s }
         return String(s[..<r.lowerBound])
+    }
+}
+
+/// 站点卡片的自适应流式排版。与 `LazyVGrid` 的差别只在行高：
+/// 这里每一次排版都按当排最高的那张卡重新量，卡片中途长高（转种信息出现）会把整排
+/// 连同分组外框一起顶开，而不是画到下面那排上面去；没信息的卡片保持本来的高度不动。
+struct SiteFlow: Layout {
+    var minWidth: CGFloat
+    var maxWidth: CGFloat
+    var spacing: CGFloat
+
+    private struct Rows {
+        var colWidth: CGFloat = 0
+        var cols = 1
+        var tops: [CGFloat] = []
+        var height: CGFloat = 0
+    }
+
+    private func layout(_ subviews: Subviews, _ width: CGFloat) -> Rows {
+        var r = Rows(colWidth: minWidth, height: 0)
+        guard width > 0, !subviews.isEmpty else { return r }
+        var cols = max(1, Int((width + spacing) / (minWidth + spacing)))
+        var w = (width - spacing * CGFloat(cols - 1)) / CGFloat(cols)
+        while w > maxWidth && cols < subviews.count {
+            cols += 1
+            w = (width - spacing * CGFloat(cols - 1)) / CGFloat(cols)
+        }
+        r.cols = cols
+        r.colWidth = min(w, width)
+        let hs = subviews.map { $0.sizeThatFits(.init(width: r.colWidth, height: nil)).height }
+        var y: CGFloat = 0
+        var i = 0
+        while i < hs.count {
+            let n = min(cols, hs.count - i)
+            r.tops.append(contentsOf: Array(repeating: y, count: n))
+            y += (hs[i..<(i + n)].max() ?? 0) + spacing
+            i += n
+        }
+        r.height = max(0, y - spacing)
+        return r
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let width = proposal.width, width.isFinite, width > 0 else {
+            return CGSize(width: minWidth * CGFloat(max(1, subviews.count)), height: minWidth)
+        }
+        return CGSize(width: width, height: layout(subviews, width).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize,
+                       subviews: Subviews, cache: inout ()) {
+        let r = layout(subviews, bounds.width)
+        for (i, sv) in subviews.enumerated() where i < r.tops.count {
+            let x = bounds.minX + CGFloat(i % r.cols) * (r.colWidth + spacing)
+            sv.place(at: CGPoint(x: x, y: bounds.minY + r.tops[i]), anchor: .topLeading,
+                     proposal: .init(width: r.colWidth, height: nil))
+        }
     }
 }
 
@@ -1835,6 +1862,7 @@ struct AssistView: View {
                 header
                 statsCard
                 queueCard
+                siteCard
                 torrentsCard
             }
             .padding(20)
@@ -1876,6 +1904,16 @@ struct AssistView: View {
             .disabled(model.assistScanning || model.assistRunning
                       || !(model.assistStats.count(.review) > 0))
             .help("上一轮推进下载器却没等到校验结果的种子，回来问一次下载器：满了就启动，不满就回滚")
+
+            if model.assistRunning {
+                Button {
+                    model.assistStop()
+                } label: {
+                    Label("停止本轮", systemImage: "stop.circle")
+                }
+                .controlSize(.small)
+                .help("处理完手头这一格就收摊；状态表原样留着，下一轮从没跑过的格子接着铺")
+            }
 
             Toggle("只预演", isOn: $model.assistDryRun)
                 .toggleStyle(.switch)
@@ -1955,6 +1993,79 @@ struct AssistView: View {
             parts.append("上次扫描 " + AppModel.dateText(last.timeIntervalSince1970))
         }
         return parts.joined(separator: "；") + "。"
+    }
+
+    // MARK: 逐站进度
+
+    /// 只看有活儿的站（不支持检索的那些铺在这儿只是噪音）
+    @State private var progressBusyOnly = false
+
+    /// 一站一行：这一站判定到哪、还要检索几次、要不要先停一停。
+    /// 115 个辅种站 × 上万条种子的分母，就是靠这一张卡一站一站管住的。
+    private var siteCard: some View {
+        let rows = model.assistSiteProgress
+            .filter { !progressBusyOnly || (!$0.unsupported && ($0.searches > 0 || $0.paused > 0)) }
+            .sorted { lhs, rhs in
+                if lhs.searches != rhs.searches { return lhs.searches > rhs.searches }
+                return model.siteName(lhs.siteID) < model.siteName(rhs.siteID)
+            }
+        return CardSection("按站点（\(rows.count)）") {
+            if rows.isEmpty {
+                Text("扫描下载器后这里逐站给出进度；不想这一轮动某个站，就把它的暂停打开。")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                Toggle("只显示还有活的站", isOn: $progressBusyOnly)
+                    .toggleStyle(.switch).controlSize(.small)
+                ScrollView {
+                    VStack(spacing: 5) {
+                        ForEach(rows, id: \.siteID) { p in
+                            siteRow(p)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+                Text("已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func siteRow(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> some View {
+        let paused = cfg.pausedSites.contains(p.siteID)
+        return HStack(spacing: 8) {
+            Text(model.siteName(p.siteID)).lineLimit(1).frame(width: 96, alignment: .leading)
+            if p.unsupported {
+                Text("不支持站内检索").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+            } else {
+                ProgressView(value: p.percent).frame(width: 120)
+                Text("\(AssistPipeline.grouped(p.resolved)) / \(AssistPipeline.grouped(p.total))"
+                     + "　还要检索 \(AssistPipeline.grouped(p.searches))")
+                    .font(.caption2).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                if p.failed > 0 {
+                    Text("失败 \(p.failed)").font(.caption2).foregroundStyle(.red)
+                }
+                if p.review > 0 {
+                    Text("待复核 \(p.review)").font(.caption2).foregroundStyle(.purple)
+                }
+                Spacer()
+                Toggle("暂停", isOn: Binding(
+                    get: { paused },
+                    set: { on in
+                        model.assistUpdate { a in
+                            if on {
+                                if !a.pausedSites.contains(p.siteID) { a.pausedSites.append(p.siteID) }
+                            } else {
+                                a.pausedSites.removeAll { $0 == p.siteID }
+                            }
+                        }
+                    }))
+                    .toggleStyle(.switch).controlSize(.mini)
+                    .help("暂停这一站：这一轮不去敲门，格子仍算欠着")
+            }
+        }
+        .opacity(paused ? 0.6 : 1)
     }
 
     // MARK: 待处理队列
@@ -2223,6 +2334,7 @@ struct AssistView: View {
         case .seeding: return tintColor(status).opacity(0.14)
         // 「不用查」的几种也给个底：灰一档，跟「要动手」的素底分开
         case .missing, .rejected, .filtered: return Color.secondary.opacity(0.16)
+        case .paused: return Color.secondary.opacity(0.12)
         case .unsupported: return Color.secondary.opacity(0.08)
         case .pending: return Color.clear
         }
@@ -2233,6 +2345,7 @@ struct AssistView: View {
         case .assisted, .failed, .verifying, .review, .manual: return tintColor(status).opacity(0.5)
         case .seeding: return tintColor(status).opacity(0.4)
         case .missing, .rejected, .filtered: return Color.secondary.opacity(0.35)
+        case .paused: return Color.secondary.opacity(0.5)
         case .unsupported, .pending: return Color(nsColor: .separatorColor)
         }
     }
@@ -2246,7 +2359,7 @@ struct AssistView: View {
         case .manual: return .orange
         case .seeding: return .teal
         case .pending: return .secondary
-        case .missing, .rejected, .unsupported, .filtered: return Color.secondary.opacity(0.6)
+        case .missing, .rejected, .unsupported, .filtered, .paused: return Color.secondary.opacity(0.6)
         }
     }
 }

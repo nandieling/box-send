@@ -248,6 +248,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         ApplyAssistStats(assist?["stats"]);
         ApplyAssistCoverage(assist?["coverage"]);
         ApplyAssistQueue(assist?["queue"]);
+        ApplyAssistSiteProgress(assist?["siteProgress"]);
 
         var logs = snap["logs"]?.AsArray();
         if (logs != null && (Logs.Count != logs.Count || full))
@@ -512,6 +513,29 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     }
 
     private string _queueFingerprint = "";
+
+    /// 逐站进度：一站一行（判定到哪、还要检索几次、这一轮先别动它）
+    public ObservableCollection<AssistSiteRow> AssistSiteProgress { get; } = new();
+
+    private string _progressFingerprint = "";
+
+    /// 站点名单一百多行，一行有变就整表重建：比逐字段 diff 少一类对不齐的 bug
+    private void ApplyAssistSiteProgress(JsonNode? array)
+    {
+        var parsed = (array as JsonArray)?.Select(n => AssistSiteRow.From(n!)).ToList()
+                       ?? new List<AssistSiteRow>();
+        parsed.Sort((a, b) => b.Searches != a.Searches
+            ? b.Searches.CompareTo(a.Searches)
+            : string.CompareOrdinal(a.SiteName, b.SiteName));
+        var fingerprint = string.Join("|", parsed.Select(AssistSiteRow.Fingerprint));
+        if (parsed.Count == AssistSiteProgress.Count && fingerprint == _progressFingerprint) return;
+        _progressFingerprint = fingerprint;
+        AssistSiteProgress.Clear();
+        foreach (var p in parsed) AssistSiteProgress.Add(p);
+    }
+
+    /// 停止本轮：给核心库正在跑的那条流水线递个话，没在跑就是空操作
+    public Task<string?> AssistStopAsync() => TryAsync("assist.stop", null);
 
     public void ClearAssistRows() => AssistRows.Clear();
 
@@ -974,6 +998,48 @@ public sealed class AssistRow : INotifyPropertyChanged
     }
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// 一个站的辅种进度。暂停开关由界面写回配置的 assist.pausedSites，这里只管显示。
+public sealed class AssistSiteRow
+{
+    public string SiteID { get; init; } = "";
+    public string SiteName { get; init; } = "";
+    public int Total { get; init; }
+    public int Resolved { get; init; }
+    public int Searches { get; init; }
+    public int Failed { get; init; }
+    public int Review { get; init; }
+    public bool Unsupported { get; init; }
+    public bool Paused { get; init; }
+    public double Percent { get; init; }
+
+    public string Line => Unsupported
+        ? "不支持站内检索，辅种得靠人"
+        : $"{Resolved:N0} / {Total:N0}　还要检索 {Searches:N0}";
+    public string Warn => string.Join(" · ", new[]
+        { Failed > 0 ? $"失败 {Failed}" : "", Review > 0 ? $"待复核 {Review}" : "" }
+            .Where(x => x.Length > 0));
+    public bool HasWarn => Warn.Length > 0;
+    public bool HasBar => !Unsupported;
+    public double RowOpacity => Paused ? 0.6 : 1.0;
+
+    public static AssistSiteRow From(JsonNode n) => new()
+    {
+        SiteID = n["siteID"]?.GetValue<string>() ?? "",
+        SiteName = n["siteName"]?.GetValue<string>() ?? "",
+        Total = n["total"]?.GetValue<int>() ?? 0,
+        Resolved = n["resolved"]?.GetValue<int>() ?? 0,
+        Searches = n["searches"]?.GetValue<int>() ?? 0,
+        Failed = n["failed"]?.GetValue<int>() ?? 0,
+        Review = n["review"]?.GetValue<int>() ?? 0,
+        Unsupported = n["unsupported"]?.GetValue<bool>() ?? false,
+        Paused = n["pausedSite"]?.GetValue<bool>() ?? false,
+        Percent = n["percent"] is JsonValue v && v.TryGetValue<double>(out var d) ? d : 0,
+    };
+
+    public static string Fingerprint(AssistSiteRow p) =>
+        $"{p.SiteID}#{p.Resolved}#{p.Searches}#{p.Failed}#{p.Review}#{p.Paused}#{p.Unsupported}";
 }
 
 /// 待处理队列的一行：站名、种子、结论、原因，外加这一条能点什么

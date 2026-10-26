@@ -715,6 +715,38 @@ Windows 侧：
   跑起来一次检索都不发）；`BOXSEND_LIVE=1` 实站仍报 3,319 条 / 381,685 格，覆盖率行照旧；
   `dotnet build` 0 错误。界面截图这轮还是被「Mac is locked」挡住，靠实站测试与构建验。
 
+## 这一轮（卡片只在该长时长 + 辅种第三批：暂停单站、逐站进度、停止本轮）
+
+- 上一轮的「运行中就整排占位」太糙：整组卡片一起变高，白给一大片空白。改成各自按内容长，
+  排版交给自写的 `SiteFlow: Layout`（mac）：每次排版都按当排最高的那张卡重新量行高，
+  卡片中途长高会把整排连同分组外框一起顶开，而不是画到下面那排上面；没信息的卡片保持光板两行。
+  `LazyVGrid` 不行是因为它只在排版那一刻量一次行高，不是「不能变高」。
+  Windows 侧本来就是 `WrapPanel`（每次内容变化都重排当排），所以只是把空胶囊、种子页按钮、
+  说明行改回 `Visibility="Collapsed"`，不再用 `MinHeight` 占位。
+- 暂停单站：`AssistConfig.pausedSites: [String]` + `isPaused(_:)`。与逐站筛选是两回事——
+  筛选是「这站本来就不辅这类」，暂停是「这一轮先别动这站」，所以暂停的格子算欠着（不进 `resolved`），
+  但不计入还要检索的次数（这一轮根本不会去敲门）。归类多一档 `RowStatus.paused`（本站已暂停），
+  覆盖率那句多一段「暂停站里压着 N 格」，`coverage.siteCount` 也不再把它算作在跑的站。
+  `run()` 在站点那一层就跳过（只发一条「跳过：本站已暂停」，不逐格发事件）。
+  两端写回的都是 `assist.pausedSites`：mac 用 `assistUpdate`，WPF 用 `PatchSection("assist", …)`。
+- 逐站进度：`CatalogPlan.SiteProgress` + `siteProgress(live:)`。一站一行——铺了多少格、
+  已判定多少、还要检索几次、失败/待复核几条、是不是暂停/不支持检索；实时进展按 `live` 挪格子，
+  所以跑起来那一条百分比会当场走。边界上 `assist.page` / `assist.scan` / 快照的 `assist` 段
+  多带 `siteProgress` 数组，`coverage` 多一个 `paused`。mac 直接调核心库那份，WPF 只画 JSON。
+- 停止本轮：核心里 `requestStop()` / `stopRequested`，`run()` 在处理下一格之前看一次；
+  `Report.stopped` 一路带到两端的运行文案（「（已手动停止本轮）」）。
+  mac 记下正在跑的流水线实例（`assistRunner`）；Windows 走边界动作 `assist.stop`，
+  核心库那边同样记 `assistRunner`，两端一个语义：只停这一轮，状态表原样留着。
+  标志用 `StopFlag`（`NSLock` 包一个 Bool）——界面线程写、跑轮的线程读，裸 Bool 是数据竞争。
+- mac：辅种页「待处理」与「种子与站点」之间插「按站点」卡（一行一站 + 暂停开关，
+  列表自己滚 `maxHeight: 280`，可只看还有活的站），运行中顶部多一颗「停止本轮」；
+  Windows：同一张卡是 `GroupBox` + `ScrollViewer MaxHeight="240"`，`AssistSiteRow` 是它的 VM，
+  `BtnStop` 只在 `BusyAssist` 时露面，格子 `paused` 走一组淡灰 DataTrigger，
+  计数牌 `Order` 补 `"paused"`。
+- 验证：`swift test` 576 绿（新增 `AssistPauseProgressTests` 4 条：暂停站的格子欠着但不计检索、
+  暂停站一次请求不发、逐站进度三站各算各的且实时进展推动百分比、停止本轮只跑完手头那一格）；
+  `BOXSEND_LIVE=1` 实站照旧出覆盖率那句；`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

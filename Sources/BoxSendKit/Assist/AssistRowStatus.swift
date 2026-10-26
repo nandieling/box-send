@@ -28,6 +28,8 @@ extension AssistPipeline {
         case unsupported
         /// 这个站设了筛选规则，这条按规则不该辅
         case filtered
+        /// 这个站被手动暂停：还没轮到，先不去敲门（不算有结论）
+        case paused
 
         /// 站点卡片上的短标签
         public var label: String {
@@ -44,6 +46,7 @@ extension AssistPipeline {
             case .seeding: return "已做种"
             case .unsupported: return "不支持检索"
             case .filtered: return "本站不辅"
+            case .paused: return "已暂停"
             }
         }
 
@@ -61,6 +64,7 @@ extension AssistPipeline {
             case .seeding: return "已在该站做种"
             case .unsupported: return "不支持站内检索"
             case .filtered: return "按本站筛选不辅"
+            case .paused: return "本站已暂停"
             }
         }
     }
@@ -99,10 +103,14 @@ extension AssistPipeline {
                 + count(.filtered)
         }
 
-        /// 还没结论的格子（含要重试的失败、要人拍板的、要回查的）
+        /// 暂停站里压着的格子：没结论，但这一轮不会去检索
+        public var paused: Int { count(.paused) }
+
+        /// 还没结论的格子（含要重试的失败、要人拍板的、要回查的、暂停站里压着的）
         public var unresolved: Int { max(0, total - resolved) }
 
-        /// 还要发多少次检索才铺完：待辅种 + 上次失败的（失败的下次会重搜）
+        /// 还要发多少次检索才铺完：待辅种 + 上次失败的（失败的下次会重搜）。
+        /// 暂停站里那些不算：这一轮根本不会去敲门
         public var searchesLeft: Int { count(.pending) + count(.failed) }
 
         /// 等人动手的格子：失败、待确认、待复核
@@ -124,6 +132,8 @@ extension AssistPipeline {
         /// 按单轮预算还要跑多少轮
         public var roundsLeft = 0
         public var siteCount = 0
+        /// 压在暂停站里没轮的格子（不计检索，也不算有结论）
+        public var paused = 0
 
         public var percent: Double { total == 0 ? 0 : Double(resolved) / Double(total) }
 
@@ -138,6 +148,7 @@ extension AssistPipeline {
                 parts.append("站内检索已经铺完")
             }
             if let s = secondsLeft { parts.append("不间断跑完约 " + Self.duration(s)) }
+            if paused > 0 { parts.append("暂停站里压着 \(grouped(paused)) 格") }
             if needsAction > 0 { parts.append("等人处理 \(grouped(needsAction)) 条") }
             if siteCount > 0 { parts.append("在跑的站 \(grouped(siteCount)) 个") }
             return parts.joined(separator: "；") + "。"
@@ -210,6 +221,7 @@ extension AssistPipeline {
         if why.contains("待复核") { return .review }
         if why.contains("不是同一种子") { return .rejected }
         if why.contains("筛选不辅") { return .filtered }
+        if why.contains("本站已暂停") { return .paused }
         return nil
     }
 

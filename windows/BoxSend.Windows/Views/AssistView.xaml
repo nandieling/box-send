@@ -13,6 +13,9 @@
                 <!-- 上一轮推进下载器却没等到校验结果的种子，靠这个收尾：只问下载器，不敲站点 -->
                 <Button x:Name="BtnRecheck" Content="回查校验" Margin="10,0,0,0" Click="OnRecheck"
                         ToolTip="问一次下载器：校验满了就启动，不满就回滚" />
+                <!-- 跑到一半想收摊：只停这一轮，状态表原样留着 -->
+                <Button x:Name="BtnStop" Content="停止本轮" Margin="10,0,0,0" Click="OnStop"
+                        Visibility="Collapsed" ToolTip="处理完手头这一格就收摊；下一轮从没跑过的格子接着铺" />
                 <CheckBox x:Name="DryRun" Content="只预演" VerticalAlignment="Center"
                           Margin="14,0,0,0" ToolTip="按真实流程走一遍，但不动下载器" />
                 <TextBlock x:Name="State" Margin="12,0,0,0" VerticalAlignment="Center"
@@ -132,6 +135,44 @@
                 </ItemsControl>
             </GroupBox>
 
+            <!-- 一站一行：判定到哪、还要检索几次；这一轮不想动哪个站就把它暂停。
+                 分母靠逐站筛选砍，节奏靠这张卡管 -->
+            <GroupBox x:Name="SiteBox" DockPanel.Dock="Top" Header="按站点" Margin="0,12,0,0">
+                <StackPanel>
+                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="SiteProgressList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <DockPanel Margin="0,1" Opacity="{Binding RowOpacity}">
+                                        <CheckBox DockPanel.Dock="Right" Content="暂停" FontSize="11"
+                                                  IsChecked="{Binding Paused}" Click="OnPauseSite"
+                                                  Tag="{Binding SiteID}" VerticalAlignment="Center"
+                                                  ToolTip="暂停这一站：这一轮不去敲门，格子仍算欠着" />
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Warn}" FontSize="11"
+                                                   Margin="0,0,10,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource DangerText}"
+                                                   Visibility="{Binding HasWarn, Converter={StaticResource BoolVis}}" />
+                                        <TextBlock DockPanel.Dock="Left" Text="{Binding SiteName}" FontSize="12"
+                                                   Width="96" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" />
+                                        <StackPanel Margin="8,0,0,0" MaxWidth="280">
+                                            <ProgressBar Height="5" Minimum="0" Maximum="1"
+                                                         Value="{Binding Percent}"
+                                                         Visibility="{Binding HasBar, Converter={StaticResource BoolVis}}" />
+                                            <TextBlock Text="{Binding Line}" FontSize="11"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Text="已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。"
+                               Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+            </GroupBox>
+
             <!-- 一条种子一张卡。默认只摊开要人动手的那几类格子，其余收成计数牌，点一下才展开 -->
             <GroupBox Header="种子与站点" Margin="0,12,0,0">
                 <DockPanel>
@@ -247,6 +288,11 @@
                                                                     <Setter Property="Background" Value="#28808A94" />
                                                                     <Setter Property="BorderBrush" Value="#59808A94" />
                                                                     <Setter Property="Opacity" Value="0.7" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="paused">
+                                                                    <Setter Property="Background" Value="#1F808A94" />
+                                                                    <Setter Property="BorderBrush" Value="#66808A94" />
+                                                                    <Setter Property="Opacity" Value="0.75" />
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Status}" Value="filtered">
                                                                     <Setter Property="Background" Value="#28808A94" />
