@@ -319,7 +319,7 @@ public partial class AssistView : UserControl
         private static readonly string[] Order =
         {
             "assisted", "pending", "verifying", "review", "manual",
-            "failed", "rejected", "missing", "seeding", "unsupported",
+            "failed", "rejected", "missing", "seeding", "unsupported", "filtered",
         };
 
         /// 默认就摊开的：问题不该要人先去点计数牌才看得见

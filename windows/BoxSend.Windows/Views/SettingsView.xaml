@@ -117,6 +117,35 @@
                         <CheckBox x:Name="RemoveOnFail" Content="校验不满 100% 时删掉刚加的种子"
                                   FontSize="12" Margin="0,4,0,0" />
                         <Button Content="保存节奏" Margin="0,8,0,0" HorizontalAlignment="Left" Click="OnSavePace" />
+                        <!-- 逐站筛选：站点名单铺满时首轮要检索几十天，能砍分母的就靠这条规则 -->
+                        <Expander x:Name="FilterBox" Header="辅种逐站筛选" Margin="0,8,0,0"
+                                  Expanded="OnFiltersOpen" Collapsed="OnFiltersOpen">
+                            <StackPanel Margin="0,6,0,0">
+                                <DockPanel>
+                                    <CheckBox x:Name="OnlySetFilters" Content="只显示设过规则的站"
+                                              DockPanel.Dock="Right" FontSize="12"
+                                              Checked="OnFiltersOpen" Unchecked="OnFiltersOpen" />
+                                    <TextBlock x:Name="FilterSummary" FontSize="12" VerticalAlignment="Center"
+                                               TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
+                                </DockPanel>
+                                <DockPanel Margin="0,6,0,2">
+                                    <TextBlock Text="站点" Width="96" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <TextBlock Text="下限 / 上限 GB" DockPanel.Dock="Right" Width="116" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <TextBlock Text="不辅（含任一）" Width="180" Margin="8,0,0,0" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <TextBlock Text="只辅（含任一）" Width="180" Margin="8,0,0,0" FontSize="11"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                </DockPanel>
+                                <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+                                    <StackPanel x:Name="SiteFilters" />
+                                </ScrollViewer>
+                                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Text="关键词不分大小写，逗号分隔；体积留空 = 跟全局设置。规则只拦「要不要去站内检索」这一步，已辅过、已在该站做种的照旧不动。" />
+                            </StackPanel>
+                        </Expander>
                         <TextBlock Text="一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。辅种站点在「站点分组」页底部的辅种区块里添加。"
                                    FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
                                    Foreground="{DynamicResource TextMuted}" />

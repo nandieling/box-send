@@ -803,6 +803,11 @@ public struct AssistConfig: Codable {
     public var verifyPollSec: Int
     /// 辅种页一列多少条种子（分页用）。上万条种子整页摊开会把界面钉住。
     public var listPageSize: Int
+    /// 逐站筛选：这个站只辅哪几条种子（按种子名与体积筛）。
+    /// 整库 × 全站轻松几十万格，站点名单铺满时首轮要跑几十天；
+    /// 「这站只做电影、不碰 40G 以上的原盘、带「剧集」的不要」这类规则
+    /// 能把分母线性砍下来，比把逐站间隔调大管用得多。
+    public var siteFilters: [String: SiteFilter]
     /// 隔这么多分钟自动跑一轮（0 = 不自动跑）。到点是「扫描 + 辅种」整套，
     /// 站点请求仍受单轮预算与逐站间隔约束，不会把检索打在站点脸上。
     public var autoRunMinutes: Int
@@ -811,8 +816,10 @@ public struct AssistConfig: Codable {
                 roundBudget: Int = 200, missTTLDays: Int = 7, autoAcceptSameFiles: Bool = true,
                 removeOnVerifyFail: Bool = true, minSizeGB: Double = 0, maxSizeGB: Double = 0,
                 categories: [String] = [], verifyWaitSec: Int = 600, verifyPollSec: Int = 10,
-                autoRunMinutes: Int = 0, listPageSize: Int = 10) {
+                autoRunMinutes: Int = 0, listPageSize: Int = 10,
+                siteFilters: [String: SiteFilter] = [:]) {
         self.siteIDs = siteIDs
+        self.siteFilters = siteFilters
         self.perSiteIntervalSec = perSiteIntervalSec
         self.jitterSec = jitterSec
         self.roundBudget = roundBudget
@@ -844,12 +851,69 @@ public struct AssistConfig: Codable {
         verifyPollSec = try c.decodeIfPresent(Int.self, forKey: .verifyPollSec) ?? 10
         autoRunMinutes = try c.decodeIfPresent(Int.self, forKey: .autoRunMinutes) ?? 0
         listPageSize = max(1, try c.decodeIfPresent(Int.self, forKey: .listPageSize) ?? 10)
+        siteFilters = try c.decodeIfPresent([String: SiteFilter].self, forKey: .siteFilters) ?? [:]
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteIDs, perSiteIntervalSec, jitterSec, roundBudget, missTTLDays, autoAcceptSameFiles,
              removeOnVerifyFail, minSizeGB, maxSizeGB, categories, verifyWaitSec, verifyPollSec,
-             autoRunMinutes, listPageSize
+             autoRunMinutes, listPageSize, siteFilters
+    }
+
+    /// 一个站的辅种筛选规则
+    public struct SiteFilter: Codable, Equatable {
+        /// 命中其一才辅（空 = 不限）
+        public var include: [String]
+        /// 命中任意一条就不辅
+        public var exclude: [String]
+        /// 本站体积下限（GB，0 = 跟全局）
+        public var minSizeGB: Double
+        /// 本站体积上限（GB，0 = 跟全局）
+        public var maxSizeGB: Double
+
+        public init(include: [String] = [], exclude: [String] = [],
+                    minSizeGB: Double = 0, maxSizeGB: Double = 0) {
+            self.include = include
+            self.exclude = exclude
+            self.minSizeGB = minSizeGB
+            self.maxSizeGB = maxSizeGB
+        }
+
+        /// 没设任何条件 = 这个站不设限（计划里不占额外算力）
+        public var isEmpty: Bool {
+            trimmed(include).isEmpty && trimmed(exclude).isEmpty && minSizeGB <= 0 && maxSizeGB <= 0
+        }
+
+        /// 这条种子在这个站要不要辅：nil = 要，有值 = 不辅的原因（界面上原样显示）
+        public func reject(_ name: String, sizeGB: Double) -> String? {
+            if isEmpty { return nil }
+            let n = name.lowercased()
+            let inc = trimmed(include), exc = trimmed(exclude)
+            if !inc.isEmpty, !inc.contains(where: { n.contains($0.lowercased()) }) {
+                return "没有本站要的关键词"
+            }
+            if let hit = exc.first(where: { n.contains($0.lowercased()) }) {
+                return "命中本站排除词「\(hit)」"
+            }
+            if minSizeGB > 0, sizeGB < minSizeGB {
+                return "不到本站下限 \(Int(minSizeGB))GB"
+            }
+            if maxSizeGB > 0, sizeGB > maxSizeGB {
+                return "超过本站上限 \(Int(maxSizeGB))GB"
+            }
+            return nil
+        }
+
+        /// 界面上填的关键词常有空行、多余空格：统一擦干净
+        private func trimmed(_ list: [String]) -> [String] {
+            list.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        }
+    }
+
+    /// 这个站的筛选规则（没设过返回 nil）
+    public func assistFilter(_ siteID: String) -> SiteFilter? {
+        guard let f = siteFilters[siteID], !f.isEmpty else { return nil }
+        return f
     }
 
     /// 节流参数（SiteThrottle 用）

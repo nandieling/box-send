@@ -251,14 +251,16 @@ public partial class RunView : UserControl
         };
         var (reseed, reseedText) = Chip();
         var (push, pushText) = Chip();
-        // 说明行不设 MaxHeight：转种失败原因、站内已有种子链接这类文案本来就长，
-        // 限高会把后半句裁掉（卡片窄，靠换行撑高，不做省略号）
+        // 说明行不设 MaxHeight：转种失败原因这类文案本来就长，限高会把后半句裁掉。
+        // 但空着的时候也要占住三行的位置：卡片高度随进度变来变去，一排里就显歪，
+        // 长文案出现时还会把旁边的卡片挤得像是被盖住（与 mac 版同一套占位）
         var detail = new TextBlock
         {
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0),
-            Visibility = Visibility.Collapsed,
+            MinHeight = DetailLines * 14,
+            Opacity = 0,
         };
         var body = new StackPanel();
         body.Children.Add(name);
@@ -282,7 +284,10 @@ public partial class RunView : UserControl
             Background = Tinted("Accent", 0.18),
             BorderBrush = (Brush)FindResource("Accent"),
             Foreground = (Brush)FindResource("Accent"),
-            Visibility = Visibility.Collapsed,
+            // 占位：运行中没链接也留着这一格；没在跑就整格收掉，别留大片空白
+            Opacity = 0,
+            IsEnabled = false,
+            Visibility = _model.Running ? Visibility.Visible : Visibility.Collapsed,
         };
         body.Children.Add(seed);
         body.Children.Add(detail);
@@ -331,16 +336,29 @@ public partial class RunView : UserControl
     private void SaveTargets() =>
         _model.Call("targets.set", new { ids = RunTargets().Select(x => x.Id).ToArray() });
 
-    /// 状态胶囊：先建好放着，运行时才填字（重建整张卡片代价大，改文字便宜）
+    /// 说明行占几行：三行放不下的是少数，完整文案在悬浮提示与运行记录里
+    private const int DetailLines = 3;
+
+    /// 胶囊那一格的高度：两行文案 + 上下内边距。空着时也占住，卡片才不会中途长高
+    private const int ChipLinesHeight = 32;
+
+    /// 状态胶囊：先建好放着，运行时才填字（重建整张卡片代价大，改文字便宜）。
+    /// 没有事件时不折叠而是铺隐形文字占位——折叠会让卡片中途变高，一排卡片上下错位。
     private static (Border, TextBlock) Chip()
     {
-        var text = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap };
+        var text = new TextBlock
+        {
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Text = "\n",
+        };
         var box = new Border
         {
             CornerRadius = new CornerRadius(9),
             Padding = new Thickness(6, 2, 6, 2),
             Margin = new Thickness(0, 4, 0, 0),
-            Visibility = Visibility.Collapsed,
+            MinHeight = ChipLinesHeight,
+            Opacity = 0,
             Child = text,
         };
         return (box, text);
@@ -366,12 +384,20 @@ public partial class RunView : UserControl
         var push = _model.PushEvent(id);
         SetChip(r.Reseed, r.ReseedText, reseed);
         SetChip(r.Push, r.PushText, push);
+        // 占位只在运行中铺：整排卡片同时变高，一次排版就稳；空跑前不必撑那么高
+        r.Reseed.MinHeight = _model.Running ? ChipLinesHeight : 0;
+        r.Push.MinHeight = _model.Running ? ChipLinesHeight : 0;
+        r.Detail.MinHeight = _model.Running ? DetailLines * 14 : 0;
         var warning = _model.Sites.FirstOrDefault(s => s.Id == id)?.Warning ?? "";
         var link = push?.Url ?? "";
         if (link.Length == 0) link = reseed?.Url ?? "";
-        r.Seed.Visibility = link.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        r.Seed.Opacity = link.Length == 0 ? 0 : 1;
+        r.Seed.IsEnabled = link.Length > 0;
+        if (link.Length == 0)
+            r.Seed.Visibility = _model.Running ? Visibility.Visible : Visibility.Collapsed;
         if (link.Length > 0)
         {
+            r.Seed.Visibility = Visibility.Visible;
             r.Seed.ToolTip = "在浏览器里打开站内那条种子\n" + link;
             r.Seed.Click -= OpenSeed;
             r.Seed.Tag = link;
@@ -381,7 +407,7 @@ public partial class RunView : UserControl
         r.Detail.Text = text;
         r.Detail.Foreground = (Brush)FindResource(key);
         r.Detail.ToolTip = text;
-        r.Detail.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        r.Detail.Opacity = text.Length == 0 ? 0 : 1;
     }
 
     /// 卡片本身点击是「选为转种目标」，跳站内链接得单独一个按钮
@@ -403,9 +429,15 @@ public partial class RunView : UserControl
     {
         if (e == null || e.Text.Length == 0)
         {
-            box.Visibility = Visibility.Collapsed;
+            // 空胶囊：留着占位，只把内容擦干净（背景空、无提示）
+            text.Text = "\n";
+            text.Foreground = (Brush)Application.Current.Resources["TextMuted"];
+            box.Background = null;
+            box.ToolTip = null;
+            box.Opacity = 0;
             return;
         }
+        box.Opacity = 1;
         var (icon, key) = Phase(e.Phase);
         text.Text = icon + " " + e.Text;
         text.Foreground = (Brush)FindResource(key);

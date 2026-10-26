@@ -682,6 +682,39 @@ Windows 侧：
   回查两种收尾、否决挡住检索、覆盖率算式与那句文案、队列排序与上限、旧失败表读得动）；
   `dotnet build` 0 错误。
 
+## 这一轮（转种卡片先占格 + 辅种逐站筛选）
+
+- 批量转种卡片运行中会盖住下面那排：`LazyVGrid` 的行高只在排版那一刻按各卡片当时的高度算，
+  胶囊、种子页按钮、说明行事后冒出来把卡片撑高，画得下去却已经把邻居顶歪。这轮不猜像素，改成先占格：
+  mac 把可变的那三格各铺一个同字号的隐形影子（`chipSlot` / `seedSlot` / `detailSlot` 都是
+  `ZStack` 里先放 `.opacity(0)` 的空壳再盖真的），说明行从 4 行收成 3 行并同样占位，
+  卡片高度从此与有没有事件无关；`eventChip` 抽出 `chipView(_:tint:icon:tip:)` 好让影子复用同一段排版。
+- Windows 同一个道理，只是用 WPF 的手法：`RunView.xaml.cs` 里 `ChipLinesHeight = 32`、`DetailLines = 3`，
+  胶囊那格是个 `MinHeight` 的空 `Border`，说明行 `MinHeight = DetailLines * 14`；
+  隐藏一律走 `Opacity` + `IsEnabled` 而不是 `Visibility="Collapsed"`——塌掉布局就又会被重新量一次，
+  正是要避开的那个坑。
+- 占位只在运行中铺（`reserve: model.running` / WPF 里 `_model.Running` 决定 `MinHeight` 与
+  种子页按钮的 `Visibility`）：空卡片也占满会白给一大片高度，一屏少放一半站点；
+  开跑那一刻整排一起变高，还是一次排版，稳。mac 的逐站筛选列表套了 `ScrollView`（`maxHeight: 280`），
+  与 WPF 那个 `MaxHeight="260"` 一回事——115 个辅种站铺平会把设置页顶没，Cookie 与下载器就看不见了。
+- 辅种多了逐站筛选：`AssistConfig.siteFilters: [String: SiteFilter]`，
+  `SiteFilter { include, exclude, minSizeGB, maxSizeGB }` 配 `isEmpty` 与 `reject(_:sizeGB:)`（返回中文原因），
+  `assistFilter(_:)` 把「只填了空格」当成没设规则。走已有的 `config.patch`，键 `assist.siteFilters[id]`，
+  清空就是删键，两端都不必加新动作。
+- 归类多一档 `RowStatus.filtered`（本站不辅，统计行「按本站筛选不辅」），并计入 `resolved`：
+  这一格永远不会去敲门，不该再算在「待辅种」里让人误会还要等。`SiteBucket` 多
+  `filtered` / `filteredReason`，`planCatalog` 在算完做种与已辅之后扣掉这一批、并从 missing/failed 里减掉，
+  `preSkip` 在负缓存之前先判规则，原因后面缀一句「在「设置 → 辅种」的逐站筛选里改」。
+  核心里判，两端只填表：实站那 381,685 格 / 还要检索 347,259 次这个分母，只有这条规则砍得动。
+- mac：设置页「辅种节奏」下面加「辅种逐站筛选」卡，`AssistFilterRow` 一行一个站
+  （只辅 / 不辅 / 上下限 GB，回车提交，逗号中英文都算），带「只显示设过规则的站」和一句汇总。
+  Windows：`SettingsView.xaml` 加 `Expander`「辅种逐站筛选」，`BuildSiteFilters()` 先比指纹再决定是否重建，
+  免得轮询把正在敲的框刷没；`FilterRow` 用 `LostFocus`/回车提交，`CommitFilter` 写同一个键。
+- WPF 的计数牌排序 `Order` 补上 `"filtered"`，底色走默认那档灰，站名与结论仍走核心给的文案。
+- 验证：`swift test` 572 绿（新增 `AssistSiteFilterTests` 3 条：判定本身、计划里标成本站不辅并算已判定、
+  跑起来一次检索都不发）；`BOXSEND_LIVE=1` 实站仍报 3,319 条 / 381,685 格，覆盖率行照旧；
+  `dotnet build` 0 错误。界面截图这轮还是被「Mac is locked」挡住，靠实站测试与构建验。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

@@ -315,6 +315,10 @@ public final class AssistPipeline {
         if state.isAssistRejected(site: site.id, hash: t.hash) {
             return PreSkip(why: "人工判定不是同一种子", detail: "已经否决过，不再检索；界面上可以撤销")
         }
+        if let f = cfg.assistFilter(site.id),
+           let why = f.reject(t.name, sizeGB: Double(t.totalSize) / 1_073_741_824) {
+            return PreSkip(why: "按本站筛选不辅（\(why)）", detail: "在「设置 → 辅种」的逐站筛选里改")
+        }
         if state.assistMissedAt(site: site.id, hash: t.hash,
                                ttlSeconds: Double(cfg.missTTLDays) * 86_400) != nil {
             return PreSkip(why: "站内没有（\(cfg.missTTLDays) 天内查过）", detail: "负缓存生效，不重复检索")
@@ -413,6 +417,8 @@ public final class AssistPipeline {
         var rejected: Set<String> = []
         var missing: Set<String> = []
         var failed: Set<String> = []
+        var filtered: Set<String> = []
+        var filteredReason: [String: String] = [:]
     }
 
     /// 全量种子目录 × 辅种站点的计划：计数按全量算，格子按页摊。
@@ -485,6 +491,7 @@ public final class AssistPipeline {
             if b.rejected.contains(h) { return .rejected }
             if b.missing.contains(h) { return .missing }
             if b.failed.contains(h) { return .failed }
+            if b.filtered.contains(h) { return .filtered }
             return .pending
         }
 
@@ -538,6 +545,7 @@ public final class AssistPipeline {
             case .review: return "待复核（上次校验没等完）"
             case .rejected: return "人工判定不是同一种子"
             case .missing: return "站内没有（\(missTTLDays) 天内查过）"
+            case .filtered: return "按本站筛选不辅（\(b.filteredReason[st.rawValue] ?? "")）"
             default: return nil      // 失败的那格本轮还会再试，不算「跳过」
             }
         }
@@ -588,13 +596,24 @@ public final class AssistPipeline {
                 b.rejected = state.assistRejectHashes(site: id)
                     .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
                     .subtracting(b.review)
+                if let f = cfg.assistFilter(id) {
+                    for t in list {
+                        let h = t.hash.lowercased()
+                        if let why = f.reject(t.name, sizeGB: Double(t.totalSize) / 1_073_741_824) {
+                            b.filtered.insert(h)
+                            // 一格里放一条原因就够看：同一类原因合并成一句
+                            b.filteredReason[RowStatus.filtered.rawValue] = why
+                        }
+                    }
+                    b.filtered.subtracting(b.seeding).subtracting(b.assisted)
+                }
                 b.missing = state.assistMissHashes(site: id, ttlSeconds: missTTL)
                     .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
-                    .subtracting(b.review).subtracting(b.rejected)
+                    .subtracting(b.review).subtracting(b.rejected).subtracting(b.filtered)
                 b.failed = state.assistFailHashes(site: id)
                     .intersection(hashSet).subtracting(b.seeding)
                     .subtracting(b.assisted).subtracting(b.missing)
-                    .subtracting(b.review).subtracting(b.rejected)
+                    .subtracting(b.review).subtracting(b.rejected).subtracting(b.filtered)
             }
             buckets[id] = b
             if b.unsupported {
@@ -604,6 +623,7 @@ public final class AssistPipeline {
             }
             let pending = list.count - b.seeding.count - b.assisted.count
                 - b.review.count - b.rejected.count - b.missing.count - b.failed.count
+                - b.filtered.count
             pendingBySite[id] = max(0, pending)
             tally.increase(.seeding, b.seeding.count)
             tally.increase(.assisted, b.assisted.count)
@@ -611,6 +631,7 @@ public final class AssistPipeline {
             tally.increase(.rejected, b.rejected.count)
             tally.increase(.missing, b.missing.count)
             tally.increase(.failed, b.failed.count)
+            tally.increase(.filtered, b.filtered.count)
             tally.increase(.pending, max(0, pending))
             counts["已在该站做种", default: 0] += b.seeding.count
             counts["此前已辅过", default: 0] += b.assisted.count
@@ -618,6 +639,7 @@ public final class AssistPipeline {
             counts["人工已否决", default: 0] += b.rejected.count
             counts["站内没有（\(cfg.missTTLDays) 天内查过）", default: 0] += b.missing.count
             counts["上次检索失败", default: 0] += b.failed.count
+            counts["按本站筛选不辅", default: 0] += b.filtered.count
             counts["会去站内检索", default: 0] += max(0, pending)
         }
         return CatalogPlan(torrents: list, siteIDs: ids, missTTLDays: cfg.missTTLDays,

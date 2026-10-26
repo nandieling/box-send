@@ -26,6 +26,8 @@ extension AssistPipeline {
         case seeding
         /// 站点没有可用的检索入口
         case unsupported
+        /// 这个站设了筛选规则，这条按规则不该辅
+        case filtered
 
         /// 站点卡片上的短标签
         public var label: String {
@@ -41,6 +43,7 @@ extension AssistPipeline {
             case .rejected: return "已否决"
             case .seeding: return "已做种"
             case .unsupported: return "不支持检索"
+            case .filtered: return "本站不辅"
             }
         }
 
@@ -57,6 +60,7 @@ extension AssistPipeline {
             case .rejected: return "人工已否决"
             case .seeding: return "已在该站做种"
             case .unsupported: return "不支持站内检索"
+            case .filtered: return "按本站筛选不辅"
             }
         }
     }
@@ -92,6 +96,7 @@ extension AssistPipeline {
         /// 已经有结论、不用再去站内敲门的格子
         public var resolved: Int {
             count(.assisted) + count(.seeding) + count(.missing) + count(.rejected)
+                + count(.filtered)
         }
 
         /// 还没结论的格子（含要重试的失败、要人拍板的、要回查的）
@@ -204,6 +209,7 @@ extension AssistPipeline {
         if why.contains("待人工确认") { return .manual }
         if why.contains("待复核") { return .review }
         if why.contains("不是同一种子") { return .rejected }
+        if why.contains("筛选不辅") { return .filtered }
         return nil
     }
 

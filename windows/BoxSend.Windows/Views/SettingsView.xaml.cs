@@ -92,7 +92,161 @@ public partial class SettingsView : UserControl
         About.Text = $"BoxSend {_model.CoreVersion} · 核心库 {_model.CoreVersion} · 平台 {_model.Platform}";
         ConfigPath.Text = $"配置：{_model.ConfigPath}\n数据：{_model.DataDir}";
         LoadPace();
+        BuildSiteFilters();
         _loading = false;
+    }
+
+    // MARK: 辅种逐站筛选
+    //
+    // 站点名单铺满时首轮要检索几十天，能砍分母的就靠这份规则：一个站只辅哪几类、
+    // 多大体积。规则存在 assist.siteFilters 里，核心库在建计划时就把不辅的格子挑出去。
+
+    /// 展开/收起、切「只显示设过规则」都要重排；输入中的框由指纹挡着，不会被打掉
+    private void OnFiltersOpen(object sender, RoutedEventArgs e) => BuildSiteFilters();
+
+    private void BuildSiteFilters()
+    {
+        var ids = AssistSiteIDs();
+        var filters = AssistFilters();
+        FilterSummary.Text = $"共 {ids.Count} 个辅种站，其中 {filters.Count} 个设了规则";
+        var want = ids.Where(id => OnlySetFilters.IsChecked != true || filters.ContainsKey(id)).ToList();
+        var print = string.Join("|", want.Select(id => id + "#" +
+            (filters.TryGetValue(id, out var f) ? f.Key : "")));
+        if (print == _filterPrint) return;
+        _filterPrint = print;
+        SiteFilters.Children.Clear();
+        foreach (var id in want) SiteFilters.Children.Add(FilterRow(id, filters.TryGetValue(id, out var f) ? f : null));
+    }
+
+    private string _filterPrint = "";
+
+    /// 辅种站点名单（顺序照配置，界面上不重排）
+    private List<string> AssistSiteIDs() =>
+        (_model.Config?["assist"]?["siteIDs"] as JsonArray)?.Select(n =>
+            n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")
+            .Where(id => id.Length > 0 && _model.Sites.Any(x => x.Id == id)).ToList()
+        ?? new List<string>();
+
+    /// siteFilters → 界面用的四条文本（关键词回显时用逗号连，与输入格式一致）
+    private Dictionary<string, FilterDraft> AssistFilters()
+    {
+        var outMap = new Dictionary<string, FilterDraft>();
+        if (_model.Config?["assist"]?["siteFilters"] is not JsonObject map) return outMap;
+        foreach (var kv in map)
+        {
+            if (kv.Value is not JsonObject o) continue;
+            var inc = Words(o["include"]);
+            var exc = Words(o["exclude"]);
+            var lo = Dbl(o["minSizeGB"]);
+            var hi = Dbl(o["maxSizeGB"]);
+            if (inc.Count == 0 && exc.Count == 0 && lo <= 0 && hi <= 0) continue;
+            outMap[kv.Key] = new FilterDraft(string.Join("，", inc), string.Join("，", exc),
+                lo > 0 ? ((int)lo).ToString() : "", hi > 0 ? ((int)hi).ToString() : "");
+        }
+        return outMap;
+    }
+
+    private static List<string> Words(JsonNode? n) =>
+        (n as JsonArray)?.Select(x => x is JsonValue v && v.TryGetValue<string>(out var s) ? s : "")
+            .Where(x => x.Length > 0).ToList() ?? new List<string>();
+
+    private static double Dbl(JsonNode? n)
+    {
+        if (n is not JsonValue v) return 0;
+        if (v.TryGetValue<double>(out var d)) return d;
+        return v.TryGetValue<int>(out var i) ? i : 0;
+    }
+
+    private UIElement FilterRow(string id, FilterDraft? d)
+    {
+        var name = _model.Sites.FirstOrDefault(x => x.Id == id)?.Name ?? id;
+        var inc = Box(d?.Inc ?? "", 180, "不限");
+        var exc = Box(d?.Exc ?? "", 180, "不排除");
+        var min = Box(d?.Min ?? "", 52, "0");
+        var max = Box(d?.Max ?? "", 52, "0");
+        void Commit() => CommitFilter(id, inc, exc, min, max);
+        foreach (var t in new[] { inc, exc, min, max })
+        {
+            t.LostFocus += (_, _) => Commit();
+            t.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) Commit(); };
+        }
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var clear = new Button
+        {
+            Content = "清除", FontSize = 11, Padding = new Thickness(7, 0, 7, 0),
+            Margin = new Thickness(6, 0, 0, 0), Visibility = d == null ? Visibility.Collapsed : Visibility.Visible,
+        };
+        clear.Click += (_, _) =>
+        {
+            inc.Text = exc.Text = min.Text = max.Text = "";
+            CommitFilter(id, inc, exc, min, max);
+        };
+        DockPanel.SetDock(clear, Dock.Right);
+        var sizes = new StackPanel { Orientation = Orientation.Horizontal };
+        sizes.Children.Add(min);
+        sizes.Children.Add(new TextBlock { Text = " / ", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        sizes.Children.Add(max);
+        DockPanel.SetDock(sizes, Dock.Right);
+        var excBox = new Border { Width = 188, Margin = new Thickness(8, 0, 0, 0), Child = exc };
+        var incBox = new Border { Width = 188, Margin = new Thickness(8, 0, 0, 0), Child = inc };
+        row.Children.Add(clear);
+        row.Children.Add(sizes);
+        row.Children.Add(excBox);
+        row.Children.Add(incBox);
+        row.Children.Add(new TextBlock
+        {
+            Text = name, Width = 96, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return row;
+    }
+
+    private static TextBox Box(string text, double width, string hint) => new()
+    {
+        Text = text,
+        Width = width,
+        FontSize = 12,
+        ToolTip = hint,
+    };
+
+    /// 写回 assist.siteFilters：四条全空 = 这个站不设限（整条摘掉，别留空壳）
+    private void CommitFilter(string id, TextBox inc, TextBox exc, TextBox min, TextBox max)
+    {
+        var incList = Words(inc.Text);
+        var excList = Words(exc.Text);
+        var lo = Parse(min.Text);
+        var hi = Parse(max.Text);
+        _model.PatchSection("assist", o =>
+        {
+            var map = o["siteFilters"] as JsonObject ?? new JsonObject();
+            if (incList.Count == 0 && excList.Count == 0 && lo <= 0 && hi <= 0) map.Remove(id);
+            else map[id] = new JsonObject
+            {
+                ["include"] = Arr(incList), ["exclude"] = Arr(excList),
+                ["minSizeGB"] = lo, ["maxSizeGB"] = hi,
+            };
+            o["siteFilters"] = map;
+        });
+    }
+
+    private static JsonArray Arr(List<string> items)
+    {
+        var a = new JsonArray();
+        foreach (var i in items) a.Add(JsonValue.Create(i));
+        return a;
+    }
+
+    /// 界面上填的关键词按逗号（中英文都算）切；数字留空当 0
+    private static List<string> Words(string s) =>
+        s.Split(new[] { ',', '，', '、' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+
+    private static double Parse(string s) => double.TryParse(s, out var d) ? Math.Max(0, d) : 0;
+
+    private sealed record FilterDraft(string Inc, string Exc, string Min, string Max)
+    {
+        /// 指纹：内容一致就不重画那一行，免得正在输入的框被刷新打掉
+        public string Key => Inc + "|" + Exc + "|" + Min + "|" + Max;
     }
 
     // MARK: 辅种搜索节奏（站点在「站点分组」页的辅种区块里加）

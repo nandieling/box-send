@@ -334,3 +334,120 @@ final class AssistReviewQueueTests: XCTestCase {
 private extension String {
     var nonEmpty: Bool { !isEmpty }
 }
+
+/// 逐站筛选：整库 × 全站的分母靠这个砍，规则在核心库里判，两端只填表
+final class AssistSiteFilterTests: XCTestCase {
+    private func site(_ id: String) -> SiteConfig {
+        SiteConfig(id: id, name: id, url: "https://\(id).invalid/",
+                   framework: .nexusPHP, enabled: true)
+    }
+
+    private func torrent(_ hash: String, _ name: String, gb: Double) -> LocalTorrent {
+        LocalTorrent(hash: hash, name: name, savePath: "/dl",
+                     totalSize: Int64(gb * 1_073_741_824), progress: 1,
+                     trackerHosts: ["elsewhere.invalid"])
+    }
+
+    private func cfg(_ filters: [String: AssistConfig.SiteFilter]) -> AppConfig {
+        var app = AppConfig.template()
+        app.sourceSites = [site("s1"), site("s2")]
+        app.assist = AssistConfig(siteIDs: ["s1", "s2"], perSiteIntervalSec: 0, jitterSec: 0,
+                                  siteFilters: filters)
+        return app
+    }
+
+    /// 关键词不分大小写；排除与体积上下限都算原因
+    func testFilterJudgement() {
+        let movie = AssistConfig.SiteFilter(include: ["BluRay", "1080p"], exclude: ["剧集"])
+        XCTAssertNil(movie.reject("Movie.2020.1080p.BluRay", sizeGB: 20))
+        XCTAssertEqual(movie.reject("Movie.2020.x264.WEB-DL", sizeGB: 20), "没有本站要的关键词")
+        XCTAssertEqual(movie.reject("剧集.2020.1080p.BluRay", sizeGB: 20), "命中本站排除词「剧集」")
+        let cap = AssistConfig.SiteFilter(minSizeGB: 0, maxSizeGB: 30)
+        XCTAssertNil(cap.reject("A", sizeGB: 29.9))
+        XCTAssertEqual(cap.reject("A", sizeGB: 31)?.contains("上限"), true)
+        XCTAssertTrue(AssistConfig.SiteFilter().isEmpty, "什么都没填 = 这个站不设限")
+        XCTAssertNil(AssistConfig.SiteFilter(exclude: [" "]).reject("任意名字", sizeGB: 1),
+                     "只有空白的关键词不算设过规则")
+    }
+
+    /// 计划里那一格标「本站不辅」，且算已判定（不用再去敲门）
+    func testPlanMarksFilteredCells() throws {
+        let app = cfg(["s1": AssistConfig.SiteFilter(include: ["电影"])])
+        let p = AssistPipeline(config: app, cookies: CookieStore(),
+                              state: StateStore(dataDir: "/tmp/boxsend-f-\(UUID().uuidString)"),
+                              downloader: RDLStub())
+        let list = [torrent("h1", "电影 A", gb: 10), torrent("h2", "剧集 B", gb: 10)]
+        let plan = p.planCatalog(list)
+        XCTAssertEqual(plan.status(torrent: list[0], siteID: "s1"), .pending)
+        XCTAssertEqual(plan.status(torrent: list[1], siteID: "s1"), .filtered)
+        XCTAssertEqual(plan.status(torrent: list[1], siteID: "s2"), .pending, "另一个站没设规则")
+        let cov = plan.coverage()
+        XCTAssertEqual(cov.total, 4)
+        XCTAssertEqual(cov.resolved, 1, "本站不辅的那格算已判定")
+        XCTAssertEqual(cov.searchesLeft, 3, "分母真的少了这一格")
+        XCTAssertEqual(plan.rows(list).first { $0.hash == "h2" && $0.siteID == "s1" }?
+                       .skipReason?.contains("筛选不辅"), true)
+    }
+
+    /// 跑起来一次请求都不该发：白检索既慢又给站点添负载
+    func testFilteredCellSendsNoRequest() throws {
+        let data = BEnc.enc(["info": ["name": "X", "piece length": 262144, "pieces": "0000",
+                                     "files": [["length": 1, "path": ["a"] as [Any]] as [String: Any]]]])
+        var app = cfg(["s1": AssistConfig.SiteFilter(exclude: ["剧集"])])
+        app.assist?.siteIDs = ["s1"]   // 只留这一个站，别把没设规则的站的检索也算进来
+        let state = StateStore(dataDir: "/tmp/boxsend-f2-\(UUID().uuidString)")
+        let p = AssistPipeline(config: app, cookies: CookieStore(), state: state,
+                               downloader: RDLStub())
+        let fake = FilterProbeSite(site: site("s1"),
+                                   client: HTTPClient(cookies: CookieStore(), userAgent: "t"),
+                                   data: data)
+        p.adapterFactory = { _, _ in fake }
+        var o = AssistPipeline.Options(); o.sleep = { _ in }
+        let report = p.run(torrents: [torrent("h2", "剧集 B", gb: 10)], opts: o)
+        XCTAssertEqual(fake.searches, 0)
+        XCTAssertEqual(report.skippedCount, 1)
+    }
+}
+
+/// 只报「检索发了几次」的假站点 / 空下载器
+private final class FilterProbeSite: SiteAdapter {
+    let site: SiteConfig
+    let client: HTTPClient
+    var override: SiteOverride? { site.overrides }
+    var canPrecheckDuplicate = true
+    var searches = 0
+    private let data: Data
+    init(site: SiteConfig, client: HTTPClient, data: Data) {
+        self.site = site; self.client = client; self.data = data
+    }
+    func fetchTorrentList() throws -> [ReleaseInfo] { [] }
+    func fetchDetail(detailURL: String) throws -> ReleaseInfo {
+        ReleaseInfo(siteID: site.id, detailURL: detailURL, name: "站内那条",
+                    torrentURL: site.url + "download.php?id=1")
+    }
+    func downloadTorrentFile(_ info: ReleaseInfo) throws -> (data: Data, filename: String) {
+        (data, "site.torrent")
+    }
+    func searchExists(_ info: ReleaseInfo) throws -> String? {
+        searches += 1
+        return site.url + "details.php?id=1"
+    }
+    func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
+        UploadOutcome(success: false, message: "", detailURL: nil)
+    }
+}
+
+private final class RDLStub: Downloader {
+    func addTorrent(data: Data, filename: String, savePath: String?, category: String?,
+                    skipChecking: Bool, upLimit: Int64) throws -> AddTorrentResult { AddTorrentResult(id: "") }
+    func addTorrent(data: Data, filename: String, savePath: String?, category: String?,
+                    skipChecking: Bool, upLimit: Int64, paused: Bool) throws -> AddTorrentResult {
+        AddTorrentResult(id: "")
+    }
+    func testConnection() throws -> String { "fake" }
+    func listTorrents() throws -> [LocalTorrent] { [] }
+    func torrentFiles(hash: String) throws -> [(path: String, size: Int64)] { [] }
+    func setPaused(hashes: [String], paused: Bool) throws {}
+    func removeTorrent(hash: String, keepFiles: Bool) throws {}
+    func torrentProgress(hash: String) throws -> (progress: Double, state: String)? { nil }
+}

@@ -248,6 +248,11 @@
                                                                     <Setter Property="BorderBrush" Value="#59808A94" />
                                                                     <Setter Property="Opacity" Value="0.7" />
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="filtered">
+                                                                    <Setter Property="Background" Value="#28808A94" />
+                                                                    <Setter Property="BorderBrush" Value="#59808A94" />
+                                                                    <Setter Property="Opacity" Value="0.7" />
+                                                                </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Status}" Value="unsupported">
                                                                     <Setter Property="Background" Value="#14808A94" />
                                                                     <Setter Property="Opacity" Value="0.55" />

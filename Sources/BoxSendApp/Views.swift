@@ -359,19 +359,14 @@ struct RunView: View {
             Text(s.name).fontWeight(selected ? .semibold : .medium).lineLimit(1)
             Text(limit > 0 ? "上传限速 \(Int((Double(limit) / 1048576.0).rounded())) MB/s" : "上传限速 不限速")
                 .font(.caption).foregroundStyle(.secondary)
-            if let e = model.reseedEvents[s.id] { eventChip(e) }
-            if let e = model.pushEvents[s.id] { eventChip(e) }
-            if let link = seedPageURL(s) {
-                Button {
-                    model.openURL(link)
-                } label: {
-                    Label("种子页", systemImage: "arrow.up.forward.app").font(.caption)
-                }
-                .buttonStyle(.bordered).controlSize(.small)
-                .tint(Color.accentColor)
-                .help("在浏览器里打开站内那条种子：\(link)")
-            }
-            detailLine(s)
+            // 三格都是先占好再填：LazyVGrid 的行高只在排版那一刻算，卡片中途长高
+            // 会把下面那排顶歪（卡片互相遮挡），所以高度必须运行前后一致
+            // 只有跑起来才铺占位：空卡片也占一格会把网格顶出大片空白；
+            // 运行时整排一起变高，行高照样只在排版那一刻算一次
+            chipSlot(model.reseedEvents[s.id], reserve: model.running)
+            chipSlot(model.pushEvents[s.id], reserve: model.running)
+            seedSlot(seedPageURL(s), reserve: model.running)
+            detailSlot(s, reserve: model.running)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -442,12 +437,25 @@ struct RunView: View {
     // MARK: 站点卡片状态
 
     /// 状态胶囊：图标 + 短文案。窄卡片里让文字竖排换行（不截断），完整原因看悬浮提示
-    @ViewBuilder
     private func eventChip(_ e: AppModel.TargetEvent) -> some View {
-        let tint: Color = chipTint(e.phase)
+        chipView(Text(e.text), chipTint(e.phase), chipIcon(e.phase),
+                 tip: e.detail.isEmpty ? e.text : e.detail)
+    }
+
+    /// 胶囊那一格：底下永远铺一个两行的隐形胶囊，真胶囊盖在上面。
+    /// 有没有事件、文案长短都不改卡片高度，网格排版才不会错位。
+    @ViewBuilder
+    private func chipSlot(_ e: AppModel.TargetEvent?, reserve: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            if reserve { chipView(Text(" \n "), .primary, "circle", tip: "").opacity(0) }
+            if let e { eventChip(e) }
+        }
+    }
+
+    private func chipView(_ text: Text, _ tint: Color, _ icon: String, tip: String) -> some View {
         HStack(alignment: .center, spacing: 3) {
-            Image(systemName: chipIcon(e.phase)).font(.system(size: 9))
-            Text(e.text).font(.caption)
+            Image(systemName: icon).font(.system(size: 9))
+            text.font(.caption)
                 .lineLimit(2).multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -455,7 +463,28 @@ struct RunView: View {
         .padding(.horizontal, 6).padding(.vertical, 2)
         .background(Capsule().fill(tint.opacity(0.13)))
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(e.detail.isEmpty ? e.text : e.detail)
+        .help(tip)
+    }
+
+    /// 种子页那一格：没链接时留一个同样高的隐形按钮占位
+    @ViewBuilder
+    private func seedSlot(_ link: String?, reserve: Bool) -> some View {
+        ZStack(alignment: .leading) {
+            if reserve { seedButton(nil).opacity(0) }
+            if let link { seedButton(link) }
+        }
+    }
+
+    private func seedButton(_ link: String?) -> some View {
+        Button {
+            if let link { model.openURL(link) }
+        } label: {
+            Label(link == nil ? "" : "种子页", systemImage: "arrow.up.forward.app").font(.caption)
+        }
+        .buttonStyle(.bordered).controlSize(.small)
+        .tint(Color.accentColor)
+        .disabled(link == nil)
+        .help(link.map { "在浏览器里打开站内那条种子：\($0)" } ?? "")
     }
 
     private func chipTint(_ p: AppModel.TargetEvent.Phase) -> Color {
@@ -476,17 +505,24 @@ struct RunView: View {
         }
     }
 
-    /// 卡片下方的说明行：失败原因 / 已存在详情 / 需人工注意的提示。
-    /// 允许换行（不截断成「…」），完整内容在悬浮提示里。
+    /// 卡片下方的说明行那一格：先铺三行隐形文字占位。
+    /// 失败原因允许换行（不截断成「…」），更长的尾巴在悬浮提示与运行记录里。
     @ViewBuilder
-    private func detailLine(_ s: SiteConfig) -> some View {
-        if let d = detailText(s) {
-            Text(d.display).font(.caption2).foregroundStyle(d.tint)
-                .lineLimit(4)
+    private func detailSlot(_ s: SiteConfig, reserve: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            if reserve { Text(" \n \n \n ")
+                .font(.caption2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
-                .help(d.full)
+                .opacity(0) }
+            if let d = detailText(s) {
+                Text(d.display).font(.caption2).foregroundStyle(d.tint)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .help(d.full)
+            }
         }
     }
 
@@ -2186,7 +2222,7 @@ struct AssistView: View {
         case .assisted, .failed, .verifying, .review, .manual: return tintColor(status).opacity(0.18)
         case .seeding: return tintColor(status).opacity(0.14)
         // 「不用查」的几种也给个底：灰一档，跟「要动手」的素底分开
-        case .missing, .rejected: return Color.secondary.opacity(0.16)
+        case .missing, .rejected, .filtered: return Color.secondary.opacity(0.16)
         case .unsupported: return Color.secondary.opacity(0.08)
         case .pending: return Color.clear
         }
@@ -2196,7 +2232,7 @@ struct AssistView: View {
         switch status {
         case .assisted, .failed, .verifying, .review, .manual: return tintColor(status).opacity(0.5)
         case .seeding: return tintColor(status).opacity(0.4)
-        case .missing, .rejected: return Color.secondary.opacity(0.35)
+        case .missing, .rejected, .filtered: return Color.secondary.opacity(0.35)
         case .unsupported, .pending: return Color(nsColor: .separatorColor)
         }
     }
@@ -2210,8 +2246,74 @@ struct AssistView: View {
         case .manual: return .orange
         case .seeding: return .teal
         case .pending: return .secondary
-        case .missing, .rejected, .unsupported: return Color.secondary.opacity(0.6)
+        case .missing, .rejected, .unsupported, .filtered: return Color.secondary.opacity(0.6)
         }
+    }
+}
+
+/// 逐站筛选的一行：站名 + 包含/排除关键词 + 体积上下限。回车提交（与限速输入框同一套习惯）
+private struct AssistFilterRow: View {
+    let name: String
+    let filter: AssistConfig.SiteFilter
+    let commit: (AssistConfig.SiteFilter) -> Void
+    @State private var include: String
+    @State private var exclude: String
+    @State private var minGB: String
+    @State private var maxGB: String
+
+    init(name: String, filter: AssistConfig.SiteFilter,
+         commit: @escaping (AssistConfig.SiteFilter) -> Void) {
+        self.name = name
+        self.filter = filter
+        self.commit = commit
+        _include = State(initialValue: filter.include.joined(separator: "，"))
+        _exclude = State(initialValue: filter.exclude.joined(separator: "，"))
+        _minGB = State(initialValue: filter.minSizeGB > 0 ? String(Int(filter.minSizeGB)) : "")
+        _maxGB = State(initialValue: filter.maxSizeGB > 0 ? String(Int(filter.maxSizeGB)) : "")
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(name).lineLimit(1).frame(width: 92, alignment: .leading)
+            field($include, "不限") { include = $0; send() }
+            field($exclude, "不排除") { exclude = $0; send() }
+            field($minGB, "0", wide: false) { minGB = $0; send() }
+            field($maxGB, "0", wide: false) { maxGB = $0; send() }
+            if !filter.isEmpty {
+                Button("清除") {
+                    include = ""; exclude = ""; minGB = ""; maxGB = ""
+                    commit(AssistConfig.SiteFilter())
+                }
+                .controlSize(.mini)
+            }
+            Spacer()
+        }
+        .font(.caption)
+    }
+
+    private func field(_ bind: Binding<String>, _ prompt: String, wide: Bool = true,
+                       set: @escaping (String) -> Void) -> some View {
+        TextField("", text: bind, prompt: Text(prompt))
+            .textFieldStyle(.roundedBorder)
+            .frame(width: wide ? 190 : 52)
+            .onSubmit { set(bind.wrappedValue); send() }
+    }
+
+    /// 关键词按逗号（中英文都算）切；数字留空当 0
+    private func send() {
+        var f = AssistConfig.SiteFilter(
+            include: split(include), exclude: split(exclude),
+            minSizeGB: Double(minGB) ?? 0, maxSizeGB: Double(maxGB) ?? 0)
+        if f.include.isEmpty && exclude.isEmpty && minGB.isEmpty && maxGB.isEmpty {
+            f = AssistConfig.SiteFilter()
+        }
+        commit(f)
+    }
+
+    private func split(_ s: String) -> [String] {
+        s.components(separatedBy: CharacterSet(charactersIn: ",，、"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -2341,6 +2443,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 paceCard
+                siteFilterCard
                 CookiesView()
                 DownloaderView()
                 CardSection("主题（渐变色）") {
@@ -2420,6 +2523,54 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。"
                  + "辅种站点在「站点分组」页底部的辅种区块里添加。")
+                .font(.caption2).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 逐站筛选：站点名单铺满时首轮要检索几十天，能砍分母的就靠这条规则
+    @State private var filterOnlySet = false
+
+    private var siteFilterCard: some View {
+        let ids = cfg.siteIDs
+        let rows = ids.filter { filterOnlySet == false || cfg.assistFilter($0) != nil }
+        return CardSection("辅种逐站筛选") {
+            HStack(spacing: 10) {
+                Toggle("只显示设过规则的站", isOn: $filterOnlySet)
+                    .toggleStyle(.switch).controlSize(.small)
+                Text("共 \(ids.count) 个辅种站，其中 \(ids.filter { cfg.assistFilter($0) != nil }.count) 个设了规则")
+                    .font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+            }
+            if ids.isEmpty {
+                Text("辅种站点在「站点分组」页底部的辅种区块里添加。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    Text("站点").frame(width: 92, alignment: .leading)
+                    Text("只辅（含任一）").frame(width: 190, alignment: .leading)
+                    Text("不辅（含任一）").frame(width: 190, alignment: .leading)
+                    Text("下限/上限 GB")
+                    Spacer()
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                // 站名一多这张卡能顶满整屏，规则列表自己滚，别把设置页撑没
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(rows, id: \.self) { id in
+                            AssistFilterRow(name: model.siteName(id),
+                                            filter: cfg.siteFilters[id] ?? AssistConfig.SiteFilter()) { f in
+                                model.assistUpdate {
+                                    if f.isEmpty { $0.siteFilters[id] = nil } else { $0.siteFilters[id] = f }
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 280)
+            }
+            Text("关键词不分大小写，逗号分隔；体积留空 = 跟全局设置。规则只拦「要不要去站内检索这一步」，"
+                 + "已辅过、已在该站做种的照旧不动。")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
