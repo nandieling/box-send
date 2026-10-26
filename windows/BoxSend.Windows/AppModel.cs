@@ -249,6 +249,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         ApplyAssistCoverage(assist?["coverage"]);
         ApplyAssistQueue(assist?["queue"]);
         ApplyAssistSiteProgress(assist?["siteProgress"]);
+        ApplyAssistBudget(assist?["budget"]);
 
         var logs = snap["logs"]?.AsArray();
         if (logs != null && (Logs.Count != logs.Count || full))
@@ -536,6 +537,26 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     /// 停止本轮：给核心库正在跑的那条流水线递个话，没在跑就是空操作
     public Task<string?> AssistStopAsync() => TryAsync("assist.stop", null);
+
+    /// 追加本轮请求预算（只追次数上限，逐站间隔照旧）
+    public Task<string?> AssistAddBudgetAsync(int add = 200) =>
+        TryAsync("assist.budget", new { add });
+
+    private int _assistBudgetUsed;
+    private int _assistBudgetTotal;
+    public int AssistBudgetUsed => _assistBudgetUsed;
+    public int AssistBudgetTotal => _assistBudgetTotal;
+    public string AssistBudgetLine => $"本轮请求 {_assistBudgetUsed:N0} / {_assistBudgetTotal:N0}";
+
+    private void ApplyAssistBudget(JsonNode? node)
+    {
+        var used = Num(node?["used"]);
+        var total = Num(node?["total"]);
+        if (used == _assistBudgetUsed && total == _assistBudgetTotal) return;
+        _assistBudgetUsed = used;
+        _assistBudgetTotal = total;
+        Raise(nameof(AssistBudgetUsed), nameof(AssistBudgetTotal), nameof(AssistBudgetLine));
+    }
 
     public void ClearAssistRows() => AssistRows.Clear();
 

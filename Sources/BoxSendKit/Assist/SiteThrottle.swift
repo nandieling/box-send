@@ -31,7 +31,7 @@ public final class SiteThrottle: @unchecked Sendable {
         }
     }
 
-    private let limits: Limits
+    private var limits: Limits
     private let now: () -> Date
     private let pause: (TimeInterval) -> Void
     private let lock = NSLock()
@@ -80,6 +80,19 @@ public final class SiteThrottle: @unchecked Sendable {
         lock.unlock()
         if extra > 0 { pause(extra) }
         return true
+    }
+
+    /// 本轮预算：已用 / 上限（上限能中途追加）
+    public var budget: (used: Int, total: Int) {
+        lock.lock(); defer { lock.unlock() }
+        return (requests, limits.roundBudget)
+    }
+
+    /// 追加本轮预算：人在界面上看着这一轮跑得顺，想让它多跑一会儿，
+    /// 不必等这轮收工再点一次。逐站间隔照旧，追加的只是次数上限。
+    public func addBudget(_ n: Int) {
+        lock.lock(); defer { lock.unlock() }
+        limits.roundBudget += max(0, n)
     }
 
     /// 站点回 429/503 或写明「搜索太频繁/请稍后再试」：该站间隔翻倍，别接着敲

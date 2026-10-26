@@ -37,6 +37,42 @@ public final class ReseedPipeline {
     /// 下载器连不上时也应该把种先发到目标站。
     /// 这一行讲的是「源站种子」，文案统一用获取（源站种子获取中… / 源站种子已获取），
     /// 和目标站卡片上的推送区分开，免得看着像目标站已经推完。
+    /// 上传给目标站的 .torrent 文件名：非 ASCII（中文片名）去掉，多余标点收成点，
+    /// 擦得没剩几个字就改用提交给目标站的主标题。站点校验只认 ASCII，
+    /// 文件名与主标题对不上反而更容易被判「无效」
+    static func uploadFilename(_ source: String, title: String) -> String {
+        let cleaned = asciiSafeName((source as NSString).deletingPathExtension)
+        let base = cleaned.count >= 8 ? cleaned : asciiSafeName(title)
+        return (base.count >= 4 ? base : "release") + ".torrent"
+    }
+
+    /// 站点上传文件名的字符白名单。各站那条校验的宽严不一，最窄的一种形如
+    /// `^[\w.-]+\.torrent$`（只认字母数字下划线点连字符），所以这里直接收到最窄那一档：
+    /// 中文、空格、方括号、冒号等一律收成点，连着的点收一个，首尾分隔去掉。
+    /// 这样出来的名字既过得了最严的站，看着也就是标准的场景命名（点分）
+    static func asciiSafeName(_ text: String) -> String {
+        var out = ""
+        var lastSep = false
+        for scalar in text.unicodeScalars {
+            let ok = (scalar >= "a" && scalar <= "z") || (scalar >= "A" && scalar <= "Z")
+                || (scalar >= "0" && scalar <= "9") || scalar == "_" || scalar == "-"
+            if ok {
+                out.unicodeScalars.append(scalar)
+                lastSep = false
+            } else if !lastSep {
+                out.append(".")
+                lastSep = true
+            }
+        }
+        let sep = CharacterSet(charactersIn: " .-_")
+        var name = out.trimmingCharacters(in: sep)
+        if name.count > 120 {
+            // 截断也落在分隔上，别留半截词和一个孤零零的点
+            name = String(name.prefix(120)).trimmingCharacters(in: sep)
+        }
+        return name
+    }
+
     private func pushSourceTorrent(torrentData: Data, filename: String, upLimit: Int64,
                                    release: ReleaseInfo, opts: Options, report: inout Report) {
         if state.isPushed(key: release.dedupKey) {
@@ -330,6 +366,13 @@ public final class ReseedPipeline {
         // 3. 下载 .torrent，用 bencode 校正大小；发布名保持源站详情页主标题
         //（.torrent 的 info.name 常带站方前缀/点分文件名，不宜作为目标站主标题）
         let (torrentData, filename) = try adapter.downloadTorrentFile(release)
+        // 上传给目标站的文件名单独洗一遍：NexusPHP 家族那条校验只认 ASCII 字母数字加少量标点，
+        // 而站方常把中文片名写进 .torrent 文件名（实测 LuckPT「[LuckPT].南家三姐妹 再来一碗.…」），
+        // 照原样传上去就是「无效的文件名」，一站都传不上去
+        let uploadName = Self.uploadFilename(filename, title: release.name)
+        if uploadName != filename {
+            state.note("torrent 文件名改为上传用：\(filename) → \(uploadName)")
+        }
         report.torrentBytes = torrentData.count
         report.torrentData = torrentData
         release.size = Bencode.totalLength(torrentData) ?? release.size
@@ -486,7 +529,7 @@ public final class ReseedPipeline {
                             continue
                         }
                         let outcome = try bounded(opts.siteTimeout, "单站转种") {
-                            try tAdapter.upload(release, torrentData: torrentData, filename: filename)
+                            try tAdapter.upload(release, torrentData: torrentData, filename: uploadName)
                         }
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)

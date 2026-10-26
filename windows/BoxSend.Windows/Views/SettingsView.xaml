@@ -112,6 +112,9 @@
                                        TextWrapping="Wrap" VerticalAlignment="Bottom"
                                        Foreground="{DynamicResource TextMuted}" />
                         </Grid>
+                        <CheckBox x:Name="RelaxedRetry" Content="站内查不到时换宽松查询词再问一次"
+                                  Margin="0,6,0,0"
+                                  ToolTip="站点把 Blu-ray 写成 BluRay、结果页截断标题这几类，只有宽松那档查得出来；代价是没命中的那一格多花一次请求" />
                         <CheckBox x:Name="AutoAccept" Content="站点重打包（文件全等）自动采纳"
                                   FontSize="12" Margin="0,4,0,0" />
                         <CheckBox x:Name="RemoveOnFail" Content="校验不满 100% 时删掉刚加的种子"

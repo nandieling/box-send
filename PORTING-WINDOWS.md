@@ -747,6 +747,39 @@ Windows 侧：
   暂停站一次请求不发、逐站进度三站各算各的且实时进展推动百分比、停止本轮只跑完手头那一格）；
   `BOXSEND_LIVE=1` 实站照旧出覆盖率那句；`dotnet build` 0 错误。
 
+## 这一轮（上传文件名洗成 ASCII + 辅种第四批：报错不算「站内没有」、宽松重试、中途追加预算）
+
+- 大部分目标站报「转种失败 无效的文件名！」：源站把中文片名写进了 .torrent 文件名
+  （实测 LuckPT 47762「[LuckPT].南家三姐妹 再来一碗.Minami-ke: Okawari.2008.S02.1080p.…」，
+  debug 里 audiences/cmct/hdhome/chdbits/hdsky 的 upload-*.html 全写着「无效的文件名！」）。
+  NexusPHP 家族那条校验只认 ASCII，最窄的一种形如 `^[\w.-]+\.torrent$`，
+  所以 `ReseedPipeline.uploadFilename(_:title:)` 直接收到最窄那一档：中文、空格、方括号、
+  冒号等一律收成一个点，首尾分隔去掉，超过 120 字在分隔处截断；洗完全空就改用发给目标站的
+  主标题，主标题也不能用才兜底 `release.torrent`。改完的名字会往状态里记一句
+  「torrent 文件名改为上传用：A → B」，原本那份照旧推给下载器（下载器认中文名，站点不认）。
+  **这层在共用的核心里，两端一起好**：Windows 一行都不用改，走的是同一个 `upload(filename:)`。
+- 站内检索「报错」与「站内没有」分家（`attempt`）：cookie 失效、站点 500 这类以前也走
+  `markAssistMiss`，等于把整站的格子钉在负缓存里 7 天不再问；现在只 `markAssistFail`，
+  结论写「站内检索失败：…」（`failed`），下一轮照问。新增 `AssistSearchErrorRetryTests` 验这条。
+- 宽松重试：严格那档没命中时换宽松查询词再问一次（`SiteAdapter.searchExists(_:relaxed:)`，
+  NexusPHP 那边本来就有多组候选词与容忍分词的匹配，辅种此前只用严格那档）。
+  开关是 `AssistConfig.relaxedRetrySearch`（默认开），两端都放在「设置 → 辅种」：
+  mac 是 `Toggle`，WPF 是 `CheckBox RelaxedRetry`，读写同一个 `assist.relaxedRetrySearch`。
+  只在「干净没命中」后才追加，已经点了停止本轮就不追这次；命中的那一格会在结论里带
+  「换宽松查询词才找到」，整轮跑完的文案多一句「其中 N 条换宽松查询词才找到」。
+  代价：一条站外确实没有的种子从 1 次请求变成 2 次，所以旧的两条只数请求次数的测试
+  改用关掉宽松重试的 `quietCfg`。
+- 中途追加预算：`SiteThrottle.budget` / `addBudget(_:)`（上限只增不减，负数忽略）。
+  边界多两个动作：`assist.stop`（上一轮就有）与 `assist.budget`，`assist` 段多带
+  `budget: {used, total}`；mac 那棵「追加 200 次」直接问手里的流水线实例，
+  WPF 走 `AssistAddBudgetAsync()` 再等下一次快照。两端语义一致：只抬这一轮的次数上限，
+  逐站间隔与抖动照旧。
+- 验证：`swift test` 588 绿（新增 `UploadFilenameTests` 7 条——真名、中文名回退主标题、
+  兜底名、干净名不动、标点收点、长名截断、`asciiSafeName` 字面；
+  `AssistSearchErrorRetryTests` 5 条——报错不进负缓存且下轮再问、干净没命中问两次再进负缓存、
+  宽松档捞回重新打包的那条、开关关掉只问一次、`addBudget` 抬上限）；
+  `dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

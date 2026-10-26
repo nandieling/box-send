@@ -259,6 +259,7 @@ public partial class SettingsView : UserControl
         MissTTL.Text = ((int)PaceNum("missTTLDays", 7)).ToString();
         AutoRun.Text = ((int)PaceNum("autoRunMinutes", 0)).ToString();
         ListPageSize.Text = ((int)PaceNum("listPageSize", 10)).ToString();
+        RelaxedRetry.IsChecked = _model.SectionFlag("assist", "relaxedRetrySearch", true);
         AutoAccept.IsChecked = _model.SectionFlag("assist", "autoAcceptSameFiles", true);
         RemoveOnFail.IsChecked = _model.SectionFlag("assist", "removeOnVerifyFail", true);
         LoadPaceHint();
@@ -290,6 +291,7 @@ public partial class SettingsView : UserControl
             if (double.TryParse(Jitter.Text, out var jt)) o["jitterSec"] = Math.Max(0, Math.Min(30, jt));
             if (int.TryParse(Budget.Text, out var bd)) o["roundBudget"] = Math.Max(1, Math.Min(2000, bd));
             if (int.TryParse(MissTTL.Text, out var tt)) o["missTTLDays"] = Math.Max(0, Math.Min(90, tt));
+            o["relaxedRetrySearch"] = RelaxedRetry.IsChecked == true;
             o["autoAcceptSameFiles"] = AutoAccept.IsChecked == true;
             o["removeOnVerifyFail"] = RemoveOnFail.IsChecked == true;
             if (int.TryParse(AutoRun.Text, out var ar)) o["autoRunMinutes"] = Math.Max(0, Math.Min(1440, ar));

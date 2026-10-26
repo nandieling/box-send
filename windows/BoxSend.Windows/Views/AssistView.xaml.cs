@@ -231,6 +231,8 @@ public partial class AssistView : UserControl
         BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
         BtnRecheck.IsEnabled = !_model.BusyAssist;
         BtnStop.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
+        BtnBudget.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
+        Budget.Text = _model.AssistBudgetLine;
         SiteBox.Visibility = _model.AssistSiteProgress.Count == 0
             ? Visibility.Collapsed : Visibility.Visible;
         BtnPrev.IsEnabled = _page > 0 && !_model.BusyAssist;
@@ -242,6 +244,10 @@ public partial class AssistView : UserControl
 
     /// 停止本轮：核心库处理完手头那一格才收摊，中途打断不会把推一半的种子扔下
     private async void OnStop(object sender, RoutedEventArgs e) => await _model.AssistStopAsync();
+
+    /// 追加本轮请求预算：这一轮跑得顺就想让它多跑一会儿，不必收工再点一次
+    private async void OnBudget(object sender, RoutedEventArgs e) =>
+        await _model.AssistAddBudgetAsync();
 
     /// 暂停 / 取消暂停一个辅种站：写 assist.pausedSites，进度行跟着下一次快照变灰
     private void OnPauseSite(object sender, RoutedEventArgs e)

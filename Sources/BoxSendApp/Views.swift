@@ -1913,6 +1913,12 @@ struct AssistView: View {
                 }
                 .controlSize(.small)
                 .help("处理完手头这一格就收摊；状态表原样留着，下一轮从没跑过的格子接着铺")
+                Button("追加 200 次") { model.assistAddBudget() }
+                    .controlSize(.small)
+                    .help("只追这一轮的请求次数上限，逐站间隔照旧")
+                Text("本轮请求 \(model.assistBudget.used) / \(model.assistBudget.total)")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .help("站点请求：检索、详情、种子文件各算一次")
             }
 
             Toggle("只预演", isOn: $model.assistDryRun)
@@ -2623,6 +2629,8 @@ struct SettingsView: View {
             paceRow("辅种页单页条数", Binding(get: { cfg.listPageSize },
                                              set: { model.assistSetPageSize($0) }),
                     recommend: 10, unit: "条")
+            Toggle("站内查不到时换宽松查询词再问一次", isOn: flag(\.relaxedRetrySearch))
+                .font(.callout)
             Toggle("站点重打包（文件全等）自动采纳", isOn: flag(\.autoAcceptSameFiles))
                 .font(.callout)
             Toggle("校验不满 100% 时删掉刚加的种子", isOn: flag(\.removeOnVerifyFail))
@@ -2634,7 +2642,8 @@ struct SettingsView: View {
                  : "约 \(model.assistAutoNext ?? 0) 分钟后自动跑下一轮，请求仍受单轮预算约束。")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）。"
+            Text("一次检索最多发 3 次站点请求（检索、详情、种子文件各一次）；"
+                 + "严格查重没命中再问一次宽松的，那一格最多 4 次。"
                  + "辅种站点在「站点分组」页底部的辅种区块里添加。")
                 .font(.caption2).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

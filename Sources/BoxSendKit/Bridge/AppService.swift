@@ -394,6 +394,8 @@ public final class AppService {
             return try rejectAssist(params)
         case "assist.stop":
             return stopAssist()
+        case "assist.budget":
+            return addAssistBudget(params)
         case "assist.tick":
             return tickAssist()
         case "assist.status":
@@ -923,6 +925,7 @@ public final class AppService {
                 }
                 reportText = "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                     + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+                    + (pipe.relaxedHits > 0 ? "，其中 \(pipe.relaxedHits) 条换宽松查询词才找到" : "")
                     + (report.stopped ? "（已手动停止本轮）" : "")
             } catch {
                 failure = error.localizedDescription
@@ -969,6 +972,34 @@ public final class AppService {
         } catch {
             return ["started": false, "minutes": minutes, "error": error.localizedDescription]
         }
+    }
+
+    /// 追加本轮请求预算：这一轮跑得顺就想让它多跑一会儿，不必收工再点一次。
+    /// 没在跑时什么也不做——预算是「这一轮」的概念，下一轮从头算。
+    private func addAssistBudget(_ params: [String: Any]) -> [String: Any] {
+        let add = int(params["add"]) ?? 200
+        lock.lock()
+        let runner = assistRunner
+        lock.unlock()
+        runner?.addBudget(max(1, add))
+        return assistBudget()
+    }
+
+    /// 本轮请求「已用 / 上限」：没在跑就给个 0 / 配置值，界面上那句照写
+    private func assistBudget() -> [String: Any] {
+        lock.lock()
+        let runner = assistRunner
+        let planned = cfg.assist?.roundBudget ?? 0
+        lock.unlock()
+        let b = runner?.budget ?? (used: 0, total: planned)
+        return ["used": b.used, "total": b.total]
+    }
+
+    /// 快照里那份预算读数（已持锁，不能再进 assistBudget）
+    private func assistBudgetLocked() -> [String: Any] {
+        let planned = cfg.assist?.roundBudget ?? 0
+        let b = assistRunner?.budget ?? (used: 0, total: planned)
+        return ["used": b.used, "total": b.total]
     }
 
     /// 「停止本轮」：给正在跑的那条流水线递个话，没在跑就是空操作。
@@ -1018,6 +1049,7 @@ public final class AppService {
         let minutes = cfg.assist?.autoRunMinutes ?? 0
         var out: [String: Any] = ["running": busyAssist, "step": assistStep, "report": assistReport,
                 "rows": rows, "stats": Self.statsJSON(stats),
+                "budget": assistBudgetLocked(),
                 "autoRun": ["minutes": minutes,
                             "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
                             "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]

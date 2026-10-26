@@ -16,6 +16,12 @@
                 <!-- 跑到一半想收摊：只停这一轮，状态表原样留着 -->
                 <Button x:Name="BtnStop" Content="停止本轮" Margin="10,0,0,0" Click="OnStop"
                         Visibility="Collapsed" ToolTip="处理完手头这一格就收摊；下一轮从没跑过的格子接着铺" />
+                <Button x:Name="BtnBudget" Content="追加 200 次" Margin="10,0,0,0"
+                        Click="OnBudget" Visibility="Collapsed"
+                        ToolTip="只追这一轮的请求次数上限，逐站间隔照旧" />
+                <TextBlock x:Name="Budget" Margin="10,0,0,0" VerticalAlignment="Center"
+                           FontSize="12" Foreground="{DynamicResource TextMuted}"
+                           ToolTip="站点请求：检索、详情、种子文件各算一次" />
                 <CheckBox x:Name="DryRun" Content="只预演" VerticalAlignment="Center"
                           Margin="14,0,0,0" ToolTip="按真实流程走一遍，但不动下载器" />
                 <TextBlock x:Name="State" Margin="12,0,0,0" VerticalAlignment="Center"

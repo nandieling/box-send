@@ -1583,6 +1583,14 @@ final class AppModel: ObservableObject {
     /// 停止本轮：处理完手头这一格就收摊，状态表原样留着
     func assistStop() { assistRunner?.requestStop() }
 
+    /// 本轮请求「已用 / 上限」：跑起来那句「预算还剩多少」用它
+    var assistBudget: (used: Int, total: Int) {
+        assistRunner?.budget ?? (used: 0, total: assistConfig.roundBudget)
+    }
+
+    /// 追加本轮请求预算（只追次数上限，逐站间隔照旧）
+    func assistAddBudget(_ n: Int = 200) { assistRunner?.addBudget(max(1, n)) }
+
     /// 覆盖率与预计：把「还剩多少」翻成「照现在这个节奏还要跑多久」
     var assistCoverage: AssistPipeline.Coverage? {
         guard let plan = assistPlan else { return nil }
@@ -1841,6 +1849,7 @@ final class AppModel: ObservableObject {
             let text = (dry ? "预演结束：" : "辅种结束：")
                 + "成功 \(report.assistedCount)，待人工确认 \(report.pendingCount)，"
                 + "跳过 \(report.skippedCount)，站点请求 \(report.requests) 次"
+                + (pipe.relaxedHits > 0 ? "，其中 \(pipe.relaxedHits) 条换宽松查询词才找到" : "")
                 + (report.stopped ? "（已手动停止本轮）" : "")
             await MainActor.run {
                 self.cookies.mergeFrom(jar)

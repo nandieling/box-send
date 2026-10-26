@@ -130,6 +130,14 @@ final class AssistPipelineTests: XCTestCase {
                      roundBudget: 50, verifyWaitSec: 3, verifyPollSec: 1)
     }
 
+    /// 站内没找到时默认还会换宽松查询词再问一次（AssistSearchErrorRetryTests 专门测它）。
+    /// 只数「问了几次、有没有被负缓存拦住」的测试用这一份，次数才对得上
+    private var quietCfg: AssistConfig {
+        var cfg = quickCfg
+        cfg.relaxedRetrySearch = false
+        return cfg
+    }
+
     private func noSleep(_ seconds: TimeInterval) {}
 
     // MARK: A 级：hash 相同，校验到 100% 才算成
@@ -194,7 +202,7 @@ final class AssistPipelineTests: XCTestCase {
 
     func testPlanMarksSearchableAndSkipped() throws {
         let dl = FakeDownloader()
-        let (pipe, fake, _) = makePipe(cfg: quickCfg, downloader: dl,
+        let (pipe, fake, _) = makePipe(cfg: quietCfg, downloader: dl,
                                        site: site("target", host: "target.invalid"),
                                        torrentData: nil)
         var o = AssistPipeline.Options(); o.sleep = noSleep
@@ -226,7 +234,7 @@ final class AssistPipelineTests: XCTestCase {
     /// 站内没有：记负缓存，第二次跑不再检索
     func testMissIsCachedAndNotResearched() throws {
         let dl = FakeDownloader()
-        let (pipe, fake, _) = makePipe(cfg: quickCfg, downloader: dl,
+        let (pipe, fake, _) = makePipe(cfg: quietCfg, downloader: dl,
                                        site: site("target"), torrentData: nil)
         var o = AssistPipeline.Options(); o.sleep = noSleep
         _ = pipe.run(torrents: [localTorrent(hash: "bb")], opts: o)

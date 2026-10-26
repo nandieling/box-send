@@ -166,14 +166,23 @@ public final class AssistPipeline {
 
     // MARK: - 执行
 
-    @discardableResult
-    /// 界面上的「停止本轮」：在处理下一条格子时生效，不会把手头那条推一半的扔下
+    /// 本轮请求已用 / 上限：界面上那句「本轮预算还剩多少」
+    public var budget: (used: Int, total: Int) { throttle.budget }
+
+    /// 追加本轮请求预算（不追节奏，只追次数上限）
+    public func addBudget(_ n: Int) { throttle.addBudget(n) }
+
+    /// 这一轮里有几条是靠宽松查询词才找到站内那条的
+    public var relaxedHits: Int { relaxedHitCount }
+    private var relaxedHitCount = 0
+
     public func requestStop() { stopFlag.set(true) }
     public var stopRequested: Bool { stopFlag.value }
     private let stopFlag = StopFlag(false)
 
     /// 那个标志：界面线程写、跑轮的线程读，裸 Bool 算数据竞争，套一层锁
 
+    @discardableResult
     public func run(torrents: [LocalTorrent], opts: Options = Options()) -> Report {
         var report = Report()
         guard let cfg = config.assist else { return report }
@@ -808,6 +817,7 @@ public final class AssistPipeline {
         }
         // 人工点了「采纳」：就算在负缓存期内、或此前辅过，也照着人的判断再走一遍
         let forced = opts.forceKeys.contains("\(site.id)|\(t.hash)")
+        var relaxedHit = false
         // 先筛掉不该花请求的组合：白扔请求既慢又给站点添负载
         if !forced, let pre = preSkip(t, site: site, cfg: cfg) {
             return out(.skip(pre.why), pre.detail)
@@ -816,10 +826,28 @@ public final class AssistPipeline {
             return out(.skip("本轮检索预算用完"), "站点请求预算已用满，下次接着跑")
         }
         let query = ReleaseInfo(siteID: site.id, detailURL: site.url, name: t.name)
-        guard let detail = try? adapter.searchExists(query) else {
+        // 「检索报错」与「站内没有」是两回事：cookie 失效、站点 500 这类不能记成
+        // 「站内没有」，否则整站的格子被钉在负缓存里 7 天不再问
+        var found: String?
+        var missClean = true
+        do {
+            found = try adapter.searchExists(query)
+        } catch {
+            missClean = false
+            return out(.skip("站内检索没问成"), "站内检索失败：\(error.localizedDescription)",
+                       failed: true)
+        }
+        // 严格那档没命中就换宽松查询词再问一次（多花一次请求，只发生在没命中时）
+        if found == nil, missClean, !stopRequested, cfg.relaxedRetrySearch,
+           throttle.acquire(site.id) {
+            found = try? adapter.searchExists(query, relaxed: true)
+            relaxedHit = found != nil
+        }
+        guard let detail = found else {
             state.markAssistMiss(site: site.id, hash: t.hash)
             return out(.skip("站内无此种子"), "站内检索没找到同名种子")
         }
+        if relaxedHit { relaxedHitCount += 1 }
         guard throttle.acquire(site.id),
               let info = try? adapter.fetchDetail(detailURL: detail),
               throttle.acquire(site.id),
@@ -827,7 +855,8 @@ public final class AssistPipeline {
             return out(.skip("站点那条读不下来"), "详情或 .torrent 下载失败（cookie 可能失效）",
                        failed: true)
         }
-        guard let localFiles = try? downloader.torrentFiles(hash: t.hash), !localFiles.isEmpty else {
+        let foundNote = relaxedHit ? "（换宽松查询词才找到，站内标题与本地不同）" : ""
+                guard let localFiles = try? downloader.torrentFiles(hash: t.hash), !localFiles.isEmpty else {
             return out(.nameOnly(info.name), "读不到本地种子的文件清单，没法逐文件比对")
         }
         let local = TorrentFingerprint(root: TorrentFingerprint.commonRoot(localFiles),
@@ -851,6 +880,7 @@ public final class AssistPipeline {
             }
             var note = forced ? "已按人工采纳" : ""
             if forced, let layoutNote { note += "（\(layoutNote)，可能会重下一部分）" }
+            if relaxedHit { note = note.isEmpty ? "换宽松查询词才找到" : note + "；换宽松查询词才找到" }
             return push(t, site: site, cfg: cfg, data: data, level: lvl, why: reason, detail: detail,
                         opts: opts, prefix: note.isEmpty ? "" : note + "：")
         }
@@ -858,7 +888,7 @@ public final class AssistPipeline {
         switch level {
         case .nameOnly:
             if forced { return admit(level, why) }
-            return out(level, "名字对得上但文件清单对不上：\(why)")
+            return out(level, "名字对得上但文件清单对不上：\(why)\(foundNote)")
         case .skip(let why):
             // 判定明说不是同一种子：不因一句「采纳」就硬加
             return out(.skip(why), why)
@@ -867,8 +897,8 @@ public final class AssistPipeline {
                 return out(.nameOnly(info.name), "站点重新打包过（hash 不同），按设置不自动采纳")
             }
             if !forced, let layoutNote {
-                return out(level, "文件一致，但\(layoutNote)，直接加会重下一整份，先不动下载器",
-                           url: detail)
+                return out(level, "文件一致，但\(layoutNote)，直接加会重下一整份，先不动下载器"
+                           + foundNote, url: detail)
             }
             return admit(level, why)
         }
