@@ -289,7 +289,8 @@ public partial class RunView : UserControl
 
         var card = new Border
         {
-            Width = 172,
+            // 卡片宽度收到 mac 那套 adaptive(104…150) 的量级：一屏多放一倍站点
+            Width = 126,
             Padding = new Thickness(10, 8, 10, 8),
             Margin = new Thickness(0, 0, 8, 8),
             CornerRadius = new CornerRadius(8),

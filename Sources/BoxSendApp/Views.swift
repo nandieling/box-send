@@ -341,7 +341,7 @@ struct RunView: View {
                     ProgressView().controlSize(.small)
                 }
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6),
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 8)],
                       alignment: .leading, spacing: 8) {
                 ForEach(members, id: \.id) { s in
                     targetSiteCard(s)
@@ -1973,10 +1973,7 @@ struct AssistView: View {
         let status = model.assistStatus(row)
         let live = model.assistRows[row.rowKey]
         return VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: cellIcon(status)).foregroundStyle(tintColor(status))
-                Text(model.siteName(row.siteID)).font(.caption).lineLimit(1)
-            }
+            Text(model.siteName(row.siteID)).font(.caption).lineLimit(1)
             HStack(spacing: 4) {
                 Text(status.label).font(.caption2).foregroundStyle(tintColor(status))
                 if status == .manual {
@@ -1989,25 +1986,41 @@ struct AssistView: View {
         }
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { Color.blockSurface(model.theme.dark) }
+        .background {
+            // 底色即结论：绿=已辅、红=失败、蓝=校验中、橙=待确认、青=已在该站做种，
+            // 待辅种与「不用查」的保持素底，一眼能挑出要动手的格子
+            ZStack {
+                Color.blockSurface(model.theme.dark)
+                cellWash(status)
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+            .strokeBorder(cellEdge(status), lineWidth: 1))
+        .opacity(status == .unsupported ? 0.55 : status == .missing ? 0.8 : 1)
         .help([model.siteName(row.siteID), row.torrentName,
                live?.detail ?? row.skipReason ?? ""]
             .filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
-    private func cellIcon(_ status: AssistPipeline.RowStatus) -> String {
+    /// 格子底色：结论色铺一层薄底；待辅种 / 不存在 / 不支持检索铺不出来（素底 = 不用管）
+    private func cellWash(_ status: AssistPipeline.RowStatus) -> Color {
         switch status {
-        case .assisted: return "checkmark.circle.fill"
-        case .pending: return "circle"
-        case .failed: return "xmark.circle.fill"
-        case .verifying: return "hourglass"
-        case .manual: return "questionmark.circle"
-        case .missing: return "circle.slash"
-        case .seeding: return "checkmark.seal"
-        case .unsupported: return "minus.circle"
+        case .assisted, .failed, .verifying, .manual: return tintColor(status).opacity(0.18)
+        case .seeding: return tintColor(status).opacity(0.14)
+        // 「不用查」的两种也给个底：灰一档，跟「要动手」的素底分开
+        case .missing: return Color.secondary.opacity(0.16)
+        case .unsupported: return Color.secondary.opacity(0.08)
+        case .pending: return Color.clear
+        }
+    }
+
+    private func cellEdge(_ status: AssistPipeline.RowStatus) -> Color {
+        switch status {
+        case .assisted, .failed, .verifying, .manual: return tintColor(status).opacity(0.5)
+        case .seeding: return tintColor(status).opacity(0.4)
+        case .missing: return Color.secondary.opacity(0.35)
+        case .unsupported, .pending: return Color(nsColor: .separatorColor)
         }
     }
 

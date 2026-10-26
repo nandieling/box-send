@@ -110,9 +110,48 @@
                                                 <DataTemplate>
                                                     <Border MinWidth="96" MaxWidth="132" Margin="0,0,8,8" Padding="8,6"
                                                             CornerRadius="6"
-                                                            Background="{DynamicResource BlockSurface}"
-                                                            BorderBrush="{DynamicResource Line}"
                                                             BorderThickness="1" ToolTip="{Binding Tip}">
+                                                        <!-- 底色即结论：绿=已辅、红=失败、蓝=校验中、橙=待确认、青=已在该站做种；
+                                                             待辅种 / 不存在 / 不支持检索保持素底，一眼挑出要动手的格子 -->
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="{DynamicResource BlockSurface}" />
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="assisted">
+                                                                        <Setter Property="Background" Value="#2E2EA244" />
+                                                                        <Setter Property="BorderBrush" Value="#7A2EA244" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="failed">
+                                                                        <Setter Property="Background" Value="#2EE5484D" />
+                                                                        <Setter Property="BorderBrush" Value="#7AE5484D" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="verifying">
+                                                                        <Setter Property="Background" Value="#2E4C8EFF" />
+                                                                        <Setter Property="BorderBrush" Value="#7A4C8EFF" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="manual">
+                                                                        <Setter Property="Background" Value="#2EE89B2C" />
+                                                                        <Setter Property="BorderBrush" Value="#7AE89B2C" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="seeding">
+                                                                        <Setter Property="Background" Value="#252AA4A4" />
+                                                                        <Setter Property="BorderBrush" Value="#6A2AA4A4" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="missing">
+                                                                        <Setter Property="Background" Value="#28808A94" />
+                                                                        <Setter Property="BorderBrush" Value="#59808A94" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="unsupported">
+                                                                        <Setter Property="Background" Value="#14808A94" />
+                                                                        <Setter Property="Opacity" Value="0.55" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="missing">
+                                                                        <Setter Property="Opacity" Value="0.8" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
                                                         <StackPanel>
                                                             <TextBlock Text="{Binding SiteName}" FontSize="12"
                                                                        TextTrimming="CharacterEllipsis" />

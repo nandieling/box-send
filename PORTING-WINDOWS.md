@@ -640,6 +640,20 @@ Windows 侧：
 - 验证：`swift test` 558 绿（`DolbyDomainAndSeedLinkTests` 加两条：配置里的旧域名被改写、
   改写结果落盘；镜像地址不被改写那条照旧）；`dotnet build` 0 错误。
 
+## 这一轮（卡片再收窄、辅种格子换成底色说话）
+
+- 批量转种站点卡片再收窄一半：mac 从固定 6 列改成 `GridItem(.adaptive(minimum: 104, maximum: 150))`，
+  WPF 站点卡片 `Width` 172 → 126。窄卡片里胶囊与说明行本来就会换行撑高，不受影响。
+- 辅种格子去掉站名前面那个符号（mac 删掉 `Image(systemName:)`，WPF 本来就没画）：
+  一格一格看下来符号是噪音，结论改由底色说。
+- 格子底色 = 结论：mac 用 `cellWash` / `cellEdge` 在 `blockSurface` 上铺一层结论色（0.14~0.18）并把描边同色收边；
+  WPF 在格子 `Border.Style` 里按 `Status` 上 DataTrigger（`#2E…` 这类半透明 ARGB，深浅主题都能压住底）。
+  绿=已辅种、红=失败、蓝=校验中、橙=待确认、青=已在该站做种、灰=站内不存在（整格压到 80% 透明）；
+  不支持检索铺更淡的灰并把整格压到 55%，待辅种保持素底——一眼就能挑出要动手的格子。
+  两边都用同一套状态词（`assisted` / `failed` / `verifying` / `manual` / `seeding`），
+  WPF 那份跟着 `Cell.Status` 的变更通知走，跑起来会当场换色。
+- 验证：`swift test` 558 绿（这轮全是界面改动）；`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
