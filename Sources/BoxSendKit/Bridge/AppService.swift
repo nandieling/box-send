@@ -386,6 +386,10 @@ public final class AppService {
             return try startAssist(params)
         case "assist.confirm":
             return try confirmAssist(params)
+        case "assist.recheck":
+            return try recheckAssist(params)
+        case "assist.reject":
+            return try rejectAssist(params)
         case "assist.tick":
             return tickAssist()
         case "assist.status":
@@ -792,6 +796,37 @@ public final class AppService {
             },
             "sites": plan.siteIDs.map { ["id": $0, "name": nameOf($0)] },
             "budget": budget,
+        ].merging(assistExtrasLocked(plan: plan)) { _, new in new }
+    }
+
+    /// 覆盖率与待处理清单：扫描、翻页、跑完一轮都重算，两端画同一份数
+    private func assistExtrasLocked(plan: AssistPipeline.CatalogPlan) -> [String: Any] {
+        let live = assistLiveLocked()
+        let cov = plan.coverage(live: live)
+        let conf = cfg
+        let nameOf: (String) -> String = { id in
+            guard let s = conf.site(id) else { return id }
+            return SiteRegistry.effectiveSite(s).name
+        }
+        let items = AssistPipeline.queueItems(state.assistQueueEntries(), live: live,
+                                             siteNames: nameOf, torrents: plan.byHash,
+                                             timeText: { Self.dateText($0) })
+        return [
+            "coverage": [
+                "total": cov.total, "resolved": cov.resolved, "unresolved": cov.unresolved,
+                "percent": cov.percent, "needsAction": cov.needsAction,
+                "searchesLeft": cov.searchesLeft, "roundsLeft": cov.roundsLeft,
+                "line": cov.line,
+            ],
+            "queue": items.map { item -> [String: Any] in
+                ["key": item.key, "siteID": item.siteID, "siteName": item.siteName,
+                 "hash": item.hash, "torrentName": item.torrentName,
+                 "status": item.status.rawValue, "statusText": item.status.label,
+                 "why": item.why, "time": item.timeText, "url": item.url,
+                 "canAdopt": item.canAdopt, "canRetry": item.canRetry,
+                 "canRecheck": item.canRecheck, "canUndo": item.canUndo,
+                 "canReject": item.canReject]
+            },
         ]
     }
 
@@ -954,11 +989,66 @@ public final class AppService {
             return d
         }
         let minutes = cfg.assist?.autoRunMinutes ?? 0
-        return ["running": busyAssist, "step": assistStep, "report": assistReport,
+        var out: [String: Any] = ["running": busyAssist, "step": assistStep, "report": assistReport,
                 "rows": rows, "stats": Self.statsJSON(stats),
                 "autoRun": ["minutes": minutes,
                             "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
                             "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]
+        if let plan = assistPlan { out.merge(assistExtrasLocked(plan: plan)) { _, new in new } }
+        return out
+    }
+
+    /// 回查校验：只问下载器，一次站点请求都不发，所以随时能点
+    private func recheckAssist(_ params: [String: Any]) throws -> [String: Any] {
+        lock.lock()
+        let cfg = self.cfg
+        let plan = self.assistPlan
+        lock.unlock()
+        let (pipe, jar) = try makeAssistPipeline(cfg)
+        var names: [String: String] = [:]
+        for (hash, t) in plan?.byHash ?? [:] { names[hash] = t.name }
+        var keys = Set((params["keys"] as? [String]) ?? [])
+        if keys.isEmpty, let only = params["key"] as? String { keys = [only] }
+        let report = pipe.recheckReviews(siteIDs: nil, keys: keys, names: names) { [weak self] st in
+            guard let self else { return }
+            let ev = Event(seq: self.nextSeq(), kind: "assist", siteID: st.siteID,
+                           text: "\(st.torrentName)｜\(st.text)", detail: st.detail,
+                           phase: AssistPipeline.phaseName(st.phase), ok: nil,
+                           time: Date().timeIntervalSince1970, key: st.rowKey)
+            self.mutate { self.assistRows[st.rowKey] = ev }
+        }
+        _ = jar
+        // 待复核表已经变了，计划要跟着重算，否则格子上还挂着「待复核」
+        guard let plan else { return ["recheck": report.text] }
+        let fresh = pipe.planCatalog(plan.torrents, siteIDs: plan.siteIDs)
+        mutate {
+            self.assistPlan = fresh
+            self.assistReport = report.text
+        }
+        return assistPayload(plan: fresh, page: assistPage, cfg: cfg,
+                             downloader: pipe.downloaderLabel, raw: assistTorrentRaw,
+                             budget: cfg.assist?.roundBudget ?? 0,
+                             summary: assistScanInfo.isEmpty ? nil : assistScanInfo)
+    }
+
+    /// 人工否决 / 撤销否决一条组合（不发站点请求，改完就地重算计划）
+    private func rejectAssist(_ params: [String: Any]) throws -> [String: Any] {
+        guard let key = params["key"] as? String, key.contains("|") else {
+            throw Failure("没说否决哪条")
+        }
+        lock.lock()
+        let cfg = self.cfg
+        let plan = self.assistPlan
+        lock.unlock()
+        let (pipe, _) = try makeAssistPipeline(cfg)
+        pipe.setRejected(key, rejected: params["rejected"] as? Bool ?? true)
+        guard let plan else { return ["ok": true] }
+        let fresh = pipe.planCatalog(plan.torrents, siteIDs: plan.siteIDs)
+        mutate { self.assistPlan = fresh }
+        return assistPayload(plan: fresh, page: assistPage, cfg: cfg,
+                             downloader: pipe.downloaderLabel, raw: assistTorrentRaw,
+                             budget: cfg.assist?.roundBudget ?? 0,
+                             summary: assistScanInfo.isEmpty ? nil : assistScanInfo)
     }
 
     /// 某一格在计划里的结论（拿上次扫描的分桶回查，不重新问状态）

@@ -1552,6 +1552,12 @@ final class AppModel: ObservableObject {
     @Published var assistDryRun = false
     /// 定时自动跑的钟：构造即「刚跑过」，开机后先等满一个周期再自己动
     private var assistAutoRun = AssistAutoRun()
+    /// 回查校验 / 否决之后重算计划用的下载器（只建对象，不发请求）
+    private func assistPipe(_ cfg: AppConfig, _ jar: CookieStore) -> AssistPipeline {
+        AssistPipeline(config: cfg, cookies: jar, state: state,
+                       downloader: DownloaderFactory.makeForAssist(cfg, client:
+                           HTTPClient(cookies: jar, userAgent: cfg.userAgent)))
+    }
     private var assistAutoTimer: Timer?
 
     var assistConfig: AssistConfig { config.assist ?? AssistConfig(siteIDs: []) }
@@ -1564,6 +1570,22 @@ final class AppModel: ObservableObject {
     /// 顶部那几个数：全量目录 × 当前进展
     var assistStats: AssistPipeline.Tally {
         assistPlan?.adjusted(live: assistLive) ?? AssistPipeline.Tally()
+    }
+
+    /// 覆盖率与预计：把「还剩多少」翻成「照现在这个节奏还要跑多久」
+    var assistCoverage: AssistPipeline.Coverage? {
+        guard let plan = assistPlan else { return nil }
+        return plan.coverage(live: assistLive)
+    }
+
+    /// 待处理队列：失败 / 待复核 / 待人工确认 / 已否决，一条一行带按钮
+    var assistQueue: [AssistPipeline.QueueItem] {
+        guard let plan = assistPlan else { return [] }
+        let conf = config
+        return AssistPipeline.queueItems(
+            state.assistQueueEntries(), live: assistLive,
+            siteNames: { id in conf.site(id).map { SiteRegistry.effectiveSite($0).name } ?? id },
+            torrents: plan.byHash, timeText: { AppModel.dateText($0) })
     }
 
     /// 一列几条（设置里改）
@@ -1611,6 +1633,60 @@ final class AppModel: ObservableObject {
     /// 一格（一条种子 × 一个站）在界面上的结论
     func assistStatus(_ row: AssistPipeline.PlanRow) -> AssistPipeline.RowStatus {
         AssistPipeline.status(of: row, live: assistRows[row.rowKey]?.liveRow)
+    }
+
+    /// 回查校验：只问下载器，不发站点请求，随时能点。
+    /// 上一轮「推进了下载器却没等到校验结果」的那些条靠它收尾。
+    func assistRecheck(keys: Set<String> = []) {
+        guard !assistRunning, !assistScanning else { return }
+        assistRunning = true
+        assistMessage = nil
+        let pipe = assistPipe(config, cookies)
+        let names: [String: String] = (assistPlan?.byHash ?? [:]).mapValues { $0.name }
+        let ids = assistPlan?.siteIDs
+        Task.detached(priority: .utility) {
+            let report = pipe.recheckReviews(siteIDs: ids, keys: keys, names: names) { s in
+                Task { @MainActor in self.assistRows[s.rowKey] = s }
+            }
+            await MainActor.run {
+                self.assistRunning = false
+                self.assistMessage = report.text
+                self.rebuildAssistPlan()
+            }
+        }
+    }
+
+    /// 重试一条失败的组合：只重跑这一格
+    func assistRetry(key: String) {
+        let parts = key.split(separator: "|", maxSplits: 1)
+        guard parts.count == 2, let t = assistPlan?.byHash[parts[1].lowercased()] else { return }
+        runAssist(siteIDs: [String(parts[0])], forceKeys: [], scope: [t])
+    }
+
+    /// 人工否决 / 撤销否决一条组合：改状态表后重算这一页的格子
+    func assistReject(key: String, rejected: Bool = true) {
+        let parts = key.split(separator: "|", maxSplits: 1)
+        guard parts.count == 2 else { return }
+        let site = String(parts[0]), hash = String(parts[1])
+        if rejected {
+            state.markAssistReject(site: site, hash: hash)
+            assistRows.removeValue(forKey: key)
+        } else {
+            state.clearAssistReject(site: site, hash: hash)
+        }
+        rebuildAssistPlan()
+    }
+
+    /// 用现有目录重算计划（状态表刚变过，格子结论得跟着变；不重读下载器，那一下要好几秒）
+    private func rebuildAssistPlan() {
+        guard let old = assistPlan else { return }
+        let pipe = assistPipe(config, cookies)
+        Task.detached(priority: .utility) {
+            let fresh = pipe.planCatalog(old.torrents, siteIDs: old.siteIDs)
+            await MainActor.run {
+                self.publishAssist(fresh, page: self.assistPage, raw: self.assistTorrentRaw)
+            }
+        }
     }
 
     /// 辅种用的是哪台（没填地址时提示去「下载器」页补，免得扫描半天连不上）

@@ -654,6 +654,34 @@ Windows 侧：
   WPF 那份跟着 `Cell.Status` 的变更通知走，跑起来会当场换色。
 - 验证：`swift test` 558 绿（这轮全是界面改动）；`dotnet build` 0 错误。
 
+## 这一轮（辅种页第一批：覆盖率、待复核收尾、待处理队列、格子收牌）
+
+- 状态表加两张表、改一张表：`assistReview`（推进了下载器却没等到校验结果）、
+  `assistReject`（人工判定不是同一种子）、`assistFail` 的值从时间戳换成 `{time, why}`。
+  旧 `state.json` 里那个纯数字仍能读出来（`AssistFailRec.init(from:)` 先试单值容器），原因留空。
+  待复核记录里存的是 `siteHash`——站点重新打包过时它与本地 hash 不同，回查校验只能按它问下载器。
+- 归类多两档：`RowStatus.review`（待复核，紫）与 `RowStatus.rejected`（已否决，灰）。
+  `Status.Phase` 同步多一个 `review`，跨边界的阶段名就是 `"review"`，
+  WPF 的 `AssistRow.PhaseText` / `Tone` 与 `AssistStatLine.Tone` 都跟着加了这一档（配色键 `Review`）。
+  预筛顺序：已做种 > 已辅过 > 待复核 > 已否决 > 站内没有 > 上次失败。
+- 覆盖率与队列都在核心里算，两端只画：`CatalogPlan.coverage(live:)` 出 `Coverage`，
+  `Coverage.line` 那句「已判定 x / y（z%）；还要站内检索 n 次…不间断跑完约 3 天 4 小时」直接上界面；
+  `AssistPipeline.queueItems(...)` 出待处理清单（待确认 > 待复核 > 失败 > 已否决，上限 200，
+  下载器里已经没掉的条目不收）。千分位由 `AssistPipeline.grouped` 统一。
+- 边界上新增两个动作：`assist.recheck`（可带 `keys` 只回查一条）、`assist.reject`（`key` + `rejected`）。
+  两者都只改状态表 / 问下载器，不发站点请求，回来的载荷与 `assist.page` 同形，界面直接重画。
+  `assist.scan` / `assist.page` 的返回和快照的 `assist` 段都多带 `coverage`、`queue` 两个键。
+- mac：统计卡顶部加进度条与那句覆盖率；新增「待处理」卡，一行一条带采纳 / 重试 / 回查 / 否决 / 撤销；
+  「种子与站点」里每条种子默认只摊开 `failed` / `manual` / `review` 三类格子，其余收成计数牌，
+  点牌子展开那一类，另有「展开全部格子」开关（`folded` 记手动改过的那些类）。
+- Windows：同一条边界契约下只画界面。`AssistView.xaml` 加 `BtnRecheck`、`Coverage` + `CoverageLine`、
+  `QueueBox` / `Queue`（`BooleanToVisibilityConverter` 控按钮显隐）、格子多 `review` / `rejected` 两组 DataTrigger；
+  `TorrentBlock` 拆出 `Cells`（全部）与 `VisibleCells`（画出来的）并带 `Chips`，`Rebuild()` 一次算完；
+  `AssistQueueItem` 是队列 VM，动作走 `AssistRecheckAsync` / `AssistRejectAsync` / `AssistRetryAsync`。
+- 验证：`swift test` 569 绿（新增 `AssistReviewQueueTests` 11 条：待复核落盘与重启仍在、
+  回查两种收尾、否决挡住检索、覆盖率算式与那句文案、队列排序与上限、旧失败表读得动）；
+  `dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

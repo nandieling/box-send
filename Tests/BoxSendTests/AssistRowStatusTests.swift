@@ -273,9 +273,23 @@ final class AssistSnapshotStatsTests: XCTestCase {
         let paged = try svc.invoke("assist.page", ["page": 0])
         let pagedAt = Date().timeIntervalSince(began) - scanned
         XCTAssertLessThan(pagedAt, 1.0, "翻页耗时应该只跟一页的行数有关：\(pagedAt)s")
+        // 覆盖率与待处理队列：真实库上也要给出那句话，界面才有进度可看
+        let cov = out["coverage"] as? [String: Any]
+        XCTAssertNotNil(cov, "扫描结果要带覆盖率")
+        XCTAssertEqual(cov?["total"] as? Int, total, "覆盖率的分母就是全量组合数")
+        let percent = cov?["percent"] as? Double ?? -1
+        XCTAssertTrue(percent >= 0 && percent <= 1, "百分比要在 0…1：\(percent)")
+        XCTAssertFalse((cov?["line"] as? String ?? "").isEmpty, "那句覆盖率的话不能空")
+        let queue = (out["queue"] as? [[String: Any]]) ?? []
+        XCTAssertLessThanOrEqual(queue.count, 200, "队列有上限，几万条失败也不整表摊开")
+        for item in queue.prefix(3) {
+            XCTAssertFalse((item["key"] as? String ?? "").isEmpty, "队列条目要能定位到格子")
+            XCTAssertFalse((item["siteName"] as? String ?? "").isEmpty, "要说清是哪个站")
+        }
         NSLog("实站辅种计划：种子 %@ 条（去重前 %@）/ 本页 %@ 条 / 全量 %@ 格 / 扫描 %.1fs / 翻页 %.2fs",
               String(describing: out["torrentTotal"]), String(describing: out["torrentRaw"]),
               String(torrents.count), String(total), scanned, pagedAt)
+        NSLog("实站覆盖率：%@（待处理 %@ 条）", cov?["line"] as? String ?? "-", String(queue.count))
     }
 
     /// 报几条种子的假下载器

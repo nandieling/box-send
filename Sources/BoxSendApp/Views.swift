@@ -1787,12 +1787,18 @@ struct DownloaderView: View {
 
 struct AssistView: View {
     @EnvironmentObject var model: AppModel
+    /// 每条种子手动改过的展开状态（hash → 状态 → 是否展开）。没改过的按默认走：
+    /// 只展开要人动手的几类，115 个站全摊开就是满屏灰格子，真正的结论反倒看不见。
+    @State private var folded: [String: [AssistPipeline.RowStatus: Bool]] = [:]
+    /// 一次性全展开（核对整页时用）
+    @State private var cellsWideOpen = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 statsCard
+                queueCard
                 torrentsCard
             }
             .padding(20)
@@ -1826,6 +1832,15 @@ struct AssistView: View {
             .disabled(model.assistScanning || model.assistRunning || model.assistCells.isEmpty)
             .help("只处理这一页列出的种子；整库定时那轮按体积自己取前若干条")
 
+            Button {
+                model.assistRecheck()
+            } label: {
+                Label("回查校验", systemImage: "arrow.clockwise.circle")
+            }
+            .disabled(model.assistScanning || model.assistRunning
+                      || !(model.assistStats.count(.review) > 0))
+            .help("上一轮推进下载器却没等到校验结果的种子，回来问一次下载器：满了就启动，不满就回滚")
+
             Toggle("只预演", isOn: $model.assistDryRun)
                 .toggleStyle(.switch)
                 .controlSize(.small)
@@ -1851,7 +1866,7 @@ struct AssistView: View {
 
     // MARK: 统计
 
-    /// 已完成 / 待辅种 / 失败三个主数打头，其余几类跟着列（0 也留着，免得看着像没跑）
+    /// 覆盖率条打头，后面跟着各类计数（0 也留着，免得看着像没跑）
     private var statsCard: some View {
         let tally = model.assistStats
         return CardSection("辅种统计") {
@@ -1859,6 +1874,14 @@ struct AssistView: View {
                 Text("扫描下载器后，这里按「一条种子 × 一个站」给出已完成、待辅种、失败等计数。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
+                if let cov = model.assistCoverage {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: cov.percent)
+                            .frame(maxWidth: .infinity)
+                        Text(cov.line).font(.caption2).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 HStack(alignment: .top, spacing: 20) {
                     ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
                         statBlock(line.status, line.count)
@@ -1873,7 +1896,7 @@ struct AssistView: View {
 
     private func statBlock(_ status: AssistPipeline.RowStatus, _ count: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(count)")
+            Text(AssistPipeline.grouped(count))
                 .font(.title2.weight(.semibold)).monospacedDigit()
                 .foregroundStyle(tintColor(status))
             Text(status.statLabel).font(.caption).foregroundStyle(.secondary)
@@ -1885,7 +1908,8 @@ struct AssistView: View {
     private func footline(_ tally: AssistPipeline.Tally) -> String {
         var parts: [String] = []
         if let plan = model.assistPlan {
-            parts.append("全量 \(plan.total) 个组合，其中 \(plan.willSearch) 个会去站内检索")
+            parts.append("全量 \(AssistPipeline.grouped(plan.total)) 个组合，"
+                       + "其中 \(AssistPipeline.grouped(plan.willSearch)) 个会去站内检索")
         }
         parts.append("单轮预算 \(cfg.roundBudget) 次请求，用完下次接着跑")
         if model.assistTorrentRaw > model.assistTorrentTotal {
@@ -1897,9 +1921,79 @@ struct AssistView: View {
         return parts.joined(separator: "；") + "。"
     }
 
+    // MARK: 待处理队列
+
+    /// 需要人点一下才往前走的条目集中在这儿：失败、待复核、待人工确认、已否决
+    private var queueCard: some View {
+        CardSection("待处理（\(model.assistQueue.count)）") {
+            if model.assistQueue.isEmpty {
+                Text("没有等人处理的条目。")
+                    .font(.callout).foregroundStyle(.secondary)
+            } else {
+                ForEach(model.assistQueue) { item in
+                    queueRow(item)
+                }
+            }
+        }
+    }
+
+    private func queueRow(_ item: AssistPipeline.QueueItem) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                model.openURL(item.url)
+            } label: {
+                Text(item.siteName).font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(model.theme.dark ? Color.white : Color.primary)
+            .frame(width: 84, alignment: .leading)
+            .disabled(item.url.isEmpty)
+            .help(item.url.isEmpty ? item.siteName : "打开站内那条：\(item.url)")
+
+            Text(item.statusText).font(.caption2).foregroundStyle(tintColor(item.status))
+                .frame(width: 46, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.torrentName).font(.caption).lineLimit(1)
+                Text(item.why).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(item.timeText).font(.caption2).foregroundStyle(.secondary)
+                .fixedSize()
+
+            if item.canAdopt {
+                Button("采纳") { model.assistConfirm(key: item.key) }
+                    .controlSize(.small).disabled(model.assistRunning)
+                    .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
+            }
+            if item.canRetry {
+                Button("重试") { model.assistRetry(key: item.key) }
+                    .controlSize(.small).disabled(model.assistRunning)
+                    .help("只重跑这一格：再检索一次站内，找到就重新推下载器")
+            }
+            if item.canRecheck {
+                Button("回查") { model.assistRecheck(keys: [item.key]) }
+                    .controlSize(.small).disabled(model.assistRunning)
+                    .help("问一次下载器那条校验完了没：满了就启动，不满就回滚")
+            }
+            if item.canReject {
+                Button("否决") { model.assistReject(key: item.key) }
+                    .controlSize(.small)
+                    .help("站内那条不是同一个种子：以后不再拿它烦你")
+            }
+            if item.canUndo {
+                Button("撤销") { model.assistReject(key: item.key, rejected: false) }
+                    .controlSize(.small)
+                    .help("撤销否决：这条重新允许检索")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
     // MARK: 种子 × 站点
 
-    /// 一条种子一张卡：卡里是它在各辅种站的格子（站名 + 已辅种 / 待辅种 / 不存在…）
+    /// 一条种子一张卡：标题行 + 各类计数（点一下展开那类格子）
     private var torrentsCard: some View {
         CardSection("种子与站点") {
             if model.assistShownTorrents.isEmpty {
@@ -1935,6 +2029,10 @@ struct AssistView: View {
                 Image(systemName: "chevron.right")
             }
             .disabled(model.assistPage >= model.assistPageCount - 1)
+            Toggle("展开全部格子", isOn: $cellsWideOpen)
+                .toggleStyle(.button)
+                .controlSize(.mini)
+                .help("把每条种子在所有站的格子都摊开看")
             Spacer()
         }
     }
@@ -1942,6 +2040,7 @@ struct AssistView: View {
     private func torrentBlock(_ t: LocalTorrent) -> some View {
         let rows = rowsByHash[t.hash] ?? []
         let tally = AssistPipeline.tally(rows: rows, live: model.assistLive)
+        let shown = visibleRows(rows, tally: tally)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(t.name).font(.callout).lineLimit(1)
@@ -1955,20 +2054,78 @@ struct AssistView: View {
             if rows.isEmpty {
                 Text("这条不在本轮计划里").font(.caption2).foregroundStyle(.secondary)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 6)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(rows, id: \.rowKey) { row in
-                        siteCell(row)
+                // 计数条即筛选：点哪一类就只看那一类的格子，要人动手的默认已经展开
+                HStack(spacing: 5) {
+                    ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
+                        if line.count > 0 {
+                            chip(t.hash, line.status, line.count, tally: tally)
+                        }
                     }
                 }
-                Text("已辅 \(tally.count(.assisted)) · 待辅 \(tally.count(.pending))"
-                     + " · 失败 \(tally.count(.failed)) · 不存在 \(tally.count(.missing))")
-                    .font(.caption2).foregroundStyle(.secondary)
+                if !shown.isEmpty {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 6)],
+                              alignment: .leading, spacing: 6) {
+                        ForEach(shown, id: \.rowKey) { row in
+                            siteCell(row)
+                        }
+                    }
+                }
             }
         }
     }
 
-    /// 一格：站名 + 结论；「待确认」的格子上带一个「采纳」
+    /// 一类一格的小计数牌：底色说结论，数字说有几格
+    private func chip(_ hash: String, _ status: AssistPipeline.RowStatus, _ count: Int,
+                      tally: AssistPipeline.Tally) -> some View {
+        let on = cellsWideOpen || isOpen(hash, status, tally)
+        return Button {
+            toggle(hash, status, tally)
+        } label: {
+            HStack(spacing: 3) {
+                Text(status.label)
+                Text("\(count)").monospacedDigit().fontWeight(.semibold)
+            }
+            .font(.caption2)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(on ? tintColor(status).opacity(0.26) : Color.clear)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+        .tint(tintColor(status))
+        .help("展开看\(status.statLabel)的格子")
+    }
+
+    /// 默认展开：失败、待确认、待复核。剩下的收成计数牌，不然满屏都是不用管的格子
+    /// （这一类默认展开是有意为之：问题不该要人先去点标签才看得见）
+    private func autoOpen(_ status: AssistPipeline.RowStatus, _ tally: AssistPipeline.Tally) -> Bool {
+        switch status {
+        case .failed, .manual, .review: return tally.count(status) > 0
+        default: return false
+        }
+    }
+
+    private func isOpen(_ hash: String, _ status: AssistPipeline.RowStatus,
+                        _ tally: AssistPipeline.Tally) -> Bool {
+        if cellsWideOpen { return true }
+        return folded[hash]?[status] ?? autoOpen(status, tally)
+    }
+
+    /// 点计数牌 = 按当前可见性反向记一次：自动展开的那类也能一指点收起
+    private func toggle(_ hash: String, _ status: AssistPipeline.RowStatus,
+                        _ tally: AssistPipeline.Tally) {
+        var m = folded[hash] ?? [:]
+        m[status] = !isOpen(hash, status, tally)
+        folded[hash] = m
+    }
+
+    /// 这一条种子里要画出来的格子
+    private func visibleRows(_ rows: [AssistPipeline.PlanRow],
+                            tally: AssistPipeline.Tally) -> [AssistPipeline.PlanRow] {
+        guard let hash = rows.first?.hash else { return [] }
+        return rows.filter { isOpen(hash, model.assistStatus($0), tally) }
+    }
+
+    /// 一格：站名 + 结论；「待确认」的格子上带「采纳」「否决」
     private func siteCell(_ row: AssistPipeline.PlanRow) -> some View {
         let status = model.assistStatus(row)
         let live = model.assistRows[row.rowKey]
@@ -1982,6 +2139,26 @@ struct AssistView: View {
                         .disabled(model.assistRunning)
                         .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
                 }
+            }
+            if status == .manual || status == .failed || status == .review {
+                HStack(spacing: 4) {
+                    if status != .rejected {
+                        Button("否决") { model.assistReject(key: row.rowKey) }
+                            .controlSize(.mini)
+                            .help("站内那条不是同一个种子：以后不再拿它烦你")
+                    }
+                    if status == .review {
+                        Button("回查") { model.assistRecheck(keys: [row.rowKey]) }
+                            .controlSize(.mini)
+                            .disabled(model.assistRunning)
+                            .help("问一次下载器那条校验完了没")
+                    }
+                }
+            }
+            if status == .rejected {
+                Button("撤销") { model.assistReject(key: row.rowKey, rejected: false) }
+                    .controlSize(.mini)
+                    .help("撤销否决：这条重新允许检索")
             }
         }
         .padding(6)
@@ -2003,13 +2180,13 @@ struct AssistView: View {
             .filter { !$0.isEmpty }.joined(separator: "\n"))
     }
 
-    /// 格子底色：结论色铺一层薄底；待辅种 / 不存在 / 不支持检索铺不出来（素底 = 不用管）
+    /// 格子底色：结论色铺一层薄底；待辅种铺不出来（素底 = 不用管）
     private func cellWash(_ status: AssistPipeline.RowStatus) -> Color {
         switch status {
-        case .assisted, .failed, .verifying, .manual: return tintColor(status).opacity(0.18)
+        case .assisted, .failed, .verifying, .review, .manual: return tintColor(status).opacity(0.18)
         case .seeding: return tintColor(status).opacity(0.14)
-        // 「不用查」的两种也给个底：灰一档，跟「要动手」的素底分开
-        case .missing: return Color.secondary.opacity(0.16)
+        // 「不用查」的几种也给个底：灰一档，跟「要动手」的素底分开
+        case .missing, .rejected: return Color.secondary.opacity(0.16)
         case .unsupported: return Color.secondary.opacity(0.08)
         case .pending: return Color.clear
         }
@@ -2017,9 +2194,9 @@ struct AssistView: View {
 
     private func cellEdge(_ status: AssistPipeline.RowStatus) -> Color {
         switch status {
-        case .assisted, .failed, .verifying, .manual: return tintColor(status).opacity(0.5)
+        case .assisted, .failed, .verifying, .review, .manual: return tintColor(status).opacity(0.5)
         case .seeding: return tintColor(status).opacity(0.4)
-        case .missing: return Color.secondary.opacity(0.35)
+        case .missing, .rejected: return Color.secondary.opacity(0.35)
         case .unsupported, .pending: return Color(nsColor: .separatorColor)
         }
     }
@@ -2029,10 +2206,11 @@ struct AssistView: View {
         case .assisted: return .green
         case .failed: return .red
         case .verifying: return Color.accentColor
+        case .review: return .purple
         case .manual: return .orange
         case .seeding: return .teal
         case .pending: return .secondary
-        case .missing, .unsupported: return Color.secondary.opacity(0.6)
+        case .missing, .rejected, .unsupported: return Color.secondary.opacity(0.6)
         }
     }
 }

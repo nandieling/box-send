@@ -30,7 +30,7 @@ public final class AssistPipeline {
     /// 逐条进展（界面卡片用）。与转种分开一套：辅种多了「校验中」这一态，
     /// 因为「已添加」不等于「已辅种」——要等下载器校验到 100% 才算成。
     public struct Status: Equatable {
-        public enum Phase: Equatable { case working, verifying, done, failed, skipped }
+        public enum Phase: Equatable { case working, verifying, review, done, failed, skipped }
         public var siteID: String
         /// 哪条种子（下载器里的 v1 hash，小写）；站点级提示时为空
         public var hash: String
@@ -71,6 +71,8 @@ public final class AssistPipeline {
         public var skippedCount: Int {
             outcomes.filter { if case .skip = $0.level { return true }; return false }.count
         }
+        /// 推进了下载器但没等到校验结果的条数
+        public var reviewCount: Int { outcomes.filter { $0.review }.count }
     }
 
     /// 站点适配器工厂（默认走内置注册表；单测注入假适配器，不发真请求）
@@ -172,8 +174,9 @@ public final class AssistPipeline {
             for t in torrents {
                 if opts.limit > 0, report.outcomes.count >= opts.limit { return report }
                 let out = attempt(t, site: site, adapter: adapter, cfg: cfg, opts: opts)
-                // 失败单独记一张表：不算「站内没有」，下轮还要再试，但界面要数得出失败几条
-                if out.failed { state.markAssistFail(site: id, hash: t.hash) }
+                // 失败单独记一张表：不算「站内没有」，下轮还要再试，
+                // 但界面要数得出失败几条、为什么砸的（待处理队列就地说明）
+                if out.failed { state.markAssistFail(site: id, hash: t.hash, why: out.message) }
                 report.outcomes.append(out)
                 emit(opts, Status(siteID: id, hash: t.hash, torrentName: t.name,
                                   text: textOf(out), phase: phaseOf(out),
@@ -197,11 +200,97 @@ public final class AssistPipeline {
 
     private func phaseOf(_ o: AssistOutcome) -> Status.Phase {
         if o.done { return .done }
+        if o.review { return .review }
         if o.failed { return .failed }
         switch o.level {
         case .sameHash, .sameFiles: return o.done ? .done : .verifying
         case .nameOnly: return .skipped
         case .skip: return .skipped
+        }
+    }
+
+    // MARK: - 回查校验
+
+    /// 回查「待复核」的结果汇总
+    public struct RecheckReport {
+        public var checked = 0
+        /// 复核到 100%：这条算辅成了
+        public var verified = 0
+        /// 校验不满 / 下载器里已经没了：回滚并转失败
+        public var dropped = 0
+        /// 还在校验，下次再看
+        public var waiting = 0
+
+        public var text: String {
+            guard checked > 0 else { return "没有待复核的种子" }
+            return "回查 \(checked) 条：辅种成功 \(verified)，已回滚 \(dropped)，还在校验 \(waiting)"
+        }
+    }
+
+    /// 回查上一轮没等到校验结果的种子。只问下载器，一次站点请求都不发，
+    /// 所以随时能点，也不会给站点添负载。
+    /// - Parameter names: hash → 种子名（界面上要说清复核的是哪条，核心库不重读下载器）
+    @discardableResult
+    public func recheckReviews(siteIDs: [String]? = nil, keys: Set<String> = [],
+                               names: [String: String] = [:],
+                               onEvent: ((Status) -> Void)? = nil) -> RecheckReport {
+        var rep = RecheckReport()
+        guard let cfg = config.assist else { return rep }
+        func emit(_ id: String, _ hash: String, _ text: String, _ phase: Status.Phase,
+                  url: String) {
+            onEvent?(Status(siteID: id, hash: hash,
+                            torrentName: names[hash] ?? "", text: text, phase: phase, detail: url))
+        }
+        for id in (siteIDs ?? cfg.siteIDs) {
+            let recs = state.assistReviewRecs(site: id)
+            guard !recs.isEmpty else { continue }
+            for (hash, rec) in recs.sorted(by: { $0.key < $1.key }) {
+                if !keys.isEmpty, !keys.contains("\(id)|\(hash)") { continue }
+                rep.checked += 1
+                guard let p = try? downloader.torrentProgress(hash: rec.siteHash) else {
+                    state.clearAssistReview(site: id, hash: hash)
+                    state.markAssistFail(site: id, hash: hash,
+                                         why: "复核时下载器里已经没有这条种子")
+                    emit(id, hash, "复核失败：下载器里已经没这条", .failed, url: rec.url)
+                    rep.dropped += 1
+                    continue
+                }
+                if p.progress >= 0.999 {
+                    try? downloader.setPaused(hashes: [rec.siteHash], paused: false)
+                    state.markAssisted(site: id, hash: hash, url: rec.url, level: rec.level)
+                    state.note("assist[\(id)] REVIEW-OK \(names[hash] ?? hash) \(rec.level)")
+                    emit(id, hash, "复核：校验到 100%，已启动", .done, url: rec.url)
+                    rep.verified += 1
+                    continue
+                }
+                // 校验早停了却不满：文件对不上，留着它会自己重下一整份
+                if !isChecking(p.state) {
+                    if cfg.removeOnVerifyFail {
+                        try? downloader.removeTorrent(hash: rec.siteHash, keepFiles: true)
+                    }
+                    state.clearAssistReview(site: id, hash: hash)
+                    state.markAssistFail(site: id, hash: hash,
+                                         why: "复核时校验只到 \(Int(p.progress * 100))%"
+                                            + (cfg.removeOnVerifyFail ? "，已删掉刚加的种子" : "，种子保持暂停"))
+                    emit(id, hash, "复核：校验只到 \(Int(p.progress * 100))%", .failed, url: rec.url)
+                    rep.dropped += 1
+                    continue
+                }
+                rep.waiting += 1
+                emit(id, hash, "还在校验（\(p.state)），稍后再回查", .review, url: rec.url)
+            }
+        }
+        return rep
+    }
+
+    /// 人工否决 / 撤销否决：检索到的那条到底算不算同一种子，人说了算
+    public func setRejected(_ key: String, rejected: Bool) {
+        let parts = key.split(separator: "|", maxSplits: 1)
+        guard parts.count == 2 else { return }
+        if rejected {
+            state.markAssistReject(site: String(parts[0]), hash: String(parts[1]))
+        } else {
+            state.clearAssistReject(site: String(parts[0]), hash: String(parts[1]))
         }
     }
 
@@ -217,6 +306,14 @@ public final class AssistPipeline {
         }
         if state.isAssisted(site: site.id, hash: t.hash) {
             return PreSkip(why: "此前已辅过", detail: "本轮跳过，重跑不重复检索")
+        }
+        if state.assistReviewRecs(site: site.id)[t.hash.lowercased()] != nil {
+            return PreSkip(why: "待复核（上次校验没等完）",
+                           detail: "那条种子还在下载器里暂停着：用「回查校验」收尾，"
+                                 + "本轮不重复检索，免得加出第二条")
+        }
+        if state.isAssistRejected(site: site.id, hash: t.hash) {
+            return PreSkip(why: "人工判定不是同一种子", detail: "已经否决过，不再检索；界面上可以撤销")
         }
         if state.assistMissedAt(site: site.id, hash: t.hash,
                                ttlSeconds: Double(cfg.missTTLDays) * 86_400) != nil {
@@ -312,6 +409,8 @@ public final class AssistPipeline {
         var unsupported = false
         var seeding: Set<String> = []
         var assisted: Set<String> = []
+        var review: Set<String> = []
+        var rejected: Set<String> = []
         var missing: Set<String> = []
         var failed: Set<String> = []
     }
@@ -324,6 +423,10 @@ public final class AssistPipeline {
         public var torrents: [LocalTorrent]
         public var siteIDs: [String]
         public var missTTLDays: Int
+        /// 每个站还要检索多少次（算「照现在这个节奏还要跑多久」）
+        public var pendingBySite: [String: Int]
+        /// 逐站间隔与抖动、单轮预算：估算用的那三个数
+        public var pace: (interval: TimeInterval, jitter: TimeInterval, roundBudget: Int)
         /// 组合总数（种子 × 站点）
         public var total: Int
         /// 会真去站内检索的格子数
@@ -334,15 +437,20 @@ public final class AssistPipeline {
         public var tally: Tally
 
         var buckets: [String: SiteBucket]
-        var byHash: [String: LocalTorrent]
+        /// hash → 种子（队列与队列按钮要按 hash 找回是哪条）
+        public var byHash: [String: LocalTorrent]
 
         init(torrents: [LocalTorrent] = [], siteIDs: [String] = [], missTTLDays: Int = 7,
+                    pendingBySite: [String: Int] = [:],
+                    pace: (interval: TimeInterval, jitter: TimeInterval, roundBudget: Int) = (8, 3, 200),
                     total: Int = 0, willSearch: Int = 0, counts: [(reason: String, count: Int)] = [],
                     tally: Tally = Tally(), buckets: [String: SiteBucket] = [:],
                     byHash: [String: LocalTorrent] = [:]) {
             self.torrents = torrents
             self.siteIDs = siteIDs
             self.missTTLDays = missTTLDays
+            self.pendingBySite = pendingBySite
+            self.pace = pace
             self.total = total
             self.willSearch = willSearch
             self.counts = counts
@@ -373,6 +481,8 @@ public final class AssistPipeline {
             if b.unsupported { return .unsupported }
             if b.seeding.contains(h) { return .seeding }
             if b.assisted.contains(h) { return .assisted }
+            if b.review.contains(h) { return .review }
+            if b.rejected.contains(h) { return .rejected }
             if b.missing.contains(h) { return .missing }
             if b.failed.contains(h) { return .failed }
             return .pending
@@ -395,11 +505,38 @@ public final class AssistPipeline {
             return t
         }
 
+        /// 覆盖率与预计：计划计数叠加当前进展，两边看到的是同一个数
+        public func coverage(live: [String: LiveRow] = [:]) -> Coverage {
+            let t = adjusted(live: live)
+            var c = Coverage()
+            c.total = t.total
+            c.resolved = t.resolved
+            c.unresolved = t.unresolved
+            c.searchesLeft = t.searchesLeft
+            c.needsAction = t.needsAction
+            // 执行是按站轮着来的，不是并发：逐站间隔乘以各自还要检索的次数，再累加
+            let per = pace.interval + pace.jitter / 2
+            var seconds: TimeInterval = 0
+            var sites = 0
+            for (_, n) in pendingBySite where n > 0 {
+                sites += 1
+                seconds += Double(n) * per
+            }
+            c.siteCount = sites
+            c.secondsLeft = sites == 0 ? nil : seconds
+            if pace.roundBudget > 0 {
+                c.roundsLeft = Int((Double(c.searchesLeft) / Double(pace.roundBudget)).rounded(.up))
+            }
+            return c
+        }
+
         private func skipText(_ st: RowStatus, bucket b: SiteBucket) -> String? {
             if b.unsupported { return "该站暂不支持站内检索" }
             switch st {
             case .seeding: return "已在该站做种"
             case .assisted: return "此前已辅过"
+            case .review: return "待复核（上次校验没等完）"
+            case .rejected: return "人工判定不是同一种子"
             case .missing: return "站内没有（\(missTTLDays) 天内查过）"
             default: return nil      // 失败的那格本轮还会再试，不算「跳过」
             }
@@ -435,6 +572,7 @@ public final class AssistPipeline {
         let missTTL = Double(cfg.missTTLDays) * 86_400
         var buckets: [String: SiteBucket] = [:]
         var counts: [String: Int] = [:]
+        var pendingBySite: [String: Int] = [:]
         var tally = Tally()
         for id in ids {
             guard let site = config.site(id) else { continue }
@@ -445,11 +583,18 @@ public final class AssistPipeline {
             } else {
                 // 优先级与 preSkip 一致：已做种 > 已辅过 > 站内没有 > 上次失败
                 b.assisted = state.assistedHashes(site: id).intersection(hashSet).subtracting(b.seeding)
+                b.review = state.assistReviewHashes(site: id)
+                    .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
+                b.rejected = state.assistRejectHashes(site: id)
+                    .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
+                    .subtracting(b.review)
                 b.missing = state.assistMissHashes(site: id, ttlSeconds: missTTL)
                     .intersection(hashSet).subtracting(b.seeding).subtracting(b.assisted)
+                    .subtracting(b.review).subtracting(b.rejected)
                 b.failed = state.assistFailHashes(site: id)
                     .intersection(hashSet).subtracting(b.seeding)
                     .subtracting(b.assisted).subtracting(b.missing)
+                    .subtracting(b.review).subtracting(b.rejected)
             }
             buckets[id] = b
             if b.unsupported {
@@ -458,19 +603,26 @@ public final class AssistPipeline {
                 continue
             }
             let pending = list.count - b.seeding.count - b.assisted.count
-                - b.missing.count - b.failed.count
+                - b.review.count - b.rejected.count - b.missing.count - b.failed.count
+            pendingBySite[id] = max(0, pending)
             tally.increase(.seeding, b.seeding.count)
             tally.increase(.assisted, b.assisted.count)
+            tally.increase(.review, b.review.count)
+            tally.increase(.rejected, b.rejected.count)
             tally.increase(.missing, b.missing.count)
             tally.increase(.failed, b.failed.count)
             tally.increase(.pending, max(0, pending))
             counts["已在该站做种", default: 0] += b.seeding.count
             counts["此前已辅过", default: 0] += b.assisted.count
+            counts["待复核", default: 0] += b.review.count
+            counts["人工已否决", default: 0] += b.rejected.count
             counts["站内没有（\(cfg.missTTLDays) 天内查过）", default: 0] += b.missing.count
             counts["上次检索失败", default: 0] += b.failed.count
             counts["会去站内检索", default: 0] += max(0, pending)
         }
         return CatalogPlan(torrents: list, siteIDs: ids, missTTLDays: cfg.missTTLDays,
+                           pendingBySite: pendingBySite,
+                           pace: (cfg.perSiteIntervalSec, cfg.jitterSec, cfg.roundBudget),
                            total: list.count * ids.count,
                            willSearch: counts["会去站内检索", default: 0],
                            counts: counts.sorted { $0.value > $1.value }
@@ -637,9 +789,14 @@ public final class AssistPipeline {
             opts.sleep(poll)
             waited += poll
         }
+        // 落一张「待复核」：不落盘的话这一格重启就人间蒸发，那条暂停的种子也没人收尾
+        state.markAssistReview(site: site.id, hash: t.hash, url: detail, siteHash: siteHash,
+                               level: levelTag(), why: why)
+        state.note("assist[\(site.id)] REVIEW \(t.name) \(levelTag())")
         return AssistOutcome(siteID: site.id, torrentName: t.name, level: level, detailURL: detail,
                              message: "校验还没跑完（等了 \(cfg.verifyWaitSec) 秒），"
-                                    + "种子先留在下载器里暂停着，稍后回来看结果")
+                                    + "种子先留在下载器里暂停着，点「回查校验」看结果",
+                             review: true)
     }
 
     /// 阶段名（桥接层与界面按这个名字比对，别随意改）
@@ -647,6 +804,7 @@ public final class AssistPipeline {
         switch p {
         case .working: return "working"
         case .verifying: return "verifying"
+        case .review: return "review"
         case .done: return "done"
         case .failed: return "failed"
         case .skipped: return "skipped"
@@ -657,6 +815,7 @@ public final class AssistPipeline {
         switch name {
         case "working": return .working
         case "verifying": return .verifying
+        case "review": return .review
         case "done": return .done
         case "failed": return .failed
         case "skipped": return .skipped

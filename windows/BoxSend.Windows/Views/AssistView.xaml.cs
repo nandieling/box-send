@@ -3,12 +3,13 @@ using System.ComponentModel;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>辅种页：两块信息 —— 一条种子 × 各辅种站的格子（站名 + 已辅种/待辅种/不存在），
-/// 以及整轮的已完成 / 待辅种 / 失败计数。分类与计数都在核心库里算，
-/// 这页只画格子；搜索节奏挪到了「设置」页。</summary>
+/// <summary>辅种页：覆盖率 + 待处理队列 + 「一条种子 × 各辅种站」的格子。
+/// 归类、计数、覆盖率文案都在核心库里算，这页只画；默认只摊开要人动手的那几类格子，
+/// 115 个站全摊开就是满屏灰格子，真结论反倒看不见。</summary>
 public partial class AssistView : UserControl
 {
     private readonly AppModel _model;
@@ -23,6 +24,7 @@ public partial class AssistView : UserControl
         InitializeComponent();
         Torrents.ItemsSource = _torrents;
         Stats.ItemsSource = _model.AssistStats;
+        Queue.ItemsSource = _model.AssistQueue;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(ShowSites);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(RefreshProgress);
         ShowSites();
@@ -67,6 +69,22 @@ public partial class AssistView : UserControl
         if (node == null)
         {
             State.Text = error ?? "扫描下载器失败";
+            return;
+        }
+        Fill(node!.AsObject());
+    }
+
+    /// 回查校验：上一轮推进下载器却没等到校验结果的种子，回来问一次下载器。
+    /// 一次站点请求都不发，所以跑多快都不给站点添负载。
+    private async void OnRecheck(object sender, RoutedEventArgs e)
+    {
+        BtnRecheck.IsEnabled = false;
+        State.Text = "回查校验…";
+        var (node, error) = await _model.AssistRecheckAsync();
+        BtnRecheck.IsEnabled = true;
+        if (node == null)
+        {
+            State.Text = error ?? "回查校验失败";
             return;
         }
         Fill(node!.AsObject());
@@ -119,6 +137,7 @@ public partial class AssistView : UserControl
                 Left = Text(n?["name"]),
                 SizeText = $"{size / 1073741824.0:0.0} GiB",
                 Right = $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站",
+                WideOpen = WideOpen.IsChecked == true,
             };
             byHash[hash] = block;
             _torrents.Add(block);
@@ -140,24 +159,26 @@ public partial class AssistView : UserControl
                     + (skip.Length > 0 ? "\n" + skip : ""),
             });
         }
-        var planTotal = result["planTotal"]?.GetValue<int>() ?? 0;
-        var willSearch = 0;
-        var skips = new List<string>();
-        if (result["planCounts"] is JsonObject counts)
-            foreach (var kv in counts)
-            {
-                var c = kv.Value?.GetValue<int>() ?? 0;
-                if (kv.Key == "会去站内检索") willSearch = c;
-                else skips.Add($"{kv.Key} {c}");
-            }
-        skips.Sort((a, b) => b.Split(' ').Last().CompareTo(a.Split(' ').Last()));
+        foreach (var block in _torrents) block.Rebuild();
+        ShowCoverage(result);
         var budget = result["budget"]?.GetValue<int>() ?? 0;
-        PlanSummary.Text = $"全量 {planTotal} 个组合，其中 {willSearch} 个会去站内检索"
-            + $"（单轮预算 {_model.SectionInt("assist", "roundBudget", 200)} 次请求，用完下次接着跑）"
-            + $"；本轮剩余额度 {budget} 次"
-            + (skips.Count > 0 ? "；跳过：" + string.Join(" · ", skips.Take(4)) : "");
+        PlanSummary.Text = $"单轮预算 {_model.SectionInt("assist", "roundBudget", 200)} 次请求，"
+            + $"本轮剩余额度 {budget} 次；用完接着跑下一轮，站点检索不会被打过头";
         State.Text = $"参与站点 {CheckedSites().Length} 个";
         RefreshProgress();
+    }
+
+    /// 覆盖率那一行与进度条：文案由核心库给，两端一字不差
+    private void ShowCoverage(JsonObject result)
+    {
+        if (result["coverage"] is not JsonObject cov)
+        {
+            CoverageLine.Text = "";
+            Coverage.Value = 0;
+            return;
+        }
+        Coverage.Value = cov["percent"]?.GetValue<double>() ?? 0;
+        CoverageLine.Text = Text(cov["line"]);
     }
 
     private async void OnStart(object sender, RoutedEventArgs e)
@@ -199,17 +220,38 @@ public partial class AssistView : UserControl
                     + (live.Detail.Length > 0 ? "\n" + live.Detail : "");
                 cell.NeedConfirm = live.Status == "manual";
             }
-            block.Right = $"{block.SizeText} · 已辅 {block.Cells.Count(c => c.Status == "assisted")}"
-                + $" · 待辅 {block.Cells.Count(c => c.Status is "pending" or "verifying")}"
-                + $" · 失败 {block.Cells.Count(c => c.Status == "failed")}";
+            block.Rebuild();
         }
+        Coverage.Value = _model.AssistCoveragePercent;
+        CoverageLine.Text = _model.AssistCoverageLine;
+        QueueBox.Visibility = _model.AssistQueue.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        QueueBox.Header = $"待处理（{_model.AssistQueue.Count}）";
         BtnScan.IsEnabled = !_model.BusyAssist;
         BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
+        BtnRecheck.IsEnabled = !_model.BusyAssist;
         BtnPrev.IsEnabled = _page > 0 && !_model.BusyAssist;
         BtnNext.IsEnabled = _page < _pageCount - 1 && !_model.BusyAssist;
         BtnStart.Content = DryRun.IsChecked == true ? "预演本页" : "辅种本页";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
+    }
+
+    /// 全展开 / 全收起：切完每张卡重算一遍可见格子
+    private void OnWideOpen(object sender, RoutedEventArgs e)
+    {
+        foreach (var block in _torrents)
+        {
+            block.WideOpen = WideOpen.IsChecked == true;
+            block.Rebuild();
+        }
+    }
+
+    /// 点计数牌 = 展开/收起那一类的格子
+    private void OnChip(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: Chip chip }) return;
+        var block = _torrents.FirstOrDefault(b => b.Hash == chip.Hash);
+        block?.Toggle(chip.Status);
     }
 
     /// 人工采纳一条：只重跑这一条，负缓存与「已辅过」预筛都让路
@@ -222,10 +264,40 @@ public partial class AssistView : UserControl
         RefreshProgress();
     }
 
+    // MARK: 待处理队列上的按钮
+
+    private async void OnAdoptQ(object sender, RoutedEventArgs e) =>
+        await RunQueueAction(sender, item => _model.AssistConfirmAsync(item.Key));
+
+    private async void OnRetryQ(object sender, RoutedEventArgs e) =>
+        await RunQueueAction(sender, item => _model.AssistRetryAsync(item.SiteID, item.Hash));
+
+    private async void OnRecheckQ(object sender, RoutedEventArgs e) =>
+        await RunQueueAction(sender, item => _model.AssistRecheckAsync(new[] { item.Key }).ContinueWith(
+            t => (string?)t.Result.Error));
+
+    private async void OnRejectQ(object sender, RoutedEventArgs e) =>
+        await RunQueueAction(sender, item => _model.AssistRejectAsync(item.Key, true).ContinueWith(
+            t => (string?)t.Result.Error));
+
+    private async void OnUndoQ(object sender, RoutedEventArgs e) =>
+        await RunQueueAction(sender, item => _model.AssistRejectAsync(item.Key, false).ContinueWith(
+            t => (string?)t.Result.Error));
+
+    /// 队列按钮统一走这一趟：调用完刷新一次，界面按新状态重画那一行
+    private async Task RunQueueAction(object sender, Func<AssistQueueItem, Task<string?>> action)
+    {
+        if (sender is not FrameworkElement { DataContext: AssistQueueItem item }) return;
+        State.Text = $"处理 {item.SiteName} · {item.TorrentName}…";
+        var err = await action(item);
+        State.Text = err ?? $"{item.SiteName}：已处理";
+        RefreshProgress();
+    }
+
     private static string Text(JsonNode? n) =>
         n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
 
-    /// 一条种子一张卡
+    /// 一条种子一张卡：标题 + 各类计数牌 + 展开的那些格子
     public sealed class TorrentBlock : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -234,7 +306,26 @@ public partial class AssistView : UserControl
         public string Left { get; init; } = "";
         public string SizeText { get; set; } = "";
 
+        /// 这一页里这条种子的全部格子（含没展开的）
         public ObservableCollection<Cell> Cells { get; } = new();
+        /// 画出来的格子：默认只有要人动手的那几类
+        public ObservableCollection<Cell> VisibleCells { get; } = new();
+        public ObservableCollection<Chip> Chips { get; } = new();
+
+        /// 手动改过的展开状态；没改过的按默认走
+        private readonly Dictionary<string, bool> _fold = new();
+
+        /// 与核心库 RowStatus 的声明顺序一致，界面照这个排计数牌
+        private static readonly string[] Order =
+        {
+            "assisted", "pending", "verifying", "review", "manual",
+            "failed", "rejected", "missing", "seeding", "unsupported",
+        };
+
+        /// 默认就摊开的：问题不该要人先去点计数牌才看得见
+        private static readonly string[] AutoOpen = { "failed", "manual", "review" };
+
+        public bool WideOpen { get; set; }
 
         private string _right = "";
         public string Right
@@ -245,7 +336,84 @@ public partial class AssistView : UserControl
 
         public string Tip => Left;
 
+        /// 格子结论可能刚变过：计数牌与可见格子都按当前状态重算
+        public void Rebuild()
+        {
+            var groups = new Dictionary<string, List<Cell>>();
+            foreach (var c in Cells)
+            {
+                if (!groups.TryGetValue(c.Status, out var list)) groups[c.Status] = list = new List<Cell>();
+                list.Add(c);
+            }
+            var statuses = Order.Where(groups.ContainsKey)
+                .Concat(groups.Keys.Where(k => !Order.Contains(k))).ToList();
+            Replace(Chips, statuses.Select(st => new Chip(Hash, st, groups[st][0].StatusText,
+                groups[st].Count, IsOpen(st))).ToList());
+            Replace(VisibleCells, Cells.Where(c => IsOpen(c.Status)).ToList());
+            int N(string st) => groups.TryGetValue(st, out var l) ? l.Count : 0;
+            Right = $"{SizeText} · 已辅 {N("assisted")} · 待辅 {N("pending") + N("verifying")}"
+                + $" · 失败 {N("failed")} · 待复核 {N("review")} · 待确认 {N("manual")}";
+        }
+
+        public void Toggle(string status)
+        {
+            _fold[status] = !IsOpen(status);
+            Rebuild();
+        }
+
+        private bool IsOpen(string status) =>
+            WideOpen || (_fold.TryGetValue(status, out var v) ? v : AutoOpen.Contains(status));
+
         private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        /// 整表替换：一次几十条，比逐条 diff 便宜，也不会漏通知
+        private static void Replace<T>(ObservableCollection<T> target, List<T> items)
+        {
+            target.Clear();
+            foreach (var i in items) target.Add(i);
+        }
+    }
+
+    /// 一类格子的小计数牌：底色说结论，数字说有几格，点一下展开那一类
+    public sealed class Chip
+    {
+        public Chip(string hash, string status, string label, int count, bool open)
+        {
+            Hash = hash;
+            Status = status;
+            Label = label;
+            Count = count;
+            IsOpen = open;
+            Wash = open ? WashBrush(status) : Brushes.Transparent;
+            Tip = $"{label} {count} 格：{(open ? "点击收起" : "点击展开")}";
+        }
+
+        public string Hash { get; }
+        public string Status { get; }
+        public string Label { get; }
+        public int Count { get; }
+        public bool IsOpen { get; }
+        public Brush Wash { get; }
+        public string Tip { get; }
+
+        /// 展开的那类铺一层结论色薄底；没展开的保持透明
+        private static Brush WashBrush(string status)
+        {
+            var hex = status switch
+            {
+                "assisted" => "#3D2EA244",
+                "failed" => "#3DE5484D",
+                "verifying" => "#3D4C8EFF",
+                "review" => "#3D9B5BE0",
+                "manual" => "#3DE89B2C",
+                "seeding" => "#3D2AA4A4",
+                _ => "#33808A94",
+            };
+            return _cache.TryGetValue(hex, out var b) ? b : _cache[hex] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(hex));
+        }
+
+        private static readonly Dictionary<string, Brush> _cache = new();
     }
 
     /// 一格 = 一条种子在一个站的结论
@@ -282,11 +450,13 @@ public partial class AssistView : UserControl
             set { if (_statusText == value) return; _statusText = value; Raise(nameof(StatusText)); }
         }
 
+        /// 该用哪个配色键
         public string Tone => Status switch
         {
             "assisted" or "seeding" => "Success",
             "failed" => "DangerText",
             "verifying" => "Accent",
+            "review" => "Review",
             "manual" => "Warning",
             _ => "TextMuted",
         };

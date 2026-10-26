@@ -246,6 +246,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         AssistReport = Str(assist?["report"]);
         ApplyAssistRows(assist?["rows"]);
         ApplyAssistStats(assist?["stats"]);
+        ApplyAssistCoverage(assist?["coverage"]);
+        ApplyAssistQueue(assist?["queue"]);
 
         var logs = snap["logs"]?.AsArray();
         if (logs != null && (Logs.Count != logs.Count || full))
@@ -279,6 +281,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
               nameof(ReseedDownloaderID), nameof(AssistDownloaderID),
               nameof(BusySSH), nameof(BusyAssist), nameof(AssistRunning),
               nameof(AssistStep), nameof(AssistReport), nameof(AssistAutoNextMinutes),
+              nameof(AssistCoverageLine), nameof(AssistCoveragePercent), nameof(AssistNeedsAction),
               nameof(CurrentTheme));
     }
 
@@ -474,6 +477,42 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<AssistStatLine> AssistStats { get; } = new();
     public int AssistStatTotal { get; private set; }
 
+    /// 待处理队列：失败 / 待复核 / 待人工确认 / 已否决（核心库排好序，上限 200 条）
+    public ObservableCollection<AssistQueueItem> AssistQueue { get; } = new();
+
+    /// 覆盖率那一句话与进度（0…1），文案由核心库给，两端一字不差
+    public string AssistCoverageLine { get; private set; } = "";
+    public double AssistCoveragePercent { get; private set; }
+    public int AssistNeedsAction { get; private set; }
+
+    private void ApplyAssistCoverage(JsonNode? node)
+    {
+        var o = node as JsonObject;
+        var line = Str(o?["line"]);
+        var percent = o?["percent"] is JsonValue v && v.TryGetValue<double>(out var d) ? d : 0;
+        var action = Num(o?["needsAction"]);
+        if (line == AssistCoverageLine && Math.Abs(percent - AssistCoveragePercent) < 0.0001
+            && action == AssistNeedsAction) return;
+        AssistCoverageLine = line;
+        AssistCoveragePercent = percent;
+        AssistNeedsAction = action;
+        Raise(nameof(AssistCoverageLine), nameof(AssistCoveragePercent), nameof(AssistNeedsAction));
+    }
+
+    /// 队列条目不多（上限 200），结论有变就整表重建：比逐字段 diff 少一类对不齐的 bug
+    private void ApplyAssistQueue(JsonNode? array)
+    {
+        var parsed = (array as JsonArray)?.Select(n => AssistQueueItem.From(n!)).ToList()
+                       ?? new List<AssistQueueItem>();
+        var fingerprint = string.Join("|", parsed.Select(AssistQueueItem.Fingerprint));
+        if (parsed.Count == AssistQueue.Count && fingerprint == _queueFingerprint) return;
+        _queueFingerprint = fingerprint;
+        AssistQueue.Clear();
+        foreach (var p in parsed) AssistQueue.Add(p);
+    }
+
+    private string _queueFingerprint = "";
+
     public void ClearAssistRows() => AssistRows.Clear();
 
     private void ApplyAssistStats(JsonNode? node)
@@ -535,6 +574,33 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 人工采纳一条「待人工确认」：只重跑这一条，负缓存与「已辅过」预筛都让路
     public Task<string?> AssistConfirmAsync(string key) =>
         TryAsync("assist.confirm", new { key });
+
+    /// 回查校验：只问下载器，一次站点请求都不发。回来的载荷与翻页同形，界面直接重画
+    public async Task<(JsonNode? Node, string? Error)> AssistRecheckAsync(string[]? keys = null)
+    {
+        string? error = null;
+        var node = await Task.Run(() => _api.TryInvoke("assist.recheck", out error,
+            keys is { Length: > 0 } ? new { keys } : null));
+        await RefreshAsync(full: false);
+        return (node, node == null ? error ?? "回查校验失败" : null);
+    }
+
+    /// 人工否决 / 撤销否决一条组合：核心库只改状态表，回来的载荷已按新结论重算
+    public async Task<(JsonNode? Node, string? Error)> AssistRejectAsync(string key, bool rejected)
+    {
+        string? error = null;
+        var node = await Task.Run(() => _api.TryInvoke("assist.reject", out error, new { key, rejected }));
+        await RefreshAsync(full: false);
+        return (node, node == null ? error ?? "这条没改动" : null);
+    }
+
+    /// 重试一条失败的组合：只跑这一格
+    public Task<string?> AssistRetryAsync(string siteID, string hash) =>
+        TryAsync("assist.start", new
+        {
+            siteIDs = new[] { siteID }, dryRun = false,
+            forceKeys = Array.Empty<string>(), torrentHashes = new[] { hash },
+        });
 
     /// 到点问一句核心库：该跑就跑，没到点它什么都不做
     private async Task AssistTickAsync()
@@ -882,6 +948,7 @@ public sealed class AssistRow : INotifyPropertyChanged
         "assisted" or "seeding" => "Success",
         "failed" => "DangerText",
         "verifying" => "Accent",
+        "review" => "Review",
         "manual" => "Warning",
         _ => "TextMuted",
     };
@@ -890,6 +957,7 @@ public sealed class AssistRow : INotifyPropertyChanged
     {
         "working" => "检索中",
         "verifying" => "校验中",
+        "review" => "待复核",
         "done" => "已辅种",
         "failed" => "失败",
         "skipped" => "跳过",
@@ -906,6 +974,57 @@ public sealed class AssistRow : INotifyPropertyChanged
     }
 
     private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// 待处理队列的一行：站名、种子、结论、原因，外加这一条能点什么
+public sealed class AssistQueueItem
+{
+    public string Key { get; init; } = "";
+    public string SiteID { get; init; } = "";
+    public string SiteName { get; init; } = "";
+    public string Hash { get; init; } = "";
+    public string TorrentName { get; init; } = "";
+    public string Status { get; init; } = "";
+    public string StatusText { get; init; } = "";
+    public string Why { get; init; } = "";
+    public string Time { get; init; } = "";
+    public string Url { get; init; } = "";
+    public bool CanAdopt { get; init; }
+    public bool CanRetry { get; init; }
+    public bool CanRecheck { get; init; }
+    public bool CanUndo { get; init; }
+    public bool CanReject { get; init; }
+
+    public string Tone => Status switch
+    {
+        "failed" => "DangerText",
+        "review" => "Review",
+        "manual" => "Warning",
+        _ => "TextMuted",
+    };
+
+    /// 用来判断这一行有没有变（结论、原因、按钮任一项变了就重画）
+    public static string Fingerprint(AssistQueueItem i) =>
+        $"{i.Key}#{i.Status}#{i.Why}#{i.CanAdopt}{i.CanRetry}{i.CanRecheck}{i.CanUndo}{i.CanReject}";
+
+    public static AssistQueueItem From(JsonNode n) => new()
+    {
+        Key = n["key"]?.GetValue<string>() ?? "",
+        SiteID = n["siteID"]?.GetValue<string>() ?? "",
+        SiteName = n["siteName"]?.GetValue<string>() ?? "",
+        Hash = n["hash"]?.GetValue<string>() ?? "",
+        TorrentName = n["torrentName"]?.GetValue<string>() ?? "",
+        Status = n["status"]?.GetValue<string>() ?? "",
+        StatusText = n["statusText"]?.GetValue<string>() ?? "",
+        Why = n["why"]?.GetValue<string>() ?? "",
+        Time = n["time"]?.GetValue<string>() ?? "",
+        Url = n["url"]?.GetValue<string>() ?? "",
+        CanAdopt = n["canAdopt"]?.GetValue<bool>() ?? false,
+        CanRetry = n["canRetry"]?.GetValue<bool>() ?? false,
+        CanRecheck = n["canRecheck"]?.GetValue<bool>() ?? false,
+        CanUndo = n["canUndo"]?.GetValue<bool>() ?? false,
+        CanReject = n["canReject"]?.GetValue<bool>() ?? false,
+    };
 }
 
 /// 统计行：一行一个归类，标签由核心库给（mac 与 Windows 同一份文案）
@@ -928,6 +1047,7 @@ public sealed class AssistStatLine : INotifyPropertyChanged
         "assisted" or "seeding" => "Success",
         "failed" => "DangerText",
         "verifying" => "Accent",
+        "review" => "Review",
         "manual" => "Warning",
         _ => "TextMuted",
     };

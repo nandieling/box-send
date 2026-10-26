@@ -31,9 +31,15 @@ public final class StateStore {
         /// 辅种负缓存：站点 -> hash -> 站内没检索到的时间。没找到也要记，
         /// 否则每轮都替站点重搜一遍同一条，纯属白跑（站点还嫌你烦）
         var assistMiss: [String: [String: Double]] = [:]
-        /// 辅种失败：站点 -> hash -> 上次失败时间。失败不算「站内没有」，下轮还要再试，
-        /// 但界面要能数出「失败辅种」有多少，所以单独记一张表。
-        var assistFail: [String: [String: Double]] = [:]
+        /// 辅种失败：站点 -> hash -> 上次失败时间与原因。失败不算「站内没有」，下轮还要再试，
+        /// 但界面要能数出「失败辅种」有多少、为什么砸的，所以单独记一张表。
+        var assistFail: [String: [String: AssistFailRec]] = [:]
+        /// 待复核：已经推进下载器，但没等到校验结果（等超时、中途退出）。
+        /// 不落盘就没人收尾了——那条种子还在下载器里暂停着，下一轮又当新面孔重搜一遍，
+        /// 白敲站点，还可能加出第二条。
+        var assistReview: [String: [String: AssistReviewRec]] = [:]
+        /// 人工否决：检索到的那条不是同一种子。永久别再拿它烦人，界面上留一条可撤销。
+        var assistReject: [String: [String: Double]] = [:]
         /// 上次扫描下载器的时间与当时的 hash 集合摘要（增量扫描用）
         var assistScanTime: Double?
         var assistScanDigest: String?
@@ -55,7 +61,9 @@ public final class StateStore {
             cookieChecks = try c.decodeIfPresent([String: CookieCheckRec].self, forKey: .cookieChecks) ?? [:]
             assisted = try c.decodeIfPresent([String: [String: AssistRec]].self, forKey: .assisted) ?? [:]
             assistMiss = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistMiss) ?? [:]
-            assistFail = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistFail) ?? [:]
+            assistFail = try c.decodeIfPresent([String: [String: AssistFailRec]].self, forKey: .assistFail) ?? [:]
+            assistReview = try c.decodeIfPresent([String: [String: AssistReviewRec]].self, forKey: .assistReview) ?? [:]
+            assistReject = try c.decodeIfPresent([String: [String: Double]].self, forKey: .assistReject) ?? [:]
             assistScanTime = try c.decodeIfPresent(Double.self, forKey: .assistScanTime)
             assistScanDigest = try c.decodeIfPresent(String.self, forKey: .assistScanDigest)
             assistScanCount = try c.decodeIfPresent(Int.self, forKey: .assistScanCount)
@@ -68,6 +76,47 @@ public final class StateStore {
         var url: String
         /// sameHash / sameFiles：靠什么判定是同一种子（界面上要说清）
         var level: String
+    }
+
+    /// 一条辅种失败。旧版 state.json 里只存一个时间戳，读出来原因留空。
+    struct AssistFailRec: Codable {
+        var time: Double
+        var why: String
+
+        private enum C: String, CodingKey { case time, why }
+
+        init(time: Double, why: String) {
+            self.time = time
+            self.why = why
+        }
+
+        init(from d: Decoder) throws {
+            if let t = try? d.singleValueContainer().decode(Double.self) {
+                time = t; why = ""
+                return
+            }
+            let c = try d.container(keyedBy: C.self)
+            time = try c.decode(Double.self, forKey: .time)
+            why = try c.decodeIfPresent(String.self, forKey: .why) ?? ""
+        }
+    }
+
+    /// 一条待复核记录。siteHash 是加进下载器那条的哈希——站点重新打包过时它与本地 hash 不同，
+    /// 回查校验只能按它问下载器。
+    public struct AssistReviewRec: Codable {
+        public var time: Double
+        public var url: String
+        public var siteHash: String
+        public var level: String
+        public var why: String
+
+        public init(time: Double, url: String, siteHash: String, level: String, why: String) {
+            self.time = time
+            self.url = url
+            self.siteHash = siteHash
+            self.level = level
+            self.why = why
+        }
     }
 
     private let path: String
@@ -206,6 +255,8 @@ public final class StateStore {
             AssistRec(time: Date().timeIntervalSince1970, url: url, level: level)
         snapshot.assistMiss[site]?.removeValue(forKey: hash.lowercased())
         snapshot.assistFail[site]?.removeValue(forKey: hash.lowercased())
+        snapshot.assistReview[site]?.removeValue(forKey: hash.lowercased())
+        snapshot.assistReject[site]?.removeValue(forKey: hash.lowercased())
         saveLocked()
     }
 
@@ -224,16 +275,61 @@ public final class StateStore {
         saveLocked()
     }
 
-    /// 记一次辅种失败（检索到了但读不下来 / 加进下载器失败）：下轮还会再试
-    public func markAssistFail(site: String, hash: String) {
+    /// 记一次辅种失败（检索到了但读不下来 / 加进下载器失败 / 校验不满被删）：下轮还会再试。
+    /// 原因一起记：待处理队列要就地说明为什么砸的，光有个时间没法定位。
+    public func markAssistFail(site: String, hash: String, why: String = "") {
         lock.lock(); defer { lock.unlock() }
-        snapshot.assistFail[site, default: [:]][hash.lowercased()] = Date().timeIntervalSince1970
+        snapshot.assistFail[site, default: [:]][hash.lowercased()] =
+            AssistFailRec(time: Date().timeIntervalSince1970, why: why)
+        snapshot.assistReview[site]?.removeValue(forKey: hash.lowercased())
         saveLocked()
     }
 
     public func assistFailedAt(site: String, hash: String) -> Date? {
         lock.lock(); defer { lock.unlock() }
-        return snapshot.assistFail[site]?[hash.lowercased()].map { Date(timeIntervalSince1970: $0) }
+        return snapshot.assistFail[site]?[hash.lowercased()].map { Date(timeIntervalSince1970: $0.time) }
+    }
+
+    // MARK: 辅种：待复核 / 人工否决
+
+    /// 推进了下载器但没等到校验结果
+    public func markAssistReview(site: String, hash: String, url: String, siteHash: String,
+                                 level: String, why: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assistReview[site, default: [:]][hash.lowercased()] =
+            AssistReviewRec(time: Date().timeIntervalSince1970, url: url, siteHash: siteHash,
+                            level: level, why: why)
+        snapshot.assistFail[site]?.removeValue(forKey: hash.lowercased())
+        saveLocked()
+    }
+
+    public func clearAssistReview(site: String, hash: String) {
+        lock.lock(); defer { lock.unlock() }
+        if snapshot.assistReview[site]?.removeValue(forKey: hash.lowercased()) != nil { saveLocked() }
+    }
+
+    public func assistReviewRecs(site: String) -> [String: AssistReviewRec] {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assistReview[site] ?? [:]
+    }
+
+    /// 这条是「人工否决」过的（检索到但不算同一种子）
+    public func isAssistRejected(site: String, hash: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return snapshot.assistReject[site]?[hash.lowercased()] != nil
+    }
+
+    public func markAssistReject(site: String, hash: String) {
+        lock.lock(); defer { lock.unlock() }
+        snapshot.assistReject[site, default: [:]][hash.lowercased()] = Date().timeIntervalSince1970
+        snapshot.assistReview[site]?.removeValue(forKey: hash.lowercased())
+        snapshot.assistFail[site]?.removeValue(forKey: hash.lowercased())
+        saveLocked()
+    }
+
+    public func clearAssistReject(site: String, hash: String) {
+        lock.lock(); defer { lock.unlock() }
+        if snapshot.assistReject[site]?.removeValue(forKey: hash.lowercased()) != nil { saveLocked() }
     }
 
     // MARK: 辅种批量取表（全量目录算计数用：上万种子 × 上百个站不能一条条问）
@@ -256,6 +352,44 @@ public final class StateStore {
     public func assistFailHashes(site: String) -> Set<String> {
         lock.lock(); defer { lock.unlock() }
         return Set(snapshot.assistFail[site]?.keys ?? [:].keys)
+    }
+
+    /// 这个站待复核的 hash（等校验结果，本轮不该再去站内重搜）
+    public func assistReviewHashes(site: String) -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return Set(snapshot.assistReview[site]?.keys ?? [:].keys)
+    }
+
+    /// 这个站被人工否决过的 hash
+    public func assistRejectHashes(site: String) -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return Set(snapshot.assistReject[site]?.keys ?? [:].keys)
+    }
+
+    /// 待处理队列的素材：各站待复核 / 失败 / 已否决 的条目（不含「待人工确认」，
+    /// 那种只在跑的那一轮里存在，由调用方从实时进展里补）
+    public func assistQueueEntries() -> [AssistQueueEntry] {
+        lock.lock(); defer { lock.unlock() }
+        var out: [AssistQueueEntry] = []
+        for (site, table) in snapshot.assistReview {
+            for (hash, rec) in table {
+                out.append(AssistQueueEntry(siteID: site, hash: hash, kind: .review,
+                                           why: rec.why, time: rec.time, url: rec.url))
+            }
+        }
+        for (site, table) in snapshot.assistFail {
+            for (hash, rec) in table {
+                out.append(AssistQueueEntry(siteID: site, hash: hash, kind: .failed,
+                                           why: rec.why, time: rec.time))
+            }
+        }
+        for (site, table) in snapshot.assistReject {
+            for (hash, t) in table {
+                out.append(AssistQueueEntry(siteID: site, hash: hash, kind: .rejected,
+                                           why: "人工判定不是同一种子", time: t))
+            }
+        }
+        return out
     }
 
     /// 记一次扫描（增量扫描靠它：种子集合没变、站点也没新增，就没什么可搜的）
@@ -300,6 +434,28 @@ public final class StateStore {
     private func saveLocked() {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+    }
+}
+
+/// 待处理队列里的一条历史记录（状态表 → 界面）
+public struct AssistQueueEntry: Equatable {
+    public enum Kind: String { case review, failed, rejected }
+    public var siteID: String
+    public var hash: String
+    public var kind: Kind
+    public var why: String
+    public var time: Double
+    /// 站内那条种子的详情页（待复核记录里有，点队列条目能直接跳过去看）
+    public var url: String
+
+    public init(siteID: String, hash: String, kind: Kind, why: String, time: Double,
+                url: String = "") {
+        self.siteID = siteID
+        self.hash = hash
+        self.kind = kind
+        self.why = why
+        self.time = time
+        self.url = url
     }
 }
 

@@ -12,12 +12,16 @@ extension AssistPipeline {
         case pending
         /// 真做砸了：读不到站点那条、推下载器失败、校验不满被删
         case failed
-        /// 已推进下载器，等校验
+        /// 已推进下载器，这一轮正在等校验
         case verifying
+        /// 上一轮推进了下载器却没等到结果：种子还暂停着，等「回查校验」收尾
+        case review
         /// 只有名字对得上，等人拍板
         case manual
         /// 站内检索没有这条种子
         case missing
+        /// 检索到了一条，人比对过说不是同一种子：永久不再问
+        case rejected
         /// 这份文件已经在该站做种，本来就不用辅
         case seeding
         /// 站点没有可用的检索入口
@@ -30,8 +34,11 @@ extension AssistPipeline {
             case .pending: return "待辅种"
             case .failed: return "失败"
             case .verifying: return "校验中"
+            case .review: return "待复核"
             case .manual: return "待确认"
+            case .review: return "待复核"
             case .missing: return "不存在"
+            case .rejected: return "已否决"
             case .seeding: return "已做种"
             case .unsupported: return "不支持检索"
             }
@@ -44,8 +51,10 @@ extension AssistPipeline {
             case .pending: return "待辅种"
             case .failed: return "失败辅种"
             case .verifying: return "校验中"
+            case .review: return "待复核（校验没跑完）"
             case .manual: return "待人工确认"
             case .missing: return "站内不存在"
+            case .rejected: return "人工已否决"
             case .seeding: return "已在该站做种"
             case .unsupported: return "不支持站内检索"
             }
@@ -79,6 +88,77 @@ extension AssistPipeline {
         public var lines: [(status: RowStatus, count: Int)] {
             RowStatus.allCases.map { ($0, count($0)) }
         }
+
+        /// 已经有结论、不用再去站内敲门的格子
+        public var resolved: Int {
+            count(.assisted) + count(.seeding) + count(.missing) + count(.rejected)
+        }
+
+        /// 还没结论的格子（含要重试的失败、要人拍板的、要回查的）
+        public var unresolved: Int { max(0, total - resolved) }
+
+        /// 还要发多少次检索才铺完：待辅种 + 上次失败的（失败的下次会重搜）
+        public var searchesLeft: Int { count(.pending) + count(.failed) }
+
+        /// 等人动手的格子：失败、待确认、待复核
+        public var needsAction: Int { count(.failed) + count(.manual) + count(.review) }
+    }
+
+    /// 覆盖率与预计：把「还剩多少」翻成人能安排的话。
+    /// 估算按逐站间隔串行累加——执行本来就是按站轮着来的，不是并发。
+    public struct Coverage: Equatable {
+        public var total = 0
+        public var resolved = 0
+        public var unresolved = 0
+        /// 还要发多少次站内检索
+        public var searchesLeft = 0
+        /// 等人处理：失败 / 待确认 / 待复核
+        public var needsAction = 0
+        /// 不间断跑完还要多久（nil = 没有可检索的格子，或没设间隔）
+        public var secondsLeft: TimeInterval?
+        /// 按单轮预算还要跑多少轮
+        public var roundsLeft = 0
+        public var siteCount = 0
+
+        public var percent: Double { total == 0 ? 0 : Double(resolved) / Double(total) }
+
+        /// 一句人话：既给百分比，也给「照现在这个节奏要多久」
+        public var line: String {
+            var parts: [String] = []
+            parts.append("已判定 \(grouped(resolved)) / \(grouped(total))（\(String(format: "%.1f", percent * 100))%）")
+            if searchesLeft > 0 {
+                parts.append("还要站内检索 \(grouped(searchesLeft)) 次"
+                    + (roundsLeft > 0 ? "，按单轮预算要 \(grouped(roundsLeft)) 轮" : ""))
+            } else {
+                parts.append("站内检索已经铺完")
+            }
+            if let s = secondsLeft { parts.append("不间断跑完约 " + Self.duration(s)) }
+            if needsAction > 0 { parts.append("等人处理 \(grouped(needsAction)) 条") }
+            if siteCount > 0 { parts.append("在跑的站 \(grouped(siteCount)) 个") }
+            return parts.joined(separator: "；") + "。"
+        }
+
+        static func duration(_ t: TimeInterval) -> String {
+            let sec = Int(t.rounded())
+            if sec < 90 { return "\(sec) 秒" }
+            let min = sec / 60
+            if min < 90 { return "\(min) 分钟" }
+            let hr = min / 60
+            if hr < 48 { return min % 60 == 0 ? "\(hr) 小时" : "\(hr) 小时 \(min % 60) 分" }
+            let day = hr / 24
+            return hr % 24 == 0 ? "\(day) 天" : "\(day) 天 \(hr % 24) 小时"
+        }
+    }
+
+    /// 千分位：三四万条组合不加逗号根本数不清
+    public static func grouped(_ n: Int) -> String {
+        let s = String(n)
+        var out = ""
+        for (i, ch) in s.enumerated() {
+            if i > 0 && (s.count - i) % 3 == 0 { out.append(",") }
+            out.append(ch)
+        }
+        return out
     }
 
     /// 一行在界面上的结论：跑过的以进展为准，没跑过的按计划
@@ -109,6 +189,7 @@ extension AssistPipeline {
         case .done: return .assisted
         case .failed: return .failed
         case .verifying: return .verifying
+        case .review: return .review
         case .working: return nil                 // 还在跑：照计划的结论显示
         case .skipped: return status(why: live.text)
         }
@@ -121,6 +202,8 @@ extension AssistPipeline {
         if why.contains("已在该站做种") { return .seeding }
         if why.contains("此前已辅过") { return .assisted }
         if why.contains("待人工确认") { return .manual }
+        if why.contains("待复核") { return .review }
+        if why.contains("不是同一种子") { return .rejected }
         return nil
     }
 
