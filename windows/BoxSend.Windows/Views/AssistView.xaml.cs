@@ -279,19 +279,21 @@ public partial class AssistView : UserControl
     private async void OnBudget(object sender, RoutedEventArgs e) =>
         await _model.AssistAddBudgetAsync();
 
-    /// 暂停 / 取消暂停一个辅种站：写 assist.pausedSites，进度行跟着下一次快照变灰
+    /// 暂停 / 取消暂停一个辅种站：卡片上那个按钮是开关，按现值翻一次，
+    /// 写 assist.pausedSites，卡片底色跟着下一次快照变灰
     private void OnPauseSite(object sender, RoutedEventArgs e)
     {
-        if (sender is not CheckBox { Tag: string id } box) return;
-        var on = box.IsChecked == true;
+        if (sender is not FrameworkElement { Tag: string id }) return;
         _model.PatchSection("assist", o =>
         {
-            var keep = (o["pausedSites"] as JsonArray ?? new JsonArray())
+            var list = (o["pausedSites"] as JsonArray ?? new JsonArray())
                 .Select(x => x?.GetValue<string>() ?? "")
-                .Where(x => x.Length > 0 && x != id).ToList();
-            if (on) keep.Add(id);
+                .Where(x => x.Length > 0).ToList();
+            var wasPaused = list.Contains(id);
+            if (wasPaused) list = list.Where(x => x != id).ToList();
+            else list.Add(id);
             var arr = new JsonArray();
-            foreach (var k in keep) arr.Add(JsonValue.Create(k));
+            foreach (var k in list) arr.Add(JsonValue.Create(k));
             o["pausedSites"] = arr;
         });
     }

@@ -838,6 +838,10 @@ public final class AppService {
             "siteProgress": plan.siteProgress(live: live).map { sp -> [String: Any] in
                 ["siteID": sp.siteID, "siteName": nameOf(sp.siteID),
                  "total": sp.total, "resolved": sp.resolved, "percent": sp.percent,
+                 // 卡片底色、排序与那两行字都由核心库给，Windows 不必自己判
+                 "state": sp.state.rawValue, "stateLabel": sp.state.label,
+                 "stateRank": sp.state.rank, "stateLine": sp.stateLine, "nextLine": sp.nextLine,
+                 "warnLine": sp.warnLine,
                  "searches": sp.searches, "assisted": sp.assisted, "seeding": sp.seeding,
                  "review": sp.review, "rejected": sp.rejected, "missing": sp.missing,
                  "failed": sp.failed, "filtered": sp.filtered, "paused": sp.paused,

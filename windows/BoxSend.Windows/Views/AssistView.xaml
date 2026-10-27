@@ -144,30 +144,71 @@
                         <TextBlock x:Name="SiteListHeader" FontSize="12" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextMuted}" />
                     </DockPanel>
-                    <ScrollViewer x:Name="SiteScroll" MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="SiteScroll" MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                        <!-- 一站一卡：底色说结论，有问题的排前面 -->
                         <ItemsControl x:Name="SiteProgressList">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <DockPanel Margin="0,1" Opacity="{Binding RowOpacity}">
-                                        <CheckBox DockPanel.Dock="Right" Content="暂停" FontSize="11"
-                                                  IsChecked="{Binding Paused}" Click="OnPauseSite"
-                                                  Tag="{Binding SiteID}" VerticalAlignment="Center"
-                                                  ToolTip="暂停这一站：这一轮不去敲门，格子仍算欠着" />
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Warn}" FontSize="11"
-                                                   Margin="0,0,10,0" VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource DangerText}"
-                                                   Visibility="{Binding HasWarn, Converter={StaticResource BoolVis}}" />
-                                        <TextBlock DockPanel.Dock="Left" Text="{Binding SiteName}" FontSize="12"
-                                                   Width="96" TextTrimming="CharacterEllipsis"
-                                                   VerticalAlignment="Center" />
-                                        <StackPanel Margin="8,0,0,0" MaxWidth="280">
-                                            <ProgressBar Height="5" Minimum="0" Maximum="1"
+                                    <Border Width="152" Margin="0,0,6,6" Padding="7,5" CornerRadius="6"
+                                            BorderThickness="1" ToolTip="{Binding Tip}">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="{DynamicResource BlockSurface}" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="trouble">
+                                                        <Setter Property="Background" Value="#2EE5484D" />
+                                                        <Setter Property="BorderBrush" Value="#7AE5484D" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="review">
+                                                        <Setter Property="Background" Value="#2E9B5BE0" />
+                                                        <Setter Property="BorderBrush" Value="#7A9B5BE0" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="done">
+                                                        <Setter Property="Background" Value="#2E2EA244" />
+                                                        <Setter Property="BorderBrush" Value="#7A2EA244" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="paused">
+                                                        <Setter Property="Background" Value="#1F808A94" />
+                                                        <Setter Property="BorderBrush" Value="#66808A94" />
+                                                        <Setter Property="Opacity" Value="0.85" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="unsupported">
+                                                        <Setter Property="Background" Value="#14808A94" />
+                                                        <Setter Property="BorderBrush" Value="#59808A94" />
+                                                        <Setter Property="Opacity" Value="0.65" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Content="{Binding PauseText}"
+                                                        FontSize="11" Padding="6,0" Click="OnPauseSite"
+                                                        Tag="{Binding SiteID}"
+                                                        ToolTip="{Binding PauseTip}" />
+                                                <TextBlock Text="{Binding SiteName}" FontSize="12"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           VerticalAlignment="Center" />
+                                            </DockPanel>
+                                            <ProgressBar Height="4" Minimum="0" Maximum="1" Margin="0,3,0,0"
                                                          Value="{Binding Percent}"
                                                          Visibility="{Binding HasBar, Converter={StaticResource BoolVis}}" />
-                                            <TextBlock Text="{Binding Line}" FontSize="11"
+                                            <TextBlock Text="{Binding Line}" FontSize="11" Margin="0,2,0,0"
+                                                       TextTrimming="CharacterEllipsis"
                                                        Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding NextLine}" FontSize="11" Margin="0,1,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       Visibility="{Binding HasNext, Converter={StaticResource BoolVis}}" />
+                                            <TextBlock Text="{Binding Warn}" FontSize="11" Margin="0,1,0,0"
+                                                       Foreground="{DynamicResource DangerText}"
+                                                       Visibility="{Binding HasWarn, Converter={StaticResource BoolVis}}" />
                                         </StackPanel>
-                                    </DockPanel>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -175,7 +216,7 @@
                     <TextBlock x:Name="PlanSummary" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
                                Foreground="{DynamicResource TextMuted}" />
                     <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"
-                               Text="已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。"
+                               Text="底色说结论：红=这一站有检索或推送砸了，紫=有待复核，绿=这一站已铺完，灰=暂停或没有站内检索；有问题的排前面。"
                                Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
                 </StackPanel>

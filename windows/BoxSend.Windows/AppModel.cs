@@ -530,9 +530,12 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     {
         var parsed = (array as JsonArray)?.Select(n => AssistSiteRow.From(n!)).ToList()
                        ?? new List<AssistSiteRow>();
-        parsed.Sort((a, b) => b.Searches != a.Searches
-            ? b.Searches.CompareTo(a.Searches)
-            : string.CompareOrdinal(a.SiteName, b.SiteName));
+        // 有问题的站排前面，其余按「还要检索几次」
+        parsed.Sort((a, b) => a.StateRank != b.StateRank
+            ? a.StateRank.CompareTo(b.StateRank)
+            : b.Searches != a.Searches
+                ? b.Searches.CompareTo(a.Searches)
+                : string.CompareOrdinal(a.SiteName, b.SiteName));
         var fingerprint = string.Join("|", parsed.Select(AssistSiteRow.Fingerprint));
         if (parsed.Count == AssistSiteProgress.Count && fingerprint == _progressFingerprint) return;
         _progressFingerprint = fingerprint;
@@ -1046,18 +1049,29 @@ public sealed class AssistSiteRow
     public bool Unsupported { get; init; }
     public bool Paused { get; init; }
     public double Percent { get; init; }
+    /// 这一站归哪一组（trouble / review / queued / paused / done / unsupported）：核心库判的
+    public string State { get; init; } = "queued";
+    /// 卡片排列名次：有问题的排前面（核心库给的 SiteState.rank）
+    public int StateRank { get; init; } = 2;
+    /// 悬停那句（站名｜归组 + 判定 + 问题）
+    public string StateLabel { get; init; } = "";
+    /// 卡片那两行字：文案由核心库给，两端一字不差
+    public string Line { get; init; } = "";
+    /// 第三行：接下来还有多少活儿（暂停站说清压着多少格）
+    public string NextLine { get; init; } = "";
+    public string Warn { get; init; } = "";
 
-    public string Line => Unsupported
-        ? "不支持站内检索，辅种得靠人"
-        : $"{Resolved:N0} / {Total:N0}　还要检索 {Searches:N0}";
-    public string Warn => string.Join(" · ", new[]
-        { Failed > 0 ? $"失败 {Failed}" : "", Review > 0 ? $"待复核 {Review}" : "" }
-            .Where(x => x.Length > 0));
+    public string Tip => $"{SiteName}｜{StateLabel}\n{Line}"
+        + (NextLine.Length > 0 ? $"　{NextLine}" : "")
+        + (Warn.Length > 0 ? $"\n{Warn}" : "");
+    public bool HasNext => NextLine.Length > 0;
     public bool HasWarn => Warn.Length > 0;
     public bool HasBar => !Unsupported;
     /// 「还有活儿」：没检索完，或暂停站里压着没结论
     public bool IsBusy => !Unsupported && (Searches > 0 || Paused);
-    public double RowOpacity => Paused ? 0.6 : 1.0;
+    public string PauseText => Paused ? "继续" : "暂停";
+    public string PauseTip => Paused ? "取消暂停：下一轮这一站接着检索"
+        : "暂停这一站：这一轮不去敲门，格子仍算欠着";
 
     public static AssistSiteRow From(JsonNode n) => new()
     {
@@ -1071,10 +1085,17 @@ public sealed class AssistSiteRow
         Unsupported = n["unsupported"]?.GetValue<bool>() ?? false,
         Paused = n["pausedSite"]?.GetValue<bool>() ?? false,
         Percent = n["percent"] is JsonValue v && v.TryGetValue<double>(out var d) ? d : 0,
+        State = n["state"]?.GetValue<string>() ?? "queued",
+        StateRank = n["stateRank"]?.GetValue<int>() ?? 2,
+        StateLabel = n["stateLabel"]?.GetValue<string>() ?? "",
+        Line = n["stateLine"]?.GetValue<string>() ?? "",
+        NextLine = n["nextLine"]?.GetValue<string>() ?? "",
+        Warn = n["warnLine"]?.GetValue<string>() ?? "",
     };
 
     public static string Fingerprint(AssistSiteRow p) =>
-        $"{p.SiteID}#{p.Resolved}#{p.Searches}#{p.Failed}#{p.Review}#{p.Paused}#{p.Unsupported}";
+        $"{p.SiteID}#{p.Resolved}#{p.Searches}#{p.Failed}#{p.Review}#{p.Paused}"
+        + $"#{p.Unsupported}#{p.State}";
 }
 
 /// 待处理队列的一行：站名、种子、结论、原因，外加这一条能点什么

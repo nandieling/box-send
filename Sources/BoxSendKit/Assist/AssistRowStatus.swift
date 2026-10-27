@@ -117,6 +117,47 @@ extension AssistPipeline {
         }
     }
 
+    /// 一张站点卡片该是什么颜色。115 个站铺成一片，靠文字逐行读太慢，
+    /// 得让人一眼挑出「这站有活儿砸了」；归法放核心，两端不会给出两种颜色。
+    public enum SiteState: String, CaseIterable {
+        /// 这个站没有站内检索入口，本来辅不了
+        case unsupported
+        /// 人按了暂停：这一轮不去敲门
+        case paused
+        /// 有检索没问成 / 推下载器砸了的格子
+        case trouble
+        /// 有推了下载器却没等完校验的格子
+        case review
+        /// 全部格子都有结论，不用再敲门
+        case done
+        /// 还有一串要去站内检索
+        case queued
+
+        /// 卡片悬停时的说法
+        public var label: String {
+            switch self {
+            case .unsupported: return "不支持站内检索"
+            case .paused: return "本站已暂停"
+            case .trouble: return "有问题"
+            case .review: return "有待复核"
+            case .done: return "已铺完"
+            case .queued: return "排队中"
+            }
+        }
+
+        /// 卡片排列顺序：有问题的排前面，不支持检索的沉底
+        public var rank: Int {
+            switch self {
+            case .trouble: return 0
+            case .review: return 1
+            case .queued: return 2
+            case .paused: return 3
+            case .done: return 4
+            case .unsupported: return 5
+            }
+        }
+    }
+
     /// 一行的实时进展。只要阶段与那句话就够归类了，不必把整个 Status 递给界面。
     public struct LiveRow: Equatable {
         public var phase: Status.Phase

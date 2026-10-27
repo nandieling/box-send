@@ -107,6 +107,35 @@ final class AssistRowStatusTests: XCTestCase {
         }
     }
 
+    /// 站点卡片该是什么颜色、卡片那两行字怎么说：归法与文案都在核心库里
+    func testSiteProgressStateAndCardLines() {
+        func sp(_ f: (inout AssistPipeline.CatalogPlan.SiteProgress) -> Void)
+            -> AssistPipeline.CatalogPlan.SiteProgress {
+            var p = AssistPipeline.CatalogPlan.SiteProgress(siteID: "s", total: 10)
+            f(&p)
+            return p
+        }
+        XCTAssertEqual(sp { $0.failed = 1 }.state, .trouble)
+        XCTAssertEqual(sp { $0.review = 1 }.state, .review)
+        XCTAssertEqual(sp { _ in }.state, .queued)
+        XCTAssertEqual(sp { $0.assisted = 10 }.state, .done)
+        XCTAssertEqual(sp { $0.pausedSite = true }.state, .paused)
+        XCTAssertEqual(sp { $0.unsupported = true }.state, .unsupported)
+        XCTAssertEqual(sp { $0.unsupported = true; $0.failed = 3 }.state, .unsupported,
+                       "没有检索入口的站不该被失败数抢了颜色")
+        XCTAssertEqual(sp { $0.assisted = 4 }.stateLine, "已判定 4 / 10")
+        XCTAssertEqual(sp { $0.assisted = 4; $0.pending = 6 }.nextLine, "还要检索 6")
+        XCTAssertEqual(sp { $0.assisted = 10 }.nextLine, "这一站已铺完")
+        XCTAssertEqual(sp { $0.pausedSite = true; $0.paused = 7 }.nextLine, "已暂停，压着 7 格")
+        XCTAssertEqual(sp { $0.unsupported = true }.nextLine, "")
+        XCTAssertEqual(sp { $0.failed = 2; $0.review = 1 }.warnLine, "失败 2 · 待复核 1")
+        XCTAssertEqual(sp { _ in }.warnLine, "")
+        XCTAssertLessThan(AssistPipeline.SiteState.trouble.rank, AssistPipeline.SiteState.queued.rank,
+                          "有问题的站排前面")
+        XCTAssertGreaterThan(AssistPipeline.SiteState.unsupported.rank, AssistPipeline.SiteState.done.rank,
+                             "辅不了的站沉底")
+    }
+
     /// 辅种失败要和「跳过」分开：done 与 failed 两个标记不能混
     func testFailedFlagIsItsOwnThing() {
         let o = AssistOutcome(siteID: "a", torrentName: "T", level: .sameHash,
@@ -237,6 +266,13 @@ final class AssistSnapshotStatsTests: XCTestCase {
         XCTAssertTrue(buckets.allSatisfy { (($0["detail"] as? String) ?? "").isEmpty == false },
                       "每组都给细分说明，悬停才有的可看")
         XCTAssertEqual(rows.first?["bucket"] as? String, "waiting", "一格归哪一组也随格子回来")
+        let sites = (out["siteProgress"] as? [[String: Any]]) ?? []
+        XCTAssertFalse(sites.isEmpty, "逐站卡片的数据随载荷回来")
+        XCTAssertEqual(sites.first?["state"] as? String, AssistPipeline.SiteState.queued.rawValue,
+                       "一张卡片该是什么颜色由核心库判")
+        XCTAssertEqual(sites.first?["stateRank"] as? Int, AssistPipeline.SiteState.queued.rank)
+        XCTAssertFalse(((sites.first?["stateLine"] as? String) ?? "").isEmpty,
+                       "卡片那行字连文案一起给")
         let listed = (out["torrents"] as? [[String: Any]]) ?? []
         XCTAssertEqual(listed.first?["summary"] as? String, "没轮到 2",
                        "明细行那句汇总由核心库拼，两端不各算一遍")

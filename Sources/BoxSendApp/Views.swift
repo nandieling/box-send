@@ -2016,11 +2016,12 @@ struct AssistView: View {
         return parts.joined(separator: "；") + "。"
     }
 
-    /// 逐站那一截：合计写在标题行右侧，一站一行只管自己那一站
+    /// 逐站那一截：一站一张卡片。一百多个站用行列表读不动，卡片靠底色挑问题
     private var siteList: some View {
         let rows = model.assistSiteProgress
             .filter { !progressBusyOnly || (!$0.unsupported && ($0.searches > 0 || $0.paused > 0)) }
             .sorted { lhs, rhs in
+                if lhs.state.rank != rhs.state.rank { return lhs.state.rank < rhs.state.rank }
                 if lhs.searches != rhs.searches { return lhs.searches > rhs.searches }
                 return model.siteName(lhs.siteID) < model.siteName(rhs.siteID)
             }
@@ -2038,59 +2039,111 @@ struct AssistView: View {
                     .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
             }
             if rows.isEmpty {
-                Text("扫描下载器后这里逐站给出进度；不想这一轮动某个站，就把它的暂停打开。")
+                Text("扫描下载器后这里一站一卡；不想这一轮动某个站，就把它的暂停按下去。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
                 ScrollView {
-                    VStack(spacing: 5) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 184), spacing: 6)],
+                              alignment: .leading, spacing: 6) {
                         ForEach(rows, id: \.siteID) { p in
-                            siteRow(p)
+                            siteCard(p)
                         }
                     }
+                    .padding(.top, 1)
                 }
-                .frame(maxHeight: 280)
-                Text("已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。")
+                .frame(maxHeight: 300)
+                Text("底色说结论：红=这一站有检索或推送砸了，紫=有待复核，绿=这一站已铺完，"
+                     + "灰=暂停或没有站内检索；有问题的排前面。")
                     .font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private func siteRow(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> some View {
-        let paused = cfg.pausedSites.contains(p.siteID)
-        return HStack(spacing: 8) {
-            Text(model.siteName(p.siteID)).lineLimit(1).frame(width: 96, alignment: .leading)
-            if p.unsupported {
-                Text("不支持站内检索").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                ProgressView(value: p.percent).frame(width: 120)
-                Text("\(AssistPipeline.grouped(p.resolved)) / \(AssistPipeline.grouped(p.total))"
-                     + "　还要检索 \(AssistPipeline.grouped(p.searches))")
-                    .font(.caption2).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
-                if p.failed > 0 {
-                    Text("失败 \(p.failed)").font(.caption2).foregroundStyle(.red)
-                }
-                if p.review > 0 {
-                    Text("待复核 \(p.review)").font(.caption2).foregroundStyle(.purple)
-                }
-                Spacer()
-                Toggle("暂停", isOn: Binding(
-                    get: { paused },
-                    set: { on in
-                        model.assistUpdate { a in
-                            if on {
-                                if !a.pausedSites.contains(p.siteID) { a.pausedSites.append(p.siteID) }
-                            } else {
-                                a.pausedSites.removeAll { $0 == p.siteID }
-                            }
+    /// 一站一卡：站名 + 进度 + 那句判定，右上一个暂停/继续按钮
+    private func siteCard(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> some View {
+        let paused = p.pausedSite
+        let warn = p.warnLine
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(model.siteName(p.siteID)).font(.caption).lineLimit(1)
+                Spacer(minLength: 2)
+                Button {
+                    model.assistUpdate { a in
+                        if paused {
+                            a.pausedSites.removeAll { $0 == p.siteID }
+                        } else if !a.pausedSites.contains(p.siteID) {
+                            a.pausedSites.append(p.siteID)
                         }
-                    }))
-                    .toggleStyle(.switch).controlSize(.mini)
-                    .help("暂停这一站：这一轮不去敲门，格子仍算欠着")
+                    }
+                } label: {
+                    Image(systemName: paused ? "play.circle" : "pause.circle").font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help(paused ? "取消暂停：下一轮这一站接着检索"
+                             : "暂停这一站：这一轮不去敲门，格子仍算欠着")
+            }
+            if !p.unsupported {
+                ProgressView(value: p.percent)
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
+            }
+            Text(p.stateLine).font(.caption2).monospacedDigit()
+                .foregroundStyle(.secondary).lineLimit(1)
+            if !p.nextLine.isEmpty {
+                Text(p.nextLine).font(.caption2).monospacedDigit()
+                    .foregroundStyle(.secondary).lineLimit(1)
+            }
+            if !warn.isEmpty {
+                Text(warn).font(.caption2).monospacedDigit().lineLimit(1)
+                    .foregroundStyle(p.failed > 0 ? Color.red : Color.purple)
             }
         }
-        .opacity(paused ? 0.6 : 1)
+        .padding(6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                Color.blockSurface(model.theme.dark)
+                siteWash(p.state)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(siteEdge(p.state), lineWidth: 1))
+        .opacity(p.state == .unsupported ? 0.65 : 1)
+        .help([model.siteName(p.siteID) + "｜" + p.state.label,
+               p.stateLine + (p.nextLine.isEmpty ? "" : "　" + p.nextLine), warn]
+            .filter { !$0.isEmpty }.joined(separator: "\n"))
+    }
+
+    private func siteTint(_ state: AssistPipeline.SiteState) -> Color {
+        switch state {
+        case .trouble: return .red
+        case .review: return .purple
+        case .done: return .green
+        case .queued: return Color.accentColor
+        case .paused, .unsupported: return Color.secondary.opacity(0.6)
+        }
+    }
+
+    private func siteWash(_ state: AssistPipeline.SiteState) -> Color {
+        switch state {
+        case .trouble: return Color.red.opacity(0.16)
+        case .review: return Color.purple.opacity(0.16)
+        case .done: return Color.green.opacity(0.12)
+        case .queued: return Color.secondary.opacity(0.06)
+        case .paused: return Color.secondary.opacity(0.12)
+        case .unsupported: return Color.secondary.opacity(0.08)
+        }
+    }
+
+    private func siteEdge(_ state: AssistPipeline.SiteState) -> Color {
+        switch state {
+        case .trouble, .review, .done: return siteTint(state).opacity(0.45)
+        case .queued: return Color(nsColor: .separatorColor)
+        case .paused, .unsupported: return Color.secondary.opacity(0.3)
+        }
     }
 
     // MARK: 待你处理：整页唯一动手的地方

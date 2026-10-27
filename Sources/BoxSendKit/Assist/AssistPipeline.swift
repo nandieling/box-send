@@ -593,11 +593,42 @@ public final class AssistPipeline {
             public var paused = 0
             public var pending = 0
             public var unsupported = false
+            /// 这一站被人在界面上按了暂停
+            public var pausedSite = false
             /// 不用再去站内敲门的格子
             public var resolved: Int { assisted + seeding + missing + rejected + filtered }
             /// 这一轮还会发几次检索
             public var searches: Int { pending + failed }
             public var percent: Double { total == 0 ? 1 : Double(resolved) / Double(total) }
+
+            /// 卡片底色与排序按它走
+            public var state: AssistPipeline.SiteState {
+                if unsupported { return .unsupported }
+                if pausedSite { return .paused }
+                if failed > 0 { return .trouble }
+                if review > 0 { return .review }
+                return resolved >= total ? .done : .queued
+            }
+
+            /// 卡片第二行：判定到哪（一句放得下，别在卡片里被省略号砍掉）
+            public var stateLine: String {
+                unsupported ? "没有站内检索入口" : "已判定 \(grouped(resolved)) / \(grouped(total))"
+            }
+
+            /// 卡片第三行：接下来还有多少活儿；暂停站说清压着多少格
+            public var nextLine: String {
+                if unsupported { return "" }
+                if pausedSite && paused > 0 { return "已暂停，压着 \(grouped(paused)) 格" }
+                if searches > 0 { return "还要检索 \(grouped(searches))" }
+                return resolved >= total ? "这一站已铺完" : ""
+            }
+
+            /// 卡片上那行红字；没事就是空串
+            public var warnLine: String {
+                [failed > 0 ? "失败 \(grouped(failed))" : "",
+                 review > 0 ? "待复核 \(grouped(review))" : ""]
+                    .filter { !$0.isEmpty }.joined(separator: " · ")
+            }
         }
 
         /// 逐站进度（叠加本轮已发生的进展）
@@ -621,6 +652,7 @@ public final class AssistPipeline {
                 let known = sp.seeding + sp.assisted + sp.review + sp.rejected
                     + sp.missing + sp.failed + sp.filtered
                 let left = max(0, torrents.count - known)
+                sp.pausedSite = b.pausedSite
                 if b.pausedSite { sp.paused = left } else { sp.pending = left }
                 out.append(sp)
             }

@@ -840,6 +840,30 @@ Windows 侧：
   快照与 `assist.scan` 载荷各加断言：`stats.buckets` 五组齐全且都给细分说明、格子带 `bucket`、
   `torrents[].summary` == 「没轮到 2」、`attention` 为 false）；`dotnet build` 0 错误。
 
+## 这一轮（逐站那一截：行列表改站点卡片）
+
+- 115 个站用一行一站的列表读不动：横向一大截空白、进度条几乎全在 0、要找那家有问题的站得滚到底。
+  改成一站一卡片（卡片是这个软件已有的语言：转种分组、种子明细都是卡片）。
+- **归组进核心**：`AssistPipeline.SiteState`（trouble / review / queued / paused / done / unsupported，
+  带 `label` 与 `rank`）+ `SiteProgress.pausedSite`（人按没按暂停，跟「暂停站里压着几格」是两回事）
+  + `SiteProgress.state` / 卡片那三行字 `stateLine`（「已判定 0 / 3,325」）、
+  `nextLine`（「还要检索 3,325」/「已暂停，压着 129,660 格」/「这一站已铺完」）、
+  `warnLine`（那行红字，没事是空串）。三行分开是因为卡片宽 130 上下，
+  「已判定 x / y　还要检索 n」挤一行会被省略号砍掉。
+  优先级：不支持检索 > 暂停 > 失败 > 待复核 > 已铺完 > 排队中；`rank` 让有问题的站排前面、
+  辅不了的沉底。颜色归组也归核心判：两端给出两种颜色的话，同一份下载器会看着像两个状态。
+- **mac**：`siteList` 那截换 `LazyVGrid`（132…184 自适应）卡片——站名 + 迷你进度条 +
+  那三行字，右上一个 暂停/继续 图标按钮（`pause.circle` / `play.circle`），底色与描边按 `state`
+  走（`siteWash`/`siteEdge`），排序 `state.rank` → 检索数 → 站名。
+  覆盖率、5 组计数、「只显示还有活的站」、「合计 …」那几样不动。
+- **Windows 要改**：`siteProgress` 每项多 `state` / `stateLabel` / `stateRank` / `stateLine` /
+  `nextLine` / `warnLine`，`AssistSiteRow.Line`/`NextLine`/`Warn` 改为直接用核心给的文案（不再自己拼），
+  排序按 `stateRank`；`AssistView.xaml` 那一截换 `WrapPanel` + 164px 卡片，底色走 `State` 的
+  DataTrigger；暂停从 CheckBox 换成 暂停/继续 按钮，`OnPauseSite` 因此改成按现值翻开关。
+- 验证：`swift test` 601 绿（新增 `testSiteProgressStateAndCardLines`：六种归组各判对各、
+  不支持检索的站不被失败数抢颜色、卡片那三行文案各说各的、`rank` 顺序；`assist.scan` 载荷加断言：
+  `siteProgress` 带 `state`/`stateRank`/`stateLine`）；`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
