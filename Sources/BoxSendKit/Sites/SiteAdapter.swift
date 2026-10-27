@@ -29,9 +29,6 @@ public protocol SiteAdapter: AnyObject {
     func previewUploadFields(_ info: ReleaseInfo) throws -> [(String, String)]
     /// 注入 TMDB 反查回调（NexusPHP 家族支持：源站没给 TMDB 链接时按豆瓣/IMDb 反查）
     func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?)
-    /// 上传前改写 .torrent：有些站按 Windows 禁令校验种子内部文件名，
-    /// 非法规格就得先改名（会换 info hash）。返回 nil 表示原样上传
-    func prepareTorrentForUpload(_ data: Data, info: ReleaseInfo) -> (data: Data, renames: [String])?
 }
 
 
@@ -46,10 +43,6 @@ extension SiteAdapter {
     func searchExists(_ info: ReleaseInfo, relaxed: Bool) throws -> String? { try searchExists(info) }
     /// 框架暂无反查需求（源站直接给出 TMDB 链接的站够用）
     func setTMDBLookup(_ lookup: ((ReleaseInfo) -> String?)?) {}
-    /// 默认不改种子：绝大多数站点不查种子内部文件名，而改一次名就换一次 hash，没必要
-    func prepareTorrentForUpload(_ data: Data, info: ReleaseInfo) -> (data: Data, renames: [String])? {
-        nil
-    }
 
 }
 

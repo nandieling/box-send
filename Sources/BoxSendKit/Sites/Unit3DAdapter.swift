@@ -235,6 +235,8 @@ class Unit3DAdapter: SiteAdapter {
     // MARK: - 上传（转种）
 
     func upload(_ info: ReleaseInfo, torrentData: Data, filename: String) throws -> UploadOutcome {
+        // 站方连包内文件名一起查：不合规矩就在发请求之前停下，别传一半被拒
+        try Self.guardTorrentNames(torrentData, siteName: site.name)
         let fields = try uploadFields(info)
         let torrentName = Self.uploadFilename(info.name.isEmpty ? filename : info.name)
         let path = "/api/torrent/createOredit"
@@ -503,52 +505,63 @@ class Unit3DAdapter: SiteAdapter {
         return (cleaned.count >= 4 ? cleaned : "boxsend") + ".torrent"
     }
 
-    // MARK: - 上传前改写种子
+    // MARK: - 上传前：种子内部文件名的站方规矩
 
-    /// 站方校验种子内部文件名，按 Windows 那套禁令来：中文合法，`<>:"/\|?*` 不合法。
+    /// 站方按 Windows 那套禁令校验包内文件名：中文合法，`<>:"/\|?*` 与控制字符不合法。
     /// 源站那条「南家三姐妹 再来一碗.Minami-ke: Okawari…mkv」带冒号，整单被打回
-    /// 「種子檔案含有非法檔名」。改名会换 info hash（与源站就是两条种子），这是站方规则逼的。
-    /// 只在真得改时重编码：本来合法的种子返回 nil，字节与 hash 都跟源站保持一致
-    static func legalizeTorrentNames(_ data: Data) -> (data: Data, renames: [String])? {
+    /// 「種子檔案含有非法檔名」。
+    /// **不自动改名**：改了包内文件名，info hash 就变，下载器手里那批文件对不上号，
+    /// 加进去会显示丢文件、整份重下（实测如此）。宁可报错，让人自己决定改不改。
+    /// 返回不合法的条目名（按出现顺序去重，UTF-8 解码后给人看）
+    static func illegalTorrentNames(_ data: Data) -> [String] {
         guard let root = BValue.decode(data), case .dict(let infoPairs) = root.dict("info") else {
-            return nil
+            return []
         }
-        var renames: [String] = []
-        func shown(_ b: Data) -> String { String(decoding: b, as: UTF8.self) }
-        func clean(_ v: BValue) -> BValue {
-            guard case .bytes(let b) = v, let fixed = SiteFileName.legalComponent(b) else { return v }
-            renames.append("\(shown(b)) → \(shown(fixed))")
-            return .bytes(fixed)
+        var out: [String] = []
+        func offer(_ b: Data) {
+            guard !SiteFileName.illegalChars(b).isEmpty else { return }
+            let shown = String(decoding: b, as: UTF8.self)
+            if !out.contains(shown) { out.append(shown) }
         }
-        // path 是字符串列表；unpaired 编码里一段可能是 [utf8, 原字节] 两个串
-        func cleanPath(_ v: BValue) -> BValue {
-            guard case .list(let xs) = v else { return v }
-            return .list(xs.map { seg in
-                seg.listValues == nil ? clean(seg) : .list(seg.listValues!.map(clean))
-            })
-        }
-        func cleanFileEntry(_ v: BValue) -> BValue {
-            guard let pairs = v.dictPairs else { return v }
-            return .dict(pairs.map { (k, pv) in
-                (k, String(decoding: k, as: UTF8.self) == "path" ? cleanPath(pv) : pv)
-            })
-        }
-        var newInfo: [(Data, BValue)] = []
-        for (k, v) in infoPairs {
-            switch String(decoding: k, as: UTF8.self) {
-            case "name", "name.utf-8": newInfo.append((k, clean(v)))
-            case "files":
-                if case .list(let xs) = v { newInfo.append((k, .list(xs.map(cleanFileEntry)))) }
-                else { newInfo.append((k, v)) }
-            default: newInfo.append((k, v))
+        // path 是字符串列表；unpaired 编码里一段是 [utf8, 原字节] 两个串
+        func segs(_ v: BValue) {
+            guard case .list(let xs) = v else { return }
+            for seg in xs {
+                if let inner = seg.listValues { inner.compactMap { $0.bytesValue }.forEach(offer) }
+                else if let b = seg.bytesValue { offer(b) }
             }
         }
-        guard !renames.isEmpty else { return nil }
-        return (root.setting("info", to: .dict(newInfo)).encoded(), renames)
+        for (k, v) in infoPairs {
+            switch String(decoding: k, as: UTF8.self) {
+            case "name", "name.utf-8":
+                if let b = v.bytesValue { offer(b) }
+            case "files":
+                if case .list(let xs) = v { for e in xs { if let p = e.dict("path") { segs(p) } } }
+            default: break
+            }
+        }
+        return out
     }
 
-    func prepareTorrentForUpload(_ data: Data, info: ReleaseInfo) -> (data: Data, renames: [String])? {
-        Self.legalizeTorrentNames(data)
+    /// 包内文件名不合站方规矩就别传：说清是哪几个名字、卡在哪个字符、手动发种能改成什么
+    private static func guardTorrentNames(_ data: Data, siteName: String) throws {
+        let bad = illegalTorrentNames(data)
+        guard let first = bad.first else { return }
+        let chars = SiteFileName.illegalChars(Data(first.utf8)).map(String.init)
+            .joined(separator: " ")
+        var msg = "\(siteName) 不接受种子内的文件名「\(abbrev(first))」：含站方禁止字符 \(chars)。"
+        if let fixed = SiteFileName.legalComponent(Data(first.utf8)) {
+            msg += "手动发种时可改成「\(abbrev(String(decoding: fixed, as: UTF8.self)))」。"
+        }
+        if bad.count > 1 { msg += "同类还有 \(bad.count - 1) 处。" }
+        msg += "不代改：改名会换 info hash，下载器认不出手里那批文件、要整份重下。"
+        throw BoxSendError.badInput(msg)
+    }
+
+    /// 名字太长会挤爆站点卡片：中间省略，留最能认出来的两头
+    private static func abbrev(_ s: String, _ keep: Int = 60) -> String {
+        guard s.count > keep else { return s }
+        return "\(s.prefix(keep / 2))…\(s.suffix(keep / 2 - 1))"
     }
 
     /// 简介：站方为 Markdown/HTML 混排编辑器，沿用源站 HTML（图片绝对化、去源站链接）

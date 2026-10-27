@@ -499,18 +499,9 @@ public final class ReseedPipeline {
                                            debugDir: debugDir, opts: opts, report: &report)
                             continue
                         }
-                        // 少数站（馒头）连种子内部的文件名一起校验，带冒号的片名要改名重写。
-                        // 只改上传这一份：推给下载器的仍是源站原种子，与站内做种的那条同 hash
-                        var torrentForTarget = torrentData
-                        if let fix = tAdapter.prepareTorrentForUpload(torrentData, info: release) {
-                            torrentForTarget = fix.data
-                            state.note("torrent 内部文件名改为站内合法（\(fix.renames.count) 处）："
-                                       + fix.renames.prefix(3).joined(separator: " / "))
-                        }
                         let outcome = try bounded(opts.siteTimeout, "单站转种") {
-                            try tAdapter.upload(release, torrentData: torrentForTarget, filename: uploadName)
+                            try tAdapter.upload(release, torrentData: torrentData, filename: uploadName)
                         }
-
                         if outcome.success {
                             state.markUploaded(site: tid, key: release.dedupKey)
                             if outcome.alreadyExists {

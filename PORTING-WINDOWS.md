@@ -780,33 +780,37 @@ Windows 侧：
   宽松档捞回重新打包的那条、开关关掉只问一次、`addBudget` 抬上限）；
   `dotnet build` 0 错误。
 
-## 这一轮（馒头「種子檔案含有非法檔名」：上传前改写种子内部文件名）
+## 这一轮（馒头「種子檔案含有非法檔名」：包内文件名只检测、只报错，不代改）
 
 - 同一颗种子（LuckPT 47762）传馒头被整单打回：
   `種子檔案含有非法檔名: 南家三姐妹 再来一碗.Minami-ke: Okawari.2008.S02E04.1080p.Blu-Ray.Remux.AVC.LPCM 2.0-LuckAni.mkv`。
   跟上轮的「无效的文件名」不是一回事：那次是 multipart 里那个 .torrent 文件名，这次是**种子内部**
   的文件名——馒头按 Windows 那套禁令校验包内文件，中文合法、`<>:"/\|?*` 与控制字符不合法，
   这条片名里「Minami-ke: Okawari」的冒号就是钉子。
-- `SiteAdapter` 加一个默认不做事的钩子 `prepareTorrentForUpload(_:info:)`：适配器要改就返回
-  新字节 + 改了几处，流水线在上传前调用、把改名记进状态（`torrent 内部文件名改为站内合法（N 处）`），
-  **只改上传这一份**——推给下载器的仍是源站原种子，与站内做种的那条同 hash。
-  改名会换 info hash（与源站就是两条种子），这是站方规则逼的，不是我们想换。
-- 馒头适配器里 `legalizeTorrentNames`：解出值树 → 洗 `info.name` / `name.utf-8` 与每个
-  `files[].path`（含 unpaired 那种一段两个串的写法）→ 只有真改过时才整份重编码。
-  本来合法的种子返回 nil，字节一个不动，hash 照旧能跨站复用。
-  文件名按**字节**洗而不是按 String：老种子常是 GBK 命名，解码再编回去就换字节了。
-- 为此新增两块地基：`BValue`（通用 bencode 值树，解码按原始字节、编码走规范字典序，
-  真种子往返 hash 不变）与 `SiteFileName`（站点文件名规则收在一处：
-  `uploadName`/`asciiName` 是上传文件名的 ASCII 白名单，`legalComponent` 是包内文件名的
-  Windows 合法性；两者宽严不同，别混用）。`ReseedPipeline.uploadFilename` 改为转调，
-  馒头那份 `uploadFilename` 也从「只去斜杠」换成同一个 ASCII 白名单。
+- 先按「上传前改写包内文件名」做过一版（`SiteAdapter.prepareTorrentForUpload` 钩子 +
+  只改上传那一份）。实测不行：包内文件名一改 info hash 就变，下载器手里那批文件对不上号，
+  加进去显示丢文件、整份重下——跨种本来就是为了让下载器认出手里的文件，这样等于白跨。
+  钩子与流水线那处调用一并撤了。**结论：站方规矩与本地文件冲突时报错让人决定，不要自作主张改名。**
+  主标题（发给站台的 `name` 字段）要调无所谓，那只是个标题。
+- 现在是 `Unit3DAdapter.illegalTorrentNames`：走值树看 `info.name` / `name.utf-8` 与每个
+  `files[].path`（含 unpaired 那种一段两个串的写法），点名报出所有不合法的条目；
+  `upload` 第一件事就是 `guardTorrentNames`，**一个请求都不发**就抛 `badInput`，
+  消息里带站名、哪个名字（过长从中间省略）、卡在哪个字符、手动发种能改成什么、
+  以及「不代改：改名会换 info hash，下载器认不出手里那批文件」。站点卡片上的转种失败就是这句。
+- 为此新增两块地基留着用：`BValue`（通用 bencode 值树，解码按原始字节、编码走规范字典序，
+  真种子往返 hash 不变）与 `SiteFileName`（站点文件名规则收在一处：`uploadName`/`asciiName`
+  是上传文件名的 ASCII 白名单，`illegalChars`/`legalComponent` 是包内文件名的 Windows 合法性
+  与「能改成什么」；两者宽严不同，别混用）。包内名字一律按**字节**判——老种子常是 GBK 命名，
+  解码成 String 再编回去就换字节了。`ReseedPipeline.uploadFilename` 改为转调，
+  馒头那份 `uploadFilename` 也从「只去斜杠」换成同一个 ASCII 白名单（中文名以前照原样发上去）。
 - 顺带修一个既有解析 bug：`Bencode.fileList` 遇到 unpaired 种子（path 一段是 `[utf8, 原字节]`）
   只跳了内层列表的第一个元素，把内层的 `e` 当成 path 的结尾，整份清单被判解析失败——
   辅种靠这份清单逐文件比对，碰上这种种子会白落到「待复核」。现在整段跳过。
-- **Windows 不需要改**：改名、清洗都在共用的核心里，WPF 只是照旧显示运行日志里那句改名说明。
-- 验证：`swift test` 597 绿（新增 `TorrentRenameTests` 9 条——三份真种子值树往返 hash/清单/tracker
-  都不变、真名改名后冒号消失且中文保留、合法种子返回 nil、多文件根目录与每段 path 都洗、
-  GBK 字节原样保留、unpaired 两个串都洗、馒头上传名洗成 ASCII、`legalComponent` 只对真非法字符动手；
+- **Windows 不需要改**：检测、报错、清洗都在共用的核心里，WPF 照旧显示那句转种失败原因。
+- 验证：`swift test` 598 绿（`TorrentIllegalNameTests` 9 条——三份真种子值树往返 hash/清单/tracker
+  都不变、真名点名到 `Minami-ke:` 那一处、合法种子（含三份真种子）一条都不点名、多文件根目录与
+  每段 path 都点名、unpaired 两个串只点一次、GBK 名按字节也认得出、报错里带的非法字符与建议改名、
+  馒头上传名洗成 ASCII；`Unit3DAdapterTests` 加一条：包内名不合法时零请求抛 `badInput`；
   另修 `Unit3DAdapterTests` 那条对上传文件名的旧期望）；`dotnet build` 0 错误。
 
 ## 踩过记在这儿

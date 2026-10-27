@@ -38,9 +38,19 @@ public enum SiteFileName {
         return (base.count >= 4 ? base : "release") + ".torrent"
     }
 
-    /// 种子内部一个文件/目录名（原始字节）。有非法字符时返回洗过的字节，没有返回 nil
-    /// ——返回 nil 让调用方保住原字节，别白改一次 hash。
+    /// 一个包内文件名（原始字节）里的非法字符，按出现顺序去重；合法返回空数组。
     /// 逐字节扫：文件名未必是 UTF-8，而多字节序列的字节都 ≥0x80，不会与 ASCII 撞车
+    public static func illegalChars(_ text: Data) -> [Character] {
+        var out: [Character] = []
+        for x in text where isIllegal(x) {
+            let c = Character(UnicodeScalar(x))
+            if !out.contains(c) { out.append(c) }
+        }
+        return out
+    }
+
+    /// 把非法字符换成点后的名字（站方报错时顺手告诉人「手动发种能改成这个」）；
+    /// 本来就合法返回 nil
     public static func legalComponent(_ text: Data) -> Data? {
         var hit = false
         for x in text where isIllegal(x) { hit = true; break }

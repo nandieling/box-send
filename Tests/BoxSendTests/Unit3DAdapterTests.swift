@@ -178,6 +178,31 @@ final class Unit3DAdapterTests: XCTestCase {
                       String(body.suffix(600)))
     }
 
+    /// 包内文件名带站方禁止的字符：一个请求都不发就报错，说清是哪个名字、能改成什么。
+    /// 不自动改名——改了 info hash，下载器手里那批文件对不上号，加进去显示丢文件要整份重下
+    func testUploadBailsBeforeNetworkOnIllegalInternalName() throws {
+        var requests = 0
+        let adapter = Unit3DAdapter(site: site(), client: client { req in
+            requests += 1
+            return self.resp(Self.bangumiRows)
+        })
+        let raw = "南家三姐妹 再来一碗.Minami-ke: Okawari.2008.S02E04.1080p.Blu-Ray.Remux"
+            + ".AVC.LPCM 2.0-LuckAni.mkv"
+        let torrent = BEnc.enc(["info": ["name": raw, "piece length": 262144, "pieces": "0000"],
+                                "announce": "https://tracker.invalid/announce"])
+        XCTAssertThrowsError(try adapter.upload(animeRelease(), torrentData: torrent,
+                                               filename: "any.torrent")) { err in
+            guard case BoxSendError.badInput(let msg) = err else {
+                return XCTFail("期望 badInput，实际 \(err)")
+            }
+            XCTAssertTrue(msg.contains("Minami-ke"), msg)
+            XCTAssertTrue(msg.contains(":"), msg)
+            XCTAssertTrue(msg.contains("不代改"), msg)
+            XCTAssertTrue(msg.contains("手动发种时可改成"), msg)
+        }
+        XCTAssertEqual(requests, 0, "明知站方要拒，别先把种传上去再挨一句报错")
+    }
+
     /// 在线动画（非原盘）应落在「动画」而不是「动画-BluRay」
     func testUploadWebDLAnimeUsesPlainAnimeCategory() throws {
         let (_, body, _) = try captureUpload(info: animeRelease(name: "Yuru.Yuri.S03.2015.1080p.WEB-DL.AAC-LuckAni"))
