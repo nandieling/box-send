@@ -40,7 +40,6 @@ extension AssistPipeline {
             case .verifying: return "校验中"
             case .review: return "待复核"
             case .manual: return "待确认"
-            case .review: return "待复核"
             case .missing: return "不存在"
             case .rejected: return "已否决"
             case .seeding: return "已做种"
@@ -65,6 +64,55 @@ extension AssistPipeline {
             case .unsupported: return "不支持站内检索"
             case .filtered: return "按本站筛选不辅"
             case .paused: return "本站已暂停"
+            }
+        }
+
+        /// 归到界面上的 5 组之一
+        public var bucket: Bucket {
+            switch self {
+            case .assisted, .verifying: return .done
+            case .manual, .review: return .action
+            case .failed: return .trouble
+            case .seeding, .missing, .rejected, .filtered, .unsupported: return .skip
+            case .pending, .paused: return .waiting
+            }
+        }
+    }
+
+    /// 界面上的归类：12 个结论收成 5 组。计数牌上摆 12 个数没人看得懂，
+    /// 而真正决定下一步动作的只有「要不要我管」。细分结论留在悬停提示里，
+    /// 两端共用这一份归法，免得 mac 与 Windows 各给一套「待你处理」。
+    public enum Bucket: String, CaseIterable {
+        /// 不用管：已经辅上，或正在校验
+        case done
+        /// 等你点一下：只有名字对得上、或校验没等完
+        case action
+        /// 出问题了：可以再试一次
+        case trouble
+        /// 本来就不用辅：已在该站做种、站内没有、按筛选不辅、站没检索入口、人已否决
+        case skip
+        /// 还没轮到：排队中、暂停站里压着
+        case waiting
+
+        /// 计数牌上的短名
+        public var label: String {
+            switch self {
+            case .done: return "已完成"
+            case .action: return "待你处理"
+            case .trouble: return "出问题"
+            case .skip: return "不用辅"
+            case .waiting: return "没轮到"
+            }
+        }
+
+        /// 悬停提示：这一组到底收了哪些结论
+        public var hint: String {
+            switch self {
+            case .done: return "已推下载器并校验通过（含正在校验的）"
+            case .action: return "只有名字对得上、或上次校验没等完：要你采纳或否决"
+            case .trouble: return "检索没问成、读不到站内那条、推下载器砸了：可以重试"
+            case .skip: return "已在该站做种 / 站内没有 / 人已否决 / 按本站筛选不辅 / 该站没有检索入口"
+            case .waiting: return "还没轮到，或所在站被暂停：等下一轮"
             }
         }
     }
@@ -95,6 +143,32 @@ extension AssistPipeline {
         /// 固定顺序，0 也列出来：只列非零项会让人以为某一类还没开始跑
         public var lines: [(status: RowStatus, count: Int)] {
             RowStatus.allCases.map { ($0, count($0)) }
+        }
+
+        /// 界面上的 5 组（固定顺序，0 也列出来）
+        public var buckets: [(bucket: Bucket, count: Int)] {
+            Bucket.allCases.map { ($0, count($0)) }
+        }
+
+        public func count(_ bucket: Bucket) -> Int {
+            RowStatus.allCases.reduce(0) { $0 + ($1.bucket == bucket ? count($1) : 0) }
+        }
+
+        /// 一行汇总（明细行右侧那句话）：0 的不写；两端共用
+        public var summaryLine: String {
+            let parts = Bucket.allCases.compactMap { b -> String? in
+                count(b) > 0 ? "\(b.label) \(grouped(count(b)))" : nil
+            }
+            return parts.isEmpty ? "没有格子" : parts.joined(separator: " · ")
+        }
+
+        /// 一组里的细分说法，给悬停提示：「已完成辅种 12，校验中 3」
+        public func breakdown(_ bucket: Bucket) -> String {
+            let parts = RowStatus.allCases.compactMap { st -> String? in
+                guard st.bucket == bucket, count(st) > 0 else { return nil }
+                return "\(st.statLabel) \(grouped(count(st)))"
+            }
+            return parts.isEmpty ? bucket.hint : parts.joined(separator: "，")
         }
 
         /// 已经有结论、不用再去站内敲门的格子

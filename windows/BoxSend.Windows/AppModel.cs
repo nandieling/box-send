@@ -475,12 +475,15 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 逐行进展（按「站点|种子 hash」定位），扫描出的计划行由此上色
     public ObservableCollection<AssistRow> AssistRows { get; } = new();
 
-    /// 整轮统计（核心库算好连标签一起给）：已完成辅种 / 待辅种 / 失败辅种…
-    public ObservableCollection<AssistStatLine> AssistStats { get; } = new();
+    /// 5 组计数（核心库归好类）：已完成 / 待你处理 / 出问题 / 不用辅 / 没轮到。
+    /// 12 个结论收成这 5 组，归法在核心库里，两端不各写一套
+    public ObservableCollection<AssistBucketLine> AssistBuckets { get; } = new();
     public int AssistStatTotal { get; private set; }
 
-    /// 待处理队列：失败 / 待复核 / 待人工确认 / 已否决（核心库排好序，上限 200 条）
+    /// 待你处理：失败 / 待复核 / 待人工确认（核心库排好序，上限 200 条）
     public ObservableCollection<AssistQueueItem> AssistQueue { get; } = new();
+    /// 你否决过的：界面收进「已处理」那一栏，不跟待办混在一列
+    public ObservableCollection<AssistQueueItem> AssistHandled { get; } = new();
 
     /// 覆盖率那一句话与进度（0…1），文案由核心库给，两端一字不差
     public string AssistCoverageLine { get; private set; } = "";
@@ -507,10 +510,12 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         var parsed = (array as JsonArray)?.Select(n => AssistQueueItem.From(n!)).ToList()
                        ?? new List<AssistQueueItem>();
         var fingerprint = string.Join("|", parsed.Select(AssistQueueItem.Fingerprint));
-        if (parsed.Count == AssistQueue.Count && fingerprint == _queueFingerprint) return;
+        if (parsed.Count == AssistQueue.Count + AssistHandled.Count
+            && fingerprint == _queueFingerprint) return;
         _queueFingerprint = fingerprint;
         AssistQueue.Clear();
-        foreach (var p in parsed) AssistQueue.Add(p);
+        AssistHandled.Clear();
+        foreach (var p in parsed) (p.Handled ? AssistHandled : AssistQueue).Add(p);
     }
 
     private string _queueFingerprint = "";
@@ -546,7 +551,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private int _assistBudgetTotal;
     public int AssistBudgetUsed => _assistBudgetUsed;
     public int AssistBudgetTotal => _assistBudgetTotal;
-    public string AssistBudgetLine => $"本轮请求 {_assistBudgetUsed:N0} / {_assistBudgetTotal:N0}";
+    public string AssistBudgetLine => $"已请求 {_assistBudgetUsed:N0} / {_assistBudgetTotal:N0}";
 
     private void ApplyAssistBudget(JsonNode? node)
     {
@@ -563,15 +568,18 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private void ApplyAssistStats(JsonNode? node)
     {
         if (node is not JsonObject obj) return;
-        var lines = obj["lines"]?.AsArray();
+        // 界面摆的是 5 组；细分那 12 行留在核心库的 breakdown 文案里挂悬停提示
+        var lines = obj["buckets"]?.AsArray();
         if (lines == null) return;
         var parsed = lines.OfType<JsonObject>().Select(o => (
-            Status: Text(o["status"]), Label: Text(o["label"]), Count: Num(o["count"]))).ToList();
+            Bucket: Text(o["bucket"]), Label: Text(o["label"]), Count: Num(o["count"]),
+            Detail: Text(o["detail"]))).ToList();
         AssistStatTotal = Num(obj["total"]);
         // 顺序固定、只改数字：整表重建会让界面在跑动中闪一下
-        while (AssistStats.Count < parsed.Count) AssistStats.Add(new AssistStatLine());
-        while (AssistStats.Count > parsed.Count) AssistStats.RemoveAt(AssistStats.Count - 1);
-        for (var i = 0; i < parsed.Count; i++) AssistStats[i].Apply(parsed[i].Status, parsed[i].Label, parsed[i].Count);
+        while (AssistBuckets.Count < parsed.Count) AssistBuckets.Add(new AssistBucketLine());
+        while (AssistBuckets.Count > parsed.Count) AssistBuckets.RemoveAt(AssistBuckets.Count - 1);
+        for (var i = 0; i < parsed.Count; i++)
+            AssistBuckets[i].Apply(parsed[i].Bucket, parsed[i].Label, parsed[i].Count, parsed[i].Detail);
     }
 
     private void ApplyAssistRows(JsonNode? array)
@@ -987,6 +995,9 @@ public sealed class AssistRow : INotifyPropertyChanged
         private set { if (_statusText == value) return; _statusText = value; Raise(nameof(StatusText)); }
     }
 
+    /// 归到界面上的 5 组之一（done / action / trouble / skip / waiting）：核心库给的
+    public string Bucket { get; private set; } = "";
+
     /// 该用哪个配色键
     public string Tone => Status switch
     {
@@ -1011,6 +1022,7 @@ public sealed class AssistRow : INotifyPropertyChanged
 
     public void Apply(JsonObject o)
     {
+        Bucket = o["bucket"]?.GetValue<string>() ?? Bucket;
         Text = o["text"]?.GetValue<string>() ?? "";
         Detail = o["detail"]?.GetValue<string>() ?? "";
         Phase = o["phase"]?.GetValue<string>() ?? "";
@@ -1043,6 +1055,8 @@ public sealed class AssistSiteRow
             .Where(x => x.Length > 0));
     public bool HasWarn => Warn.Length > 0;
     public bool HasBar => !Unsupported;
+    /// 「还有活儿」：没检索完，或暂停站里压着没结论
+    public bool IsBusy => !Unsupported && (Searches > 0 || Paused);
     public double RowOpacity => Paused ? 0.6 : 1.0;
 
     public static AssistSiteRow From(JsonNode n) => new()
@@ -1081,6 +1095,8 @@ public sealed class AssistQueueItem
     public bool CanRecheck { get; init; }
     public bool CanUndo { get; init; }
     public bool CanReject { get; init; }
+    /// 人已经表过态（否决）：归到「已处理」那一栏
+    public bool Handled { get; init; }
 
     public string Tone => Status switch
     {
@@ -1092,7 +1108,7 @@ public sealed class AssistQueueItem
 
     /// 用来判断这一行有没有变（结论、原因、按钮任一项变了就重画）
     public static string Fingerprint(AssistQueueItem i) =>
-        $"{i.Key}#{i.Status}#{i.Why}#{i.CanAdopt}{i.CanRetry}{i.CanRecheck}{i.CanUndo}{i.CanReject}";
+        $"{i.Key}#{i.Status}#{i.Why}#{i.Handled}#{i.CanAdopt}{i.CanRetry}{i.CanRecheck}{i.CanUndo}{i.CanReject}";
 
     public static AssistQueueItem From(JsonNode n) => new()
     {
@@ -1111,16 +1127,19 @@ public sealed class AssistQueueItem
         CanRecheck = n["canRecheck"]?.GetValue<bool>() ?? false,
         CanUndo = n["canUndo"]?.GetValue<bool>() ?? false,
         CanReject = n["canReject"]?.GetValue<bool>() ?? false,
+        Handled = n["handled"]?.GetValue<bool>() ?? (n["status"]?.GetValue<string>() == "rejected"),
     };
 }
 
-/// 统计行：一行一个归类，标签由核心库给（mac 与 Windows 同一份文案）
-public sealed class AssistStatLine : INotifyPropertyChanged
+/// 计数牌的一格：5 组之一，标签与细分说明都由核心库给（mac 与 Windows 同一份文案）
+public sealed class AssistBucketLine : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Status { get; private set; } = "";
+    public string Bucket { get; private set; } = "";
     public string Label { get; private set; } = "";
+    /// 这一组里细分的结论（「已完成辅种 12，校验中 3」）
+    public string Tip { get; private set; } = "";
 
     private int _count;
     public int Count
@@ -1129,23 +1148,23 @@ public sealed class AssistStatLine : INotifyPropertyChanged
         private set { if (_count == value) return; _count = value; Raise(nameof(Count)); }
     }
 
-    public string Tone => Status switch
+    public string Tone => Bucket switch
     {
-        "assisted" or "seeding" => "Success",
-        "failed" => "DangerText",
-        "verifying" => "Accent",
-        "review" => "Review",
-        "manual" => "Warning",
+        "done" => "Success",
+        "trouble" => "DangerText",
+        "action" => "Warning",
         _ => "TextMuted",
     };
 
-    public void Apply(string status, string label, int count)
+    public void Apply(string bucket, string label, int count, string detail)
     {
-        Status = status;
+        Bucket = bucket;
         Label = label;
         Count = count;
-        Raise(nameof(Status));
+        Tip = detail;
+        Raise(nameof(Bucket));
         Raise(nameof(Label));
+        Raise(nameof(Tip));
         Raise(nameof(Tone));
     }
 

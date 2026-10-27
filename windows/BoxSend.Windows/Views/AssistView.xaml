@@ -3,37 +3,97 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolVis" />
+        <!-- 待你处理的一行：站名 + 结论 + 原因 + 最多两个按钮（待办与已处理共用这一套） -->
+        <DataTemplate x:Key="QueueRowTemplate">
+            <DockPanel Margin="0,2">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="采纳" FontSize="11" Padding="7,1" Margin="4,0,0,0"
+                            Click="OnAdoptQ" Visibility="{Binding CanAdopt, Converter={StaticResource BoolVis}}"
+                            ToolTip="按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成" />
+                    <Button Content="重试" FontSize="11" Padding="7,1" Margin="4,0,0,0"
+                            Click="OnRetryQ" Visibility="{Binding CanRetry, Converter={StaticResource BoolVis}}"
+                            ToolTip="只重跑这一格：再检索一次站内，找到就重新推下载器" />
+                    <Button Content="回查" FontSize="11" Padding="7,1" Margin="4,0,0,0"
+                            Click="OnRecheckQ" Visibility="{Binding CanRecheck, Converter={StaticResource BoolVis}}"
+                            ToolTip="问一次下载器那条校验完了没" />
+                    <Button Content="撤销" FontSize="11" Padding="7,1" Margin="4,0,0,0"
+                            Click="OnUndoQ" Visibility="{Binding CanUndo, Converter={StaticResource BoolVis}}"
+                            ToolTip="撤销否决：这条重新允许检索" />
+                    <Button Content="否决" FontSize="11" Padding="7,1" Margin="4,0,0,0"
+                            Click="OnRejectQ" Visibility="{Binding CanReject, Converter={StaticResource BoolVis}}"
+                            ToolTip="站内那条不是同一个种子：以后不再拿它烦你" />
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Time}" FontSize="11"
+                           Margin="10,0,8,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMuted}" />
+                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusText}" FontSize="11"
+                           Width="52" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Tone}" Value="DangerText">
+                                    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                                    <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Tone}" Value="Review">
+                                    <Setter Property="Foreground" Value="#B07BE0FF" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <StackPanel DockPanel.Dock="Left" Margin="8,0,0,0" MinWidth="90">
+                    <TextBlock Text="{Binding TorrentName}" FontSize="12"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Why}" FontSize="11" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Left" Text="{Binding SiteName}" FontSize="12"
+                           FontWeight="SemiBold" Width="88" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+        </DataTemplate>
     </UserControl.Resources>
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <DockPanel LastChildFill="True">
+            <!-- 顶部只做三件事：重扫目录、跑这一页、看运行状态 -->
             <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                <Button x:Name="BtnScan" Content="扫描下载器" Click="OnScan" />
-                <Button x:Name="BtnStart" Content="开始辅种" Style="{StaticResource Primary}"
-                        Margin="10,0,0,0" Click="OnStart" />
-                <!-- 上一轮推进下载器却没等到校验结果的种子，靠这个收尾：只问下载器，不敲站点 -->
-                <Button x:Name="BtnRecheck" Content="回查校验" Margin="10,0,0,0" Click="OnRecheck"
-                        ToolTip="问一次下载器：校验满了就启动，不满就回滚" />
-                <!-- 跑到一半想收摊：只停这一轮，状态表原样留着 -->
-                <Button x:Name="BtnStop" Content="停止本轮" Margin="10,0,0,0" Click="OnStop"
-                        Visibility="Collapsed" ToolTip="处理完手头这一格就收摊；下一轮从没跑过的格子接着铺" />
-                <Button x:Name="BtnBudget" Content="追加 200 次" Margin="10,0,0,0"
-                        Click="OnBudget" Visibility="Collapsed"
-                        ToolTip="只追这一轮的请求次数上限，逐站间隔照旧" />
-                <TextBlock x:Name="Budget" Margin="10,0,0,0" VerticalAlignment="Center"
-                           FontSize="12" Foreground="{DynamicResource TextMuted}"
-                           ToolTip="站点请求：检索、详情、种子文件各算一次" />
+                <Button x:Name="BtnScan" Content="重新扫描（不发检索）" Click="OnScan"
+                        ToolTip="重读下载器的种子列表与已做种站点：只更新目录，不去站内检索" />
+                <Button x:Name="BtnStart" Content="跑这一页" Style="{StaticResource Primary}"
+                        Margin="10,0,0,0" Click="OnStart"
+                        ToolTip="只处理这一页列出的种子；逐站间隔与单轮请求上限照「设置」里的节奏" />
                 <CheckBox x:Name="DryRun" Content="只预演" VerticalAlignment="Center"
                           Margin="14,0,0,0" ToolTip="按真实流程走一遍，但不动下载器" />
+                <!-- 跑起来才出现：一行说清请求额度，旁边就是停止与追加 -->
+                <Border x:Name="RunningPanel" Margin="14,0,0,0" Padding="8,2" CornerRadius="6"
+                        Background="{DynamicResource BlockSurface}" VerticalAlignment="Center"
+                        Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="Budget" VerticalAlignment="Center" FontSize="12"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   ToolTip="站点请求：检索、详情、种子文件各算一次" />
+                        <Button x:Name="BtnStop" Content="停止" FontSize="12" Padding="8,1"
+                                Margin="8,0,0,0" Click="OnStop"
+                                ToolTip="处理完手头这一格就收摊；下一轮从没跑过的格子接着铺" />
+                        <Button x:Name="BtnBudget" Content="追加 200 次" FontSize="12" Padding="8,1"
+                                Margin="6,0,0,0" Click="OnBudget"
+                                ToolTip="只追这一轮的请求次数上限，逐站间隔照旧" />
+                    </StackPanel>
+                </Border>
                 <TextBlock x:Name="State" Margin="12,0,0,0" VerticalAlignment="Center"
-                           FontSize="12" TextWrapping="Wrap" MaxWidth="360"
+                           FontSize="12" TextWrapping="Wrap" MaxWidth="320"
                            Foreground="{DynamicResource TextMuted}" />
             </WrapPanel>
 
             <TextBlock x:Name="SiteInfo" DockPanel.Dock="Top" FontSize="12" TextWrapping="Wrap"
                        Margin="0,0,0,8" Foreground="{DynamicResource TextMuted}" />
 
-            <!-- 整轮计数 + 覆盖率：光有「待辅种 38 万」不够，得知道铺到什么程度、还要跑多久 -->
-            <GroupBox DockPanel.Dock="Top" Header="辅种统计">
+            <!-- 进度：整轮覆盖率 + 5 组计数 + 逐站。数字只在这一块出现 -->
+            <GroupBox x:Name="ProgressBox" DockPanel.Dock="Top" Header="进度">
                 <StackPanel>
                     <ItemsControl x:Name="Stats">
                         <ItemsControl.ItemsPanel>
@@ -41,7 +101,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel MinWidth="98" Margin="0,0,18,2">
+                                <StackPanel MinWidth="98" Margin="0,0,18,2" ToolTip="{Binding Tip}">
                                     <TextBlock Text="{Binding Count}" FontSize="22" FontWeight="SemiBold">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
@@ -59,9 +119,6 @@
                                                     <DataTrigger Binding="{Binding Tone}" Value="Warning">
                                                         <Setter Property="Foreground" Value="{DynamicResource Warning}" />
                                                     </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Tone}" Value="Review">
-                                                        <Setter Property="Foreground" Value="#B07BE0FF" />
-                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </TextBlock.Style>
@@ -76,76 +133,18 @@
                                  Margin="0,6,0,4" Foreground="{DynamicResource Accent}" />
                     <TextBlock x:Name="CoverageLine" FontSize="12" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextMuted}" />
-                    <TextBlock x:Name="PlanSummary" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
-                               Foreground="{DynamicResource TextMuted}" />
-                </StackPanel>
-            </GroupBox>
-
-            <!-- 需要人点一下才往前走的条目集中在这儿：失败 / 待复核 / 待人工确认 / 已否决 -->
-            <GroupBox x:Name="QueueBox" DockPanel.Dock="Top" Margin="0,12,0,0" Header="待处理">
-                <ItemsControl x:Name="Queue">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <DockPanel Margin="0,2">
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Content="采纳" FontSize="11" Padding="7,1" Margin="4,0,0,0"
-                                            Click="OnAdoptQ" Visibility="{Binding CanAdopt, Converter={StaticResource BoolVis}}"
-                                            ToolTip="按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成" />
-                                    <Button Content="重试" FontSize="11" Padding="7,1" Margin="4,0,0,0"
-                                            Click="OnRetryQ" Visibility="{Binding CanRetry, Converter={StaticResource BoolVis}}"
-                                            ToolTip="只重跑这一格：再检索一次站内，找到就重新推下载器" />
-                                    <Button Content="回查" FontSize="11" Padding="7,1" Margin="4,0,0,0"
-                                            Click="OnRecheckQ" Visibility="{Binding CanRecheck, Converter={StaticResource BoolVis}}"
-                                            ToolTip="问一次下载器那条校验完了没" />
-                                    <Button Content="否决" FontSize="11" Padding="7,1" Margin="4,0,0,0"
-                                            Click="OnRejectQ" Visibility="{Binding CanReject, Converter={StaticResource BoolVis}}"
-                                            ToolTip="站内那条不是同一个种子：以后不再拿它烦你" />
-                                    <Button Content="撤销" FontSize="11" Padding="7,1" Margin="4,0,0,0"
-                                            Click="OnUndoQ" Visibility="{Binding CanUndo, Converter={StaticResource BoolVis}}"
-                                            ToolTip="撤销否决：这条重新允许检索" />
-                                </StackPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="{Binding Time}" FontSize="11"
-                                           Margin="10,0,8,0" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextMuted}" />
-                                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusText}" FontSize="11"
-                                           Width="52" VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Tone}" Value="DangerText">
-                                                    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Tone}" Value="Warning">
-                                                    <Setter Property="Foreground" Value="{DynamicResource Warning}" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Tone}" Value="Review">
-                                                    <Setter Property="Foreground" Value="#B07BE0FF" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                                <StackPanel DockPanel.Dock="Left" Margin="8,0,0,0" MinWidth="90">
-                                    <TextBlock Text="{Binding TorrentName}" FontSize="12"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Why}" FontSize="11" TextTrimming="CharacterEllipsis"
-                                               Foreground="{DynamicResource TextMuted}" />
-                                </StackPanel>
-                                <TextBlock DockPanel.Dock="Left" Text="{Binding SiteName}" FontSize="12"
-                                           FontWeight="SemiBold" Width="88" TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" />
-                            </DockPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </GroupBox>
-
-            <!-- 一站一行：判定到哪、还要检索几次；这一轮不想动哪个站就把它暂停。
-                 分母靠逐站筛选砍，节奏靠这张卡管 -->
-            <GroupBox x:Name="SiteBox" DockPanel.Dock="Top" Header="按站点" Margin="0,12,0,0">
-                <StackPanel>
-                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                    <!-- 逐站那一截：合计写在标题行右侧，一站一行只管自己那一站 -->
+                    <StackPanel x:Name="SiteSection">
+                    <DockPanel Margin="0,8,0,4">
+                        <TextBlock x:Name="SiteTotals" DockPanel.Dock="Right" FontSize="11"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}" />
+                        <CheckBox x:Name="BusyOnly" Content="只显示还有活的站" DockPanel.Dock="Right"
+                                  FontSize="11" Margin="0,0,12,0" VerticalAlignment="Center"
+                                  Click="OnBusyOnly" />
+                        <TextBlock x:Name="SiteListHeader" FontSize="12" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextMuted}" />
+                    </DockPanel>
+                    <ScrollViewer x:Name="SiteScroll" MaxHeight="220" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="SiteProgressList">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -173,14 +172,36 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                    <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                    <TextBlock x:Name="PlanSummary" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextMuted}" />
+                    <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"
                                Text="已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。"
                                Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 
-            <!-- 一条种子一张卡。默认只摊开要人动手的那几类格子，其余收成计数牌，点一下才展开 -->
-            <GroupBox Header="种子与站点" Margin="0,12,0,0">
+            <!-- 整页唯一动手的地方：一行一条、最多两个按钮；否决过的收进「已处理」 -->
+            <GroupBox x:Name="QueueBox" DockPanel.Dock="Top" Margin="0,12,0,0" Header="待你处理">
+                <StackPanel>
+                    <DockPanel Margin="0,0,0,4">
+                        <Button x:Name="BtnRecheck" DockPanel.Dock="Right" Content="全部回查"
+                                FontSize="11" Padding="8,1" Click="OnRecheck"
+                                ToolTip="上一轮推进下载器却没等到校验结果的种子，回来问一次下载器：满了就启动，不满就回滚。只问下载器，不发站点请求" />
+                        <TextBlock FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   Text="采纳＝按你的判断当成同一种子；重试＝只重跑这一格；回查＝问下载器校验完了没。" />
+                    </DockPanel>
+                    <ItemsControl x:Name="Queue" ItemTemplate="{StaticResource QueueRowTemplate}" />
+                    <Expander x:Name="HandledBox" Margin="0,6,0,0" FontSize="12" Header="已处理">
+                        <ItemsControl x:Name="HandledQueue" Margin="0,4,0,0"
+                                      ItemTemplate="{StaticResource QueueRowTemplate}" />
+                    </Expander>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 台账：一条种子一行汇总，点开才是它在各站的格子 -->
+            <GroupBox Header="种子明细" Margin="0,12,0,0">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock x:Name="TorrentHint" FontSize="12" Margin="0,0,0,4"
@@ -190,10 +211,9 @@
                                     FontSize="12" Padding="9,1" Click="OnPrevPage" />
                             <Button x:Name="BtnNext" Content="下一页" DockPanel.Dock="Right"
                                     FontSize="12" Padding="9,1" Click="OnNextPage" />
-                            <ToggleButton x:Name="WideOpen" Content="展开全部格子" DockPanel.Dock="Right"
-                                          FontSize="12" Padding="9,1" Margin="8,0,0,0"
-                                          Checked="OnWideOpen" Unchecked="OnWideOpen"
-                                          ToolTip="把每条种子在所有站的格子都摊开看" />
+                            <TextBlock DockPanel.Dock="Right" FontSize="11" Margin="10,0,0,0"
+                                       VerticalAlignment="Center" Text="要人处理的种子默认已展开"
+                                       Foreground="{DynamicResource TextMuted}" />
                             <TextBlock x:Name="Pager" Margin="10,0,0,0" VerticalAlignment="Center"
                                        FontSize="12" Foreground="{DynamicResource TextMuted}" />
                         </DockPanel>
@@ -215,153 +235,166 @@
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="0,0,0,12">
-                                    <DockPanel>
-                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Right}"
-                                                   FontSize="12" Margin="8,0,0,0"
-                                                   Foreground="{DynamicResource TextMuted}" />
-                                        <TextBlock Text="{Binding Left}" FontSize="13"
-                                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Tip}" />
-                                    </DockPanel>
-                                    <!-- 计数牌即筛选：点哪一类就只看那一类的格子 -->
-                                    <ItemsControl ItemsSource="{Binding Chips}" Margin="0,6,0,0">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Click="OnChip" Tag="{Binding}" Margin="0,0,6,4"
-                                                        Padding="0" ToolTip="{Binding Tip}">
-                                                    <Border Background="{Binding Wash}" CornerRadius="4"
-                                                            BorderThickness="1" BorderBrush="{DynamicResource Line}"
-                                                            Padding="7,2">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Label}" FontSize="11" />
-                                                            <TextBlock Text="{Binding Count}" FontSize="11"
-                                                                       FontWeight="SemiBold" Margin="4,0,0,0" />
+                                <StackPanel Margin="0,0,0,10">
+                                    <!-- 标题行即展开开关 -->
+                                    <Button Click="OnToggleBlock" Tag="{Binding Hash}" Padding="0"
+                                            Margin="0" Background="Transparent" BorderThickness="0"
+                                            HorizontalContentAlignment="Stretch" ToolTip="{Binding Tip}">
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding Arrow}"
+                                                       FontSize="11" Width="14" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Right}"
+                                                       FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Summary}"
+                                                       FontSize="11" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                            <TextBlock Text="{Binding Left}" FontSize="13"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                    </Button>
+                                    <StackPanel Visibility="{Binding ShowDetails}" Margin="14,6,0,0">
+                                        <!-- 计数牌即筛选：点哪一类就只看那一类的格子 -->
+                                        <ItemsControl ItemsSource="{Binding Chips}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Click="OnChip" Tag="{Binding}" Margin="0,0,6,4"
+                                                            Padding="0" ToolTip="{Binding Tip}">
+                                                        <Border Background="{Binding Wash}" CornerRadius="4"
+                                                                BorderThickness="1" BorderBrush="{DynamicResource Line}"
+                                                                Padding="7,2">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="{Binding Label}" FontSize="11" />
+                                                                <TextBlock Text="{Binding Count}" FontSize="11"
+                                                                           FontWeight="SemiBold" Margin="4,0,0,0" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <ItemsControl ItemsSource="{Binding VisibleCells}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border MinWidth="96" MaxWidth="132" Margin="0,0,8,8" Padding="8,6"
+                                                            CornerRadius="6"
+                                                            BorderThickness="1" ToolTip="{Binding Tip}">
+                                                        <!-- 底色即结论：绿=已辅、红=失败、蓝=校验中、紫=待复核、橙=待确认、青=已在该站做种；
+                                                             待辅种 / 不存在 / 不支持检索保持素底，一眼挑出要动手的格子 -->
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="{DynamicResource BlockSurface}" />
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="assisted">
+                                                                        <Setter Property="Background" Value="#2E2EA244" />
+                                                                        <Setter Property="BorderBrush" Value="#7A2EA244" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="failed">
+                                                                        <Setter Property="Background" Value="#2EE5484D" />
+                                                                        <Setter Property="BorderBrush" Value="#7AE5484D" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="verifying">
+                                                                        <Setter Property="Background" Value="#2E4C8EFF" />
+                                                                        <Setter Property="BorderBrush" Value="#7A4C8EFF" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="review">
+                                                                        <Setter Property="Background" Value="#2E9B5BE0" />
+                                                                        <Setter Property="BorderBrush" Value="#7A9B5BE0" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="manual">
+                                                                        <Setter Property="Background" Value="#2EE89B2C" />
+                                                                        <Setter Property="BorderBrush" Value="#7AE89B2C" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="seeding">
+                                                                        <Setter Property="Background" Value="#252AA4A4" />
+                                                                        <Setter Property="BorderBrush" Value="#6A2AA4A4" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="missing">
+                                                                        <Setter Property="Background" Value="#28808A94" />
+                                                                        <Setter Property="BorderBrush" Value="#59808A94" />
+                                                                        <Setter Property="Opacity" Value="0.8" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="rejected">
+                                                                        <Setter Property="Background" Value="#28808A94" />
+                                                                        <Setter Property="BorderBrush" Value="#59808A94" />
+                                                                        <Setter Property="Opacity" Value="0.7" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="paused">
+                                                                        <Setter Property="Background" Value="#1F808A94" />
+                                                                        <Setter Property="BorderBrush" Value="#66808A94" />
+                                                                        <Setter Property="Opacity" Value="0.75" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="filtered">
+                                                                        <Setter Property="Background" Value="#28808A94" />
+                                                                        <Setter Property="BorderBrush" Value="#59808A94" />
+                                                                        <Setter Property="Opacity" Value="0.7" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="unsupported">
+                                                                        <Setter Property="Background" Value="#14808A94" />
+                                                                        <Setter Property="Opacity" Value="0.55" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding SiteName}" FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                                <TextBlock Text="{Binding StatusText}" FontSize="11"
+                                                                           FontWeight="SemiBold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Tone}" Value="Success">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Tone}" Value="DangerText">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Tone}" Value="Accent">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Tone}" Value="Review">
+                                                                                    <Setter Property="Foreground" Value="#B07BE0FF" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                                <!-- 人比对过觉得是同一种子，就按人的判断走一遍推送（校验不满照样回滚） -->
+                                                                <Button Content="采纳" FontSize="11" Padding="7,0"
+                                                                        Margin="6,0,0,0" Click="OnAdopt"
+                                                                        ToolTip="按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成">
+                                                                    <Button.Style>
+                                                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding NeedConfirm}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Button.Style>
+                                                                </Button>
+                                                            </StackPanel>
                                                         </StackPanel>
                                                     </Border>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                    <ItemsControl ItemsSource="{Binding VisibleCells}" Margin="0,4,0,0">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border MinWidth="96" MaxWidth="132" Margin="0,0,8,8" Padding="8,6"
-                                                        CornerRadius="6"
-                                                        BorderThickness="1" ToolTip="{Binding Tip}">
-                                                    <!-- 底色即结论：绿=已辅、红=失败、蓝=校验中、紫=待复核、橙=待确认、青=已在该站做种；
-                                                         待辅种 / 不存在 / 不支持检索保持素底，一眼挑出要动手的格子 -->
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{DynamicResource BlockSurface}" />
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="assisted">
-                                                                    <Setter Property="Background" Value="#2E2EA244" />
-                                                                    <Setter Property="BorderBrush" Value="#7A2EA244" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="failed">
-                                                                    <Setter Property="Background" Value="#2EE5484D" />
-                                                                    <Setter Property="BorderBrush" Value="#7AE5484D" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="verifying">
-                                                                    <Setter Property="Background" Value="#2E4C8EFF" />
-                                                                    <Setter Property="BorderBrush" Value="#7A4C8EFF" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="review">
-                                                                    <Setter Property="Background" Value="#2E9B5BE0" />
-                                                                    <Setter Property="BorderBrush" Value="#7A9B5BE0" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="manual">
-                                                                    <Setter Property="Background" Value="#2EE89B2C" />
-                                                                    <Setter Property="BorderBrush" Value="#7AE89B2C" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="seeding">
-                                                                    <Setter Property="Background" Value="#252AA4A4" />
-                                                                    <Setter Property="BorderBrush" Value="#6A2AA4A4" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="missing">
-                                                                    <Setter Property="Background" Value="#28808A94" />
-                                                                    <Setter Property="BorderBrush" Value="#59808A94" />
-                                                                    <Setter Property="Opacity" Value="0.8" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="rejected">
-                                                                    <Setter Property="Background" Value="#28808A94" />
-                                                                    <Setter Property="BorderBrush" Value="#59808A94" />
-                                                                    <Setter Property="Opacity" Value="0.7" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="paused">
-                                                                    <Setter Property="Background" Value="#1F808A94" />
-                                                                    <Setter Property="BorderBrush" Value="#66808A94" />
-                                                                    <Setter Property="Opacity" Value="0.75" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="filtered">
-                                                                    <Setter Property="Background" Value="#28808A94" />
-                                                                    <Setter Property="BorderBrush" Value="#59808A94" />
-                                                                    <Setter Property="Opacity" Value="0.7" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="unsupported">
-                                                                    <Setter Property="Background" Value="#14808A94" />
-                                                                    <Setter Property="Opacity" Value="0.55" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <StackPanel>
-                                                        <TextBlock Text="{Binding SiteName}" FontSize="12"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                            <TextBlock Text="{Binding StatusText}" FontSize="11"
-                                                                       FontWeight="SemiBold">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding Tone}" Value="Success">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource Success}" />
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Tone}" Value="DangerText">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource DangerText}" />
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Tone}" Value="Accent">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource Accent}" />
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Tone}" Value="Warning">
-                                                                                <Setter Property="Foreground" Value="{DynamicResource Warning}" />
-                                                                            </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Tone}" Value="Review">
-                                                                                <Setter Property="Foreground" Value="#B07BE0FF" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                            <!-- 人比对过觉得是同一种子，就按人的判断走一遍推送（校验不满照样回滚） -->
-                                                            <Button Content="采纳" FontSize="11" Padding="7,0"
-                                                                    Margin="6,0,0,0" Click="OnAdopt"
-                                                                    ToolTip="按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成">
-                                                                <Button.Style>
-                                                                    <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding NeedConfirm}" Value="True">
-                                                                                <Setter Property="Visibility" Value="Visible" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Button.Style>
-                                                            </Button>
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

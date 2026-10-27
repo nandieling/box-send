@@ -763,6 +763,11 @@ public final class AppService {
         let pageTorrents = Array(plan.torrents.dropFirst(current * size).prefix(size))
         let live = assistLive()
         let stats = plan.adjusted(live: live)
+        // 一条种子的 5 组计数：明细行右侧那句话由核心库说，两端不各算一遍
+        let pageRows = plan.rows(pageTorrents)
+        var rowsByTorrent: [String: [AssistPipeline.PlanRow]] = [:]
+        for r in pageRows { rowsByTorrent[r.hash, default: []].append(r) }
+        let torrentTally = rowsByTorrent.mapValues { AssistPipeline.tally(rows: $0, live: live) }
         let nameOf: (String) -> String = { id in
             guard let s = cfg.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
@@ -777,17 +782,21 @@ public final class AppService {
             "summary": summary ?? [:],
             "downloader": downloader,
             "stats": Self.statsJSON(stats),
-            "torrents": pageTorrents.map { t in
-                [
+            "torrents": pageTorrents.map { t -> [String: Any] in
+                let tt = torrentTally[t.hash]
+                return [
                     "hash": t.hash,
                     "name": t.name,
                     "size": t.totalSize,
                     "sizeText": String(format: "%.2f GiB", Double(t.totalSize) / 1_073_741_824),
                     "savePath": t.savePath,
                     "trackers": t.trackerHosts,
+                    // 明细行的折叠标题：这句话 + 要不要默认展开
+                    "summary": tt?.summaryLine ?? "",
+                    "attention": ((tt?.count(.action) ?? 0) + (tt?.count(.trouble) ?? 0)) > 0,
                 ]
             },
-            "rows": plan.rows(pageTorrents).map { r -> [String: Any] in
+            "rows": pageRows.map { r -> [String: Any] in
                 let st = AssistPipeline.status(of: r, live: live[r.rowKey])
                 return [
                     "key": r.rowKey,
@@ -798,6 +807,7 @@ public final class AppService {
                     "skip": r.skipReason ?? "",
                     "status": st.rawValue,
                     "statusText": st.label,
+                    "bucket": st.bucket.rawValue,
                 ]
             },
             "sites": plan.siteIDs.map { ["id": $0, "name": nameOf($0)] },
@@ -841,7 +851,7 @@ public final class AppService {
                  "why": item.why, "time": item.timeText, "url": item.url,
                  "canAdopt": item.canAdopt, "canRetry": item.canRetry,
                  "canRecheck": item.canRecheck, "canUndo": item.canUndo,
-                 "canReject": item.canReject]
+                 "canReject": item.canReject, "handled": item.handled]
             },
         ]
     }
@@ -1044,6 +1054,7 @@ public final class AppService {
             var st = AssistPipeline.status(live: live[e.key]) ?? assistPlannedStatus(e.key) ?? .pending
             d["status"] = st.rawValue
             d["statusText"] = st.label
+            d["bucket"] = st.bucket.rawValue
             return d
         }
         let minutes = cfg.assist?.autoRunMinutes ?? 0
@@ -1139,6 +1150,12 @@ public final class AppService {
         ["total": t.total,
          "lines": t.lines.map {
             ["status": $0.status.rawValue, "label": $0.status.statLabel, "count": $0.count]
+         },
+         // 界面摆的是这 5 组；lines 留着给悬停提示与明细
+         "buckets": t.buckets.map {
+            ["bucket": $0.bucket.rawValue, "label": $0.bucket.label,
+             "hint": $0.bucket.hint, "detail": t.breakdown($0.bucket),
+             "count": $0.count]
          }]
     }
 

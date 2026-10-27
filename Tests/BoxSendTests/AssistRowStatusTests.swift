@@ -75,6 +75,38 @@ final class AssistRowStatusTests: XCTestCase {
         XCTAssertTrue(lines.allSatisfy { !$0.status.statLabel.isEmpty })
     }
 
+    /// 12 个结论收成界面上的 5 组：归法在核心库里，mac 与 Windows 不会跑出两套「待你处理」
+    func testStatusesGroupIntoFiveBuckets() {
+        var t = AssistPipeline.Tally()
+        t.increase(.assisted, 3); t.increase(.verifying)                    // 已完成
+        t.increase(.manual); t.increase(.review)                            // 待你处理
+        t.increase(.failed, 2)                                              // 出问题
+        t.increase(.seeding); t.increase(.missing); t.increase(.rejected)
+        t.increase(.filtered); t.increase(.unsupported)                     // 不用辅
+        t.increase(.pending); t.increase(.paused)                           // 没轮到
+        XCTAssertEqual(t.count(.done), 4)
+        XCTAssertEqual(t.count(.action), 2)
+        XCTAssertEqual(t.count(.trouble), 2)
+        XCTAssertEqual(t.count(.skip), 5)
+        XCTAssertEqual(t.count(.waiting), 2)
+        XCTAssertEqual(t.buckets.map(\.bucket), AssistPipeline.Bucket.allCases,
+                       "5 组固定顺序、0 也列出来")
+        XCTAssertEqual(t.summaryLine, "已完成 4 · 待你处理 2 · 出问题 2 · 不用辅 5 · 没轮到 2")
+        XCTAssertTrue(t.breakdown(.done).contains("已完成辅种 3"),
+                      "悬停提示给出这一组里的细分")
+        XCTAssertTrue(t.breakdown(.action).contains("待人工确认 1"))
+        XCTAssertEqual(AssistPipeline.Tally().summaryLine, "没有格子")
+    }
+
+    /// 每个结论都得有归属：漏一个就会从 5 组计数里凭空消失
+    func testEveryStatusLandsInExactlyOneBucket() {
+        for st in AssistPipeline.RowStatus.allCases {
+            var t = AssistPipeline.Tally()
+            t.increase(st)
+            XCTAssertEqual(t.buckets.reduce(0) { $0 + $1.count }, 1, "\(st.rawValue) 归组归重了或漏了")
+        }
+    }
+
     /// 辅种失败要和「跳过」分开：done 与 failed 两个标记不能混
     func testFailedFlagIsItsOwnThing() {
         let o = AssistOutcome(siteID: "a", torrentName: "T", level: .sameHash,
@@ -159,6 +191,9 @@ final class AssistSnapshotStatsTests: XCTestCase {
                        "每一类给一行，0 也列出来")
         XCTAssertTrue(lines?.allSatisfy { ($0["label"] as? String)?.isEmpty == false } ?? false,
                       "标签连文案一起给，两端显示同一套话")
+        XCTAssertEqual((stats?["buckets"] as? [[String: Any]])?.count,
+                       AssistPipeline.Bucket.allCases.count,
+                       "界面上摆的那 5 组也随快照回来")
     }
 
     /// assist.scan 的整份载荷：列出的种子、每格结论、整轮计数，一次给全
@@ -194,6 +229,19 @@ final class AssistSnapshotStatsTests: XCTestCase {
         let stats = out["stats"] as? [String: Any]
         let lines = (stats?["lines"] as? [[String: Any]]) ?? []
         XCTAssertEqual(lines.first { ($0["status"] as? String) == "pending" }?["count"] as? Int, 6)
+        let buckets = (stats?["buckets"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(buckets.map { ($0["bucket"] as? String) ?? "" },
+                       AssistPipeline.Bucket.allCases.map(\.rawValue),
+                       "5 组的顺序与归法由核心库给")
+        XCTAssertEqual(buckets.first { ($0["bucket"] as? String) == "waiting" }?["count"] as? Int, 6)
+        XCTAssertTrue(buckets.allSatisfy { (($0["detail"] as? String) ?? "").isEmpty == false },
+                      "每组都给细分说明，悬停才有的可看")
+        XCTAssertEqual(rows.first?["bucket"] as? String, "waiting", "一格归哪一组也随格子回来")
+        let listed = (out["torrents"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(listed.first?["summary"] as? String, "没轮到 2",
+                       "明细行那句汇总由核心库拼，两端不各算一遍")
+        XCTAssertEqual(listed.first?["attention"] as? Bool, false,
+                       "还没跑：这条没有要人处理的，界面默认收起")
         XCTAssertEqual(stats?["total"] as? Int, 6, "整份计数 = 3 条种子 × 2 站")
 
         // 同一份统计也要随快照回来：跑动中计数才会自己更新
@@ -258,6 +306,7 @@ final class AssistSnapshotStatsTests: XCTestCase {
         XCTAssertFalse(rows.isEmpty)
         XCTAssertGreaterThan(total, rows.count, "计数按全量、行只回列出的那几条")
         XCTAssertNotNil(rows.first?["statusText"] as? String)
+        XCTAssertNotNil(rows.first?["bucket"] as? String, "每格都带归组，Windows 才拼得出汇总")
         let stats = out["stats"] as? [String: Any]
         XCTAssertEqual(stats?["total"] as? Int, total)
 

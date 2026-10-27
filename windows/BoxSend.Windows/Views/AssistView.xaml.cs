@@ -3,13 +3,15 @@ using System.ComponentModel;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 
 namespace BoxSend.Windows.Views;
 
-/// <summary>辅种页：覆盖率 + 待处理队列 + 「一条种子 × 各辅种站」的格子。
-/// 归类、计数、覆盖率文案都在核心库里算，这页只画；默认只摊开要人动手的那几类格子，
-/// 115 个站全摊开就是满屏灰格子，真结论反倒看不见。</summary>
+/// <summary>辅种页只有三块：进度（覆盖率 + 5 组计数 + 逐站）、待你处理、种子明细。
+/// 数字只出现在进度块，按钮只出现在待你处理，格子只在明细里。
+/// 归类、计数、文案都在核心库里算，这页只画；一条种子默认收成一行汇总，
+/// 有要人处理的才自动摊开，115 个站的格子不会糊满一屏。</summary>
 public partial class AssistView : UserControl
 {
     private readonly AppModel _model;
@@ -17,15 +19,21 @@ public partial class AssistView : UserControl
     /// 界面当前页与总页数（核心库按设置里的「单页列表条数」切页）
     private int _page;
     private int _pageCount = 1;
+    /// 逐站进度的筛选视图：勾「只显示还有活的站」只滤显示，不动模型那一表
+    private readonly ICollectionView _siteView;
+    private bool _busyOnly;
 
     public AssistView(AppModel model)
     {
         _model = model;
         InitializeComponent();
         Torrents.ItemsSource = _torrents;
-        Stats.ItemsSource = _model.AssistStats;
+        Stats.ItemsSource = _model.AssistBuckets;
         Queue.ItemsSource = _model.AssistQueue;
-        SiteProgressList.ItemsSource = _model.AssistSiteProgress;
+        HandledQueue.ItemsSource = _model.AssistHandled;
+        _siteView = CollectionViewSource.GetDefaultView(_model.AssistSiteProgress);
+        _siteView.Filter = o => o is not AssistSiteRow row || !_busyOnly || row.IsBusy;
+        SiteProgressList.ItemsSource = _siteView;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(ShowSites);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(RefreshProgress);
         ShowSites();
@@ -36,8 +44,7 @@ public partial class AssistView : UserControl
     /// （与 mac 版同一处）。</summary>
     private void ShowSites()
     {
-        var picked = AssistField("siteIDs");
-        var names = picked
+        var names = AssistField("siteIDs")
             .Select(id => _model.Sites.FirstOrDefault(s => s.Id == id)?.Name ?? id)
             .ToList();
         SiteInfo.Text = names.Count == 0
@@ -75,7 +82,7 @@ public partial class AssistView : UserControl
         Fill(node!.AsObject());
     }
 
-    /// 回查校验：上一轮推进下载器却没等到校验结果的种子，回来问一次下载器。
+    /// 全部回查：上一轮推进下载器却没等到校验结果的种子，回来问一次下载器。
     /// 一次站点请求都不发，所以跑多快都不给站点添负载。
     private async void OnRecheck(object sender, RoutedEventArgs e)
     {
@@ -124,7 +131,7 @@ public partial class AssistView : UserControl
         BtnPrev.IsEnabled = _page > 0;
         BtnNext.IsEnabled = _page < _pageCount - 1;
 
-        // 行按种子归堆：一条种子一张卡，卡里是它在各站的小格子
+        // 行按种子归堆：一条种子一行汇总，点开才是它在各站的格子
         _torrents.Clear();
         var byHash = new Dictionary<string, TorrentBlock>();
         foreach (var n in result["torrents"]?.AsArray() ?? new JsonArray())
@@ -138,7 +145,9 @@ public partial class AssistView : UserControl
                 Left = Text(n?["name"]),
                 SizeText = $"{size / 1073741824.0:0.0} GiB",
                 Right = $"{size / 1073741824.0:0.0} GiB · 已做种 {trackers} 站",
-                WideOpen = WideOpen.IsChecked == true,
+                // 折叠标题那句话与要不要默认展开，都由核心库算好
+                SeedSummary = Text(n?["summary"]),
+                Attention = n?["attention"]?.GetValue<bool>() ?? false,
             };
             byHash[hash] = block;
             _torrents.Add(block);
@@ -156,11 +165,12 @@ public partial class AssistView : UserControl
                 Hash = hash,
                 Status = Text(n?["status"]),
                 StatusText = Text(n?["statusText"]),
+                Bucket = Text(n?["bucket"]),
                 Tip = Text(n?["siteName"]) + "\n" + Text(n?["torrentName"])
                     + (skip.Length > 0 ? "\n" + skip : ""),
             });
         }
-        foreach (var block in _torrents) block.Rebuild();
+        foreach (var block in _torrents) block.Rebuild(BucketLabels());
         ShowCoverage(result);
         var budget = result["budget"]?.GetValue<int>() ?? 0;
         PlanSummary.Text = $"单轮预算 {_model.SectionInt("assist", "roundBudget", 200)} 次请求，"
@@ -168,6 +178,10 @@ public partial class AssistView : UserControl
         State.Text = $"参与站点 {CheckedSites().Length} 个";
         RefreshProgress();
     }
+
+    /// 5 组的名称与顺序：核心库给的计数牌就是这份，明细行那句话照它拼
+    private List<(string Bucket, string Label)> BucketLabels() =>
+        _model.AssistBuckets.Select(b => (b.Bucket, b.Label)).ToList();
 
     /// 覆盖率那一行与进度条：文案由核心库给，两端一字不差
     private void ShowCoverage(JsonObject result)
@@ -208,6 +222,7 @@ public partial class AssistView : UserControl
     /// 逐格结论由核心库算好随快照回来，这里只把文本与配色搬过去（整表不重建，滚动位置不动）
     private void RefreshProgress()
     {
+        var labels = BucketLabels();
         foreach (var block in _torrents)
         {
             foreach (var cell in block.Cells)
@@ -216,28 +231,43 @@ public partial class AssistView : UserControl
                 if (live == null) continue;
                 cell.Status = live.Status;
                 cell.StatusText = live.StatusText;
+                if (live.Bucket.Length > 0) cell.Bucket = live.Bucket;
                 // 详情里带上跳过原因或站点那条种子链接，悬停能看清为什么
                 cell.Tip = cell.SiteName + "\n" + block.Left
                     + (live.Detail.Length > 0 ? "\n" + live.Detail : "");
                 cell.NeedConfirm = live.Status == "manual";
             }
-            block.Rebuild();
+            block.Rebuild(labels);
         }
         Coverage.Value = _model.AssistCoveragePercent;
         CoverageLine.Text = _model.AssistCoverageLine;
-        QueueBox.Visibility = _model.AssistQueue.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        QueueBox.Header = $"待处理（{_model.AssistQueue.Count}）";
+
+        var open = _model.AssistQueue.Count;
+        var handled = _model.AssistHandled.Count;
+        var review = _model.AssistQueue.Count(i => i.Status == "review");
+        QueueBox.Header = $"待你处理（{open}）";
+        QueueBox.Visibility = open + handled == 0 ? Visibility.Collapsed : Visibility.Visible;
+        BtnRecheck.Visibility = review > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BtnRecheck.Content = $"全部回查（{review}）";
+        HandledBox.Visibility = handled == 0 ? Visibility.Collapsed : Visibility.Visible;
+        HandledBox.Header = $"已处理（{handled}）：你否决过的";
+
+        var rows = _model.AssistSiteProgress;
+        var shown = rows.Count(r => !_busyOnly || r.IsBusy);
+        SiteSection.Visibility = rows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        SiteListHeader.Text = $"逐站（{shown}）";
+        SiteTotals.Text = $"合计 已判定 {rows.Sum(r => r.Resolved):N0} / {rows.Sum(r => r.Total):N0}"
+            + $"　还要检索 {rows.Sum(r => r.Searches):N0}";
+        ProgressBox.Visibility = rows.Count == 0 && _model.AssistStatTotal == 0
+            ? Visibility.Collapsed : Visibility.Visible;
+
+        RunningPanel.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
+        Budget.Text = $"运行中，{_model.AssistBudgetLine}";
         BtnScan.IsEnabled = !_model.BusyAssist;
         BtnStart.IsEnabled = !_model.BusyAssist && _torrents.Count > 0;
-        BtnRecheck.IsEnabled = !_model.BusyAssist;
-        BtnStop.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
-        BtnBudget.Visibility = _model.BusyAssist ? Visibility.Visible : Visibility.Collapsed;
-        Budget.Text = _model.AssistBudgetLine;
-        SiteBox.Visibility = _model.AssistSiteProgress.Count == 0
-            ? Visibility.Collapsed : Visibility.Visible;
+        BtnStart.Content = DryRun.IsChecked == true ? "预演这一页" : "跑这一页";
         BtnPrev.IsEnabled = _page > 0 && !_model.BusyAssist;
         BtnNext.IsEnabled = _page < _pageCount - 1 && !_model.BusyAssist;
-        BtnStart.Content = DryRun.IsChecked == true ? "预演本页" : "辅种本页";
         if (_model.BusyAssist) State.Text = _model.AssistStep;
         else if (_model.AssistReport.Length > 0) State.Text = _model.AssistReport;
     }
@@ -266,14 +296,19 @@ public partial class AssistView : UserControl
         });
     }
 
-    /// 全展开 / 全收起：切完每张卡重算一遍可见格子
-    private void OnWideOpen(object sender, RoutedEventArgs e)
+    /// 逐站进度只看有活儿的站：筛选只作用于显示，模型那一表整表留着
+    private void OnBusyOnly(object sender, RoutedEventArgs e)
     {
-        foreach (var block in _torrents)
-        {
-            block.WideOpen = WideOpen.IsChecked == true;
-            block.Rebuild();
-        }
+        _busyOnly = BusyOnly.IsChecked == true;
+        _siteView.Refresh();
+        RefreshProgress();
+    }
+
+    /// 点标题行 = 展开/收起这一条种子的格子（人点过之后就不再自动改它）
+    private void OnToggleBlock(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string hash }) return;
+        _torrents.FirstOrDefault(b => b.Hash == hash)?.Toggle();
     }
 
     /// 点计数牌 = 展开/收起那一类的格子
@@ -281,7 +316,7 @@ public partial class AssistView : UserControl
     {
         if (sender is not FrameworkElement { Tag: Chip chip }) return;
         var block = _torrents.FirstOrDefault(b => b.Hash == chip.Hash);
-        block?.Toggle(chip.Status);
+        block?.ToggleStatus(chip.Status);
     }
 
     /// 人工采纳一条：只重跑这一条，负缓存与「已辅过」预筛都让路
@@ -294,7 +329,7 @@ public partial class AssistView : UserControl
         RefreshProgress();
     }
 
-    // MARK: 待处理队列上的按钮
+    // MARK: 待你处理那一块的按钮
 
     private async void OnAdoptQ(object sender, RoutedEventArgs e) =>
         await RunQueueAction(sender, item => _model.AssistConfirmAsync(item.Key));
@@ -327,7 +362,7 @@ public partial class AssistView : UserControl
     private static string Text(JsonNode? n) =>
         n is JsonValue v && v.TryGetValue<string>(out var s) ? s : "";
 
-    /// 一条种子一张卡：标题 + 各类计数牌 + 展开的那些格子
+    /// 一条种子一行：汇总那句话 + 点开才是计数牌与格子
     public sealed class TorrentBlock : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -338,7 +373,7 @@ public partial class AssistView : UserControl
 
         /// 这一页里这条种子的全部格子（含没展开的）
         public ObservableCollection<Cell> Cells { get; } = new();
-        /// 画出来的格子：默认只有要人动手的那几类
+        /// 画出来的格子：整条收起时为空
         public ObservableCollection<Cell> VisibleCells { get; } = new();
         public ObservableCollection<Chip> Chips { get; } = new();
 
@@ -355,44 +390,99 @@ public partial class AssistView : UserControl
         /// 默认就摊开的：问题不该要人先去点计数牌才看得见
         private static readonly string[] AutoOpen = { "failed", "manual", "review" };
 
-        public bool WideOpen { get; set; }
+        /// 5 组的固定顺序（核心库 Bucket 的声明顺序）；名字用核心库给的那份
+        private static readonly string[] BucketOrder = { "done", "action", "trouble", "skip", "waiting" };
 
+        /// 载荷给的汇总（格子还没 bucket 时的垫底文案）
+        public string SeedSummary { get; init; } = "";
+
+        /// 载荷给的「这条有要人处理的」：没人手动展开过之前拿它决定默认展开
+        public bool Attention { get; set; }
+
+        private bool _touched;
+        private bool _expanded;
+        private string _summary = "";
         private string _right = "";
+
+        public string Summary
+        {
+            get => _summary;
+            private set { if (_summary == value) return; _summary = value; Raise(nameof(Summary)); }
+        }
+
         public string Right
         {
             get => _right;
             set { if (_right == value) return; _right = value; Raise(nameof(Right)); }
         }
 
+        public string Arrow => _expanded ? "▾" : "▸";
+        public Visibility ShowDetails => _expanded ? Visibility.Visible : Visibility.Collapsed;
         public string Tip => Left;
 
-        /// 格子结论可能刚变过：计数牌与可见格子都按当前状态重算
-        public void Rebuild()
+        /// 人点标题行：展开状态交给人，之后不再自动改
+        public void Toggle()
+        {
+            _touched = true;
+            _expanded = !_expanded;
+            Raise(nameof(Arrow));
+            Raise(nameof(ShowDetails));
+        }
+
+        public void ToggleStatus(string status)
+        {
+            _fold[status] = !IsOpen(status);
+            Rebuild(null);
+        }
+
+        /// 格子结论可能刚变过：计数牌、可见格子、汇总那句话都按当前状态重算
+        public void Rebuild(List<(string Bucket, string Label)>? labels)
         {
             var groups = new Dictionary<string, List<Cell>>();
+            var counts = new Dictionary<string, int>();
+            var bucketed = false;
             foreach (var c in Cells)
             {
                 if (!groups.TryGetValue(c.Status, out var list)) groups[c.Status] = list = new List<Cell>();
                 list.Add(c);
+                if (c.Bucket.Length == 0) continue;
+                bucketed = true;
+                counts[c.Bucket] = counts.TryGetValue(c.Bucket, out var n) ? n + 1 : 1;
             }
             var statuses = Order.Where(groups.ContainsKey)
                 .Concat(groups.Keys.Where(k => !Order.Contains(k))).ToList();
             Replace(Chips, statuses.Select(st => new Chip(Hash, st, groups[st][0].StatusText,
                 groups[st].Count, IsOpen(st))).ToList());
-            Replace(VisibleCells, Cells.Where(c => IsOpen(c.Status)).ToList());
-            int N(string st) => groups.TryGetValue(st, out var l) ? l.Count : 0;
-            Right = $"{SizeText} · 已辅 {N("assisted")} · 待辅 {N("pending") + N("verifying")}"
-                + $" · 失败 {N("failed")} · 待复核 {N("review")} · 待确认 {N("manual")}";
+            Replace(VisibleCells,
+                _expanded ? Cells.Where(c => IsOpen(c.Status)).ToList() : new List<Cell>());
+            if (!bucketed)
+            {
+                if (SeedSummary.Length > 0) Summary = SeedSummary;
+                if (!_touched) SetExpanded(Attention);
+                return;
+            }
+            var named = labels is { Count: > 0 } ? labels : BucketOrder.Select(b => (b, b)).ToList();
+            var parts = named
+                .Where(p => counts.TryGetValue(p.Item1, out var n) && n > 0)
+                .Select(p => $"{p.Item2} {counts[p.Item1]:N0}")
+                .ToList();
+            Summary = parts.Count == 0 ? "没有格子" : string.Join(" · ", parts);
+            var attention = (counts.TryGetValue("action", out var a) && a > 0)
+                || (counts.TryGetValue("trouble", out var t) && t > 0);
+            Attention = attention;
+            if (!_touched) SetExpanded(attention);
         }
 
-        public void Toggle(string status)
+        private void SetExpanded(bool on)
         {
-            _fold[status] = !IsOpen(status);
-            Rebuild();
+            if (_expanded == on) return;
+            _expanded = on;
+            Raise(nameof(Arrow));
+            Raise(nameof(ShowDetails));
         }
 
         private bool IsOpen(string status) =>
-            WideOpen || (_fold.TryGetValue(status, out var v) ? v : AutoOpen.Contains(status));
+            _fold.TryGetValue(status, out var v) ? v : AutoOpen.Contains(status);
 
         private void Raise(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
@@ -459,6 +549,7 @@ public partial class AssistView : UserControl
         private string _status = "";
         private string _statusText = "";
         private string _tip = "";
+        private string _bucket = "";
         private bool _needConfirm;
 
         public string Status
@@ -471,6 +562,13 @@ public partial class AssistView : UserControl
                 Raise(nameof(Status));
                 Raise(nameof(Tone));
             }
+        }
+
+        /// 归到 5 组里的哪一组（核心库给的）：明细行那句汇总靠它拼
+        public string Bucket
+        {
+            get => _bucket;
+            set { if (_bucket == value) return; _bucket = value; Raise(nameof(Bucket)); }
         }
 
         /// 计划阶段先按计划显示（待辅种 / 不支持检索…），跑起来后由核心库的结论覆盖

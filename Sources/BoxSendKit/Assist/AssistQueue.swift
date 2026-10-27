@@ -43,6 +43,8 @@ extension AssistPipeline {
         public var canUndo: Bool { status == .rejected }
         /// 已否决的只留一个「撤销」，别的按钮都是空话
         public var canReject: Bool { status != .rejected }
+        /// 人已经表过态的（否决）：界面上收进「已处理」，不再跟待办混在一列
+        public var handled: Bool { status == .rejected }
 
         /// 排在队列第几档：能立刻动手的排前面
         var rank: Int {

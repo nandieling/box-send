@@ -813,6 +813,33 @@ Windows 侧：
   馒头上传名洗成 ASCII；`Unit3DAdapterTests` 加一条：包内名不合法时零请求抛 `badInput`；
   另修 `Unit3DAdapterTests` 那条对上传文件名的旧期望）；`dotnet build` 0 错误。
 
+## 这一轮（辅种页重排：5 块变 3 块，12 个计数收成 5 组）
+
+- 上一版辅种页五张卡（辅种统计 / 按站点 / 待处理 / 种子与站点 + 顶部一排按钮）、四套进度数字、
+  12 个平铺结论，没人能在两秒内看出「现在该干什么」。这轮按「数字只在一处、按钮只在一处」重排。
+- **归组进核心**：`AssistPipeline.Bucket`（done / action / trouble / skip / waiting，短名
+  已完成 / 待你处理 / 出问题 / 不用辅 / 没轮到）+ `RowStatus.bucket` + `Tally.count(_:)` /
+  `Tally.buckets` / `Tally.breakdown(_:)`（每组里的细分说法，挂悬停）/ `Tally.summaryLine`
+  （一条种子的汇总句）。12 个结论一个都不能漏，`testEveryStatusLandsInExactlyOneBucket`
+  逐条钉住——漏一组就表现为「数字凭空少一截」，两端各写一套归法迟早对不齐。
+- **mac**：`AssistView` 五块改三块——进度（覆盖率条 + 5 组计数 + 逐站那一截，合计写在逐站标题行
+  右侧）、待你处理（整页唯一动手的地方，一行最多两个按钮：采纳/重试/回查/撤销四选一 + 否决；
+  否决过的收进「已处理」展开栏）、种子明细（一条种子一行汇总，点开才是计数牌与格子，
+  要人处理的默认已展开，不再有「展开全部格子」那个开关）。顶部按钮改名
+  「重新扫描（不发检索）」「跑这一页」，「回查校验」挪进待你处理那栏变「全部回查（N）」，
+  跑起来只剩一行「运行中，已请求 12 / 200」旁边挂停止与追加。
+- **Windows 要改**：桥那边三处扩了字段，WPF 不跟着改就画不出新形状——`stats.buckets`
+  （5 组：bucket/label/hint/detail/count，`AssistStatLine`→`AssistBucketLine`）、
+  每格与每行实时进展都带 `bucket`、`torrents[].summary` + `attention`（明细行那句汇总与
+  要不要默认展开，都由核心拼好）、`queue[].handled`（否决过的分到 `AssistHandled`）。
+  逐站那一截加了「只显示还有活的站」，用 `ICollectionView.Filter` 只滤显示，模型那表不重建；
+  种子块改成标题行即展开开关（`TorrentBlock.Toggle`），没人点过时按 `attention` 自动展开，
+  人点过就固定不再自动改（mac 的 `touched` 同一套）。`AssistBudgetLine` 改成「已请求 x / y」，
+  前面由界面拼「运行中，」。
+- 验证：`swift test` 600 绿（新增 5 组归类两条：五组计数与汇总句、每个结论恰好落一组；
+  快照与 `assist.scan` 载荷各加断言：`stats.buckets` 五组齐全且都给细分说明、格子带 `bucket`、
+  `torrents[].summary` == 「没轮到 2」、`attention` 为 false）；`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

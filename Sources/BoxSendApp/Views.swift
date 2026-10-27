@@ -1850,20 +1850,26 @@ struct DownloaderView: View {
 
 struct AssistView: View {
     @EnvironmentObject var model: AppModel
-    /// 每条种子手动改过的展开状态（hash → 状态 → 是否展开）。没改过的按默认走：
-    /// 只展开要人动手的几类，115 个站全摊开就是满屏灰格子，真正的结论反倒看不见。
+    /// 每条种子手动改过的「某一类格子」展开状态（hash → 状态 → 是否展开）
     @State private var folded: [String: [AssistPipeline.RowStatus: Bool]] = [:]
-    /// 一次性全展开（核对整页时用）
-    @State private var cellsWideOpen = false
+    /// 展开细节的种子。没点过的按「这条种子有没有要人处理的东西」自动决定
+    @State private var opened: Set<String> = []
+    /// 人手动点过展开/收起的种子：不再自动改它
+    @State private var touched: Set<String> = []
+    /// 逐站进度只看有活儿的站（不支持检索的那些铺在这儿只是噪音）
+    @State private var progressBusyOnly = false
+    /// 否决过的条目默认收起
+    @State private var showHandled = false
 
+    /// 这一页只有三块：进度（含逐站）、待你处理、种子明细。
+    /// 数字只出现在进度块，按钮只出现在待你处理，格子只在明细里。
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 header
-                statsCard
+                progressCard
                 queueCard
-                siteCard
-                torrentsCard
+                torrentCard
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1877,54 +1883,49 @@ struct AssistView: View {
         Dictionary(grouping: model.assistCells, by: { $0.hash })
     }
 
+    // MARK: 顶部：扫描、跑这一页、运行状态
+
     private var header: some View {
         HStack(spacing: 10) {
             Button {
                 model.assistScan()
             } label: {
-                Label("扫描下载器", systemImage: "magnifyingglass")
+                Label("重新扫描（不发检索）", systemImage: "magnifyingglass")
             }
             .disabled(model.assistScanning || model.assistRunning)
+            .help("重读下载器的种子列表与已做种站点：只更新目录，不去站内检索")
 
             Button {
                 model.assistRun()
             } label: {
-                Label(model.assistDryRun ? "预演本页" : "辅种本页",
+                Label(model.assistDryRun ? "预演这一页" : "跑这一页",
                       systemImage: "square.stack.3d.up.fill")
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.assistScanning || model.assistRunning || model.assistCells.isEmpty)
-            .help("只处理这一页列出的种子；整库定时那轮按体积自己取前若干条")
-
-            Button {
-                model.assistRecheck()
-            } label: {
-                Label("回查校验", systemImage: "arrow.clockwise.circle")
-            }
-            .disabled(model.assistScanning || model.assistRunning
-                      || !(model.assistStats.count(.review) > 0))
-            .help("上一轮推进下载器却没等到校验结果的种子，回来问一次下载器：满了就启动，不满就回滚")
-
-            if model.assistRunning {
-                Button {
-                    model.assistStop()
-                } label: {
-                    Label("停止本轮", systemImage: "stop.circle")
-                }
-                .controlSize(.small)
-                .help("处理完手头这一格就收摊；状态表原样留着，下一轮从没跑过的格子接着铺")
-                Button("追加 200 次") { model.assistAddBudget() }
-                    .controlSize(.small)
-                    .help("只追这一轮的请求次数上限，逐站间隔照旧")
-                Text("本轮请求 \(model.assistBudget.used) / \(model.assistBudget.total)")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .help("站点请求：检索、详情、种子文件各算一次")
-            }
+            .help("只处理这一页列出的种子；逐站间隔与单轮请求上限照「设置」里的节奏")
 
             Toggle("只预演", isOn: $model.assistDryRun)
                 .toggleStyle(.switch)
                 .controlSize(.small)
                 .help("按真实流程走一遍，但不动下载器")
+
+            if model.assistRunning {
+                HStack(spacing: 6) {
+                    Text("运行中，已请求 \(AssistPipeline.grouped(model.assistBudget.used)) / \(AssistPipeline.grouped(model.assistBudget.total))")
+                        .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+                        .help("站点请求：检索、详情、种子文件各算一次")
+                    Button("停止") { model.assistStop() }
+                        .controlSize(.small)
+                        .help("处理完手头这一格就收摊；状态表原样留着，下一轮从没跑过的格子接着铺")
+                    Button("追加 200 次") { model.assistAddBudget() }
+                        .controlSize(.small)
+                        .help("只追这一轮的请求次数上限，逐站间隔照旧")
+                }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(Color.secondary.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
 
             if model.assistScanning || model.assistRunning {
                 ProgressView().controlSize(.small)
@@ -1944,14 +1945,14 @@ struct AssistView: View {
         }
     }
 
-    // MARK: 统计
+    // MARK: 进度：覆盖率 + 5 组计数 + 逐站
 
-    /// 覆盖率条打头，后面跟着各类计数（0 也留着，免得看着像没跑）
-    private var statsCard: some View {
+    /// 整轮跑到哪儿了。12 个结论收成 5 组摆出来，细分说法挂在悬停提示里
+    private var progressCard: some View {
         let tally = model.assistStats
-        return CardSection("辅种统计") {
+        return CardSection("进度") {
             if model.assistPlan == nil {
-                Text("扫描下载器后，这里按「一条种子 × 一个站」给出已完成、待辅种、失败等计数。")
+                Text("扫描下载器后，这里给出覆盖率、5 组计数和逐站进度。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
                 if let cov = model.assistCoverage {
@@ -1963,25 +1964,39 @@ struct AssistView: View {
                     }
                 }
                 HStack(alignment: .top, spacing: 20) {
-                    ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
-                        statBlock(line.status, line.count)
+                    ForEach(Array(tally.buckets.enumerated()), id: \.offset) { _, b in
+                        bucketBlock(b.bucket, b.count, tally)
                     }
                     Spacer(minLength: 8)
                 }
+                Divider()
+                siteList
                 Text(footline(tally)).font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private func statBlock(_ status: AssistPipeline.RowStatus, _ count: Int) -> some View {
+    private func bucketBlock(_ bucket: AssistPipeline.Bucket, _ count: Int,
+                             _ tally: AssistPipeline.Tally) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(AssistPipeline.grouped(count))
                 .font(.title2.weight(.semibold)).monospacedDigit()
-                .foregroundStyle(tintColor(status))
-            Text(status.statLabel).font(.caption).foregroundStyle(.secondary)
+                .foregroundStyle(bucketTint(bucket))
+            Text(bucket.label).font(.caption).foregroundStyle(.secondary)
         }
-        .frame(minWidth: 76, alignment: .leading)
+        .frame(minWidth: 82, alignment: .leading)
+        .help("\(bucket.label)：\(tally.breakdown(bucket))")
+    }
+
+    private func bucketTint(_ bucket: AssistPipeline.Bucket) -> Color {
+        switch bucket {
+        case .done: return .green
+        case .action: return .orange
+        case .trouble: return .red
+        case .skip: return Color.secondary.opacity(0.65)
+        case .waiting: return .secondary
+        }
     }
 
     /// 一行说清本轮规模：全量组合、会检索多少、预算、上次扫描
@@ -2001,27 +2016,31 @@ struct AssistView: View {
         return parts.joined(separator: "；") + "。"
     }
 
-    // MARK: 逐站进度
-
-    /// 只看有活儿的站（不支持检索的那些铺在这儿只是噪音）
-    @State private var progressBusyOnly = false
-
-    /// 一站一行：这一站判定到哪、还要检索几次、要不要先停一停。
-    /// 115 个辅种站 × 上万条种子的分母，就是靠这一张卡一站一站管住的。
-    private var siteCard: some View {
+    /// 逐站那一截：合计写在标题行右侧，一站一行只管自己那一站
+    private var siteList: some View {
         let rows = model.assistSiteProgress
             .filter { !progressBusyOnly || (!$0.unsupported && ($0.searches > 0 || $0.paused > 0)) }
             .sorted { lhs, rhs in
                 if lhs.searches != rhs.searches { return lhs.searches > rhs.searches }
                 return model.siteName(lhs.siteID) < model.siteName(rhs.siteID)
             }
-        return CardSection("按站点（\(rows.count)）") {
+        let resolved = rows.reduce(0) { $0 + $1.resolved }
+        let cells = rows.reduce(0) { $0 + $1.total }
+        let searches = rows.reduce(0) { $0 + $1.searches }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("逐站（\(rows.count)）").font(.caption).foregroundStyle(.secondary)
+                Toggle("只显示还有活的站", isOn: $progressBusyOnly)
+                    .toggleStyle(.switch).controlSize(.mini)
+                Spacer()
+                Text("合计 已判定 \(AssistPipeline.grouped(resolved)) / \(AssistPipeline.grouped(cells))"
+                     + "　还要检索 \(AssistPipeline.grouped(searches))")
+                    .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+            }
             if rows.isEmpty {
                 Text("扫描下载器后这里逐站给出进度；不想这一轮动某个站，就把它的暂停打开。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                Toggle("只显示还有活的站", isOn: $progressBusyOnly)
-                    .toggleStyle(.switch).controlSize(.small)
                 ScrollView {
                     VStack(spacing: 5) {
                         ForEach(rows, id: \.siteID) { p in
@@ -2029,7 +2048,7 @@ struct AssistView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 300)
+                .frame(maxHeight: 280)
                 Text("已判定 = 不用再去站内敲门的格子；暂停只是这一轮不去敲门，那些格子仍算欠着。")
                     .font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2074,17 +2093,51 @@ struct AssistView: View {
         .opacity(paused ? 0.6 : 1)
     }
 
-    // MARK: 待处理队列
+    // MARK: 待你处理：整页唯一动手的地方
 
-    /// 需要人点一下才往前走的条目集中在这儿：失败、待复核、待人工确认、已否决
+    /// 一行一条、最多两个按钮。否决过的收进「已处理」，不跟待办混在一列
     private var queueCard: some View {
-        CardSection("待处理（\(model.assistQueue.count)）") {
-            if model.assistQueue.isEmpty {
-                Text("没有等人处理的条目。")
+        let open = model.assistQueue.filter { !$0.handled }
+        let handled = model.assistQueue.filter { $0.handled }
+        let review = model.assistStats.count(.review)
+        return CardSection("待你处理（\(open.count)）") {
+            if model.assistPlan == nil {
+                Text("扫描下载器后，要你点一下才往前走的条目列在这里。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
-                ForEach(model.assistQueue) { item in
-                    queueRow(item)
+                if open.isEmpty {
+                    Text("没有等你处理的条目。").font(.callout).foregroundStyle(.secondary)
+                } else {
+                    HStack(spacing: 8) {
+                        Text("采纳＝按你的判断当成同一种子；重试＝只重跑这一格；回查＝问下载器校验完了没。")
+                            .font(.caption2).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        if review > 0 {
+                            Button("全部回查（\(review)）") { model.assistRecheck() }
+                                .controlSize(.small).disabled(model.assistRunning)
+                                .help("上一轮推进下载器却没等到校验结果的种子，回来问一次下载器：满了就启动，不满就回滚。只问下载器，不发站点请求")
+                        }
+                    }
+                    ForEach(open) { item in
+                        queueRow(item)
+                    }
+                }
+                if !handled.isEmpty {
+                    Button {
+                        showHandled.toggle()
+                    } label: {
+                        Label("已处理（\(handled.count)）：你否决过的",
+                              systemImage: showHandled ? "chevron.down" : "chevron.right")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    if showHandled {
+                        ForEach(handled) { item in
+                            queueRow(item)
+                        }
+                    }
                 }
             }
         }
@@ -2115,40 +2168,38 @@ struct AssistView: View {
             Text(item.timeText).font(.caption2).foregroundStyle(.secondary)
                 .fixedSize()
 
+            // 主按钮按结论挑一个，右边再挂一个「否决」：一行最多两个按钮
             if item.canAdopt {
                 Button("采纳") { model.assistConfirm(key: item.key) }
                     .controlSize(.small).disabled(model.assistRunning)
                     .help("按人工判断当成同一种子：加进下载器，校验到 100% 才算辅成")
-            }
-            if item.canRetry {
+            } else if item.canRetry {
                 Button("重试") { model.assistRetry(key: item.key) }
                     .controlSize(.small).disabled(model.assistRunning)
                     .help("只重跑这一格：再检索一次站内，找到就重新推下载器")
-            }
-            if item.canRecheck {
+            } else if item.canRecheck {
                 Button("回查") { model.assistRecheck(keys: [item.key]) }
                     .controlSize(.small).disabled(model.assistRunning)
                     .help("问一次下载器那条校验完了没：满了就启动，不满就回滚")
+            } else if item.canUndo {
+                Button("撤销") { model.assistReject(key: item.key, rejected: false) }
+                    .controlSize(.small)
+                    .help("撤销否决：这条重新允许检索")
             }
             if item.canReject {
                 Button("否决") { model.assistReject(key: item.key) }
                     .controlSize(.small)
                     .help("站内那条不是同一个种子：以后不再拿它烦你")
             }
-            if item.canUndo {
-                Button("撤销") { model.assistReject(key: item.key, rejected: false) }
-                    .controlSize(.small)
-                    .help("撤销否决：这条重新允许检索")
-            }
         }
         .padding(.vertical, 2)
     }
 
-    // MARK: 种子 × 站点
+    // MARK: 种子明细：只作台账，不在这儿动手
 
-    /// 一条种子一张卡：标题行 + 各类计数（点一下展开那类格子）
-    private var torrentsCard: some View {
-        CardSection("种子与站点") {
+    /// 一条种子一行汇总，点开才是格子
+    private var torrentCard: some View {
+        CardSection("种子明细") {
             if model.assistShownTorrents.isEmpty {
                 Text(model.assistScanning ? "正在读下载器…" : "（还没扫描，或下载器里没有可辅的种子）")
                     .font(.callout).foregroundStyle(.secondary)
@@ -2182,44 +2233,54 @@ struct AssistView: View {
                 Image(systemName: "chevron.right")
             }
             .disabled(model.assistPage >= model.assistPageCount - 1)
-            Toggle("展开全部格子", isOn: $cellsWideOpen)
-                .toggleStyle(.button)
-                .controlSize(.mini)
-                .help("把每条种子在所有站的格子都摊开看")
             Spacer()
+            Text("要人处理的种子默认已展开")
+                .font(.caption2).foregroundStyle(.secondary)
         }
     }
 
     private func torrentBlock(_ t: LocalTorrent) -> some View {
         let rows = rowsByHash[t.hash] ?? []
         let tally = AssistPipeline.tally(rows: rows, live: model.assistLive)
-        let shown = visibleRows(rows, tally: tally)
+        let open = isTorrentOpen(t.hash, tally)
+        let shown = open ? visibleRows(rows, tally: tally) : []
         return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(t.name).font(.callout).lineLimit(1)
-                Spacer(minLength: 8)
-                Text(String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824))
-                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                Text("已做种 \(t.trackerHosts.count) 站")
-                    .font(.caption2).foregroundStyle(.secondary)
+            Button {
+                toggleTorrent(t.hash, tally)
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: open ? "chevron.down" : "chevron.right")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(t.name).font(.callout).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(tally.summaryLine).font(.caption2).monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Text(String(format: "%.1f GiB", Double(t.totalSize) / 1_073_741_824)
+                         + "　已做种 \(t.trackerHosts.count) 站")
+                        .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .help(t.name)
-            if rows.isEmpty {
-                Text("这条不在本轮计划里").font(.caption2).foregroundStyle(.secondary)
-            } else {
-                // 计数条即筛选：点哪一类就只看那一类的格子，要人动手的默认已经展开
-                HStack(spacing: 5) {
-                    ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
-                        if line.count > 0 {
-                            chip(t.hash, line.status, line.count, tally: tally)
+            if open {
+                if rows.isEmpty {
+                    Text("这条不在本轮计划里").font(.caption2).foregroundStyle(.secondary)
+                } else {
+                    // 计数条即筛选：点哪一类就只看那一类的格子，要人动手的默认已经展开
+                    HStack(spacing: 5) {
+                        ForEach(Array(tally.lines.enumerated()), id: \.offset) { _, line in
+                            if line.count > 0 {
+                                chip(t.hash, line.status, line.count, tally: tally)
+                            }
                         }
                     }
-                }
-                if !shown.isEmpty {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 6)],
-                              alignment: .leading, spacing: 6) {
-                        ForEach(shown, id: \.rowKey) { row in
-                            siteCell(row)
+                    if !shown.isEmpty {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 140), spacing: 6)],
+                                  alignment: .leading, spacing: 6) {
+                            ForEach(shown, id: \.rowKey) { row in
+                                siteCell(row)
+                            }
                         }
                     }
                 }
@@ -2227,10 +2288,26 @@ struct AssistView: View {
         }
     }
 
+    /// 没点过的种子：有要人处理的（或出问题的）就自动展开，其余收起
+    private func isTorrentOpen(_ hash: String, _ tally: AssistPipeline.Tally) -> Bool {
+        if touched.contains(hash) { return opened.contains(hash) }
+        return tally.count(.action) > 0 || tally.count(.trouble) > 0
+    }
+
+    private func toggleTorrent(_ hash: String, _ tally: AssistPipeline.Tally) {
+        let now = isTorrentOpen(hash, tally)
+        touched.insert(hash)
+        if now {
+            opened.remove(hash)
+        } else {
+            opened.insert(hash)
+        }
+    }
+
     /// 一类一格的小计数牌：底色说结论，数字说有几格
     private func chip(_ hash: String, _ status: AssistPipeline.RowStatus, _ count: Int,
                       tally: AssistPipeline.Tally) -> some View {
-        let on = cellsWideOpen || isOpen(hash, status, tally)
+        let on = isOpen(hash, status, tally)
         return Button {
             toggle(hash, status, tally)
         } label: {
@@ -2259,7 +2336,6 @@ struct AssistView: View {
 
     private func isOpen(_ hash: String, _ status: AssistPipeline.RowStatus,
                         _ tally: AssistPipeline.Tally) -> Bool {
-        if cellsWideOpen { return true }
         return folded[hash]?[status] ?? autoOpen(status, tally)
     }
 
@@ -2369,7 +2445,6 @@ struct AssistView: View {
         }
     }
 }
-
 /// 逐站筛选的一行：站名 + 包含/排除关键词 + 体积上下限。回车提交（与限速输入框同一套习惯）
 private struct AssistFilterRow: View {
     let name: String
