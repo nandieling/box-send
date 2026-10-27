@@ -112,6 +112,74 @@ final class AssistCatalogTests: XCTestCase {
         XCTAssertEqual(t.total, 2, "总数不因进展而变")
     }
 
+    // MARK: 界面上暂停一个站
+
+    /// 点一下卡片上的暂停不该要求重新扫描：派生数（待辅种 ↔ 已暂停、还要检索几次、
+    /// 覆盖率、每站那一行、单格结论）当场全部推平
+    func testPausingASiteTakesEffectWithoutRescan() throws {
+        let sites = [site("s1"), site("s2")]
+        let state = StateStore(dataDir: "/tmp/boxsend-cat-\(UUID().uuidString)")
+        var fakes: [String: NoSearchSite] = [:]
+        let pipe = AssistPipeline(config: config(sites), cookies: CookieStore(), state: state,
+                                  downloader: EmptyTorrentDownloader())
+        pipe.adapterFactory = { sn, client -> any SiteAdapter in
+            if let hit = fakes[sn.id] { return hit }
+            let made = NoSearchSite(site: sn, client: client, searchable: sn.id == "s1")
+            fakes[sn.id] = made
+            return made
+        }
+        state.markAssisted(site: "s1", hash: "h2", url: "u", level: "sameHash")
+        state.markAssistMiss(site: "s1", hash: "h3")
+        let list = [torrent("h1", "One", 5_000), torrent("h2", "Two", 4_000),
+                    torrent("h3", "Three", 3_000), torrent("h4", "Four", 2_000)]
+        let plan = pipe.planCatalog(list)
+        XCTAssertEqual(plan.tally.count(.pending), 2, "4 条里 1 已辅过、1 站内没有")
+        XCTAssertEqual(plan.willSearch, 2)
+
+        let paused = plan.applyingPaused(["s1"])
+        XCTAssertEqual(paused.tally.count(.pending), 0)
+        XCTAssertEqual(paused.tally.count(.paused), 2, "暂停站里那两格算「压着」，仍没结论")
+        XCTAssertEqual(paused.willSearch, 0, "暂停站不计入要检索的量")
+        XCTAssertEqual(paused.pendingBySite["s1"], 0)
+        XCTAssertEqual(paused.tally.total, plan.tally.total, "推平不搬走格子，只换归类")
+        XCTAssertNil(paused.counts.first { $0.reason == "会去站内检索" }?.count)
+        XCTAssertEqual(paused.counts.first { $0.reason == "本站已暂停" }?.count, 2)
+
+        let cov = paused.coverage()
+        XCTAssertEqual(cov.searchesLeft, 0)
+        XCTAssertEqual(cov.paused, 2)
+        XCTAssertEqual(cov.siteCount, 0, "没有站有活儿，就不该说「在跑的站 1 个」")
+        XCTAssertTrue(cov.line.contains("暂停站里压着 2 格"), "\(cov.line)")
+
+        let sp = paused.siteProgress().first { $0.siteID == "s1" }
+        XCTAssertEqual(sp?.state, .paused)
+        XCTAssertEqual(sp?.searches, 0)
+        XCTAssertEqual(sp?.nextLine, "已暂停，压着 2 格")
+        XCTAssertEqual(sp?.pausedSite, true)
+
+        let cell = paused.rows([list[3]]).first { $0.siteID == "s1" }
+        XCTAssertEqual(cell?.planned, .paused, "格子也跟着改结论")
+        XCTAssertEqual(cell?.skipReason, "本站已暂停（点这张站卡恢复）")
+
+        // 取消暂停：回到原来那份数
+        let resumed = paused.applyingPaused([])
+        XCTAssertEqual(resumed.tally.count(.pending), 2)
+        XCTAssertEqual(resumed.tally.count(.paused), 0)
+        XCTAssertEqual(resumed.willSearch, 2)
+        XCTAssertEqual(resumed.pendingBySite["s1"], 2)
+
+        // 名单没变：原样返回，不复制那几万个 hash 集合
+        let same = plan.applyingPaused([])
+        XCTAssertEqual(same.tally, plan.tally)
+        XCTAssertEqual(same.counts.map(\.reason), plan.counts.map(\.reason))
+
+        // 不支持检索的站：暂停它没有意义，数一格都不该动
+        let pauseUnsupported = plan.applyingPaused(["s2", "s1"])
+        XCTAssertEqual(pauseUnsupported.siteProgress().first { $0.siteID == "s2" }?.state,
+                       .unsupported)
+        XCTAssertEqual(pauseUnsupported.tally, paused.tally)
+    }
+
     // MARK: 失败记账
 
     func testFailureIsCountedAndRetried() throws {

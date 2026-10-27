@@ -1860,6 +1860,8 @@ struct AssistView: View {
     @State private var progressBusyOnly = false
     /// 否决过的条目默认收起
     @State private var showHandled = false
+    /// 鼠标停在哪张站卡上（整张卡是暂停开关，得有哪儿能点的意思）
+    @State private var hoveredSite: String? = nil
 
     /// 这一页只有三块：进度（含逐站）、待你处理、种子明细。
     /// 数字只出现在进度块，按钮只出现在待你处理，格子只在明细里。
@@ -2039,7 +2041,7 @@ struct AssistView: View {
                     .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
             }
             if rows.isEmpty {
-                Text("扫描下载器后这里一站一卡；不想这一轮动某个站，就把它的暂停按下去。")
+                Text("扫描下载器后这里一站一卡；不想这一轮动某个站，点一下它的卡片。")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
                 ScrollView {
@@ -2053,36 +2055,50 @@ struct AssistView: View {
                 }
                 .frame(maxHeight: 300)
                 Text("底色说结论：红=这一站有检索或推送砸了，紫=有待复核，绿=这一站已铺完，"
-                     + "灰=暂停或没有站内检索；有问题的排前面。")
+                     + "灰=暂停或没有站内检索；有问题的排前面。点卡片＝暂停/恢复这一站，"
+                     + "暂停只是这一轮不去敲门，那些格子仍算欠着。")
                     .font(.caption2).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    /// 一站一卡：站名 + 进度 + 那句判定，右上一个暂停/继续按钮
+    /// 一站一卡：整张卡就是这一站的暂停开关，点一下停/放，卡上的数当场跟着变。
+    /// 图标只报当前状态（实心＝暂停中），悬停描边说「这儿能点」
     private func siteCard(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> some View {
         let paused = p.pausedSite
+        let hovered = hoveredSite == p.siteID && !p.unsupported
+        let edge = hovered ? siteTint(p.state).opacity(0.85) : siteEdge(p.state)
+        return Button {
+            model.assistSetPaused(p.siteID, paused: !paused)
+        } label: {
+            siteCardBody(p)
+        }
+        .buttonStyle(.plain)
+        .disabled(p.unsupported)
+        .background(siteCardBackground(p.state))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(edge, lineWidth: hovered ? 1.5 : 1))
+        .opacity(p.state == .unsupported ? 0.65 : 1)
+        .onHover { inside in
+            hoveredSite = inside ? p.siteID : (hoveredSite == p.siteID ? nil : hoveredSite)
+        }
+        .help(siteCardTip(p))
+    }
+
+    /// 卡片正文拆成单独一个 View：整串修饰符堆一块儿编译器会算不动
+    private func siteCardBody(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> some View {
         let warn = p.warnLine
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
                 Text(model.siteName(p.siteID)).font(.caption).lineLimit(1)
                 Spacer(minLength: 2)
-                Button {
-                    model.assistUpdate { a in
-                        if paused {
-                            a.pausedSites.removeAll { $0 == p.siteID }
-                        } else if !a.pausedSites.contains(p.siteID) {
-                            a.pausedSites.append(p.siteID)
-                        }
-                    }
-                } label: {
-                    Image(systemName: paused ? "play.circle" : "pause.circle").font(.caption2)
+                if !p.unsupported {
+                    Image(systemName: p.pausedSite ? "pause.circle.fill" : "pause.circle")
+                        .font(.caption2)
+                        .foregroundStyle(p.pausedSite ? Color.primary.opacity(0.55) : Color.secondary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(paused ? "取消暂停：下一轮这一站接着检索"
-                             : "暂停这一站：这一轮不去敲门，格子仍算欠着")
             }
             if !p.unsupported {
                 ProgressView(value: p.percent)
@@ -2102,19 +2118,25 @@ struct AssistView: View {
         }
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                Color.blockSurface(model.theme.dark)
-                siteWash(p.state)
-            }
+        .contentShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func siteCardBackground(_ state: AssistPipeline.SiteState) -> some View {
+        ZStack {
+            Color.blockSurface(model.theme.dark)
+            siteWash(state)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6)
-            .strokeBorder(siteEdge(p.state), lineWidth: 1))
-        .opacity(p.state == .unsupported ? 0.65 : 1)
-        .help([model.siteName(p.siteID) + "｜" + p.state.label,
-               p.stateLine + (p.nextLine.isEmpty ? "" : "　" + p.nextLine), warn]
-            .filter { !$0.isEmpty }.joined(separator: "\n"))
+    }
+
+    private func siteCardTip(_ p: AssistPipeline.CatalogPlan.SiteProgress) -> String {
+        var lines = [model.siteName(p.siteID) + "｜" + p.state.label,
+                     p.nextLine.isEmpty ? p.stateLine : p.stateLine + "　" + p.nextLine]
+        if !p.warnLine.isEmpty { lines.append(p.warnLine) }
+        if !p.unsupported {
+            lines.append(p.pausedSite ? "点击恢复这一站：下一轮接着检索"
+                                     : "点击暂停这一站：这一轮不去敲门，格子仍算欠着")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func siteTint(_ state: AssistPipeline.SiteState) -> Color {

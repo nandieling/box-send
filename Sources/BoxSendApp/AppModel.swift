@@ -1567,14 +1567,20 @@ final class AppModel: ObservableObject {
         assistRows.mapValues { $0.liveRow }
     }
 
+    /// 界面上的计划：存的那份按扫描那一刻的暂停名单算，界面上按了暂停就按当前
+    /// 名单推平一遍再拿去算数，否则点了暂停要重新扫描才看得出来
+    private var assistLivePlan: AssistPipeline.CatalogPlan? {
+        assistPlan?.applyingPaused(Set(assistConfig.pausedSites))
+    }
+
     /// 顶部那几个数：全量目录 × 当前进展
     var assistStats: AssistPipeline.Tally {
-        assistPlan?.adjusted(live: assistLive) ?? AssistPipeline.Tally()
+        assistLivePlan?.adjusted(live: assistLive) ?? AssistPipeline.Tally()
     }
 
     /// 逐站进度：一站一行（铺了多少格、判定多少、还要检索几次、是不是暂停）
     var assistSiteProgress: [AssistPipeline.CatalogPlan.SiteProgress] {
-        assistPlan?.siteProgress(live: assistLive) ?? []
+        assistLivePlan?.siteProgress(live: assistLive) ?? []
     }
 
     /// 正在跑的那条流水线：「停止本轮」按钮拿它递话
@@ -1593,7 +1599,7 @@ final class AppModel: ObservableObject {
 
     /// 覆盖率与预计：把「还剩多少」翻成「照现在这个节奏还要跑多久」
     var assistCoverage: AssistPipeline.Coverage? {
-        guard let plan = assistPlan else { return nil }
+        guard let plan = assistLivePlan else { return nil }
         return plan.coverage(live: assistLive)
     }
 
@@ -1712,6 +1718,23 @@ final class AppModel: ObservableObject {
     var assistDownloaderName: String {
         let d = config.assistDownloader
         return d.url.isEmpty ? "\(d.label)（还没填地址）" : "\(d.label) · \(d.url)"
+    }
+
+    /// 暂停 / 恢复一个辅种站点：改名单之外，把现有计划里的派生数就地推平
+    /// （待辅种 ↔ 已暂停、每站还要检索几次、整站归组），点一下卡片立刻变脸，
+    /// 不用重跑那一下要好几秒的扫描
+    func assistSetPaused(_ siteID: String, paused: Bool) {
+        assistUpdate { a in
+            if paused {
+                if !a.pausedSites.contains(siteID) { a.pausedSites.append(siteID) }
+            } else {
+                a.pausedSites.removeAll { $0 == siteID }
+            }
+        }
+        guard let next = assistLivePlan else { return }
+        assistPlan = next
+        assistCells = next.rows(Array(next.torrents
+            .dropFirst(assistPage * assistPageSize).prefix(assistPageSize)))
     }
 
     /// 改辅种设置并落盘（配置里没有 assist 段时先补一份默认值）

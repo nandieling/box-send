@@ -196,7 +196,7 @@ public final class AssistPipeline {
             if cfg.isPaused(id) {
                 emit(opts, Status(siteID: id, hash: "", torrentName: "",
                                   text: "跳过：本站已暂停", phase: .skipped,
-                                  detail: "在「辅种」页的「按站点」里取消暂停"))
+                                  detail: "在「辅种」页「进度」的逐站卡片上点一下就能恢复"))
                 continue
             }
             let adapter = adapterFactory(SiteRegistry.effectiveSite(site), client)
@@ -503,6 +503,52 @@ public final class AssistPipeline {
             self.byHash = byHash
         }
 
+        /// counts 里跟着暂停名单变的两个键（暂停 ↔ 待检索来回挪的就是这两项）
+        static let pausedKey = "本站已暂停"
+        static let searchKey = "会去站内检索"
+
+        /// 界面上随时能暂停/恢复某个站，而计划是按扫描那一刻的名单建的。
+        /// 这里按当前名单把派生数推平一遍：待辅种 ↔ 已暂停、每站还要检索几次、
+        /// counts、willSearch、分桶里的暂停标记一次全改，点一下卡片立刻见效，
+        /// 不用重新扫描。名单没变就原样返回（那几万个 hash 集合只共享不复制）。
+        public func applyingPaused(_ paused: Set<String>) -> CatalogPlan {
+            let wants = Set(paused.filter { buckets[$0]?.unsupported != true })
+            let baked = Set(buckets.filter { $0.value.pausedSite && !$0.value.unsupported }.keys)
+            guard wants != baked else { return self }
+            var copy = self
+            var counts: [String: Int] = [:]
+            for c in self.counts where c.count > 0 { counts[c.reason] = c.count }
+            for id in siteIDs {
+                guard let b = buckets[id], !b.unsupported else { continue }
+                let now = wants.contains(id)
+                if now == b.pausedSite { continue }
+                // 这一站还欠着的格子 = 全站格子 − 已经有结论的
+                let known = b.seeding.count + b.assisted.count + b.review.count
+                    + b.rejected.count + b.missing.count + b.failed.count + b.filtered.count
+                let left = max(0, torrents.count - known)
+                if now {
+                    copy.tally.decrease(.pending, left)
+                    copy.tally.increase(.paused, left)
+                    counts[Self.searchKey, default: 0] -= left
+                    counts[Self.pausedKey, default: 0] += left
+                    copy.pendingBySite[id] = 0
+                    copy.willSearch = max(0, copy.willSearch - left)
+                } else {
+                    copy.tally.decrease(.paused, left)
+                    copy.tally.increase(.pending, left)
+                    counts[Self.pausedKey, default: 0] -= left
+                    counts[Self.searchKey, default: 0] += left
+                    copy.pendingBySite[id] = left
+                    copy.willSearch += left
+                }
+                copy.buckets[id]?.pausedSite = now
+            }
+            copy.counts = counts.filter { $0.value > 0 }
+                .sorted { $0.value > $1.value }
+                .map { (reason: $0.key, count: $0.value) }
+            return copy
+        }
+
         /// 某一页的格子（一条种子 × 一个站，站点为外层，与执行顺序一致）
         public func rows(_ page: [LocalTorrent]) -> [PlanRow] {
             var out: [PlanRow] = []
@@ -701,7 +747,7 @@ public final class AssistPipeline {
             case .rejected: return "人工判定不是同一种子"
             case .missing: return "站内没有（\(missTTLDays) 天内查过）"
             case .filtered: return "按本站筛选不辅（\(b.filteredReason[st.rawValue] ?? "")）"
-            case .paused: return "本站已暂停（在「按站点」里取消暂停）"
+            case .paused: return "本站已暂停（点这张站卡恢复）"
             default: return nil      // 失败的那格本轮还会再试，不算「跳过」
             }
         }
@@ -771,7 +817,7 @@ public final class AssistPipeline {
                     .subtracting(b.assisted).subtracting(b.missing)
                     .subtracting(b.review).subtracting(b.rejected).subtracting(b.filtered)
             }
-            b.pausedSite = cfg.isPaused(id)
+            b.pausedSite = !b.unsupported && cfg.isPaused(id)
             buckets[id] = b
             if b.unsupported {
                 counts["该站暂不支持站内检索", default: 0] += list.count
@@ -784,7 +830,7 @@ public final class AssistPipeline {
             if b.pausedSite {
                 // 暂停：格子还欠着，但这一轮不算要检索的量
                 tally.increase(.paused, max(0, pending))
-                counts["本站已暂停", default: 0] += max(0, pending)
+                counts[CatalogPlan.pausedKey, default: 0] += max(0, pending)
                 pendingBySite[id] = 0
                 continue
             }
@@ -804,13 +850,13 @@ public final class AssistPipeline {
             counts["站内没有（\(cfg.missTTLDays) 天内查过）", default: 0] += b.missing.count
             counts["上次检索失败", default: 0] += b.failed.count
             counts["按本站筛选不辅", default: 0] += b.filtered.count
-            counts["会去站内检索", default: 0] += max(0, pending)
+            counts[CatalogPlan.searchKey, default: 0] += max(0, pending)
         }
         return CatalogPlan(torrents: list, siteIDs: ids, missTTLDays: cfg.missTTLDays,
                            pendingBySite: pendingBySite,
                            pace: (cfg.perSiteIntervalSec, cfg.jitterSec, cfg.roundBudget),
                            total: list.count * ids.count,
-                           willSearch: counts["会去站内检索", default: 0],
+                           willSearch: counts[CatalogPlan.searchKey, default: 0],
                            counts: counts.sorted { $0.value > $1.value }
                                .map { (reason: $0.key, count: $0.value) },
                            tally: tally, buckets: buckets,

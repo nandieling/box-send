@@ -152,12 +152,17 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
+                                    <!-- 整张卡都是这一站的暂停开关：点卡片任意处停/放 -->
                                     <Border Width="152" Margin="0,0,6,6" Padding="7,5" CornerRadius="6"
-                                            BorderThickness="1" ToolTip="{Binding Tip}">
+                                            BorderThickness="1" Tag="{Binding SiteID}"
+                                            MouseLeftButtonUp="OnPauseSite">
                                         <Border.Style>
                                             <Style TargetType="Border">
                                                 <Setter Property="Background" Value="{DynamicResource BlockSurface}" />
                                                 <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+                                                <Setter Property="ToolTipService.ToolTip" Value="{Binding Tip}" />
+                                                <!-- 本张卡就是暂停开关：默认给手型，不支持检索的站回落到箭头 -->
+                                                <Setter Property="Cursor" Value="Hand" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding State}" Value="trouble">
                                                         <Setter Property="Background" Value="#2EE5484D" />
@@ -180,7 +185,12 @@
                                                         <Setter Property="Background" Value="#14808A94" />
                                                         <Setter Property="BorderBrush" Value="#59808A94" />
                                                         <Setter Property="Opacity" Value="0.65" />
+                                                        <Setter Property="Cursor" Value="Arrow" />
                                                     </DataTrigger>
+                                                    <!-- 手停在这张卡上：描边亮一点，说明能点 -->
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="BorderBrush" Value="#9A2F8BE0" />
+                                                    </Trigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -188,7 +198,7 @@
                                             <DockPanel>
                                                 <Button DockPanel.Dock="Right" Content="{Binding PauseText}"
                                                         FontSize="11" Padding="6,0" Click="OnPauseSite"
-                                                        Tag="{Binding SiteID}"
+                                                        Tag="{Binding SiteID}" Focusable="False"
                                                         ToolTip="{Binding PauseTip}" />
                                                 <TextBlock Text="{Binding SiteName}" FontSize="12"
                                                            TextTrimming="CharacterEllipsis"
@@ -216,7 +226,7 @@
                     <TextBlock x:Name="PlanSummary" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
                                Foreground="{DynamicResource TextMuted}" />
                     <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"
-                               Text="底色说结论：红=这一站有检索或推送砸了，紫=有待复核，绿=这一站已铺完，灰=暂停或没有站内检索；有问题的排前面。"
+                               Text="底色说结论：红=这一站有检索或推送砸了，紫=有待复核，绿=这一站已铺完，灰=暂停或没有站内检索；有问题的排前面。点卡片＝暂停/恢复这一站，暂停只是这一轮不去敲门，那些格子仍算欠着。"
                                Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
                 </StackPanel>

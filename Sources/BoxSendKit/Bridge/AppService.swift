@@ -757,6 +757,8 @@ public final class AppService {
     private func assistPayload(plan: AssistPipeline.CatalogPlan, page: Int, cfg: AppConfig,
                                downloader: String, raw: Int, budget: Int,
                                summary: [String: Any]?) -> [String: Any] {
+        // 暂停名单随时在变，存的那份计划是扫描那一刻的：按当前名单推平再算
+        let plan = plan.applyingPaused(Set(cfg.assist?.pausedSites ?? []))
         let size = max(1, cfg.assist?.listPageSize ?? 10)
         let pageCount = max(1, (plan.torrents.count + size - 1) / size)
         let current = min(max(0, page), pageCount - 1)
@@ -817,10 +819,10 @@ public final class AppService {
 
     /// 覆盖率与待处理清单：扫描、翻页、跑完一轮都重算，两端画同一份数
     private func assistExtrasLocked(plan: AssistPipeline.CatalogPlan) -> [String: Any] {
+        let plan = plan.applyingPaused(Set(cfg.assist?.pausedSites ?? []))
         let live = assistLiveLocked()
         let cov = plan.coverage(live: live)
         let conf = cfg
-        let pausedIDs = Set(cfg.assist?.pausedSites ?? [])
         let nameOf: (String) -> String = { id in
             guard let s = conf.site(id) else { return id }
             return SiteRegistry.effectiveSite(s).name
@@ -846,7 +848,7 @@ public final class AppService {
                  "review": sp.review, "rejected": sp.rejected, "missing": sp.missing,
                  "failed": sp.failed, "filtered": sp.filtered, "paused": sp.paused,
                  "pending": sp.pending, "unsupported": sp.unsupported,
-                 "pausedSite": pausedIDs.contains(sp.siteID)]
+                 "pausedSite": sp.pausedSite]
             },
             "queue": items.map { item -> [String: Any] in
                 ["key": item.key, "siteID": item.siteID, "siteName": item.siteName,
@@ -1051,7 +1053,8 @@ public final class AppService {
     /// 快照里也带一份：Windows 端按快照轮询刷新，不必另开一条轮询
     private func assistStateLocked() -> [String: Any] {
         let live = assistLiveLocked()
-        let stats = assistPlan?.adjusted(live: live) ?? AssistPipeline.Tally()
+        let ui = assistPlan.map { $0.applyingPaused(Set(cfg.assist?.pausedSites ?? [])) }
+        let stats = ui?.adjusted(live: live) ?? AssistPipeline.Tally()
         let rows = Array(assistRows.values).sorted { $0.seq < $1.seq }.map { e -> [String: Any] in
             var d = Self.eventJSON(e)
             // 结论由核心库给：两端不必自己从文案里猜。跑过的以进展为准，没跑过的按计划
@@ -1068,7 +1071,7 @@ public final class AppService {
                 "autoRun": ["minutes": minutes,
                             "nextInMinutes": assistAutoRun.minutesLeft(minutes: minutes) as Any,
                             "lastRun": Self.dateText(assistAutoRun.lastRun.timeIntervalSince1970)]]
-        if let plan = assistPlan { out.merge(assistExtrasLocked(plan: plan)) { _, new in new } }
+        if let plan = ui { out.merge(assistExtrasLocked(plan: plan)) { _, new in new } }
         return out
     }
 
@@ -1127,7 +1130,8 @@ public final class AppService {
 
     /// 某一格在计划里的结论（拿上次扫描的分桶回查，不重新问状态）
     private func assistPlannedStatus(_ key: String) -> AssistPipeline.RowStatus? {
-        guard let plan = assistPlan else { return nil }
+        guard let plan = assistPlan?.applyingPaused(Set(cfg.assist?.pausedSites ?? []))
+        else { return nil }
         let parts = key.split(separator: "|", maxSplits: 1)
         guard parts.count == 2, let t = plan.byHash[parts[1].lowercased()] else { return nil }
         return plan.status(torrent: t, siteID: String(parts[0]))

@@ -1070,8 +1070,8 @@ public sealed class AssistSiteRow
     /// 「还有活儿」：没检索完，或暂停站里压着没结论
     public bool IsBusy => !Unsupported && (Searches > 0 || Paused);
     public string PauseText => Paused ? "继续" : "暂停";
-    public string PauseTip => Paused ? "取消暂停：下一轮这一站接着检索"
-        : "暂停这一站：这一轮不去敲门，格子仍算欠着";
+    public string PauseTip => (Paused ? "取消暂停：下一轮这一站接着检索"
+        : "暂停这一站：这一轮不去敲门，格子仍算欠着") + "；点卡片任意处都可以";
 
     public static AssistSiteRow From(JsonNode n) => new()
     {
@@ -1095,7 +1095,7 @@ public sealed class AssistSiteRow
 
     public static string Fingerprint(AssistSiteRow p) =>
         $"{p.SiteID}#{p.Resolved}#{p.Searches}#{p.Failed}#{p.Review}#{p.Paused}"
-        + $"#{p.Unsupported}#{p.State}";
+        + $"#{p.Unsupported}#{p.State}#{p.NextLine}#{p.Warn}";
 }
 
 /// 待处理队列的一行：站名、种子、结论、原因，外加这一条能点什么

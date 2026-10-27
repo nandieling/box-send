@@ -864,6 +864,36 @@ Windows 侧：
   不支持检索的站不被失败数抢颜色、卡片那三行文案各说各的、`rank` 顺序；`assist.scan` 载荷加断言：
   `siteProgress` 带 `state`/`stateRank`/`stateLine`）；`dotnet build` 0 错误。
 
+## 这一轮（逐站暂停当场见效：不必重新扫描）
+
+- 症状：站点卡片上按了暂停，什么都没变——颜色不变、数字不动，得重新扫描（那一下要好几秒）
+  才看得出效果。根因是暂停在 `planCatalog` 那一刻烤进了计划：`SiteBucket.pausedSite`、
+  `Tally` 的 `.pending`/`.paused`、`pendingBySite`、`counts["本站已暂停"]`、`willSearch`
+  全是那时算好的。执行本身倒是每次都现读配置（`run` 里 `cfg.isPaused(id)`），
+  所以只有「报数」是旧的。
+- **核心库**：`CatalogPlan.applyingPaused(_:)` 按当前名单把派生数推平——待辅种 ↔ 已暂停、
+  这一站还要检索几次、`counts` 那两项、`willSearch`、分桶里的暂停标记一次全改；
+  名单没变原样返回（那几万个 hash 集合只共享不复制）。`counts` 里那两个键名收成
+  `CatalogPlan.pausedKey` / `searchKey`，两处写数的地方共用，免得改一处漏一处。
+  不支持站内检索的站不再顺手标 `pausedSite`（暂停它没意义，卡片也不给点）。
+- **mac**：`assistStats` / `assistSiteProgress` / `assistCoverage` 走 `assistLivePlan`
+  （= 计划 `applyingPaused(当前名单)`）；新增 `assistSetPaused(_:paused:)`，改完名单顺手
+  把 `assistPlan` 与这一页的格子换成推平后的那份，卡片当场变脸、变位置。
+  卡片整张换成一个 `.plain` 按钮（原来只有右上那个小图标能点），悬停描边提「这儿能点」，
+  图标只报状态：实心 = 暂停中。
+- **Windows 要改**：不用加代码——载荷与快照里的 `siteProgress` 现在就按当前名单算，
+  `pausedSite` 直接取 `SiteProgress.pausedSite`（不再自己拿配置比）。
+  暂停一个站仍走 `config.patch`（改 `assist.pausedSites`）+ 600ms 快照轮询，点完下一拍就刷新。
+  `AssistView.xaml`：整张卡片 Border 挂 `MouseLeftButtonUp="OnPauseSite"`（按钮照留，
+  Button 会吃掉 MouseLeftButtonUp，不会翻两次），手型与「不支持检索回落到箭头」都收进
+  Style 的 Setter/Trigger（写在元素上会盖住 Trigger），`IsMouseOver` 提亮描边；
+  `AssistSiteRow.Fingerprint` 加上 `NextLine`/`Warn`，否则只有文案变会被指纹判成没变。
+- 验证：`swift test` 603 绿（新增 `testPausingASiteTakesEffectWithoutRescan`：暂停/恢复来回
+  推平、总数不动、覆盖率那句改口、格子结论与跳过原因跟着变、名单没变原样返回、
+  暂停不支持检索的站一格不动；`testPauseSiteIsReflectedWithoutRescan`：`config.patch` 之后
+  `assist.page` 的格子、`siteProgress` 卡片、快照的 `stats`/`coverage` 当场按新名单算）；
+  `dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

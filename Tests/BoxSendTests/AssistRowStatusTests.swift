@@ -377,6 +377,58 @@ final class AssistSnapshotStatsTests: XCTestCase {
         NSLog("实站覆盖率：%@（待处理 %@ 条）", cov?["line"] as? String ?? "-", String(queue.count))
     }
 
+    /// 暂停一个站不该要求重新扫描：改了名单，载荷与快照当场按新名单算
+    func testPauseSiteIsReflectedWithoutRescan() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("boxsend-assist-pause-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let cfgPath = dir.appendingPathComponent("boxsend.json").path
+        var app = AppConfig.template()
+        app.sourceSites = (0..<2).map {
+            SiteConfig(id: "s\($0)", name: "站\($0)", url: "https://s\($0).invalid/",
+                       framework: .nexusPHP, enabled: true)
+        }
+        app.assist = AssistConfig(siteIDs: ["s0", "s1"], perSiteIntervalSec: 0, jitterSec: 0,
+                                  roundBudget: 50, listPageSize: 2)
+        try JSONEncoder().encode(app).write(to: URL(fileURLWithPath: cfgPath))
+        let svc = try AppService(configPath: cfgPath, dataDir: dir.path)
+        svc.assistPipelineFactory = { cfg, client in
+            AssistPipeline(config: cfg, cookies: CookieStore(), state: svc.state,
+                           downloader: SeededDownloader(hashes: ["h1", "h2", "h3"]))
+        }
+        _ = try svc.invoke("assist.scan", [:])
+        _ = try svc.invoke("config.patch",
+                           ["patch": ["assist": ["pausedSites": ["s0"]]]])
+
+        let page = try svc.invoke("assist.page", ["page": 0])
+        let rows = (page["rows"] as? [[String: Any]]) ?? []
+        let pausedRows = rows.filter { ($0["siteID"] as? String) == "s0" }
+        XCTAssertEqual(pausedRows.count, 2)
+        XCTAssertTrue(pausedRows.allSatisfy { ($0["status"] as? String) == "paused" },
+                      "暂停站的格子当场改口，不等重新扫描")
+        XCTAssertTrue(pausedRows.allSatisfy {
+            (($0["skip"] as? String) ?? "").contains("本站已暂停")
+        })
+        XCTAssertTrue(rows.filter { ($0["siteID"] as? String) == "s1" }
+                        .allSatisfy { ($0["status"] as? String) == "pending" })
+
+        let cards = (page["siteProgress"] as? [[String: Any]]) ?? []
+        let card = cards.first { ($0["siteID"] as? String) == "s0" }
+        XCTAssertEqual(card?["state"] as? String, AssistPipeline.SiteState.paused.rawValue)
+        XCTAssertEqual(card?["pausedSite"] as? Bool, true)
+        XCTAssertEqual(card?["searches"] as? Int, 0)
+        XCTAssertTrue(((card?["nextLine"] as? String) ?? "").contains("已暂停"))
+
+        let assist = svc.snapshot()["assist"] as? [String: Any]
+        let lines = ((assist?["stats"] as? [String: Any])?["lines"] as? [[String: Any]]) ?? []
+        XCTAssertEqual(lines.first { ($0["status"] as? String) == "paused" }?["count"] as? Int, 3,
+                       "整库计数里暂停那一站的 3 格算「压着」")
+        XCTAssertEqual(lines.first { ($0["status"] as? String) == "pending" }?["count"] as? Int, 3)
+        let cov = assist?["coverage"] as? [String: Any]
+        XCTAssertEqual(cov?["searchesLeft"] as? Int, 3, "暂停那一站不计入要检索的量")
+    }
+
     /// 报几条种子的假下载器
     private final class SeededDownloader: Downloader {
         let torrents: [LocalTorrent]

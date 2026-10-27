@@ -281,9 +281,11 @@ public partial class AssistView : UserControl
 
     /// 暂停 / 取消暂停一个辅种站：卡片上那个按钮是开关，按现值翻一次，
     /// 写 assist.pausedSites，卡片底色跟着下一次快照变灰
+    /// 整张站点卡片都是暂停开关：点一下暂停/恢复这一站（不支持检索的站没什么可暂停）
     private void OnPauseSite(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: string id }) return;
+        if ((sender as FrameworkElement)?.DataContext is AssistSiteRow { Unsupported: true }) return;
         _model.PatchSection("assist", o =>
         {
             var list = (o["pausedSites"] as JsonArray ?? new JsonArray())
