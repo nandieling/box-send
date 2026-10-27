@@ -57,8 +57,8 @@ final class UploadFilenameTests: XCTestCase {
     }
 
     func testAsciiSafeNameKeepsWordChars() {
-        XCTAssertEqual(ReseedPipeline.asciiSafeName("中文 Title 2024 x265"), "Title.2024.x265")
-        XCTAssertEqual(ReseedPipeline.asciiSafeName("中文"), "")
+        XCTAssertEqual(SiteFileName.asciiName("中文 Title 2024 x265"), "Title.2024.x265")
+        XCTAssertEqual(SiteFileName.asciiName("中文"), "")
     }
 }
 

@@ -497,12 +497,58 @@ class Unit3DAdapter: SiteAdapter {
         s.hasPrefix("http") ? s : "https://movie.douban.com/subject/\(s)/"
     }
 
-    /// 发种文件名：与种子的 info.name 对齐，去掉站方不接受的字符
+    /// 发种文件名：与种子的 info.name 对齐，只留站方接受的字符（站方连中文名都不要）
     static func uploadFilename(_ base: String) -> String {
-        let cleaned = base.replacingOccurrences(of: "/", with: " ")
-            .replacingOccurrences(of: "\"", with: "'")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (cleaned.isEmpty ? "boxsend" : cleaned) + ".torrent"
+        let cleaned = SiteFileName.asciiName(base)
+        return (cleaned.count >= 4 ? cleaned : "boxsend") + ".torrent"
+    }
+
+    // MARK: - 上传前改写种子
+
+    /// 站方校验种子内部文件名，按 Windows 那套禁令来：中文合法，`<>:"/\|?*` 不合法。
+    /// 源站那条「南家三姐妹 再来一碗.Minami-ke: Okawari…mkv」带冒号，整单被打回
+    /// 「種子檔案含有非法檔名」。改名会换 info hash（与源站就是两条种子），这是站方规则逼的。
+    /// 只在真得改时重编码：本来合法的种子返回 nil，字节与 hash 都跟源站保持一致
+    static func legalizeTorrentNames(_ data: Data) -> (data: Data, renames: [String])? {
+        guard let root = BValue.decode(data), case .dict(let infoPairs) = root.dict("info") else {
+            return nil
+        }
+        var renames: [String] = []
+        func shown(_ b: Data) -> String { String(decoding: b, as: UTF8.self) }
+        func clean(_ v: BValue) -> BValue {
+            guard case .bytes(let b) = v, let fixed = SiteFileName.legalComponent(b) else { return v }
+            renames.append("\(shown(b)) → \(shown(fixed))")
+            return .bytes(fixed)
+        }
+        // path 是字符串列表；unpaired 编码里一段可能是 [utf8, 原字节] 两个串
+        func cleanPath(_ v: BValue) -> BValue {
+            guard case .list(let xs) = v else { return v }
+            return .list(xs.map { seg in
+                seg.listValues == nil ? clean(seg) : .list(seg.listValues!.map(clean))
+            })
+        }
+        func cleanFileEntry(_ v: BValue) -> BValue {
+            guard let pairs = v.dictPairs else { return v }
+            return .dict(pairs.map { (k, pv) in
+                (k, String(decoding: k, as: UTF8.self) == "path" ? cleanPath(pv) : pv)
+            })
+        }
+        var newInfo: [(Data, BValue)] = []
+        for (k, v) in infoPairs {
+            switch String(decoding: k, as: UTF8.self) {
+            case "name", "name.utf-8": newInfo.append((k, clean(v)))
+            case "files":
+                if case .list(let xs) = v { newInfo.append((k, .list(xs.map(cleanFileEntry)))) }
+                else { newInfo.append((k, v)) }
+            default: newInfo.append((k, v))
+            }
+        }
+        guard !renames.isEmpty else { return nil }
+        return (root.setting("info", to: .dict(newInfo)).encoded(), renames)
+    }
+
+    func prepareTorrentForUpload(_ data: Data, info: ReleaseInfo) -> (data: Data, renames: [String])? {
+        Self.legalizeTorrentNames(data)
     }
 
     /// 简介：站方为 Markdown/HTML 混排编辑器，沿用源站 HTML（图片绝对化、去源站链接）

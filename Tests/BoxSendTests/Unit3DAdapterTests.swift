@@ -172,7 +172,9 @@ final class Unit3DAdapterTests: XCTestCase {
         XCTAssertTrue(body.contains("name=\"bangumi\"\r\n\r\nhttps://bangumi.tv/subject/127573"), String(body.suffix(600)))
         XCTAssertTrue(body.contains("name=\"labelsNew\"\r\n\r\n中字"), String(body.suffix(600)))
         XCTAssertTrue(body.contains("name=\"scope\"\r\n\r\nNORMAL"))
-        XCTAssertTrue(body.contains("filename=\"摇曳百合.第三季.Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni.torrent\""),
+        // 上传用的文件名只留 ASCII（站方连中文名都不要）；
+        // 站台上显示的那条名字来自 name 字段，中文标题在上一行已验过
+        XCTAssertTrue(body.contains("filename=\"Yuru.Yuri.S03.2015.1080p.BluRay.Remux.AVC.LPCM.2.0-LuckAni.torrent\""),
                       String(body.suffix(600)))
     }
 

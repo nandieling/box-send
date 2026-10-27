@@ -210,9 +210,11 @@ public enum Bencode {
                     var m = j + 1
                     while m < data.count, data[m] != 0x65 {
                         if data[m] == 0x6C {
-                            guard let (first, nm) = readString(at: m + 1, data) else { return nil }
+                            // unpaired：这一段是 [utf8, 原字节]，取首项当名字，
+                            // 再整段跳过——只跳一个元素会把内层列表的 'e' 当成 path 的结尾
+                            guard let (first, _) = readString(at: m + 1, data) else { return nil }
                             segs.append(first)
-                            guard let nm2 = skipValue(at: nm, data) else { return nil }
+                            guard let nm2 = skipValue(at: m, data) else { return nil }
                             m = nm2
                         } else {
                             guard let (one, nm) = readString(at: m, data) else { return nil }
