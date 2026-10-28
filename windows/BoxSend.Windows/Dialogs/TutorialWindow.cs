@@ -7,7 +7,7 @@ namespace BoxSend.Windows.Dialogs;
 /// <summary>使用教程（与 mac 版同一套说明，Windows 上不带配图）。分节写在这里，改一处两端对照着改。</summary>
 public sealed class TutorialWindow : Window
 {
-    private static readonly (string Title, string[] Steps)[] Sections =
+    private static readonly (string Title, string[] Steps, string? Code)[] Sections =
     {
         ("1. 添加站点与分组", new[]
         {
@@ -17,7 +17,7 @@ public sealed class TutorialWindow : Window
             "组内排序：拖卡片右侧的把手拖到另一张卡片上，或在把手左边输入序号回车排到第几位（与 mac 版一致）。",
             "顶部「检测全部 cookie」批量检查 cookie / API Key 有效性，每张卡片上直接显示结果，检测中可「停止检测」；「移除站点」「移除分组」均需两次确认。",
             "支持「帖子免费1天」的站点（如猫站）卡片上会出现「发种后免费一天」开关：打开后发种成功就自动点一次站内免费按钮（要扣站内积分）；帖子已在免费满一天时不重复扣。",
-        }),
+        }, null),
         ("2. Cookie：PT-depiler Gist 与 CookieCloud", new[]
         {
             "两路都是「浏览器插件采集 → 云端存一份密文 → 本软件拉回来」：Gist 存 GitHub，CookieCloud 存自己的服务器。两路互为补充，某一站在一路过期时同步会用另一路补上，本地检测有效的 cookie 不会被覆盖。",
@@ -28,7 +28,7 @@ public sealed class TutorialWindow : Window
             "浏览器装 CookieCloud 扩展（easychen/CookieCloud，Chrome/Edge/Firefox 都能装），设置里填服务器地址，点「上传」后扩展会显示自己的 KEY（一串 UUID）和你设的加密密码。",
             "本软件「CookieCloud 同步」填服务器地址、KEY（UUID）、端对端加密密码（必须与扩展里的密码一致）：拉回 GET {服务器}/get/{KEY} 后在本地解密，再覆盖本地 cookie。",
             "两张卡片的「轮询」最小 5 分钟，打开「自动定时同步」到点自动拉；想立刻拉一次点该卡片的「立即同步」，或到「站点分组」页顶部点「同步 Cookie」两路一起同步，同步完自动复检 cookie。",
-        }),
+        }, null),
         ("3. 批量转种", new[]
         {
             "「批量转种」页粘贴种子详情页链接，勾选「转种到目标站」与「推送到下载器」。",
@@ -37,7 +37,7 @@ public sealed class TutorialWindow : Window
             "按分组顺序执行：获取种子 → 依次上传到组内已开启站点（限速取站点设置，新增时默认跟分组限速）→ 转种成功的种子自动推送到下载器。",
             "需要注明转种来源时勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介最上面；源站自带引用的不用勾。",
             "页面下半部分左栏是逐站转种结果，右栏是下载器推送结果。",
-        }),
+        }, null),
         ("4. 推送到下载器", new[]
         {
             "「设置」页「下载器」填 Web UI 地址、用户名与密码：qBittorrent 要在首选项里打开 Web UI 并取消「仅本机 localhost」，或经 VPS 隧道 / 反向代理暴露出来。",
@@ -46,7 +46,7 @@ public sealed class TutorialWindow : Window
             "保存路径留空用下载器默认目录，分类留空不打标签；「添加后跳过校验」按自己的下载习惯决定。",
             "「VPS 剩余空间」与「超过剩余空间时」的提醒 / 跳过策略是推送前的空间保护：qB WebAPI 读不到磁盘容量，这个数字要自己维护。",
             "转种成功的种子自动推到这台下载器；逐站上传限速在「站点分组」页按分组或站点填。",
-        }),
+        }, null),
         ("5. 转种服务器测速（SSH）", new[]
         {
             "部分服务器 24 小时上传流量到 2T 后，会把上行悄悄压到 20 MB/s 左右：站点照样能发种，但整批下载都变慢。",
@@ -54,28 +54,50 @@ public sealed class TutorialWindow : Window
             "「测试连接并测速」立刻连一次：显示服务器主机名与每轮实测速度。",
             "「批量转种」页「开始运行」左边有「测试上传速度」：随时点一下，实测速度显示在按钮下面那一行，不做自动判定——速度不理想就等一等再转，不测也能直接开转。",
             "测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行；测速地址可换成自己的接收端。",
-        }),
-        ("6. TMDB 链接自动反查", new[]
+        }, null),
+        ("6. TMDB 反查与自建网关（Cloudflare Workers）", new[]
         {
-            "部分站点（如杜比）把 TMDB 链接设为必填，源站简介里没有 TMDB 时发种会被拒。",
-            "「设置」页勾选「发种时自动补 TMDB 链接」：发种前用种子的 IMDb 号或豆瓣号去查条目号，填进目标站的 TMDB 输入框；查不到时留空，由你手动填写。",
-            "国内直连 api.themoviedb.org 常不通：在「API 代理网关地址」填自己的网关，留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写会先按你填的试、404 再自动补 /3 重试。",
-            "网关只是转发时仍要填 TMDB 的 API Key；只有网关自己代填 Key 时才留空。",
-            "「测试查询」用一条固定片例验证网关是否可用。",
-        }),
+            "部分站点（如杜比）把 TMDB 链接设为必填，源站简介里没有 TMDB 时发种会被拒；勾选「发种时自动补 TMDB 链接」后，发种前用种子的 IMDb 号或豆瓣号去查条目号填进目标站，查不到就留空由你手填。",
+            "国内直连 api.themoviedb.org 常不通，拿自己的网关顶上去：「API 代理网关地址」留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://tmdb.我的名字.de5.net/tmdb0512/3），漏写软件会自动补一次再试。网关只做转发时仍要填 TMDB 的 API Key，只有网关代填 Key 时才留空。",
+            "① 拿域名：在 my.dnshe.com 注册账号（邮箱 + 密码，点一下邮箱验证），进会员中心「免费域名」申请一个 de5.net 的名字（如 myname，得到 myname.de5.net）；免费域名一年到期要在面板里点一次续期。",
+            "② 接入 Cloudflare：dash.cloudflare.com 注册后点「Add a site」，主机名填完整那串 myname.de5.net（Cloudflare 允许把这种子域当成一个独立站点/区域），选 Free 计划，它会给你两台 NS，形如 evan.ns.cloudflare.com / irma.ns.cloudflare.com。",
+            "③ 交出解析权：回 my.dnshe.com 的域名管理，把这两台 NS 填进该域名的独立解析 / NS 托管并保存（父域 de5.net 的 NS 仍是 dnshe 的，靠这条子域 NS 记录把解析权交给 Cloudflare）。等几十分钟后用 dig NS myname.de5.net 验，返回 cloudflare 那两台就是生效了。",
+            "④ 部署 Worker：Cloudflare 控制台「Workers & Pages → Create → Worker」，把下面这段贴进去 Deploy。UPSTREAM 固定是 TMDB 官方接口，PREFIX 是自己随手起的暗号段（如 /tmdb0512），只有带这个前缀的路径才转发，别人不知道前缀就蹭不动你的额度。",
+            "⑤ 绑域名：该 Worker 的 Settings → Domains & Routes → Add → Custom domain，填 tmdb.myname.de5.net（主机名 tmdb），Cloudflare 会自动写 CNAME、签 HTTPS 证书，保持橙云（Proxied）即可；证书一般几十秒到几分钟就绪。",
+            "⑥ 填回软件：网关地址填 https://tmdb.myname.de5.net/tmdb0512/3，点「测试查询」应回成功；浏览器直接打开同地址加 ?query=city&api_key=你的Key 也能出 JSON。不带 Key 会回 401，那说明网关已通、只是缺 Key。",
+            "Workers 免费版每天 10 万次请求，转种这点查询量远远用不完；域名一年一续，别忘了续。",
+        }, WorkerCode),
         ("7. 软件更新", new[]
         {
             "更新地址就是项目仓库 https://github.com/nandieling/box-send，「设置」页「软件更新」卡片能看到当前版本并检查新版本。",
             "默认每次启动在后台查一次（只读 GitHub 的发布接口，不上传任何本机数据）；不想自动查就关掉「启动时自动检查」。",
             "发现新版本点「下载 x.y.z 安装包」，装新的即可：站点、Cookie、限速与主题设置都存在本机，升级不会被动到。",
-        }),
+        }, null),
         ("8. 外观设置", new[]
         {
             "「设置」页选择渐变主题；主题渐变、强调色与明暗模式覆盖窗口、页签与所有弹窗。",
             "可添加背景图片（PNG/JPG）并用滑块调整透明度，不改变窗口与各区块的大小比例。",
             "窗口最大化时顶部页签会自动放大一档，方便远距离点选。",
-        }),
+        }, null),
     };
+
+    /// TMDB 反代 Worker 脚本（与 mac 版教程同一段）
+    private const string WorkerCode = """
+const UPSTREAM = "https://api.themoviedb.org";
+const PREFIX = "/tmdb0512";              // 自己的暗号段，与网关地址里那段保持一致
+export default {
+  async fetch(req, env) {
+    const u = new URL(req.url);
+    if (!u.pathname.startsWith(PREFIX)) return new Response("no", { status: 404 });
+    const url = new URL(UPSTREAM + u.pathname.slice(PREFIX.length) + u.search);
+    const key = env.TMDB_KEY || "";      // 配在 Worker 的 Variables 里；不配就得在软件里填 Key
+    if (key && !url.searchParams.has("api_key")) url.searchParams.set("api_key", key);
+    const r = await fetch(url, { method: req.method, headers: req.headers,
+                                 body: req.body, redirect: "follow" });
+    return new Response(r.body, { status: r.status, headers: r.headers });
+  }
+}
+""";
 
     public TutorialWindow()
     {
@@ -86,7 +108,7 @@ public sealed class TutorialWindow : Window
         Background = PromptWindow.Themed("DialogBackground", "#1F2530");
 
         var body = new StackPanel { Margin = new Thickness(16, 16, 20, 16) };
-        foreach (var (title, steps) in Sections)
+        foreach (var (title, steps, code) in Sections)
         {
             body.Children.Add(new TextBlock
             {
@@ -103,6 +125,22 @@ public sealed class TutorialWindow : Window
                     FontSize = 12.5,
                     Margin = new Thickness(10, 0, 0, 4),
                     Foreground = (Brush)Application.Current.Resources["TextMuted"],
+                });
+            if (code != null)
+                // Worker 脚本单独一块等宽底框，选中就能直接抄走
+                body.Children.Add(new Border
+                {
+                    Background = (Brush)Application.Current.Resources["BlockSurface"],
+                    CornerRadius = new CornerRadius(6),
+                    Padding = new Thickness(8),
+                    Margin = new Thickness(10, 2, 0, 4),
+                    Child = new TextBlock
+                    {
+                        Text = code,
+                        FontFamily = new FontFamily("Consolas, Cascadia Mono, monospace"),
+                        FontSize = 11.5,
+                        TextWrapping = TextWrapping.NoWrap,
+                    },
                 });
             body.Children.Add(new FrameworkElement { Height = 14 });
         }

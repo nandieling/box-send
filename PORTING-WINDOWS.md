@@ -952,6 +952,28 @@ Windows 侧：
   `名字（卡片标题显示）`、区块标题 `下载器（推送用这一台）`，Windows 同一处按
   `_model.AssistEnabled` 分岔。别在收起状态下还提「用途下拉」——那栏根本不摆。
 
+## 这一轮（教程配图重拍 + Cloudflare Workers 反代 TMDB 那一段）
+
+- 配图五张全部重拍（sites / run / cookies / downloader / settings，880 宽）：不再是你
+  机器上那份真实配置的样子，而是同一份配置的脱敏版（SSH 地址换 198.51.100.24、
+  TMDB 网关换 tmdb.myname.de5.net、CookieCloud 换 cookie.example.com、下载器换
+  qb.myname.de5.net，token/密码一律 demo 值），外观统一设成深空蓝无壁纸，跟页脚那句
+  「截图为深色主题示例」对得上。
+- 拍法：`AppPaths.dir` 认 `BOXSEND_DATA_DIR`（指个空目录就用另一份配置跑，不动本机那份），
+  截图来自 Computer Use 的 `getScreenshot` 返回的 JPEG Buffer，用
+  `await import('node:fs')` 落盘（`{write:true, path}` 那套写到看不见的位置，别再用），
+  滚动用 `scroll(idx,"up"|"down")` 或直接对滚动区做 `performSecondaryAction(idx,"Scroll Down")`。
+  换标签页以后元素序号全变，先重取状态再动手。
+- 教程第 6 节扩成「TMDB 反查与自建网关（Cloudflare Workers）」：my.dnshe.com 注册免费
+  de5.net 域名 → Cloudflare「Add a site」把 `名字.de5.net` 整串当一个区域 → 把 Cloudflare 给的
+  两台 NS 填回 dnshe 的子域 NS 托管（父域 NS 仍是 dnshe，实测 `dig NS 名字.de5.net` 回
+  `*.ns.cloudflare.com`）→ Worker 脚本按 `PREFIX` 前缀转发到 api.themoviedb.org →
+  Settings → Domains & Routes 绑 `tmdb.名字.de5.net`。脚本作为代码块渲染：mac 的
+  `section(...)` 多了 `code:` 参数（放在 `steps:` 后面，Swift 要求实参按声明顺序），
+  Windows 的 `Sections` 元组多带一个 `string? Code`，非空就渲染成等宽底框。
+- 两处教程正文别只改一边：mac `Views.swift` 的 `TutorialSheet` 与 Windows
+  `Dialogs/TutorialWindow.cs` 的 `Sections` 是同一套说明的两个副本。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
