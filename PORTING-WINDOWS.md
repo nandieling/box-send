@@ -994,6 +994,24 @@ Windows 侧：
   「不用每年续，接入 Cloudflare 后 DNS 解析正常就一直有效」，页脚也改成要盯的是 Cloudflare
   那边的解析别被删。
 
+## 这一轮（出包：mac 出 dmg，Win 出 Setup.exe，包名都带版本号）
+
+- mac 不再交付 zip：`scripts/make-app.sh` 打完 `.app` 直接用系统自带的 `hdiutil` 造
+  `dist/BoxSend-<版本>-macos.dmg`（临时目录放 `.app` 加一个 `ln -s /Applications` 的替身，
+  `-format UDZO` 只读压缩，卷标 `BoxSend <版本>`）。本地和 CI 走同一条路，别再在 workflow 里
+  单独 `ditto -c -k` 压 zip——教程早就跟用户说「双击 dmg」，产物终于对上了。
+  工作流那步改名「打包 dmg」，产物名 `macos-dmg`、路径 `dist/BoxSend-*-macos.dmg`，
+  发版 `gh release` 取同一份。
+- 脚本坑：`echo "$DMG（…）"` 这种全角括号紧贴变量名的写法，bash 会把括号的字节算进变量名，
+  `set -u` 下直接 unbound；中文提示里的变量一律写 `${VAR}`。
+- Win 安装包名从 `BoxSend-<版本>-win-x64.exe` 改成 `BoxSend-<版本>-Setup.exe`
+  （`boxsend.iss` 的 `OutputBaseFilename`），`windows\README.md` 三处文件名同步。
+  工作流那边按 `windows/installer/Output/*.exe` 收，不挑名字，不用改。
+- 应用内「检查更新」只读 `releases/latest` 的 `tag_name`（`Util/Update.swift`），
+  不看资产名，所以改包名不会把升级功能改坏。
+- 验过：`hdiutil verify` 校验通过，挂载后卷里是 `BoxSend.app` + `Applications` 替身，
+  卷内 app `codesign -v --deep` 过（ad-hoc 签名，从 GitHub 下下来仍要右键打开）。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

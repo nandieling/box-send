@@ -5,7 +5,7 @@
 
 ```powershell
 .\windows\build.ps1            # 出绿色版目录 windows\publish\
-.\windows\build.ps1 -Setup     # 再打成 windows\installer\Output\BoxSend-x.y.z-win-x64.exe
+.\windows\build.ps1 -Setup     # 再打成 windows\installer\Output\BoxSend-x.y.z-Setup.exe
 ```
 
 ## 前置
@@ -48,7 +48,7 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
    LZMA2 压完安装包约为其三分之一（mac 版 `.app` 是 7.4 MB，差距全在运行时本体）。
    嫌大就加 `-FrameworkDependent` 换回框架依赖：成品 1 MB 内，代价是用户得先装 .NET 8 桌面运行时。
    （WPF 不支持裁剪，`PublishTrimmed` 用不上，这块体积省不动。）
-4. `-Setup` 时调 Inno Setup，产出 `windows\installer\Output\BoxSend-<版本>-win-x64.exe`。
+4. `-Setup` 时调 Inno Setup，产出 `windows\installer\Output\BoxSend-<版本>-Setup.exe`。
    版本号从核心库 `Sources\BoxSendKit\Util\Version.swift` 读（写进未入库的 `installer\version.inc`），
    安装包名、exe 属性里的版本、界面右上角显示的版本永远是同一个数，只在 `Version.swift` 里改一次。
    安装向导是简体中文：语言文件已随仓库带在 `installer/Languages/ChineseSimplified.isl`
@@ -77,7 +77,7 @@ CI 里这两样由 workflow 负责：`SDKROOT` 从注册表读出来写进 `GITH
 | 提 PR / 推 main | 只跑两平台的测试 |
 
 手动运行：Actions 页左侧选 `打包` → 右侧「Run workflow」→ 选分支/tag 与平台 → 绿色按钮。
-产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.2-win-x64.exe`）。
+产物在该次运行的 Summary 页底部「Artifacts」里下载（安装包文件名形如 `BoxSend-1.3-Setup.exe`）。
 
 Windows 作业会自己下载安装器装 Swift 工具链（runner 没预装，Windows 那侧官方只发 `.exe`，没有 zip；
 runner 是 Server 镜像、里面也没有 winget，所以走 curl 直连，两 GB 十几秒就下来了）。

@@ -1,4 +1,5 @@
-# 出包流水线：macOS 的 BoxSend.app 与 Windows 的安装包，同一套版本号（只改 Version.swift）
+# 出包流水线：macOS 的 dmg 与 Windows 的 Setup.exe，同一套版本号（只改 Version.swift）
+# 包名都带软件名与版本号：BoxSend-<版本>-macos.dmg / BoxSend-<版本>-Setup.exe
 #
 #   推 tag（仓库现在的 tag 形如 1.1）→ 两个平台的包直接挂到 GitHub Release
 #   Actions 页面手动运行              → 只构建并留 artifact，不发版
@@ -52,43 +53,43 @@ jobs:
           swift build --build-tests || { echo "!! 测试目标编译就没过"; exit 1; }
           swift test 2>&1 | grep -E "error:|Fatal error|failed|Executed .* tests" | tail -40
           # 过滤日志会让退出码变成 tail 的，这里取回 swift test 自己的。
-          # 用例红不在这里判：这一步红会把「打包 .app」一起跳过，连个产物都不留；
+          # 用例红不在这里判：这一步红会把「打包 dmg」一起跳过，连个产物都不留；
           # 状态记进 outputs.gate，红叉挪到作业最后那步亮，包照打（与 Windows 那侧一致）
           code="${PIPESTATUS[0]}"
           gate=false
           if [ "$code" -ne 0 ]; then
             gate=true
-            echo "::error::swift test 没过（退出码 ${code}）：.app 照打，红叉在作业最后一步亮"
+            echo "::error::swift test 没过（退出码 ${code}）：dmg 照打，红叉在作业最后一步亮"
           fi
           echo "gate=$gate" >> "$GITHUB_OUTPUT"
 
-      - name: 打包 .app
-        run: |
-          bash scripts/make-app.sh
-          ditto -c -k --keepParent dist/BoxSend.app "BoxSend-$(sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/BoxSendKit/Util/Version.swift | head -1)-macos.zip"
+      - name: 打包 dmg
+        # make-app.sh 一次产出 dist/BoxSend.app 与 dist/BoxSend-<版本>-macos.dmg；
+        # 出包只留 dmg：拖去「应用程序」就能装，教程里跟用户说的也是 dmg
+        run: bash scripts/make-app.sh
 
       - name: 留产物
         uses: actions/upload-artifact@v7
         with:
-          name: macos-app
-          path: BoxSend-*-macos.zip
+          name: macos-dmg
+          path: dist/BoxSend-*-macos.dmg
 
       - name: 发版时传上 Release
         # 测试红的时候包照打，但不让它进 Release：那份产物留在 artifact 里查
         if: ${{ startsWith(github.ref, 'refs/tags/') && steps.test.outputs.gate != 'true' }}
         run: |
           tag="${GITHUB_REF_NAME}"
-          file=$(ls BoxSend-*-macos.zip)
+          file=$(ls dist/BoxSend-*-macos.dmg)
           gh release create "$tag" "$file" --title "BoxSend $tag" --notes "见 README 使用教程" 2>/dev/null ||
             gh release upload "$tag" "$file" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # 硬门禁在这里落地：那时 .app 已经留在产物里了，红叉不会再连包一起吞掉
+      # 硬门禁在这里落地：那时 dmg 已经留在产物里了，红叉不会再连包一起吞掉
       - name: 核心库测试没过
         if: ${{ !cancelled() && steps.test.outputs.gate == 'true' }}
         run: |
-          echo 'swift test 没过：.app 已经在产物里，先看上面「测试」那步'
+          echo 'swift test 没过：dmg 已经在产物里，先看上面「测试」那步'
           exit 1
 
   Windows:

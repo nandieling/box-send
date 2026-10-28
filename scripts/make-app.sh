@@ -61,5 +61,20 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 sed -i '' "s/__VERSION__/${VERSION}/" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
+
+# 安装镜像：卷里一份 .app 加一个指到「应用程序」的替身，打开就是拖一下那种形态。
+# hdiutil 是系统自带，不需要 create-dmg；UDZO = 只读压缩，卷标带版本号，
+# 装的时候边栏里能分清是哪一版
+DMG="dist/BoxSend-${VERSION}-macos.dmg"
+STAGE="dist/dmg-staging"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+cp -R "$APP" "$STAGE/BoxSend.app"
+ln -s /Applications "$STAGE/Applications"
+rm -f "$DMG"
+hdiutil create -quiet -volname "BoxSend ${VERSION}" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+rm -rf "$STAGE"
+
 echo "构建完成: $APP"
+echo "安装镜像: ${DMG}（$(du -h "$DMG" | cut -f1)）"
 echo "运行: open $APP"
