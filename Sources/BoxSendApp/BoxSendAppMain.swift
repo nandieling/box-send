@@ -15,5 +15,12 @@ struct BoxSendAppMain: App {
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
+
+        // 教程单独一扇窗：与主窗并排摆着边看边设，不像工作表那样把主窗挡死
+        Window("使用教程", id: "tutorial") {
+            TutorialView()
+                .environmentObject(model)
+        }
+        .defaultSize(width: 640, height: 700)
     }
 }

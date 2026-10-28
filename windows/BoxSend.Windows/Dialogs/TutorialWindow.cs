@@ -58,14 +58,14 @@ public sealed class TutorialWindow : Window
         ("6. TMDB 反查与自建网关（Cloudflare Workers）", new[]
         {
             "部分站点（如杜比）把 TMDB 链接设为必填，源站简介里没有 TMDB 时发种会被拒；勾选「发种时自动补 TMDB 链接」后，发种前用种子的 IMDb 号或豆瓣号去查条目号填进目标站，查不到就留空由你手填。",
-            "国内直连 api.themoviedb.org 常不通，拿自己的网关顶上去：「API 代理网关地址」留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://tmdb.我的名字.de5.net/tmdb0512/3），漏写软件会自动补一次再试。网关只做转发时仍要填 TMDB 的 API Key，只有网关代填 Key 时才留空。",
-            "① 拿域名：在 my.dnshe.com 注册账号（邮箱 + 密码，点一下邮箱验证），进会员中心「免费域名」申请一个 de5.net 的名字（如 myname，得到 myname.de5.net）；免费域名一年到期要在面板里点一次续期。",
+            "国内直连 api.themoviedb.org 常不通，拿自己的网关顶上去：「API 代理网关地址」留空即走官方接口；地址要写到版本号那一层（末尾带 /3，如 https://tmdb.我的名字.de5.net/tmdb123/3），漏写软件会自动补一次再试。网关只做转发时仍要填 TMDB 的 API Key，只有网关代填 Key 时才留空。",
+            "① 拿域名：在 my.dnshe.com 注册账号（邮箱 + 密码，点一下邮箱验证），进会员中心「免费域名」申请一个 de5.net 的名字（如 myname，得到 myname.de5.net）；这种免费域名不用每年续，只要接入 Cloudflare 后 DNS 解析正常，就一直有效。",
             "② 接入 Cloudflare：dash.cloudflare.com 注册后点「Add a site」，主机名填完整那串 myname.de5.net（Cloudflare 允许把这种子域当成一个独立站点/区域），选 Free 计划，它会给你两台 NS，形如 evan.ns.cloudflare.com / irma.ns.cloudflare.com。",
             "③ 交出解析权：回 my.dnshe.com 的域名管理，把这两台 NS 填进该域名的独立解析 / NS 托管并保存（父域 de5.net 的 NS 仍是 dnshe 的，靠这条子域 NS 记录把解析权交给 Cloudflare）。等几十分钟后用 dig NS myname.de5.net 验，返回 cloudflare 那两台就是生效了。",
-            "④ 部署 Worker：Cloudflare 控制台「Workers & Pages → Create → Worker」，把下面这段贴进去 Deploy。UPSTREAM 固定是 TMDB 官方接口，PREFIX 是自己随手起的暗号段（如 /tmdb0512），只有带这个前缀的路径才转发，别人不知道前缀就蹭不动你的额度。",
+            "④ 部署 Worker：Cloudflare 控制台「Workers & Pages → Create → Worker」，把下面这段贴进去 Deploy。UPSTREAM 固定是 TMDB 官方接口，PREFIX 是自己随手起的暗号段（如 /tmdb123），只有带这个前缀的路径才转发，别人不知道前缀就蹭不动你的额度。",
             "⑤ 绑域名：该 Worker 的 Settings → Domains & Routes → Add → Custom domain，填 tmdb.myname.de5.net（主机名 tmdb），Cloudflare 会自动写 CNAME、签 HTTPS 证书，保持橙云（Proxied）即可；证书一般几十秒到几分钟就绪。",
-            "⑥ 填回软件：网关地址填 https://tmdb.myname.de5.net/tmdb0512/3，点「测试查询」应回成功；浏览器直接打开同地址加 ?query=city&api_key=你的Key 也能出 JSON。不带 Key 会回 401，那说明网关已通、只是缺 Key。",
-            "Workers 免费版每天 10 万次请求，转种这点查询量远远用不完；域名一年一续，别忘了续。",
+            "⑥ 填回软件：网关地址填 https://tmdb.myname.de5.net/tmdb123/3，点「测试查询」应回成功；浏览器直接打开同地址加 ?query=city&api_key=你的Key 也能出 JSON。不带 Key 会回 401，那说明网关已通、只是缺 Key。",
+            "Workers 免费版每天 10 万次请求，转种这点查询量远远用不完；de5.net 域名本身不用续期，要盯的是 Cloudflare 那边的解析别被删掉。",
         }, WorkerCode),
         ("7. 软件更新", new[]
         {
@@ -84,7 +84,7 @@ public sealed class TutorialWindow : Window
     /// TMDB 反代 Worker 脚本（与 mac 版教程同一段）
     private const string WorkerCode = """
 const UPSTREAM = "https://api.themoviedb.org";
-const PREFIX = "/tmdb0512";              // 自己的暗号段，与网关地址里那段保持一致
+const PREFIX = "/tmdb123";              // 自己的暗号段，与网关地址里那段保持一致
 export default {
   async fetch(req, env) {
     const u = new URL(req.url);
@@ -99,9 +99,37 @@ export default {
 }
 """;
 
+    private static TutorialWindow? Shared;
+
+    /// 打开（或回到）这份说明：非模态，主窗右侧有地方就贴过去并排摆着，边看边设
+    public static void Open(Window? owner)
+    {
+        var w = Shared ??= new TutorialWindow();
+        if (!w.IsLoaded && !ReferenceEquals(w.Owner, owner)) w.Owner = owner;
+        if (owner != null && !w.IsLoaded)
+        {
+            var right = owner.Left + owner.Width + 8;
+            var maxRight = SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth;
+            if (right + 520 <= maxRight)
+            {
+                w.WindowStartupLocation = WindowStartupLocation.Manual;
+                w.Left = right;
+                w.Top = owner.Top;
+            }
+        }
+        if (!w.IsVisible) w.Show();
+        w.Activate();
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        Shared = null;
+        base.OnClosed(e);
+    }
+
     public TutorialWindow()
     {
-        Title = "BoxSend 使用教程";
+        Title = "BoxSend 使用说明";
         Width = 760;
         Height = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

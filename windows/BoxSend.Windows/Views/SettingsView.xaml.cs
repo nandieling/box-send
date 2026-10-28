@@ -359,7 +359,7 @@ public partial class SettingsView : UserControl
     }
 
     private void OnTutorial(object sender, RoutedEventArgs e) =>
-        new Dialogs.TutorialWindow { Owner = Window.GetWindow(this) }.ShowDialog();
+        Dialogs.TutorialWindow.Open(Window.GetWindow(this));
 
     private void OnTmdbToggled(object sender, RoutedEventArgs e) => SaveTMDB();
 

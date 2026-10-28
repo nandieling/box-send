@@ -64,7 +64,7 @@ public final class TMDBResolver {
         self.apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 接口前缀候选：镜像常把 TMDB 挂在站点子路径下（…/tmdb0512），少写版本号会整站 404，
+    /// 接口前缀候选：镜像常把 TMDB 挂在站点子路径下（…/tmdb123），少写版本号会整站 404，
     /// 所以地址没以 /1 /3 /4 结尾时自动补一个 /3 候选
     public static func baseCandidates(from base: String) -> [String] {
         let clean = base.trimmingCharacters(in: .whitespacesAndNewlines)

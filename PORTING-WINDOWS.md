@@ -974,6 +974,26 @@ Windows 侧：
 - 两处教程正文别只改一边：mac `Views.swift` 的 `TutorialSheet` 与 Windows
   `Dialogs/TutorialWindow.cs` 的 `Sections` 是同一套说明的两个副本。
 
+## 这一轮（教程去配图，改成能跟主窗并排的独立窗口）
+
+- 教程不再内嵌配图：`Resources/tutorial/` 五张 jpg 全删，`scripts/make-app.sh` 里那段
+  `cp Resources/tutorial/*.jpg` 一并去掉，mac 侧 `tutorialImage(_:)` 和 `section(...)` 的
+  `image:` 参数也拆了（`section` 现在只留 `steps:` 与 `code:`，声明顺序仍是先标题再 `steps:`
+  再 `code:`，Swift 实参必须按这个顺序写）。配图这事先有过两轮，删干净比留着半套强。
+- mac 教程从工作表改成真正的第二扇窗：`BoxSendAppMain.swift` 加了
+  `Window("使用教程", id: "tutorial")` scene，`TutorialSheet` 更名 `TutorialView`，
+  设置页用 `@Environment(\.openWindow)` 的 `openTutorialWindow(id: "tutorial")` 打开，
+  原来的 `.sheet(isPresented: $showTutorial)` 删掉。关闭窗口用 `@Environment(\.dismiss)`，
+  不能用 `dismissWindow`（那是 macOS 14，本包最低 .macOS(.v13)）。
+  `frame` 从固定尺寸改成 `minWidth/maxWidth/maxHeight`，窗口才能随便拉。
+- Windows 同步为非模态：`TutorialWindow.Open(Window? owner)` 静态方法持有单例，主窗右侧
+  宽度够（≥520）就把窗口贴过去并排摆着，`OnClosed` 清单例；`SettingsView.xaml.cs` 从
+  `ShowDialog()` 换成这一句。两边都是「打开后与主窗并列，边看边设」。
+- 教程正文两处一并改，且 mac 与 Windows 两个副本必须逐字对齐：TMDB 网关示例里的暗号段
+  统一 `tmdb0512` → `tmdb123`（含 Worker 脚本 `PREFIX`）；de5.net 免费域名的续费说法纠正为
+  「不用每年续，接入 Cloudflare 后 DNS 解析正常就一直有效」，页脚也改成要盯的是 Cloudflare
+  那边的解析别被删。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
