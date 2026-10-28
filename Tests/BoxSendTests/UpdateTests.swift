@@ -48,9 +48,10 @@ final class UpdateTests: XCTestCase {
 
     /// 更新提示要对得上打包时写进 Info.plist 的那个版本号
     func testCurrentVersion() {
-        XCTAssertEqual(BoxSendVersion.version, "1.2")
+        XCTAssertEqual(BoxSendVersion.version, "1.3")
         XCTAssertFalse(SoftwareUpdate.isNewer("1.0", than: BoxSendVersion.version), "1.0 不该提示更新")
-        XCTAssertTrue(SoftwareUpdate.isNewer("1.3", than: BoxSendVersion.version))
+        // 拿个明显更高的版本比对，省得每次升版本都要改这一行
+        XCTAssertTrue(SoftwareUpdate.isNewer("99.0", than: BoxSendVersion.version))
         XCTAssertEqual(SoftwareUpdate.releasesURL, "https://github.com/nandieling/box-send/releases")
         XCTAssertEqual(SoftwareUpdate.latestAPIURL,
                        "https://api.github.com/repos/nandieling/box-send/releases/latest")

@@ -922,6 +922,36 @@ Windows 侧：
   测收起时 `version.features.assist == false`、`assist.scan` 抛「先收起来」、
   快照 `assist.enabled == false`。`swift test` 604 绿，`dotnet build` 0 错误。
 
+## 这一轮（1.3：种子框收成一半、下载器只留一台、教程重写）
+
+- **种子链接输入框**：mac 用 `SeedCardWidthKey` 把区块实测宽度从 `GeometryReader`
+  背景读回来，输入框 `.frame(maxWidth: 宽/2)`（窄于 460 不收，免得挤成一条缝）。
+  Windows 不用测宽：标题那行 `DockPanel LastChildFill="False"`，输入框单独放进
+  一个两等分列的 `Grid`，占第一列——两边都是「正好一半」，不靠魔法数字。
+- **下载器只留一台**：多下载器本就为辅种而存在，所以收起条件复用 `AssistFeature`
+  而不是新加开关。mac 走 `AppModel.visibleDownloaders`（收起时只回 `reseedDownloader`），
+  卡片列表、`rolesCard` 里的「添加一台」与两个用途下拉、卡片上的「删除这台」都按它摆；
+  Windows 加同名的 `AppModel.VisibleDownloaders`，`BuildCards` 用它，构造时按
+  `AssistEnabled` 把 `AddRow`/`RoleRow` 收起、`CardFor` 不再挂「删除这台」。
+  两边卡片标题都只报输入的名字（空回「下载器」），地址留在输入框里不再上标题。
+- **版本 1.3**：`Util/Version.swift` 一处改，`make-app.sh` 写进 Info.plist；
+  `BoxSend.Windows.csproj` 的 `<Version>` 跟到 1.3.0。`UpdateTests.testCurrentVersion`
+  原来写死 `isNewer("1.3", than: 当前)`，升版本必炸，改用 `99.0` 比对。
+- **使用教程**：mac `TutorialSheet` 不再走 `.boxsendAppearance()`（那层会铺壁纸，
+  字压在图上读不动），改贴新的 `BoxSendThemeBackground`——只走主题渐变再压深一层，
+  段落字号从 `.caption` 提到 `.footnote` 且用主文本色。Windows 的 `TutorialWindow`
+  本来就是实心主题底，不用动背景，正文与 mac 同步改。
+  第 2 节重写为 CookieCloud 与 PT-depiler Gist 的搭建步骤：token 只勾 `gist` scope、
+  Gist ID 取网址里那串 32 位十六进制、Gist 解密口令是「备份密码|GistID」，
+  CookieCloud 服务端 `docker run ... easychen/cookie-cloud` + 扩展给的 KEY(UUID) 与密码、
+  `GET {host}/get/{KEY}` 拉回本地解密。第 4 节按单下载器改写（旧文案还在讲「检验连接」
+  与多机用途指派）；第 5 节把「『下载器』页的转种服务器」改成「『设置』页」——那两块现在
+  都在设置页里。教程配图还是旧版标签布局那批，页脚说明已改成「截图为旧版界面示例，
+  Cookie 与下载器现已并入「设置」页」，重拍图另说。两端教程正文一处改一处对照，别只改一边。
+- 收起辅种后下载器卡片上那两个标签也跟着改了：`名字（列表与用途下拉里显示）` →
+  `名字（卡片标题显示）`、区块标题 `下载器（推送用这一台）`，Windows 同一处按
+  `_model.AssistEnabled` 分岔。别在收起状态下还提「用途下拉」——那栏根本不摆。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

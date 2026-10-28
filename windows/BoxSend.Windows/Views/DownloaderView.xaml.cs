@@ -18,11 +18,12 @@ public partial class DownloaderView : UserControl
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
         if (!model.AssistEnabled)
         {
-            // 辅种收起时不摆这栏：选一台没人在读的下载器只会让人犯迷糊
-            RoleAssistLabel.Visibility = Visibility.Collapsed;
-            RoleAssist.Visibility = Visibility.Collapsed;
-            DlBox.Header = "下载器（可以有多台）";
-            DlCaption.Text = "主下载器不能删。逐站上传限速按「批量发种推送用」那台保存。";
+            // 多下载器是为辅种而存在的：辅种收起时就只剩一台，加机器和挑用途都没地方用
+            AddRow.Visibility = Visibility.Collapsed;
+            RoleRow.Visibility = Visibility.Collapsed;
+            DlBox.Header = "下载器";
+            DlCaption.Text = "转种成功的种子都推到这一台，逐站限速照站点分组里设的走；"
+                             + "换地址或换账号改完就生效，点卡片里的「测试连接」验一下。";
         }
         Load();
     }
@@ -41,7 +42,7 @@ public partial class DownloaderView : UserControl
         RoleAssist.ItemsSource = list;
         RoleAssist.SelectedValue = _model.AssistDownloaderID;
 
-        BuildCards(list);
+        BuildCards(_model.VisibleDownloaders);
         LoadSSH();
         _loading = false;
     }
@@ -128,7 +129,7 @@ public partial class DownloaderView : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Put(grid, 0, 0, Labeled("名字（列表与用途下拉里显示）", name));
+        Put(grid, 0, 0, Labeled(_model.AssistEnabled ? "名字（列表与用途下拉里显示）" : "名字（卡片标题显示）", name));
         Put(grid, 0, 1, Labeled("类型", type));
         Put(grid, 1, 0, Labeled("地址（VPS 隧道地址，如 http://127.0.0.1:8080）", url));
         Put(grid, 1, 1, Two(
@@ -157,19 +158,23 @@ public partial class DownloaderView : UserControl
         var test = new Button { Content = "测试连接", Margin = new Thickness(10, 0, 0, 0) };
         test.Click += (_, _) => Test();
         buttons.Children.Add(test);
-        var del = new Button
+        // 只剩一台时不给删除：删了整条推送链路就没落脚的地方
+        if (_model.AssistEnabled)
         {
-            Content = "删除这台",
-            Margin = new Thickness(10, 0, 0, 0),
-            IsEnabled = !d.IsMain,
-            ToolTip = d.IsMain ? "主下载器不能删" : "删除这台下载器",
-        };
-        del.Click += (_, _) =>
-        {
-            var err = _model.RemoveDownloader(d.Id);
-            status.Text = err ?? "已删除，用途自动指回主下载器";
-        };
-        buttons.Children.Add(del);
+            var del = new Button
+            {
+                Content = "删除这台",
+                Margin = new Thickness(10, 0, 0, 0),
+                IsEnabled = !d.IsMain,
+                ToolTip = d.IsMain ? "主下载器不能删" : "删除这台下载器",
+            };
+            del.Click += (_, _) =>
+            {
+                var err = _model.RemoveDownloader(d.Id);
+                status.Text = err ?? "已删除，用途自动指回主下载器";
+            };
+            buttons.Children.Add(del);
+        }
         buttons.Children.Add(status);
 
         var body = new StackPanel();
@@ -178,7 +183,8 @@ public partial class DownloaderView : UserControl
         body.Children.Add(buttons);
         return new GroupBox
         {
-            Header = d.IsMain ? $"{d.Label}（主）" : d.Label,
+            // 标题只报名字（地址就在下面的输入框里，标题再重复一遍只是噪声）
+            Header = string.IsNullOrWhiteSpace(d.Name) ? "下载器" : d.Name,
             Margin = new Thickness(0, 0, 0, 10),
             Content = body,
         };

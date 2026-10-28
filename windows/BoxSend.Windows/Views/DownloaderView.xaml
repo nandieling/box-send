@@ -3,15 +3,15 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel>
             <TextBlock Text="下载器" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <GroupBox x:Name="DlBox" Header="下载器（可以有多台：发种与辅种各用一台）">
+            <GroupBox x:Name="DlBox" Header="下载器">
                     <StackPanel>
-                        <WrapPanel>
+                        <WrapPanel x:Name="AddRow">
                             <Button Content="添加一台" Click="OnAddDownloader" />
                             <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
                                        TextWrapping="Wrap"
                                        Text="添加后每台都直接列在下面，各自填、各自测，不用先选哪一台。" />
                         </WrapPanel>
-                        <WrapPanel Margin="0,8,0,0">
+                        <WrapPanel x:Name="RoleRow" Margin="0,8,0,0">
                             <Label Content="批量发种推送用" VerticalAlignment="Center" />
                             <ComboBox x:Name="RoleReseed" Width="180" MinHeight="32" VerticalAlignment="Center"
                                       DisplayMemberPath="Label" SelectedValuePath="Id"

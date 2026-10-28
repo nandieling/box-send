@@ -207,9 +207,19 @@ struct RevealField: View {
 
 // MARK: - 运行
 
+/// 种子链接区块的实测宽度（用它把输入框收成一半宽）
+private struct SeedCardWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct RunView: View {
     @EnvironmentObject var model: AppModel
     @State private var showHistory = false
+    /// 种子链接输入框只占区块一半宽（窗口太窄时不收，免得挤成一条缝）
+    @State private var seedFieldWidth: CGFloat?
 
     var body: some View {
         ScrollView {
@@ -234,6 +244,7 @@ struct RunView: View {
             }
             TextField("粘贴种子详情页链接（如 https://…/details.php?id=…）", text: $model.detailURL)
                 .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: seedFieldWidth, alignment: .leading)
             HStack(spacing: 10) {
                 Toggle("源站引用", isOn: $model.sourceQuoteEnabled)
                     .fixedSize()
@@ -284,6 +295,12 @@ struct RunView: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .background(GeometryReader { p in
+            Color.clear.preference(key: SeedCardWidthKey.self, value: p.size.width)
+        })
+        .onPreferenceChange(SeedCardWidthKey.self) { w in
+            seedFieldWidth = w > 460 ? floor(w / 2) : nil
         }
         .runCard()
     }
@@ -1661,23 +1678,25 @@ struct DownloaderView: View {
     }
 
     private var rolesCard: some View {
-        CardSection("下载器（可以有多台）") {
-            HStack(spacing: 10) {
-                Button("添加一台") { model.addDownloader() }
-                Text("添加后立刻列在下面，直接改就行").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-            }
-            HStack(alignment: .top, spacing: 24) {
-                LabeledRow("批量发种推送用") { rolePicker("reseed") }
-                // 辅种收起时不摆这栏：选一台没人在读的下载器只会让人犯迷糊
-                if AssistFeature.enabled {
+        CardSection(AssistFeature.enabled ? "下载器（可以有多台）" : "下载器（推送用这一台）") {
+            // 多下载器是为辅种而存在的：辅种收起时就只剩一台，加机器和挑用途都没地方用
+            if AssistFeature.enabled {
+                HStack(spacing: 10) {
+                    Button("添加一台") { model.addDownloader() }
+                    Text("添加后立刻列在下面，直接改就行").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                }
+                HStack(alignment: .top, spacing: 24) {
+                    LabeledRow("批量发种推送用") { rolePicker("reseed") }
+                    // 辅种收起时不摆这栏：选一台没人在读的下载器只会让人犯迷糊
                     LabeledRow("辅种扫描用") { rolePicker("assist") }
                 }
             }
             Text(AssistFeature.enabled
                  ? "辅种要读的那台得真有这些文件，否则加进去就是重下一遍。"
                      + "两台不是同一台时，「辅种」页顶部会写明现在用的哪台。"
-                 : "推送按「批量发种推送用」这台，逐站限速照站点分组里设的走。")
+                 : "转种成功的种子都推到这一台，逐站限速照站点分组里设的走；"
+                   + "换地址或换账号改完就生效，点下面的「测试连接」验一下。")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1687,9 +1706,11 @@ struct DownloaderView: View {
     private func downloaderCard(_ id: String) -> some View {
         let d = model.downloader(id)
         let testing = model.testingDownloaderID == id
-        return CardSection("\(d.label)（\(d.url.isEmpty ? "还没填地址" : d.url)）") {
+        // 标题只报名字（地址就在下面的输入框里，标题再重复一遍只是噪声）
+        let title = d.name.trimmingCharacters(in: .whitespaces).isEmpty ? "下载器" : d.name
+        return CardSection(title) {
             HStack(alignment: .top, spacing: 12) {
-                LabeledRow("名字（列表与用途下拉里显示）") {
+                LabeledRow(AssistFeature.enabled ? "名字（列表与用途下拉里显示）" : "名字（卡片标题显示）") {
                     TextField("如 VPS / 家里NAS", text: dl(id, \.name)).textFieldStyle(.roundedBorder)
                 }
                 LabeledRow("类型") {
@@ -1758,9 +1779,11 @@ struct DownloaderView: View {
                         .textSelection(.enabled)
                 }
                 Spacer()
-                Button("删除这台") { model.removeDownloader(id) }
-                    .disabled(!model.canRemoveDownloader(id))
-                    .help("主下载器不能删")
+                if AssistFeature.enabled {
+                    Button("删除这台") { model.removeDownloader(id) }
+                        .disabled(!model.canRemoveDownloader(id))
+                        .help("主下载器不能删")
+                }
             }
         }
     }
@@ -1769,7 +1792,7 @@ struct DownloaderView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("下载器").font(.title3.weight(.semibold)).padding(.leading, 4)
                 rolesCard
-                ForEach(model.downloaderList, id: \.id) { d in
+                ForEach(model.visibleDownloaders, id: \.id) { d in
                     downloaderCard(d.id)
                 }
                 CardSection("转种服务器（SSH 上传测速）") {
@@ -2942,9 +2965,23 @@ struct SettingsView: View {
     }
 }
 
+/// 教程等长文窗口的背景：只走主题渐变并压深一层，不铺背景图（壁纸再花也不影响读字）
+struct BoxSendThemeBackground: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        let t = model.theme
+        ZStack {
+            LinearGradient(colors: t.colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            (t.dark ? Color.black.opacity(0.5) : Color.white.opacity(0.55))
+        }
+        .ignoresSafeArea()
+    }
+}
+
 /// 使用教程弹窗（图文教程，配图打包于 Resources/tutorial/）
 struct TutorialSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
         VStack(spacing: 10) {
@@ -2958,11 +2995,16 @@ struct TutorialSheet: View {
                         "「检测cookie或api key」批量检查 cookie / API Key 有效性，检测中右侧出现「停止检测」，点击可提前停止；「移除站点」「移除分组」均需两次确认。",
                         "支持「帖子免费1天」的站点（如猫站）卡片上会出现「发种后免费一天」开关：打开后发种成功就自动点一次站内免费按钮（要扣站内积分）；帖子已在免费满一天时不重复扣。",
                     ])
-                    section("2. 配置与备份 Cookie", image: "cookies", steps: [
-                        "PT-depiler Gist 同步：填写 GitHub Token 与 Gist ID，可开启自动同步 / 自动扫描并设置间隔秒数。",
-                        "CookieCloud 同步备份：填写用户 KEY、UUID 与端对端加密密码。",
-                        "两路备份互为补充：某一站点在一处的 cookie 失效时，同步后自动用另一来源补充。",
-                        "「同步 Cookie」立即执行两路同步；「立即扫描」检查 PT-depiler 备份目录。",
+                    section("2. Cookie：PT-depiler Gist 与 CookieCloud", image: "cookies", steps: [
+                        "两路都是「浏览器插件采集 → 云端存一份密文 → 本软件拉回来」：Gist 存 GitHub，CookieCloud 存自己的服务器。两路互为补充，某一站在一路过期时同步会用另一路补上，本地检测有效的 cookie 不会被覆盖。",
+                        "先搭 PT-depiler Gist：在 github.com/settings/tokens 生成 classic token，scope 只勾 gist（不用勾 repo、delete_repo）。",
+                        "PT-depiler「设置 → 备份 → Gist 备份」打开开关，粘上 token、填 Gist ID 和设备份密码：它会定时把 cookie 打成 ptgen_cookie_*.zip 加密推到那个 Gist，Gist 设成私密即可。",
+                        "Gist ID 就是备份 gist 网址 https://gist.github.com/用户名/ID 里那串 32 位十六进制；Gist 里真正的解密口令是「备份密码|GistID」，所以 PT-depiler 用的备份密码要一字不差地填进本页的「PT-depiler 备份密码」。",
+                        "再搭 CookieCloud：服务器上 docker run -d --name cookie-cloud -p 8088:8088 easychen/cookie-cloud，或用官方公共服务器；服务端只存密文，密钥不出本机。",
+                        "浏览器装 CookieCloud 扩展（easychen/CookieCloud，Chrome/Edge/Firefox 都能装），设置里填服务器地址，点「上传」后扩展会显示自己的 KEY（一串 UUID）和你设的加密密码。",
+                        "本软件「CookieCloud 同步」填服务器地址、KEY（UUID）、端对端加密密码（必须与扩展里的密码一致）：拉回 GET {服务器}/get/{KEY} 后在本地 AES 解密，再覆盖本地 cookie。",
+                        "两张卡片的「轮询」最小 5 分钟，打开「自动定时同步」到点自动拉；想立刻拉一次点该卡片的「立即同步」，或到「站点分组」页顶部点「同步 Cookie」两路一起同步，同步完自动复检 cookie。",
+                        "只有 PT-depiler 在本机导出过 zip 时才用得上「PT-depiler 本地备份」与备份目录监控；配好上面两路就够了。",
                     ])
                     section("3. 批量转种", image: "run", steps: [
                         "「批量转种」页粘贴种子详情页链接，勾选「转种到目标站」与「推送到下载器」。",
@@ -2972,14 +3014,17 @@ struct TutorialSheet: View {
                         "需要注明转种来源时勾选「源站引用」并填写文本：软件会把这段文字用引用块加在每个目标站简介的最上面；源站自带引用的不用勾。cmct、劳改所的「附加信息」框只用这段文字，没勾选时留空并在站点卡片上提示。",
                         "点「运行记录」展开查看每个站点的转种 / 推送结果。",
                     ])
-                    section("4. 推送到 VPS 下载器", image: "downloader", steps: [
-                        "填写下载器（qBittorrent Web UI）地址、用户名与密码。",
-                        "「检验连接」验证可用性；勾选「跳过检验」后推送时不再校验。",
-                        "转种成功的种子会自动推送到下载器开始下载。",
+                    section("4. 推送到下载器", image: "downloader", steps: [
+                        "「设置」页「下载器」填 Web UI 地址、用户名与密码：qBittorrent 要在首选项里打开 Web UI 并取消「仅本机 localhost」，或经 VPS 隧道 / 反向代理暴露出来。",
+                        "卡片顶部只显示这台下载器的名字（随手起，如 VPS、家里NAS），地址只在下面输入框里改。",
+                        "「测试连接」验一次：能列出版本与下载目录才算通。",
+                        "保存路径留空用下载器默认目录，分类留空不打标签；「添加后跳过校验」按自己的下载习惯决定。",
+                        "「VPS 剩余空间」与「超过剩余空间时」的提醒 / 跳过策略是推送前的空间保护：qB WebAPI 读不到磁盘容量，这个数字要自己维护。",
+                        "转种成功的种子自动推到这台下载器；逐站上传限速在「站点分组」页按分组或站点填。",
                     ])
                     section("5. 转种服务器测速（SSH）", image: nil, steps: [
                         "部分服务器 24 小时上传流量到 2T 后，会把上行悄悄压到 20 MB/s 左右：站点照样能发种，但整批下载都变慢。",
-                        "「下载器」页「转种服务器」卡片填写服务器地址、端口、用户名，选密钥或密码登录（密钥默认 ~/.ssh/id_ed25519，点「选择…」挑）。",
+                        "「设置」页「转种服务器」卡片填写服务器地址、端口、用户名，选密钥或密码登录（密钥默认 ~/.ssh/id_ed25519，点「选择…」挑）。",
                         "「测试连接并测速」立刻连一次：显示服务器主机名、每轮实测速度。",
                         "「批量转种」页「开始运行」左边有「测试上传速度」：随时点一下，实测速度显示在按钮下面那一行，不做自动判定——速度不理想就等一等再转，不测也能直接开转。",
                         "测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行；测速地址可换成自己的接收端。",
@@ -3006,7 +3051,7 @@ struct TutorialSheet: View {
                 .padding(2)
             }
             HStack {
-                Text("提示：截图为深色主题示例，实际外观随「设置」页的主题 / 壁纸变化。")
+                Text("提示：截图为旧版界面示例，Cookie 与下载器现已并入「设置」页；外观随主题 / 壁纸变化。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("关闭") { dismiss() }
@@ -3014,18 +3059,21 @@ struct TutorialSheet: View {
             }
         }
         .padding()
-        .frame(width: 800, height: 640)
-        .boxsendAppearance()
+        .frame(width: 880, height: 700)
+        .background(BoxSendThemeBackground())
+        .tint(model.theme.accent)
+        .preferredColorScheme(model.theme.dark ? .dark : .light)
     }
 
     private func section(_ title: String, image: String? = nil, steps: [String]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.subheadline).fontWeight(.semibold)
+            Text(title).font(.headline)
             ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                 HStack(alignment: .top, spacing: 6) {
-                    Text("\(i + 1).").font(.caption).foregroundStyle(.secondary)
-                        .frame(width: 14, alignment: .trailing)
-                    Text(step).font(.caption)
+                    Text("\(i + 1).").font(.footnote).foregroundStyle(.secondary)
+                        .frame(width: 16, alignment: .trailing)
+                    Text(step).font(.footnote).foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if let image {

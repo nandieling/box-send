@@ -468,6 +468,17 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
 
     /// 快照里的下载器列表（主 + 附加），以及发种/辅种各用哪台
     public ObservableCollection<DownloaderRow> Downloaders { get; } = new();
+    /// 界面上摆哪几台：多下载器本就是为辅种才需要的，辅种收起时只摆发种那台
+    public IReadOnlyList<DownloaderRow> VisibleDownloaders
+    {
+        get
+        {
+            if (AssistEnabled) return Downloaders.ToList();
+            var hit = Downloaders.FirstOrDefault(d => d.Id == ReseedDownloaderID)
+                      ?? Downloaders.FirstOrDefault();
+            return hit is null ? new List<DownloaderRow>() : new List<DownloaderRow> { hit };
+        }
+    }
     public string ReseedDownloaderID { get; private set; } = "main";
     public string AssistDownloaderID { get; private set; } = "main";
     /// 辅种这一版收起来了（核心库的 AssistFeature）：页签、辅种区块、设置里那两块都不摆，

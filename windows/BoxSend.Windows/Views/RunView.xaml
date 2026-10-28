@@ -5,7 +5,7 @@
         <StackPanel>
             <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
                 <StackPanel>
-                    <DockPanel>
+                    <DockPanel LastChildFill="False">
                         <TextBlock Text="种子链接" FontWeight="SemiBold" VerticalAlignment="Center"
                                    Margin="0,0,10,0" />
                         <!-- 源站种子的获取状态（转种时源站种子也一起推下载器）-->
@@ -17,11 +17,18 @@
                         <ComboBox x:Name="SourceSitePick" DockPanel.Dock="Right" Width="200" MinHeight="32"
                                   VerticalAlignment="Center"
                                   ToolTip="默认按链接域名识别源站；已添加的站点都能点名作源站（站点换过域名、或同一站点有多个入口时用得上）" />
-                        <Border DockPanel.Dock="Right" Width="10" Background="Transparent" />
-                        <TextBox x:Name="DetailUrl" MinHeight="34" FontSize="13"
+                    </DockPanel>
+                    <!-- 输入框只占这一栏一半宽：链接再长也用不到整行，右边留给状态提示 -->
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="DetailUrl" Grid.Column="0" MinHeight="34" FontSize="13"
+                                 Margin="0,0,10,0" HorizontalAlignment="Stretch"
                                  VerticalContentAlignment="Center"
                                  ToolTip="粘贴种子详情页链接（如 https://…/details.php?id=…）" />
-                    </DockPanel>
+                    </Grid>
                     <WrapPanel Margin="0,10,0,0">
                         <CheckBox x:Name="UseQuote" Content="源站引用" VerticalAlignment="Center"
                                   Click="OnQuoteToggled"

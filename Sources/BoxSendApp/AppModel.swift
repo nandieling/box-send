@@ -1260,6 +1260,10 @@ final class AppModel: ObservableObject {
     // 主下载器一直存在 config.downloader（id = "main"），附加的进 config.downloaders。
 
     var downloaderList: [DownloaderConfig] { config.allDownloaders }
+    /// 界面上摆哪几台：多下载器本就是为辅种才需要的，辅种收起时只摆发种那台
+    var visibleDownloaders: [DownloaderConfig] {
+        AssistFeature.enabled ? config.allDownloaders : [config.reseedDownloader]
+    }
     func downloader(_ id: String) -> DownloaderConfig { config.downloaderEntry(id: id) }
     /// 主下载器不可删（老配置就这一台，删了整个软件就没下载器了）
     func canRemoveDownloader(_ id: String) -> Bool { id != config.downloader.id }
