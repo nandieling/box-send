@@ -148,6 +148,8 @@ public final class AppService {
                     "features": ["assist": AssistFeature.enabled],
                     "configPath": configPath, "dataDir": dataDir,
                     "themes": ThemeCatalog.allJSON,
+                    // 使用说明正文也走这里：两端渲染同一份，不再各抄一份抄歪
+                    "tutorial": TutorialText.payload(),
                     // 界面拿这些当占位值，免得两端各写一份默认值写歪
                     "sshDefaults": ["keyPath": "~/.ssh/id_ed25519",
                                     "testMB": SSHConfig().testMB,

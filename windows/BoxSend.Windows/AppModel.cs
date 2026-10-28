@@ -21,6 +21,33 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private readonly AutoTask _zipTask;
     private (bool On, int Minutes)? _zipArmed;
 
+    /// <summary>一节使用说明：标题 + 步骤 + 可选代码块（Worker 脚本那种）</summary>
+    public sealed record TutorialSection(string Title, IReadOnlyList<string> Steps, string? Code);
+
+    /// <summary>使用说明正文：整份来自核心 TutorialText，Windows 端只负责画，
+    /// 免得两端各抄一份抄歪（曾经就抄歪过）。</summary>
+    public string TutorialTitle { get; private set; } = "BoxSend 使用说明";
+    public string TutorialFootnote { get; private set; } = "";
+    public string TutorialRepo { get; private set; } = "";
+    public List<TutorialSection> Tutorial { get; } = new();
+
+    void ParseTutorial(JsonNode tut)
+    {
+        TutorialTitle = tut["title"]?.GetValue<string>() ?? TutorialTitle;
+        TutorialFootnote = tut["footnote"]?.GetValue<string>() ?? "";
+        TutorialRepo = tut["repo"]?.GetValue<string>() ?? "";
+        Tutorial.Clear();
+        foreach (var n in tut["sections"]?.AsArray() ?? new JsonArray())
+        {
+            var o = n!.AsObject();
+            var steps = new List<string>();
+            foreach (var st in o["steps"]?.AsArray() ?? new JsonArray())
+                steps.Add(st!.GetValue<string>());
+            Tutorial.Add(new TutorialSection(o["title"]?.GetValue<string>() ?? "", steps,
+                                             o["code"] is { } c ? c.GetValue<string>() : null));
+        }
+    }
+
     public AppModel(BoxSendApi api)
     {
         _api = api;
@@ -37,6 +64,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
                 d["testMB"]?.GetValue<int>() ?? 64,
                 d["probeURL"]?.GetValue<string>() ?? "https://speed.cloudflare.com/__up",
                 d["throttlingMBps"] is JsonValue tv && tv.TryGetValue<double>(out var mb) ? mb : 20);
+        if (version["tutorial"] is { } tut) ParseTutorial(tut);
         foreach (var g in Groups) Groups.Remove(g);
 
         _timer = new System.Windows.Threading.DispatcherTimer

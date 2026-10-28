@@ -1012,6 +1012,26 @@ Windows 侧：
 - 验过：`hdiutil verify` 校验通过，挂载后卷里是 `BoxSend.app` + `Applications` 替身，
   卷内 app `codesign -v --deep` 过（ad-hoc 签名，从 GitHub 下下来仍要右键打开）。
 
+## 这一轮（两端对齐审计：说明正文收进核心，两端只渲染）
+
+- 做了一次逐项对照：桥命令、卡片/区块清单、按钮与提示文案、教程正文。界面功能两端是对齐的
+  （运行记录、站点卡片里的转种/推送、种子页跳转、免费一天、拖动排序、已选分组·站点计数、
+  主题与背景图、SSH 密码登录都在），真正跑偏的是「使用教程」——Windows 那份还在讲早已删掉的
+  「左栏转种结果 / 右栏推送结果」，把按钮写成界面上不存在的「添加所选」，还说「Windows 版走
+  密钥登录」（界面上早有登录方式与密码框），并且缺了 mac 这轮加的 CookieCloud 搭建细节。
+- 根因修：教程正文搬进核心 `Sources/BoxSendKit/Util/TutorialText.swift`，两端渲染同一份。
+  平台确实不同的措辞（cookie 检测按钮名、手动填 cookie 按钮名、源站菜单/下拉框、SSH 私钥选择、
+  跳过校验开关名、自动检查开关名、dmg / Setup.exe、背景图支持的格式）用 `{占位}` + 词表现场替换，
+  正文只有一条。`version` 回包多带一个 `tutorial`（title/footnote/repo/sections），
+  Windows 在 `AppModel.ParseTutorial` 收下，`TutorialWindow` 只管排版：步骤改带序号，
+  底部补脚注与仓库地址，`Open(owner, model)` 要多传一个 model。
+- mac `TutorialView` 里那八节硬编码删掉，改成遍历 `TutorialText.current`；`section(...)`
+  渲染器不动。
+- `TutorialTests` 钉住：八节、每节 >=3 步、两端小节标题与每节步骤数必须一致、占位不许剩、
+  必须出现 CookieCloud/tmdb123/Workers/帖子免费1天/运行记录/源站引用，
+  不许再出现「下载器推送结果」「与 mac 版一致」这类作废说法；桥那份要按 Windows 措辞（含 Setup.exe）。
+  以后改教程只改核心一处，改漏会被用例直接钉住。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。
