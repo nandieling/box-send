@@ -9,6 +9,33 @@ import FoundationNetworking
 /// 平台接缝（宿主注入解压 / 纯 Swift AES / IPv4 解析 / HTTP 服务往返）。
 final class WindowsBridgeTests: XCTestCase {
 
+    /// 这批用例测的是契约本身：辅种这一版整体收起着，但相关命令与载荷要照旧跑得通，
+    /// 所以整类临时把开关打开（另有一条用例专门测收起时的行为）
+    override func setUp() {
+        super.setUp()
+        AssistFeature.enabled = true
+    }
+
+    override func tearDown() {
+        AssistFeature.enabled = false
+        super.tearDown()
+    }
+
+    /// 收起时：命令不接，载荷与快照都写明「这一版没有辅种」，两端据此收块
+    func testAssistIsHiddenWhileFeatureOff() throws {
+        let (svc, _) = try makeService()
+        AssistFeature.enabled = false
+        defer { AssistFeature.enabled = true }
+        let version = try svc.invoke("version")
+        XCTAssertEqual((version["features"] as? [String: Any])?["assist"] as? Bool, false,
+                       "载荷要告诉两端这一版没有辅种")
+        XCTAssertThrowsError(try svc.invoke("assist.scan", [:])) { err in
+            XCTAssertTrue(String(describing: err).contains("先收起来"), "要说清为什么没做：\(err)")
+        }
+        let assist = try svc.invoke("snapshot")["assist"] as? [String: Any]
+        XCTAssertEqual(assist?["enabled"] as? Bool, false, "快照里的辅种块也标明收起")
+    }
+
     private func makeService() throws -> (AppService, String) {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("boxsend-bridge-\(UUID().uuidString)")
@@ -109,7 +136,7 @@ final class WindowsBridgeTests: XCTestCase {
                        "辅种不改动转种纳管状态")
     }
 
-    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）
+    /// 辅种区块：站点入池但不进分组，也不重复出现在未分组区块（mac 与 Windows 共用这套判定）
     func testAssistSitesJoinPoolWithoutGroup() throws {
         let (svc, dir) = try makeService()
         try clearGroups(svc)

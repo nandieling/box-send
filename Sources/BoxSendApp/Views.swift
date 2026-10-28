@@ -107,17 +107,26 @@ struct AddSitesRequest: Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
-    @State private var tab = Int(ProcessInfo.processInfo.environment["BOXSEND_START_TAB"] ?? "") ?? 0
+    /// 起始页：截图脚本用 BOXSEND_START_TAB 指定；辅种收起时别停在一页不存在的标签上
+    @State private var tab = ContentView.startTab()
+
+    private static func startTab() -> Int {
+        let want = Int(ProcessInfo.processInfo.environment["BOXSEND_START_TAB"] ?? "") ?? 0
+        return want == 6 && !AssistFeature.enabled ? 0 : want
+    }
 
     var body: some View {
         TabView(selection: $tab) {
             RunView()
                 .tabItem { Label("批量转种", systemImage: "paperplane.fill") }
                 .tag(0)
-            // 辅种紧跟批量转种：两件事都在「把种子铺到更多站」这条线上
-            AssistView()
-                .tabItem { Label("辅种", systemImage: "square.stack.3d.up.fill") }
-                .tag(6)
+            // 辅种紧跟批量转种：两件事都在「把种子铺到更多站」这条线上。
+            // 这一版先收起来（AssistFeature.enabled = false），页面代码整块留着
+            if AssistFeature.enabled {
+                AssistView()
+                    .tabItem { Label("辅种", systemImage: "square.stack.3d.up.fill") }
+                    .tag(6)
+            }
             SitesView()
                 .tabItem { Label("站点分组", systemImage: "server.rack") }
                 .tag(1)
@@ -725,32 +734,37 @@ struct SitesView: View {
                     .runCard()
                 }
 
-                // 辅种站点：不进转种分组，加进来就直接参与辅种（跑与节奏在「辅种」页）
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 8) {
-                        Text("辅种站点").font(.headline)
-                        Button {
-                            addSheetReq = AddSitesRequest(group: -1, assist: true)
-                        } label: {
-                            Label("添加站点", systemImage: "plus")
+                // 辅种站点：不进转种分组，加进来就直接参与辅种（跑与节奏在「辅种」页）。
+                // 辅种收起时这块跟着收起：留着会多一块只改名单、没地方用上的卡片墙
+                if AssistFeature.enabled {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Text("辅种站点").font(.headline)
+                            Button {
+                                addSheetReq = AddSitesRequest(group: -1, assist: true)
+                            } label: {
+                                Label("添加站点", systemImage: "plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help("批量选择辅种站点（不进转种分组）")
+                            Spacer()
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("批量选择辅种站点（不进转种分组）")
-                        Spacer()
-                    }
-                    Text("\(model.assistManagedSites.count) 站 · 辅种要逐条种子去站内检索，站点先少而后多")
-                        .font(.caption).foregroundStyle(.secondary)
-                    LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 10) {
-                        ForEach(model.assistManagedSites, id: \.id) { site in
-                            assistSiteCard(site)
+                        Text("\(model.assistManagedSites.count) 站 · 辅种要逐条种子去站内检索，站点先少而后多")
+                            .font(.caption).foregroundStyle(.secondary)
+                        LazyVGrid(columns: cardColumns, alignment: .leading, spacing: 10) {
+                            ForEach(model.assistManagedSites, id: \.id) { site in
+                                assistSiteCard(site)
+                            }
                         }
                     }
+                    .runCard()
                 }
-                .runCard()
 
                 if model.managedSites.isEmpty {
-                    Text("还没有添加站点：点分组卡片或辅种区块上的「添加站点」批量选择。")
+                    Text(AssistFeature.enabled
+                         ? "还没有添加站点：点分组卡片或辅种区块上的「添加站点」批量选择。"
+                         : "还没有添加站点：点分组卡片上的「添加站点」批量选择。")
                         .font(.caption).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .runCard()
@@ -1655,10 +1669,15 @@ struct DownloaderView: View {
             }
             HStack(alignment: .top, spacing: 24) {
                 LabeledRow("批量发种推送用") { rolePicker("reseed") }
-                LabeledRow("辅种扫描用") { rolePicker("assist") }
+                // 辅种收起时不摆这栏：选一台没人在读的下载器只会让人犯迷糊
+                if AssistFeature.enabled {
+                    LabeledRow("辅种扫描用") { rolePicker("assist") }
+                }
             }
-            Text("辅种要读的那台得真有这些文件，否则加进去就是重下一遍。"
-                 + "两台不是同一台时，「辅种」页顶部会写明现在用的哪台。")
+            Text(AssistFeature.enabled
+                 ? "辅种要读的那台得真有这些文件，否则加进去就是重下一遍。"
+                     + "两台不是同一台时，「辅种」页顶部会写明现在用的哪台。"
+                 : "推送按「批量发种推送用」这台，逐站限速照站点分组里设的走。")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -2711,8 +2730,11 @@ struct SettingsView: View {
                          + "网关地址要写到版本号那一层（末尾带 /3，如 https://gw.example.com/tmdb0512/3），漏写软件会自动补一次再试。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                paceCard
-                siteFilterCard
+                // 辅种收起时这两块也不摆：搜不到入口的节奏设置留着只会让人乱改
+                if AssistFeature.enabled {
+                    paceCard
+                    siteFilterCard
+                }
                 CookiesView()
                 DownloaderView()
                 CardSection("主题（渐变色）") {

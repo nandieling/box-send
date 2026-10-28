@@ -203,6 +203,17 @@ final class PlanPreviewCapTests: XCTestCase {
 
 /// 快照里的辅种块：Windows 端照这份画，不必自己从日志文案里猜数
 final class AssistSnapshotStatsTests: XCTestCase {
+    /// 辅种这一版整体收起，但这批用例要跑真代码：临时把开关打开再测
+    override func setUp() {
+        super.setUp()
+        AssistFeature.enabled = true
+    }
+
+    override func tearDown() {
+        AssistFeature.enabled = false
+        super.tearDown()
+    }
+
     func testSnapshotCarriesStatLines() throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("boxsend-assist-stats-\(UUID().uuidString)")

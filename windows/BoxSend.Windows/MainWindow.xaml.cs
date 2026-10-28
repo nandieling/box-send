@@ -22,6 +22,8 @@ public partial class MainWindow : Window
         // 顶部页签：矢量图标 + 标题，配色跟随主题（样式在 App.xaml）
         TabRun.Header = TabIcons.Header(TabIcons.Run, "批量转种");
         TabAssist.Header = TabIcons.Header(TabIcons.Assist, "辅种");
+        // 辅种收起时连页签都不摆（开关在核心库 AssistFeature，两端同一份）
+        TabAssist.Visibility = model.AssistEnabled ? Visibility.Visible : Visibility.Collapsed;
         TabSites.Header = TabIcons.Header(TabIcons.Sites, "站点分组");
         TabSettings.Header = TabIcons.Header(TabIcons.Settings, "设置");
 

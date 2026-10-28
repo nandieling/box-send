@@ -137,9 +137,15 @@ public final class AppService {
     /// 调用一个动作。params 为界面传来的 JSON 对象（缺失字段用默认值）。
     @discardableResult
     public func invoke(_ method: String, _ params: [String: Any] = [:]) throws -> [String: Any] {
+        // 辅种收起时连命令都不接：界面没入口，别的调用方也不该在背后把站点敲一遍
+        if !AssistFeature.enabled, method.hasPrefix("assist.") {
+            throw Failure(AssistFeature.offMessage)
+        }
         switch method {
         case "version":
             return ["version": BoxSendVersion.version, "platform": Platform.osName,
+                    // 收起的功能靠这个告诉两端「这一版没有」，界面自己收块
+                    "features": ["assist": AssistFeature.enabled],
                     "configPath": configPath, "dataDir": dataDir,
                     "themes": ThemeCatalog.allJSON,
                     // 界面拿这些当占位值，免得两端各写一份默认值写歪
@@ -1065,7 +1071,8 @@ public final class AppService {
             return d
         }
         let minutes = cfg.assist?.autoRunMinutes ?? 0
-        var out: [String: Any] = ["running": busyAssist, "step": assistStep, "report": assistReport,
+        var out: [String: Any] = ["running": busyAssist, "enabled": AssistFeature.enabled,
+                "step": assistStep, "report": assistReport,
                 "rows": rows, "stats": Self.statsJSON(stats),
                 "budget": assistBudgetLocked(),
                 "autoRun": ["minutes": minutes,

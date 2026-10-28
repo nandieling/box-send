@@ -20,6 +20,8 @@ public partial class SettingsView : UserControl
         // Cookie 与下载器两页并进设置：区块本身还是原来那两个，只是不再各占一个页签
         CookieHost.Content = new CookiesView(model);
         DownloaderHost.Content = new DownloaderView(model);
+        // 辅种收起时搜索节奏与逐站筛选都不摆：没入口的设置留着只会让人乱改
+        AssistBox.Visibility = model.AssistEnabled ? Visibility.Visible : Visibility.Collapsed;
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(LoadPaceHint);
         Load();

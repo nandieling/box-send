@@ -9,10 +9,11 @@ public extension AppConfig {
 
     var managedSites: [SiteConfig] { sourceSites.filter { $0.managed } }
 
-    /// 未分组区块里的站点：只进辅种区块的辅种站点不算在这里，免得两个区块列同一张卡片
+    /// 未分组区块里的站点：只进辅种区块的辅种站点不算在这里，免得两个区块列同一张卡片。
+    /// 辅种收起时那份名单没地方列，这些站点退回未分组，别从站点分组页上消失
     var unassignedManagedSites: [SiteConfig] {
-        let assist = Set(assist?.siteIDs ?? [])
-        return managedSites.filter { groupIndex(of: $0.id) < 0 && !assist.contains($0.id) }
+        let assistOnly = Set(AssistFeature.enabled ? (assist?.siteIDs ?? []) : [])
+        return managedSites.filter { groupIndex(of: $0.id) < 0 && !assistOnly.contains($0.id) }
     }
 
     /// 辅种区块里的站点（按加入顺序；站点被移出站点池就随之消失）

@@ -16,6 +16,14 @@ public partial class DownloaderView : UserControl
         _model = model;
         InitializeComponent();
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
+        if (!model.AssistEnabled)
+        {
+            // 辅种收起时不摆这栏：选一台没人在读的下载器只会让人犯迷糊
+            RoleAssistLabel.Visibility = Visibility.Collapsed;
+            RoleAssist.Visibility = Visibility.Collapsed;
+            DlBox.Header = "下载器（可以有多台）";
+            DlCaption.Text = "主下载器不能删。逐站上传限速按「批量发种推送用」那台保存。";
+        }
         Load();
     }
 

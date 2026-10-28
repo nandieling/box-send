@@ -31,14 +31,19 @@ public partial class SitesView : UserControl
         foreach (var g in _model.Groups) Blocks.Children.Add(BlockFor(g));
         // 辅种站点单独成一块（不分组），不再混进「未分组」里重复出现
         var assistSites = _model.Sites.Where(s => s.Managed && s.Assist).ToList();
-        var unassigned = _model.Sites.Where(s => s.Managed && s.Group < 0 && !s.Assist).ToList();
+        // 辅种收起时辅种站点没人接手列，退回「未分组」里列着，别从页面上消失
+        var unassigned = _model.Sites
+            .Where(s => s.Managed && s.Group < 0 && (!s.Assist || !_model.AssistEnabled))
+            .ToList();
         // 只有真有没归组的站点才出现这一块，否则页面上会有一个去不掉的空「未分组」
         if (unassigned.Count > 0) Blocks.Children.Add(BlockFor(null, unassigned));
-        Blocks.Children.Add(AssistBlock(assistSites));
+        if (_model.AssistEnabled) Blocks.Children.Add(AssistBlock(assistSites));
         if (!_model.Sites.Any(s => s.Managed))
             Blocks.Children.Add(new TextBlock
             {
-                Text = "还没有添加站点：点分组上的「添加站点」挑一批，辅种用的站点在下面的辅种区块里加。",
+                Text = _model.AssistEnabled
+                    ? "还没有添加站点：点分组上的「添加站点」挑一批，辅种用的站点在下面的辅种区块里加。"
+                    : "还没有添加站点：点分组上的「添加站点」挑一批。",
                 FontSize = 12,
                 Margin = new Thickness(0, 4, 0, 0),
                 Foreground = (Brush)FindResource("TextMuted"),

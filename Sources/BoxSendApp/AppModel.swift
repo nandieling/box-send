@@ -1747,6 +1747,7 @@ final class AppModel: ObservableObject {
 
     /// 扫描下载器并生成本轮计划（不发站点请求）
     func assistScan() {
+        guard AssistFeature.enabled else { return }
         guard !assistRunning, !assistScanning else { return }
         assistScanning = true
         assistMessage = nil
@@ -1799,7 +1800,7 @@ final class AppModel: ObservableObject {
     /// 所以扫描放在执行体里，不依赖界面上的候选。
     func assistTick() {
         let minutes = assistConfig.autoRunMinutes
-        guard minutes > 0, !assistRunning, !assistScanning,
+        guard AssistFeature.enabled, minutes > 0, !assistRunning, !assistScanning,
               assistAutoRun.due(minutes: minutes), !enabledAssistSites.isEmpty else { return }
         assistAutoRun.noteRun()
         runAssist(siteIDs: enabledAssistSites, forceKeys: [])
@@ -1811,6 +1812,8 @@ final class AppModel: ObservableObject {
     }
 
     func startAssistAutoTimer() {
+        // 辅种收起时这把钟根本不开：到点不该有人替用户去敲站点的门
+        guard AssistFeature.enabled else { return }
         guard assistAutoTimer == nil else { return }
         let t = Timer(timeInterval: 60, repeats: true) { [weak self] _ in self?.assistTick() }
         RunLoop.main.add(t, forMode: .common)

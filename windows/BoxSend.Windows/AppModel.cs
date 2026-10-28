@@ -46,12 +46,15 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         _timer.Tick += async (_, _) => await RefreshAsync(full: false);
 
         // 定时辅种：每分钟敲一次核心库那张表，该不该跑由它判断（两端共用一把尺）
+        // 定时辅种：每分钟敲一次核心库那张表，该不该跑由它判断（两端共用一把尺）。
+        // 辅种收起时这把钟不开，到点不该有人替用户去敲站点的门
+        AssistEnabled = Bool(version["features"]?["assist"]);
         _assistTickTimer = new System.Windows.Threading.DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(60)
         };
         _assistTickTimer.Tick += async (_, _) => await AssistTickAsync();
-        _assistTickTimer.Start();
+        if (AssistEnabled) _assistTickTimer.Start();
 
         // 自动任务跑在后台线程：同步一次要走网络，不能卡住界面线程
         _gistTask = new AutoTask(() => RunInBackground("cookies.sync", new { source = "gist" }));
@@ -240,6 +243,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         }
 
         var assist = snap["assist"]?.AsObject();
+        // 收起与放开都听核心库的：这一版关着，界面据此收块
+        if (assist?["enabled"] is not null) SetAssist(Bool(assist["enabled"]));
         AssistRunning = Bool(assist?["running"]);
         AssistAutoNextMinutes = Num(assist?["autoRun"]?["nextInMinutes"]);
         AssistStep = Str(assist?["step"]);
@@ -465,6 +470,16 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<DownloaderRow> Downloaders { get; } = new();
     public string ReseedDownloaderID { get; private set; } = "main";
     public string AssistDownloaderID { get; private set; } = "main";
+    /// 辅种这一版收起来了（核心库的 AssistFeature）：页签、辅种区块、设置里那两块都不摆，
+    /// 定时也不跑。代码与记录都留着，核心库那边一开就整套回来
+    public bool AssistEnabled { get; private set; }
+
+    private void SetAssist(bool on)
+    {
+        if (AssistEnabled == on) return;
+        AssistEnabled = on;
+        Raise(nameof(AssistEnabled));
+    }
 
     public bool BusyAssist { get; private set; }
     public bool AssistRunning { get; private set; }
@@ -661,7 +676,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 到点问一句核心库：该跑就跑，没到点它什么都不做
     private async Task AssistTickAsync()
     {
-        if (BusyAssist || SectionInt("assist", "autoRunMinutes", 0) <= 0) return;
+        if (!AssistEnabled || BusyAssist || SectionInt("assist", "autoRunMinutes", 0) <= 0) return;
         await RunInBackground("assist.tick", null);
     }
 

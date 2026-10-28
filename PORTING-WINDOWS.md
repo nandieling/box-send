@@ -894,6 +894,34 @@ Windows 侧：
   `assist.page` 的格子、`siteProgress` 卡片、快照的 `stats`/`coverage` 当场按新名单算）；
   `dotnet build` 0 错误。
 
+## 这一轮（辅种整条线收起来：界面上没有，命令也不接）
+
+- 需求是「不运行」而不是「删掉」：流水线、状态表、已辅记录、两端界面代码全留着，
+  只在入口处收。收成核心库一个开关：`AssistFeature.enabled = false`
+  （`Assist/AssistFeature.swift`），两端都问它，不各写一份判断。
+- **核心库**：`AppService.invoke` 在最前面挡掉所有 `assist.*`（含 `assist.tick`），
+  回一句 `AssistFeature.offMessage`；`version` 载荷多带 `features.assist`，
+  快照的辅种块多带 `enabled`——界面据此收块，不必自己猜这一版有没有。
+  `unassignedManagedSites` 跟着改：辅种收起时那份辅种名单没地方列，
+  只进过辅种区块的站点退回「未分组」，否则它们会从站点分组页上凭空消失
+  （实测这台机器上 45 站回到未分组，cookie 检测照旧覆盖——那一段按 `sourceSites` 遍历）。
+- **mac**：`ContentView` 用 `if AssistFeature.enabled` 决定摆不摆「辅种」页签，
+  `BOXSEND_START_TAB=6` 在收起时回落到首页，免得停在一个不存在的标签上；
+  站点分组页的辅种站点区块、设置页的「辅种搜索节奏」「辅种逐站筛选」、下载器里那栏
+  「辅种扫描用」同样按开关摆；`startAssistAutoTimer` 直接不开那把一分钟的钟，
+  `assistScan`/`assistTick` 再加一道 guard。
+- **Windows 要改**：`AppModel` 从 `version.features.assist` 读 `AssistEnabled`
+  （默认 false，快照里的 `assist.enabled` 会再校正一次），据此
+  ① 不开 `_assistTickTimer`，② `MainWindow` 把 `TabAssist` 设 Collapsed，
+  ③ `SitesView.Reload` 不摆辅种区块、未分组那份把辅种站点收回来，
+  ④ `SettingsView` 把 `AssistBox`（含逐站筛选 Expander）收起，
+  ⑤ `DownloaderView` 收掉「辅种扫描用」那一栏、标题与说明文案换成不提辅种的那份。
+  收起状态一律走 `_model.AssistEnabled`，别在 XAML 里写死。
+- 测试：辅种那批用例（`AssistSnapshotStatsTests`、`WindowsBridgeTests`）在 `setUp`
+  里临时把开关打开，测的是真代码；另加 `testAssistIsHiddenWhileFeatureOff`
+  测收起时 `version.features.assist == false`、`assist.scan` 抛「先收起来」、
+  快照 `assist.enabled == false`。`swift test` 604 绿，`dotnet build` 0 错误。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

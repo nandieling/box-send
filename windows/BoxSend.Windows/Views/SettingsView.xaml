@@ -70,7 +70,7 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="辅种搜索节奏">
+                <GroupBox x:Name="AssistBox" Header="辅种搜索节奏">
                     <StackPanel>
                         <Grid MaxWidth="620" HorizontalAlignment="Left">
                             <Grid.ColumnDefinitions>

@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel>
             <TextBlock Text="下载器" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <GroupBox Header="下载器（可以有多台：发种与辅种各用一台）">
+            <GroupBox x:Name="DlBox" Header="下载器（可以有多台：发种与辅种各用一台）">
                     <StackPanel>
                         <WrapPanel>
                             <Button Content="添加一台" Click="OnAddDownloader" />
@@ -16,12 +16,13 @@
                             <ComboBox x:Name="RoleReseed" Width="180" MinHeight="32" VerticalAlignment="Center"
                                       DisplayMemberPath="Label" SelectedValuePath="Id"
                                       SelectionChanged="OnRoleChanged" />
-                            <Label Content="辅种扫描用" Margin="16,0,0,0" VerticalAlignment="Center" />
+                            <Label x:Name="RoleAssistLabel" Content="辅种扫描用" Margin="16,0,0,0"
+                                   VerticalAlignment="Center" />
                             <ComboBox x:Name="RoleAssist" Width="180" MinHeight="32" VerticalAlignment="Center"
                                       DisplayMemberPath="Label" SelectedValuePath="Id"
                                       SelectionChanged="OnRoleChanged" />
                         </WrapPanel>
-                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                        <TextBlock x:Name="DlCaption" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextMuted}"
                                    Text="主下载器不能删。辅种要读的那台得真有这些文件，否则加进去就是重下一遍；两台不是同一台时，「辅种」页顶部会写明现在用的哪台。逐站上传限速按「批量发种推送用」那台保存。" />
                     </StackPanel>
