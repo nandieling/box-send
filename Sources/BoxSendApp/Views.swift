@@ -1510,7 +1510,7 @@ struct CookiesView: View {
                         RevealField(text: gistStringBinding(\.token))
                     }
                     LabeledRow("PT-depiler 备份密码") {
-                        SecureField("", text: gistStringBinding(\.encryptionKey)).textFieldStyle(.roundedBorder)
+                        RevealField(text: gistStringBinding(\.encryptionKey))
                     }
                     HStack(alignment: .bottom, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1554,7 +1554,7 @@ struct CookiesView: View {
                 }
                 CardSection("PT-depiler 本地备份") {
                     LabeledRow("备份密码") {
-                        SecureField("", text: $zipPassword).textFieldStyle(.roundedBorder)
+                        RevealField(text: $zipPassword)
                     }
                     Button("导入 PTD_backup_*.zip …") { pickZip() }
                     Text("在 PT-depiler 中「备份 → 本地备份」导出 zip 后导入；导入会整体替换本地 cookie。")
@@ -1572,7 +1572,7 @@ struct CookiesView: View {
                     HStack(alignment: .bottom, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("备份密码").font(.caption).foregroundStyle(.secondary)
-                            SecureField("", text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) })).textFieldStyle(.roundedBorder).frame(width: 180)
+                            RevealField(text: Binding(get: { model.zipPassword() }, set: { model.setZipPassword($0) })).frame(width: 180)
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text("轮询（分钟）").font(.caption).foregroundStyle(.secondary)

@@ -1,14 +1,16 @@
 <UserControl x:Class="BoxSend.Windows.Views.SettingsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:BoxSend.Windows">
     <Border Background="{DynamicResource BlockSurface}" CornerRadius="8" Padding="16">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+            <!-- 整列居中：左边贴边摆的话，宽窗口下右侧留一大片空，看着不像设置页 -->
+            <StackPanel MaxWidth="780" HorizontalAlignment="Center">
                 <GroupBox Header="主题">
                     <ItemsControl x:Name="ThemeList">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel />
+                                <WrapPanel HorizontalAlignment="Center" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
@@ -43,20 +45,14 @@
                 <GroupBox Header="TMDB 链接（豆瓣 / IMDb 反查）">
                     <StackPanel>
                         <CheckBox x:Name="TmdbOn" Content="发种时自动补 TMDB 链接" Click="OnTmdbToggled" />
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <Label Content="API 代理网关地址（留空走官方接口）" />
-                                <TextBox x:Name="TmdbBase" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <Label Content="API Key（网关代填时留空）" />
-                                <TextBox x:Name="TmdbKey" />
-                            </StackPanel>
-                        </Grid>
+                        <StackPanel Margin="0,8,0,0" MaxWidth="420" HorizontalAlignment="Left">
+                            <Label Content="API 代理网关地址（留空走官方接口）" Padding="0,0,0,2" />
+                            <TextBox x:Name="TmdbBase" />
+                        </StackPanel>
+                        <StackPanel Margin="0,0,0,0" MaxWidth="360" HorizontalAlignment="Left">
+                            <Label Content="API Key（网关代填时留空）" Padding="0,0,0,2" />
+                            <local:SecretField x:Name="TmdbKey" />
+                        </StackPanel>
                         <WrapPanel Margin="0,10,0,0">
                             <Button x:Name="BtnTmdb" Content="测试查询" Style="{StaticResource Primary}"
                                     Click="OnTestTMDB" />

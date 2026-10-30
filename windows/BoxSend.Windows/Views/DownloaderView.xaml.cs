@@ -63,7 +63,7 @@ public partial class DownloaderView : UserControl
         Select(type, d.Type);
         var url = new TextBox { Text = d.Url };
         var user = new TextBox { Text = d.Username };
-        var pass = new TextBox { Text = d.Password };
+        var pass = new SecretField { Password = d.Password };
         var savePath = new TextBox { Text = d.SavePath };
         var category = new TextBox { Text = d.Category };
         var limit = new TextBox { Text = (d.DefaultUpLimit / 1048576).ToString(), Width = 60 };
@@ -96,7 +96,7 @@ public partial class DownloaderView : UserControl
                 ["type"] = SelectedTag(type),
                 ["url"] = url.Text.Trim(),
                 ["username"] = user.Text,
-                ["password"] = pass.Text,
+                ["password"] = pass.Password,
                 ["savePath"] = string.IsNullOrWhiteSpace(savePath.Text) ? null : savePath.Text.Trim(),
                 ["category"] = string.IsNullOrWhiteSpace(category.Text) ? null : category.Text.Trim(),
                 ["skipChecking"] = skip.IsChecked == true,
@@ -125,27 +125,22 @@ public partial class DownloaderView : UserControl
             status.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
         }
 
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 3; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Put(grid, 0, 0, Labeled(_model.AssistEnabled ? "名字（列表与用途下拉里显示）" : "名字（卡片标题显示）", name));
-        Put(grid, 0, 1, Labeled("类型", type));
-        Put(grid, 1, 0, Labeled("地址（VPS 隧道地址，如 http://127.0.0.1:8080）", url));
-        Put(grid, 1, 1, Two(
-            Labeled("用户名", user),
-            Labeled("密码", pass)));
-        Put(grid, 2, 0, Two(
-            Labeled("保存路径（留空用下载器默认）", savePath),
-            Labeled("qBittorrent 分类", category)));
-        Put(grid, 2, 1, Two(
-            Labeled("默认上传限速 MB/s", limit),
-            Two(Labeled("推送时机", push), skip)));
-
-        var guardRow = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), };
-        guardRow.Children.Add(Labeled("VPS 剩余空间（GB，留空不检查）", vpsFree));
-        guardRow.Children.Add(Labeled("不足时", guard));
-        guardRow.Children.Add(Labeled("余量 GB", margin));
+        // 一行一个字段：两列并排时标签与输入框都容易被挤矮，长短不一的字段还互相抢宽度
+        var grid = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+        grid.Children.Add(Widgets.Field(_model.AssistEnabled ? "名字（列表与用途下拉里显示）" : "名字（卡片标题显示）", name, 280));
+        grid.Children.Add(Widgets.Field("类型", type, 200));
+        grid.Children.Add(Widgets.Field("地址（VPS 隧道地址，如 http://127.0.0.1:8080）", url, 460));
+        grid.Children.Add(Widgets.Field("用户名", user, 280));
+        grid.Children.Add(Widgets.Field("密码", pass, 320));
+        grid.Children.Add(Widgets.Field("保存路径（留空用下载器默认）", savePath, 460));
+        grid.Children.Add(Widgets.Field("qBittorrent 分类", category, 280));
+        grid.Children.Add(Widgets.Field("默认上传限速 MB/s", limit, 140));
+        grid.Children.Add(Widgets.Field("推送时机", push, 180));
+        grid.Children.Add(Widgets.Field("VPS 剩余空间（GB，留空不检查）", vpsFree, 140));
+        grid.Children.Add(Widgets.Field("不足时", guard, 160));
+        grid.Children.Add(Widgets.Field("余量 GB", margin, 110));
+        skip.Margin = new Thickness(0, 2, 0, 8);
+        grid.Children.Add(skip);
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         var save = new Button
@@ -179,7 +174,6 @@ public partial class DownloaderView : UserControl
 
         var body = new StackPanel();
         body.Children.Add(grid);
-        body.Children.Add(guardRow);
         body.Children.Add(buttons);
         return new GroupBox
         {
@@ -188,32 +182,6 @@ public partial class DownloaderView : UserControl
             Margin = new Thickness(0, 0, 0, 10),
             Content = body,
         };
-    }
-
-    /// 两列里再并排两个小字段
-    private static UIElement Two(UIElement a, UIElement b)
-    {
-        var p = new WrapPanel();
-        p.Children.Add(a);
-        p.Children.Add(b);
-        return p;
-    }
-
-    private static UIElement Labeled(string text, FrameworkElement input)
-    {
-        var p = new StackPanel { Margin = new Thickness(0, 0, 8, 6) };
-        p.Children.Add(new Label { Content = text, Padding = new Thickness(0, 0, 0, 2) });
-        input.MinHeight = 30;
-        input.VerticalAlignment = VerticalAlignment.Center;
-        p.Children.Add(input);
-        return p;
-    }
-
-    private static void Put(Grid grid, int row, int col, UIElement child)
-    {
-        Grid.SetRow(child, row);
-        Grid.SetColumn(child, col);
-        grid.Children.Add(child);
     }
 
     // MARK: 多台下载器

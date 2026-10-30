@@ -1032,6 +1032,26 @@ Windows 侧：
   不许再出现「下载器推送结果」「与 mac 版一致」这类作废说法；桥那份要按 Windows 措辞（含 Setup.exe）。
   以后改教程只改核心一处，改漏会被用例直接钉住。
 
+## 这一轮（Windows 设置区：整列居中、一行一个字段、口令框加星带显示）
+
+- 设置页（含并进来的 Cookie 与下载器）整列改居中：外层 `StackPanel` 由
+  `HorizontalAlignment="Left"` 改 `Center`，MaxWidth 760→780；主题色块 WrapPanel 也居中。
+- 一行一个字段：Cookie 三张卡片、下载器卡片、SSH 卡片、TMDB 卡片原来的两列 / 三列 Grid
+  全部拆成单列，标签在上、输入框在下，宽度按内容给（URL / 路径 420~460，数字 110~140，
+  下拉 160~200）。`DownloaderView` 里 `Two()` / `Put()` / `Labeled()` 那套两列助手没人用了，删掉，
+  改用新的 `Widgets.Field(label, input, width)`。
+- 新增 `windows/BoxSend.Windows/Widgets.cs`：`Widgets.Field` 与 `SecretField`。
+  `SecretField` 是 mac `RevealField` 的对应物——`PasswordBox`（天生打星）与一个明文 `TextBox`
+  叠在同一位置，右侧「显示 / 隐藏」按钮切可见性；`PasswordBox` 不能绑定，明文侧改动回填到它，
+  取值一律读 `Password`（对外同时露 `Password` 与 `Text`，原先用 TextBox 的调用方不用改）。
+- 打星的字段两端对齐这套：Gist Token、PT-depiler 备份密码（Gist 那份）、CookieCloud 的
+  KEY 与端对端密码、PT-depiler 本地备份密码、备份目录监控密码、下载器密码、SSH 密码、TMDB API Key。
+  mac 此前有三处只用 `SecureField`（Gist 加密 KEY、两处 PT-depiler 备份密码）没有显示按钮，
+  一并换成 `RevealField`；Windows 原来手写的 `GistPeeker` + `GistReveal` 那套单点 hack 删掉。
+- 验过：mac 设置页逐个确认这八处都是打星 + 「显示」，点一下转明文、再点收回；
+  WPF 编译 0 错误（XAML 里的 `local:SecretField` 与删掉的 peeker 引用都由编译把关）。
+  Windows 端没机器可眼验，改动全在 XAML/控件层，回归点在下载器卡片与 SSH 卡片的取值。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

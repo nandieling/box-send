@@ -1,108 +1,89 @@
 <UserControl x:Class="BoxSend.Windows.Views.DownloaderView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:BoxSend.Windows">
     <StackPanel>
-            <TextBlock Text="下载器" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <GroupBox x:Name="DlBox" Header="下载器">
-                    <StackPanel>
-                        <WrapPanel x:Name="AddRow">
-                            <Button Content="添加一台" Click="OnAddDownloader" />
-                            <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Text="添加后每台都直接列在下面，各自填、各自测，不用先选哪一台。" />
-                        </WrapPanel>
-                        <WrapPanel x:Name="RoleRow" Margin="0,8,0,0">
-                            <Label Content="批量发种推送用" VerticalAlignment="Center" />
-                            <ComboBox x:Name="RoleReseed" Width="180" MinHeight="32" VerticalAlignment="Center"
-                                      DisplayMemberPath="Label" SelectedValuePath="Id"
-                                      SelectionChanged="OnRoleChanged" />
-                            <Label x:Name="RoleAssistLabel" Content="辅种扫描用" Margin="16,0,0,0"
-                                   VerticalAlignment="Center" />
-                            <ComboBox x:Name="RoleAssist" Width="180" MinHeight="32" VerticalAlignment="Center"
-                                      DisplayMemberPath="Label" SelectedValuePath="Id"
-                                      SelectionChanged="OnRoleChanged" />
-                        </WrapPanel>
-                        <TextBlock x:Name="DlCaption" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   Text="主下载器不能删。辅种要读的那台得真有这些文件，否则加进去就是重下一遍；两台不是同一台时，「辅种」页顶部会写明现在用的哪台。逐站上传限速按「批量发种推送用」那台保存。" />
-                    </StackPanel>
-                </GroupBox>
+        <TextBlock Text="下载器" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
 
-                <StackPanel x:Name="DlCards" Margin="0,12,0,0" />
+        <GroupBox x:Name="DlBox" Header="下载器">
+            <StackPanel>
+                <WrapPanel x:Name="AddRow">
+                    <Button Content="添加一台" Click="OnAddDownloader" />
+                    <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                               TextWrapping="Wrap" MaxWidth="460"
+                               Text="添加后每台都直接列在下面，各自填、各自测，不用先选哪一台。" />
+                </WrapPanel>
+                <WrapPanel x:Name="RoleRow" Margin="0,8,0,0">
+                    <Label Content="批量发种推送用" VerticalAlignment="Center" />
+                    <ComboBox x:Name="RoleReseed" Width="180" MinHeight="32" VerticalAlignment="Center"
+                              DisplayMemberPath="Label" SelectedValuePath="Id"
+                              SelectionChanged="OnRoleChanged" />
+                    <Label x:Name="RoleAssistLabel" Content="辅种扫描用" Margin="16,0,0,0"
+                           VerticalAlignment="Center" />
+                    <ComboBox x:Name="RoleAssist" Width="180" MinHeight="32" VerticalAlignment="Center"
+                              DisplayMemberPath="Label" SelectedValuePath="Id"
+                              SelectionChanged="OnRoleChanged" />
+                </WrapPanel>
+                <TextBlock x:Name="DlCaption" Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}"
+                           Text="主下载器不能删。辅种要读的那台得真有这些文件，否则加进去就是重下一遍；两台不是同一台时，「辅种」页顶部会写明现在用的哪台。逐站上传限速按「批量发种推送用」那台保存。" />
+            </StackPanel>
+        </GroupBox>
 
-                <GroupBox Header="转种服务器（SSH 上传测速）">
-                    <StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="190" />
-                                <ColumnDefinition Width="10" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <Label Content="登录方式" />
-                                <ComboBox x:Name="SshAuth">
-                                    <ComboBoxItem Content="密钥（用系统 ssh）" Tag="key" />
-                                    <ComboBoxItem Content="密码（用内置 SSH 客户端）" Tag="password" />
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <Label Content="密码（只在登录方式选「密码」时用）" />
-                                <PasswordBox x:Name="SshPass" />
-                            </StackPanel>
-                        </Grid>
-                        <Grid Margin="0,8,0,0" MaxWidth="620" HorizontalAlignment="Left">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <Label Content="服务器地址" />
-                                <TextBox x:Name="SshHost" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                <Label Content="SSH 端口" />
-                                <TextBox x:Name="SshPort" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <Label Content="用户名" />
-                                <TextBox x:Name="SshUser" />
-                            </StackPanel>
-                        </Grid>
-                        <Grid Margin="0,8,0,0" MaxWidth="620" HorizontalAlignment="Left">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <Label Content="私钥路径（~ = 当前用户目录）" />
-                                <TextBox x:Name="SshKeyPath" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                                <Label Content="每轮 MB" />
-                                <TextBox x:Name="SshTestMB" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <Label Content="测速地址（换成自己的接收端）" />
-                                <TextBox x:Name="SshProbe" />
-                            </StackPanel>
-                        </Grid>
-                        <WrapPanel Margin="0,10,0,0">
-                            <Button x:Name="BtnSshTest" Content="测试连接并测速"
-                                    Style="{StaticResource Primary}" Click="OnTestSSH" />
-                            <TextBlock x:Name="SshState" Margin="12,0,0,0" VerticalAlignment="Center"
-                                       FontSize="12" TextWrapping="Wrap"
-                                       Foreground="{DynamicResource TextMuted}" />
-                        </WrapPanel>
-                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   Text="「测试上传速度」按钮在「批量转种」页「开始运行」左边，实测速度显示在按钮下面那一行。密钥登录用系统自带的 ssh：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。密码登录走软件内置的 SSH 客户端，不需要系统 ssh。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
-                    </StackPanel>
-                </GroupBox>
+        <StackPanel x:Name="DlCards" Margin="0,12,0,0" />
 
-            <TextBlock x:Name="Result" Margin="0,12,0,0" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextMuted}" FontSize="12"
-                       TextWrapping="Wrap" />
+        <GroupBox Header="转种服务器（SSH 上传测速）">
+            <StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="300" HorizontalAlignment="Left">
+                    <Label Content="登录方式" Padding="0,0,0,2" />
+                    <ComboBox x:Name="SshAuth">
+                        <ComboBoxItem Content="密钥（用系统 ssh）" Tag="key" />
+                        <ComboBoxItem Content="密码（用内置 SSH 客户端）" Tag="password" />
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="320" HorizontalAlignment="Left">
+                    <Label Content="密码（只在登录方式选「密码」时用）" Padding="0,0,0,2" />
+                    <local:SecretField x:Name="SshPass" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                    <Label Content="服务器地址" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshHost" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="120" HorizontalAlignment="Left">
+                    <Label Content="SSH 端口" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshPort" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="240" HorizontalAlignment="Left">
+                    <Label Content="用户名" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshUser" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                    <Label Content="私钥路径（~ = 当前用户目录）" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshKeyPath" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="120" HorizontalAlignment="Left">
+                    <Label Content="每轮 MB" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshTestMB" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                    <Label Content="测速地址（换成自己的接收端）" Padding="0,0,0,2" />
+                    <TextBox x:Name="SshProbe" />
+                </StackPanel>
+                <WrapPanel Margin="0,4,0,0">
+                    <Button x:Name="BtnSshTest" Content="测试连接并测速"
+                            Style="{StaticResource Primary}" Click="OnTestSSH" />
+                    <TextBlock x:Name="SshState" Margin="12,0,0,0" VerticalAlignment="Center"
+                               FontSize="12" TextWrapping="Wrap" MaxWidth="420"
+                               Foreground="{DynamicResource TextMuted}" />
+                </WrapPanel>
+                <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextMuted}"
+                           Text="「测试上传速度」按钮在「批量转种」页「开始运行」左边，实测速度显示在按钮下面那一行。密钥登录用系统自带的 ssh：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。密码登录走软件内置的 SSH 客户端，不需要系统 ssh。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
+            </StackPanel>
+        </GroupBox>
+
+        <TextBlock x:Name="Result" Margin="0,12,0,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextMuted}" FontSize="12"
+                   TextWrapping="Wrap" />
     </StackPanel>
 </UserControl>

@@ -14,9 +14,6 @@ public partial class CookiesView : UserControl
     {
         _model = model;
         InitializeComponent();
-        // 「显示」按钮旁边放一个明文框，按下时才亮出来（PasswordBox 不支持绑定，只能两个控件切）
-        GistPeeker.Visibility = Visibility.Collapsed;
-        GistTokenDock.Children.Insert(0, GistPeeker);
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Load);
         // 同步中把两个「立即同步」都压住（自动同步走的是同一条路，标记同样生效）
         _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateSyncButtons);
@@ -139,15 +136,4 @@ public partial class CookiesView : UserControl
         _model.Call("cookies.clear");
     }
 
-    /// 口令显示切换：PasswordBox 没有 Text 绑定，换成同位置的 TextBox 太啰嗦，直接切可见性
-    private void OnReveal(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-        var reveal = GistReveal.IsChecked == true;
-        GistToken.Visibility = reveal ? Visibility.Collapsed : Visibility.Visible;
-        GistPeeker.Visibility = reveal ? Visibility.Visible : Visibility.Collapsed;
-        if (reveal) GistPeeker.Text = GistToken.Password;
-    }
-
-    private readonly TextBox GistPeeker = new() { Margin = new Thickness(0) };
 }
