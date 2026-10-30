@@ -749,12 +749,21 @@ final class AppModel: ObservableObject {
 
     var anyChecking: Bool { !siteChecking.isEmpty }
 
-    /// 是否有可检测凭据：API Key 站（馒头等）看 key；cookie 站看 cookie
+    /// 是否有可检测凭据：API Key 站（馒头等）看 key；cookie 站看 cookie；
+    /// 可乐这类两种都收的站，cookie 与 Key 任有一样就算有凭据
     private func hasCredential(for site: SiteConfig, jar: CookieStore) -> Bool {
-        if siteUsesAPIKey(site) {
+        if modelOnlyAPIKey(site) {
             return !(site.apiKey ?? "").isEmpty
         }
-        return jar.cookieHeader(forHost: siteHost(site)) != nil
+        let hasCookie = jar.cookieHeader(forHost: siteHost(site)) != nil
+        if siteAcceptsAPIKey(site) { return hasCookie || !(site.apiKey ?? "").isEmpty }
+        return hasCookie
+    }
+
+    /// 只认 API Key 的站（馒头、肉丝）：cookie 对它没意义
+    private func modelOnlyAPIKey(_ site: SiteConfig) -> Bool {
+        let es = SiteRegistry.effectiveSite(site)
+        return (es.overrides?.apiBase ?? "") != "" || (es.overrides?.usesAPIKey == true)
     }
 
     /// 批量检测代号：每轮检测开始 +1；旧的批次循环比对它决定是否退出（「停止检测」）
@@ -778,10 +787,15 @@ final class AppModel: ObservableObject {
 
     // MARK: API Key（M-Team 等 API 连接站点）
 
+    /// 界面当前按哪种凭据显示：key-only 站是 Key；可乐这类站填过 Key 就按 Key，否则按 cookie
     func siteUsesAPIKey(_ site: SiteConfig) -> Bool {
-        // 参考内置表合并后的 override（馒头等 API 站用户配置里未必带 overrides）
-        let es = SiteRegistry.effectiveSite(site)
-        return (es.overrides?.apiBase ?? "") != "" || (es.overrides?.usesAPIKey == true)
+        if modelOnlyAPIKey(site) { return true }
+        return siteAcceptsAPIKey(site) && !siteAPIKey(site).isEmpty
+    }
+
+    /// 该站能不能填 API Key（可乐：cookie 与 Key 都收，界面要多给一个 Key 页签）
+    func siteAcceptsAPIKey(_ site: SiteConfig) -> Bool {
+        modelOnlyAPIKey(site) || (SiteRegistry.effectiveSite(site).overrides?.apiKeyOptional == true)
     }
 
     func siteAPIKey(_ site: SiteConfig) -> String {

@@ -24,6 +24,8 @@ public enum SiteRegistry {
             return YemaPTAdapter(site: site, client: client, debugDir: debugDir)
         case .discuz:
             return DiscuzAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
+        case .cola:
+            return ColaAdapter(site: effectiveSite(site), client: client, debugDir: debugDir)
         case .unit3D, .luminance, .avistaz, .custom:
             let es = effectiveSite(site)
             if let ov = es.overrides, ov.apiBase != nil {
@@ -211,6 +213,7 @@ public enum SiteRegistry {
         SiteConfig(id: "xingwan", name: "星湾", url: "https://xingwan.cc/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdcity", name: "城市", url: "https://hdcity.city/", framework: .nexusPHP, enabled: false, overrides: .hdcity),
         SiteConfig(id: "fenghuang", name: "凤凰", url: "https://pt.521.best/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "cola", name: "可乐", url: "https://www.colapt.com/", framework: .cola, enabled: false, overrides: .cola),
         SiteConfig(id: "generationfree", name: "Generation-Free", url: "https://generation-free.org/", framework: .nexusPHP, enabled: false, overrides: nil),
         // --- Unit3D 家族（暂走 NexusPHP 通用逻辑，M3 待专属适配器） ---
         SiteConfig(id: "mteam", name: "馒头", url: "https://kp.m-team.cc/", framework: .unit3D, enabled: false, overrides: .mteam),

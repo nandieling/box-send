@@ -13,6 +13,8 @@ public enum SiteFramework: String, Codable {
     case haidan = "Haidan"
     case yemapt = "YemaPT"
     case discuz = "Discuz"
+    /// 可乐 PT（Vue SPA + REST API，字段与选项表自成一套）
+    case cola = "Cola"
     case xbtit = "XBTIT"
     case custom = "custom"
 }
@@ -170,6 +172,9 @@ public struct SiteOverride: Codable {
     public var apiBase: String?
     /// API 站点：是否用 API Key 连接（不走 cookie 同步）
     public var usesAPIKey: Bool?
+    /// 站方两种凭据都收（可乐 PT：填了 API Key 走 Key 面，没填仍走同步下来的 cookie）：
+    /// 界面因此同时给出 cookie 状态与「API Key（可选）」入口
+    public var apiKeyOptional: Bool?
 }
 
 extension SiteOverride {
@@ -242,6 +247,7 @@ extension SiteOverride {
         if let v = regionPatterns { out.regionPatterns = base.regionPatterns?.merging(v) { _, new in new } }
         if let v = apiBase { out.apiBase = v }
         if usesAPIKey ?? false { out.usesAPIKey = true }
+        if apiKeyOptional ?? false { out.apiKeyOptional = true }
         return out
     }
 }

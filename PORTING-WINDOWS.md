@@ -1084,6 +1084,41 @@ Windows 侧：
   WPF 编译 0 错误；mac 重新出包装到 /Applications，实跑点「同步 Cookie」后底部出现
   「Cookie 同步成功：导入/更新 2 个站点…」并在末尾带「关闭」，点一下整条消失。
 
+## 这一轮（新增站点：可乐 colapt.com）
+
+- 可乐是 Vue SPA + REST API，没有 NexusPHP 那套上传表单可以配字段名，所以按框架另开一条路：
+  `SiteFramework.cola` + `ColaAdapter`，字段映射全放在纯函数 `ColaFields`（可单测，WPF 不用重写判据）。
+  站方把 OpenAPI 编译进前端包（`assets/session-*.js` 里 `paths` / `components` 两段 JSON），
+  片源、分辨率、视频编码、HDR、字幕、发布范围那些合法值都照那份 spec 取，
+  选项表里没有的一律留空——「没有就不选」是用户定的老规矩（暮雪阁那次硬填 APE 的教训）。
+- 发种四步：`POST /media/ensure`（豆瓣→IMDb→TMDB 依次试，都不成才 `new_media`）
+  → `POST /torrents`（裸 .torrent 正文，`Content-Type: application/x-bittorrent`，409 = 站内已有）
+  → `PUT /torrents/{id}/metadata`（`expected_revision` 用挂种子那步回的 revision）
+  → `POST /torrents/{id}/submit`。那份 metadata 的 spec 是 `additionalProperties:false`，
+  多塞一个键就 422，所以 `ColaTests` 里把允许的键名列成白名单逐条比对。
+- 鉴权两条路都通：站方给外部工具的是 API Key（`rcapi_…`，认 `x-api-key` 头），配
+  `/api/v1/automation/*` 那组写端点用（那组不查 Origin / CSRF）；没填 Key 就退回 Web 那条
+  「站点 cookie + Origin + X-CSRF-Token」，CSRF 从 `GET /api/v1/me` 取，403 时换一枚重试一次。
+  下载接口要先领一次性授权（`POST /torrents/{id}/authorizations` 拿 `authorization_id`）。
+- **界面要多给一个入口**：可乐 cookie 与 API Key 都收，而原来 `usesAPIKey` 是个二值开关
+  （馒头那类 key-only 站），照它配会把 cookie 同步和「手动添加 cookie」一起废掉。
+  核心因此新增 `SiteOverride.apiKeyOptional`，配 `AppService.supportsAPIKey` / `prefersAPIKey`：
+  站点快照多带 `acceptsApiKey`，`cookies.getRaw`/`cookies.setRaw` 多认一个 `kind`
+  （`cookie` / `apikey`）。判据只在核心一份，两边界面各自画控件：
+  mac `ManualCookieSheet` 顶部加「cookie / API Key（可选）」分段选择（`Views.swift`），
+  Windows `ManualCookieWindow` 加一个复选框页签（`Dialogs/Windows.cs`）+ `SiteRow.AcceptsApiKey`，
+  可乐未填 Key 时状态行说「已有 cookie（可选填 API Key）」。
+- 片源判序（`ColaFields.source`）：Remux 最先（Remux 不是「加装字幕的原盘」，既不进 DIY原盘
+  也不打 DIY 标签）→ 流媒体 / 电视源 → 盘类（有中文字幕证据 = 蓝光 DIY = 「DIY原盘」；
+  出现 x264/x265 或写着 BDRip = 「BDRip」；其余才是「Blu-ray Disc」）→ DVD。
+  认不出媒介返回 nil 留「未知」，不猜原盘。
+- 顺手补的两处全站判据（可乐要，别的站也不会变坏）：`QualityTokens.codec(fromName:)` 认标题里的
+  VP9；`audio(from:)` 认 `E-AC-3` 这种带连字符的写法（原来只认 E-AC3 / DDP）。
+- 验过：`swift test` 640 个用例全绿（新增 `ColaTests` 21 个 + `WindowsBridgeTests` 双凭据往返 1 个）；
+  WPF 编译 0 错误；mac 重新出包装到 /Applications，实跑「站点分组 → 添加站点」搜出
+  「可乐 https://www.colapt.com/」，加入分组后卡片与手动凭据弹窗都按 API Key 页签走，
+  填一枚假 Key 保存，卡片如实报「API Key 失效」（站点回 403 `api_key_scope_denied`，已 curl 核对）。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

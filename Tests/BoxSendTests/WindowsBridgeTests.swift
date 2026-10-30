@@ -233,6 +233,33 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "hdsky"])["usesAPIKey"] as? Bool, false)
     }
 
+    /// 可乐这类「cookie 与 API Key 都收」的站：弹窗要能分别读写两种凭据，
+    /// 不能像馒头那样只认 Key（否则用户粘 cookie 会被当成 Key 存），也不能只认 cookie
+    /// （否则填了 Key 再点开是空的）。
+    func testManualCredentialDualKind() throws {
+        let (svc, _) = try makeService()
+        _ = try svc.invoke("sites.add", ["ids": ["cola"], "group": -1])
+
+        let row = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "cola" }!
+        XCTAssertEqual(row["acceptsApiKey"] as? Bool, true, "界面要按 acceptsApiKey 给可乐开 API Key 页签")
+        XCTAssertEqual(row["usesAPIKey"] as? Bool, false, "没填 Key 之前可乐还是按 cookie 显示")
+
+        _ = try svc.invoke("cookies.setRaw", ["id": "cola", "raw": "sid=abc; csrf=def", "kind": "cookie"])
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola", "kind": "cookie"])["raw"] as? String,
+                       "sid=abc; csrf=def", "kind=cookie 要存进 cookie 罐")
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola", "kind": "apikey"])["raw"] as? String,
+                       "", "两种凭据各存各的，别互相覆盖")
+
+        _ = try svc.invoke("cookies.setRaw", ["id": "cola", "raw": " rcapi_9f3 ", "kind": "apikey"])
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola", "kind": "apikey"])["raw"] as? String,
+                       "rcapi_9f3", "kind=apikey 要存进站点 apiKey")
+        let after = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "cola" }!
+        XCTAssertEqual(after["hasAPIKey"] as? Bool, true)
+        XCTAssertEqual(after["usesAPIKey"] as? Bool, true, "填了 Key 之后该站按 Key 显示")
+        // 默认（不带 kind）取当前生效的那种凭据：可乐此时回 Key
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola"])["raw"] as? String, "rcapi_9f3")
+    }
+
     func testLegacyConfigWithoutGroupsGetsOne() throws {
         // 旧配置：站点都纳管了却一个分组都没有 → 读进来要补一个默认分组，别悬着「未分组」
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())

@@ -864,6 +864,8 @@ public sealed class SiteRow : INotifyPropertyChanged
     public int IndexInBlock { get; init; }
     public int BlockSize { get; init; }
     public bool UsesApiKey { get; init; }
+    /// <summary>该站也接受 API Key（可乐：cookie 与 Key 都收，手动弹窗要多一个页签）</summary>
+    public bool AcceptsApiKey { get; init; }
     public bool HasApiKey { get; init; }
     private int _cookieCount;
     private bool _hasCookie;
@@ -954,6 +956,9 @@ public sealed class SiteRow : INotifyPropertyChanged
 
     /// 弹窗里对当前凭据的一句说明
     public string CookieText => UsesApiKey ? (HasApiKey ? "已填 API Key" : "未填 API Key")
+        : AcceptsApiKey
+            ? (HasApiKey ? "已填 API Key（也可用 cookie）"
+                         : HasCookie ? "已有 cookie（可选填 API Key）" : "无 cookie（可选填 API Key）")
         : HasCookie ? "已有 cookie" : "无 cookie";
 
     /// 下拉框直接把行对象当项用（源站选择、手动填 cookie），没有这句会显示类名
@@ -980,6 +985,7 @@ public sealed class SiteRow : INotifyPropertyChanged
             IndexInBlock = n["indexInBlock"]?.GetValue<int>() ?? -1,
             BlockSize = n["blockSize"]?.GetValue<int>() ?? 0,
             UsesApiKey = n["usesAPIKey"]?.GetValue<bool>() ?? false,
+            AcceptsApiKey = n["acceptsApiKey"]?.GetValue<bool>() ?? false,
             HasApiKey = n["hasAPIKey"]?.GetValue<bool>() ?? false,
             CookieCount = n["cookieCount"]?.GetValue<int>() ?? 0,
             HasCookie = n["hasCookie"]?.GetValue<bool>() ?? false,

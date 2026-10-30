@@ -82,6 +82,18 @@ public final class HTTPClient {
         return try perform(req)
     }
 
+    /// 原样提交请求体（可乐 PT 发种要的是裸 .torrent 正文，Content-Type: application/x-bittorrent；
+    /// multipart 那种包法它不认）
+    @discardableResult
+    func postRaw(_ url: String, body: Data, contentType: String, referer: String? = nil,
+                 extraHeaders: [String: String] = [:], method: String = "POST") throws -> Response {
+        var req = try makeRequest(url: url, method: method, referer: referer, extraHeaders: extraHeaders)
+        req.httpMethod = method
+        req.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        return try perform(req)
+    }
+
     /// multipart 文本字段（有序，允许同名多次，如 option_sel[]）
     public struct MultipartField {
         public let name: String

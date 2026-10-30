@@ -593,4 +593,13 @@ extension SiteOverride {
     )
 
     static let hhanclub: SiteOverride? = nil
+
+    /// 可乐（www.colapt.com）：Vue SPA + REST API，没有上传表单可配，字段映射在 ColaFields。
+    /// 站方要「转载注明来源」，简介开头补一句转载自…；凭据两种都收（Key 优先，退回 cookie）。
+    static let cola = SiteOverride(
+        uploadPath: "upload",
+        descrSourcePrefix: true,
+        apiKeyStyle: "cola",
+        apiKeyOptional: true
+    )
 }

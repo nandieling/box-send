@@ -316,12 +316,15 @@ public final class AppService {
         case "cookies.getRaw":
             // 弹窗预填：API 站回填 apiKey，其余回填 cookie 罐，界面不用关心差别
             let id = params["id"] as? String ?? ""
-            return ["raw": existingCredential(forID: id),
-                    "usesAPIKey": cfg.site(id).map { Self.usesAPIKey($0) } ?? false]
+            guard let site = cfg.site(id) else { return ["raw": "", "usesAPIKey": false] }
+            let kind = params["kind"] as? String
+            return ["raw": existingCredential(forID: id, kind: kind),
+                    "usesAPIKey": Self.prefersAPIKey(site),
+                    "acceptsApiKey": Self.supportsAPIKey(site)]
         case "cookies.setRaw":
             let id = params["id"] as? String ?? ""
             let raw = params["raw"] as? String ?? ""
-            return try setSiteCredential(siteID: id, raw: raw)
+            return try setSiteCredential(siteID: id, raw: raw, kind: params["kind"] as? String)
         case "cookies.remove":
             let id = params["id"] as? String ?? ""
             var removed = false
@@ -1299,10 +1302,15 @@ public final class AppService {
 
     /// 手动填写弹窗的写入口：按站点凭据类型分流。
     /// 只看 cookie 罐的话，馒头这类 API 站会「保存成功，再打开输入框是空的」
-    private func setSiteCredential(siteID: String, raw: String) throws -> [String: Any] {
+    private func setSiteCredential(siteID: String, raw: String, kind: String? = nil) throws -> [String: Any] {
         guard let site = cfg.site(siteID) else { throw Failure("未配置的站点 id: \(siteID)") }
-        return Self.usesAPIKey(site) ? try setSiteAPIKey(siteID: siteID, raw: raw)
-                                     : try setSiteCookie(siteID: siteID, raw: raw)
+        switch kind {
+        case "cookie": return try setSiteCookie(siteID: siteID, raw: raw)
+        case "apikey": return try setSiteAPIKey(siteID: siteID, raw: raw)
+        default: break
+        }
+        return Self.prefersAPIKey(site) ? try setSiteAPIKey(siteID: siteID, raw: raw)
+                                        : try setSiteCookie(siteID: siteID, raw: raw)
     }
 
     /// 手动填 API Key：覆盖旧值，非空就启用该站并当场复检
@@ -1505,14 +1513,27 @@ public final class AppService {
         if Self.usesAPIKey(site) {
             return !(site.apiKey ?? "").isEmpty
         }
-        return cookies.cookieHeader(forHost: Self.host(of: site)) != nil
+        let hasCookie = cookies.cookieHeader(forHost: Self.host(of: site)) != nil
+        if Self.supportsAPIKey(site) {
+            // 可乐这类站：cookie 与 API Key 任有一样就能用
+            return hasCookie || !(site.apiKey ?? "").isEmpty
+        }
+        return hasCookie
     }
 
-    /// 弹窗预填用的凭据原文：API 站取站点 apiKey，其余取 cookie 罐里的请求头
-    private func existingCredential(forID siteID: String) -> String {
+    /// 弹窗预填用的凭据原文：API 站取站点 apiKey，其余取 cookie 罐里的请求头。
+    /// kind 传 "cookie"/"apikey" 时按用户选的页签取（可乐这类两种都收的站用得上）。
+    private func existingCredential(forID siteID: String, kind: String? = nil) -> String {
         guard let site = cfg.site(siteID) else { return "" }
-        if Self.usesAPIKey(site) { return site.apiKey ?? "" }
-        return cookies.cookieHeader(forHost: Self.host(of: site)) ?? ""
+        let cookie = cookies.cookieHeader(forHost: Self.host(of: site)) ?? ""
+        let key = site.apiKey ?? ""
+        switch kind {
+        case "cookie": return cookie
+        case "apikey": return key
+        default: break
+        }
+        if Self.prefersAPIKey(site) { return key }
+        return cookie
     }
 
     // MARK: 下载器 / TMDB / 更新
@@ -1605,6 +1626,18 @@ public final class AppService {
     // MARK: 内部
 
     /// 该站走 API Key 还是走 cookie（合并内置 override 后判断，与 mac 版同规则）
+    /// 界面该不该给这个站开「API Key」输入：key-only 站（馒头、肉丝）+ 可乐这类两种都收的站
+    static func supportsAPIKey(_ site: SiteConfig) -> Bool {
+        let es = SiteRegistry.effectiveSite(site)
+        return usesAPIKey(site) || (es.overrides?.apiKeyOptional == true)
+    }
+
+    /// 手动弹窗里默认按哪种凭据填：key-only 站填 Key；可乐这类站填了 Key 就按 Key，否则按 cookie
+    static func prefersAPIKey(_ site: SiteConfig) -> Bool {
+        if usesAPIKey(site) { return true }
+        return supportsAPIKey(site) && !((site.apiKey ?? "").isEmpty)
+    }
+
     static func usesAPIKey(_ site: SiteConfig) -> Bool {
         let es = SiteRegistry.effectiveSite(site)
         return (es.overrides?.apiBase ?? "") != "" || (es.overrides?.usesAPIKey == true)
@@ -1724,7 +1757,8 @@ public final class AppService {
                 "enabled": s.enabled, "managed": s.managed,
                 "group": c.groupIndex(of: s.id),
                 "indexInBlock": pos.index, "blockSize": pos.count,
-                "usesAPIKey": Self.usesAPIKey(s),
+                "usesAPIKey": Self.prefersAPIKey(s),
+                "acceptsApiKey": Self.supportsAPIKey(s),
                 "hasAPIKey": !(s.apiKey ?? "").isEmpty,
                 "cookieCount": snap[h]?.count ?? 0,
                 "hasCookie": snap[h] != nil && !(snap[h]?.isEmpty ?? true),

@@ -1328,13 +1328,23 @@ struct ManualCookieSheet: View {
     let sites: [SiteConfig]
     @State private var siteID: String = ""
     @State private var text = ""
+    /// 可乐这类 cookie 与 API Key 都收的站：用户手动切页签，决定这段文本存到哪儿
+    @State private var forceAPIKey: Bool?
 
     private var current: SiteConfig? {
         sites.first(where: { $0.id == siteID }) ?? sites.first
     }
 
+    /// 该站允许填 API Key（key-only 站没有页签，直接就是 Key）
+    private var canPickKey: Bool {
+        guard let c = current else { return false }
+        return model.siteAcceptsAPIKey(c) && !model.siteUsesAPIKey(c)
+    }
+
     private var currentUsesAPIKey: Bool {
-        current.map { model.siteUsesAPIKey($0) } ?? false
+        guard let c = current else { return false }
+        if canPickKey { return forceAPIKey ?? false }
+        return model.siteUsesAPIKey(c)
     }
 
     var body: some View {
@@ -1354,8 +1364,20 @@ struct ManualCookieSheet: View {
                 .labelsHidden()
                 .frame(width: 220)
             }
+            if canPickKey {
+                Picker("凭据类型", selection: Binding(
+                    get: { forceAPIKey ?? false },
+                    set: { forceAPIKey = $0; text = initialText(apiKey: $0) }
+                )) {
+                    Text("cookie").tag(false)
+                    Text("API Key（可选）").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 240)
+            }
             inputEditor(currentUsesAPIKey
-                        ? "站点 API Key（站点页「个人主页 → 设置 → API」获取，整段粘贴）"
+                        ? "站点 API Key（可乐在站点「个人中心 → API Keys」申请，要有 torrent.upload 权限；整段粘贴）"
                         : "name1=value1; name2=value2 …（浏览器 Cookie 头原文，整段粘贴）")
             HStack(alignment: .firstTextBaseline) {
                 Text(currentUsesAPIKey
@@ -1383,10 +1405,12 @@ struct ManualCookieSheet: View {
         .frame(width: 520)
         .onAppear {
             siteID = sites.first?.id ?? ""
-            text = initialText(for: siteID)
+            forceAPIKey = nil
+            text = initialText(apiKey: currentUsesAPIKey)
         }
-        .onChange(of: siteID) { id in
-            text = initialText(for: id)
+        .onChange(of: siteID) { _ in
+            forceAPIKey = nil
+            text = initialText(apiKey: currentUsesAPIKey)
         }
         .boxsendAppearance()
     }
@@ -1414,9 +1438,9 @@ struct ManualCookieSheet: View {
     }
 
     /// 预填已有 cookie / API Key，便于覆盖前核对
-    private func initialText(for id: String) -> String {
-        guard let c = sites.first(where: { $0.id == id }) else { return "" }
-        return model.siteUsesAPIKey(c) ? model.siteAPIKey(c) : model.existingCookieHeader(for: c)
+    private func initialText(apiKey: Bool) -> String {
+        guard let c = current else { return "" }
+        return apiKey ? model.siteAPIKey(c) : model.existingCookieHeader(for: c)
     }
 }
 /// 手动添加 cookie 的站点集合（点击选中卡片后点「手动添加」弹出）

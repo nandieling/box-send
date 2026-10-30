@@ -148,6 +148,7 @@ enum QualityTokens {
         if n.contains("xvid") { return "xvid" }
         if n.contains("vc-1") || n.contains("vc1") { return "vc1" }
         if n.contains("av1") { return "av1" }
+        if n.contains("vp9") { return "vp9" }
         if n.contains("mpeg-2") || n.contains("mpeg2") { return "mpeg2" }
         return nil
     }
@@ -190,7 +191,8 @@ enum QualityTokens {
             return "dtsbr"
         }
         if n.contains("truehd") { return n.contains("atmos") ? "truehd atmos" : "truehd" }
-        if n.contains("e-ac3") || n.contains("eac3") || n.contains("ddp") { return n.contains("atmos") ? "eac3 atmos" : "eac3" }
+        if n.contains("e-ac3") || n.contains("e-ac-3") || n.contains("eac3") || n.contains("ddp")
+            || n.contains("dd+") { return n.contains("atmos") ? "eac3 atmos" : "eac3" }
         if n.contains("dd5") || n.contains("ac3") { return "ac3" }
         if n.contains("dts") { return "dts" }
         if n.contains("flac") { return "flac" }

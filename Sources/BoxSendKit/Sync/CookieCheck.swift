@@ -78,6 +78,9 @@ public enum CookieCheck {
             return checkAPIKey(es, client)
         }
         switch es.framework {
+        case .cola:
+            // 可乐两种凭据都收：填了 Key 验 Key，没填写验同步下来的 cookie
+            return checkCola(es, client)
         case .yemapt:
             return checkYemaPT(site, client)
         case .tnode:
@@ -162,6 +165,44 @@ public enum CookieCheck {
         if let d = obj["code"] as? Double { return Int(d) }
         if let str = obj["code"] as? String { return Int(str) }
         return nil
+    }
+
+    /// 可乐 PT：GET {site}api/v1/me。填了 API Key 就按 Key 验（站方的外部工具面），
+    /// 没填就按同步下来的 cookie 验；401/403 才是真失效。
+    private static func checkCola(_ site: SiteConfig, _ client: HTTPClient) -> Result {
+        let key = site.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var headers = ["Accept": "application/json"]
+        let host = URL(string: site.url)?.host ?? ""
+        if !key.isEmpty {
+            headers["x-api-key"] = key
+        } else if client.cookies.cookieHeader(forHost: host) == nil {
+            return Result(siteID: site.id, ok: false,
+                          message: "没填 API Key，本地也没有 \(host) 的 cookie：登录站点后同步一次，"
+                                 + "或在「手动添加cookie或api key」里粘一样")
+        }
+        let url = site.url.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/v1/me"
+        let resp: HTTPClient.Response
+        do {
+            resp = try client.get(url, referer: site.url, extraHeaders: headers)
+        } catch {
+            return Result(siteID: site.id, ok: false, message: "网络错误（站点不可达？）: \(error.localizedDescription)")
+        }
+        if resp.status == 401 || resp.status == 403 {
+            return Result(siteID: site.id, ok: false,
+                          message: key.isEmpty
+                              ? "cookie 已失效，请重新登录站点并触发 PT-depiler 备份"
+                              : "API Key 未通过鉴权（要在站点「自动化」里申请权限并重新生成）")
+        }
+        if resp.status >= 200 && resp.status < 300 {
+            var name = ""
+            if let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any] {
+                name = (obj["username"] as? String) ?? ""
+            }
+            return Result(siteID: site.id, ok: true,
+                          message: name.isEmpty ? (key.isEmpty ? "cookie 有效" : "API Key 有效")
+                               : "\(key.isEmpty ? "cookie 有效" : "API Key 有效")（\(name)）")
+        }
+        return Result(siteID: site.id, ok: false, message: "站点返回 HTTP \(resp.status)")
     }
 
     // MARK: - YemaPT（fetchUploadOptions 需登录）

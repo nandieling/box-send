@@ -514,6 +514,13 @@ public sealed class ManualCookieWindow : Window
     private readonly TextBlock _kind = new() { Margin = new Thickness(0, 8, 0, 2) };
     private readonly TextBlock _status = new() { Margin = new Thickness(0, 6, 0, 0) };
     private readonly Button _clear = new() { Content = "清空本站 cookie", Padding = new Thickness(14, 5, 14, 5) };
+    /// <summary>可乐这类 cookie 与 API Key 都收的站：用它决定这段文本存到哪儿</summary>
+    private readonly CheckBox _useKey = new()
+    {
+        Content = "按 API Key 填（不勾就按 cookie）",
+        Margin = new Thickness(0, 6, 0, 2),
+        Visibility = Visibility.Collapsed,
+    };
 
     public ManualCookieWindow(AppModel model, IReadOnlyList<SiteRow> sites)
     {
@@ -532,10 +539,14 @@ public sealed class ManualCookieWindow : Window
         var close = new Button { Content = "关闭", IsCancel = true, Padding = new Thickness(14, 5, 14, 5) };
         _clear.Click += (_, _) => { _raw.Clear(); OnSave(save, new RoutedEventArgs()); };
 
+        _useKey.Checked += (_, _) => { Load(); };
+        _useKey.Unchecked += (_, _) => { Load(); };
+
         Content = PromptWindow.Backdrop(this, PromptWindow.Stack(new object[]
         {
             new TextBlock { Text = "站点" },
             _site,
+            _useKey,
             _kind,
             _raw,
             _status,
@@ -544,25 +555,32 @@ public sealed class ManualCookieWindow : Window
         Load();
     }
 
+    /// <summary>当前输入框填的是哪种凭据：key-only 站恒为 Key；两种都收的站看页签</summary>
+    private bool FillingKey(SiteRow s) => s.UsesApiKey || (s.AcceptsApiKey && _useKey.IsChecked == true);
+
     private void Load()
     {
         if (_site.SelectedItem is not SiteRow s) return;
-        // API 站（馒头、肉丝）不走 cookie 同步，输入框里那串是 API Key
-        _kind.Text = s.UsesApiKey
-            ? "站点 API Key（站点页「个人主页 → 设置 → API」里获取，整段粘贴）"
+        // 可乐这类两种凭据都收的站才出页签，馒头那类 key-only 站没得选
+        _useKey.Visibility = s.AcceptsApiKey && !s.UsesApiKey ? Visibility.Visible : Visibility.Collapsed;
+        var asKey = FillingKey(s);
+        _kind.Text = asKey
+            ? "站点 API Key（可乐在站点「个人中心 → API Keys」申请，需 torrent.upload 权限；整段粘贴）"
             : "cookie 原文（浏览器 Cookie 头，形如 name1=value1; name2=value2，整段粘贴）";
-        _clear.Content = s.UsesApiKey ? "清空本站 API Key" : "清空本站 cookie";
+        _clear.Content = asKey ? "清空本站 API Key" : "清空本站 cookie";
         _status.Text = $"当前{s.CookieText}；保存即覆盖该站原有"
-                       + (s.UsesApiKey ? " API Key" : " cookie") + "，并自动开启该站";
-        var result = _model.Api.Invoke("cookies.getRaw", new { id = s.Id });
+                       + (asKey ? " API Key" : " cookie") + "，并自动开启该站";
+        var result = _model.Api.Invoke("cookies.getRaw",
+            new { id = s.Id, kind = asKey ? "apikey" : "cookie" });
         _raw.Text = result["raw"] is JsonValue rv && rv.TryGetValue<string>(out var t) ? t : "";
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
         if (_site.SelectedItem is not SiteRow s) return;
+        var asKey = FillingKey(s);
         var result = _model.Api.TryInvoke("cookies.setRaw", out var error,
-                                          new { id = s.Id, raw = _raw.Text });
+                                          new { id = s.Id, raw = _raw.Text, kind = asKey ? "apikey" : "cookie" });
         _status.Text = error ?? (result?["message"] is JsonValue mv && mv.TryGetValue<string>(out var msg)
             ? msg + "，正在检测…" : "已保存，正在检测…");
         _ = _model.RefreshAsync();
