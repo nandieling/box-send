@@ -19,6 +19,30 @@ public enum CookieCheck {
         }
     }
 
+    /// 卡片状态行后面那半句短说明。站点卡片宽度有限，长结论只能放悬停提示，
+    /// 而 mac 卡片的悬停提示被「点击停用」那句占了，所以关键判据必须能塞进状态行本身。
+    /// 文案在核心算，两端只管渲染。
+    public static func brief(ok: Bool, message: String) -> String {
+        if ok {
+            if message.contains("按 cookie 校验通过") { return "（走 cookie）" }
+            if message.contains("API Key 有效") { return "（走 Key）" }
+            if message.contains("cookie 有效") { return "（cookie）" }
+            return ""
+        }
+        if message.contains("兼容面") { return "（Key 缺发种权限）" }
+        if message.contains("API Key 已失效") { return "（Key 失效）" }
+        if message.contains("Key 校验没通") { return "（Key 没通过）" }
+        if message.contains("cookie 已失效") { return "（cookie 失效）" }
+        if message.contains("本地无 cookie") { return "（本地无 cookie）" }
+        if message.contains("本地也没有") { return "（无可用凭据）" }
+        if message.contains("网络错误") || message.contains("未响应") { return "（站点没响应）" }
+        return ""
+    }
+
+    public static func brief(_ result: Result) -> String {
+        brief(ok: result.ok, message: result.message)
+    }
+
     /// 检测时间预算：截止时间 + 上限秒数（回显用）
     public struct Budget {
         public let until: Date
@@ -167,42 +191,82 @@ public enum CookieCheck {
         return nil
     }
 
-    /// 可乐 PT：GET {site}api/v1/me。填了 API Key 就按 Key 验（站方的外部工具面），
-    /// 没填就按同步下来的 cookie 验；401/403 才是真失效。
+    /// 可乐 PT：两种凭据分开验，别把「Key 没这门权限」说成「Key 失效」。
+    /// 站点的 API Key 带 scope（torrent.upload 发种面 / mtorrent.compat MoviePilot 兼容面），
+    /// 只有兼容面的 Key 去敲 Web 面（GET /me）会被回 403 api_key_scope_denied——
+    /// 那是我们敲错了门，不是钥匙坏了。因此：
+    ///   1) 发种面探针 GET /automation/me/torrents：过了就说明这把 Key 真能发种；
+    ///   2) 没过再看 cookie（GET /api/v1/me）：cookie 能用就报「按 cookie 校验通过，转种走 cookie」，
+    ///      并把 Key 的权限状况一并写在结论里；
+    ///   3) 两样都不通才说失效，并说清缺哪一门。
     private static func checkCola(_ site: SiteConfig, _ client: HTTPClient) -> Result {
+        let api = site.url.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/v1"
         let key = site.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        var headers = ["Accept": "application/json"]
         let host = URL(string: site.url)?.host ?? ""
+        var keyNote = ""
         if !key.isEmpty {
-            headers["x-api-key"] = key
-        } else if client.cookies.cookieHeader(forHost: host) == nil {
+            let headers = ["Accept": "application/json", "Referer": site.url, "x-api-key": key]
+            let probe: HTTPClient.Response? = try? client.get(api + "/automation/me/torrents?page_size=1",
+                                                              referer: site.url, extraHeaders: headers)
+            if let probe, probe.status < 400 {
+                return Result(siteID: site.id, ok: true,
+                              message: "API Key 有效（可发种）\(colaName(probe.data).isEmpty ? "" : "（\(colaName(probe.data))）")")
+            }
+            let code = probe.flatMap { colaErrorCode($0) } ?? "network_error"
+            if code.contains("api_key") || code.contains("scope_denied") {
+                if code.contains("scope_denied") {
+                    keyNote = "Key 只有 MoviePilot 兼容面（mtorrent.compat），发种要 torrent.upload"
+                } else {
+                    keyNote = "API Key 已失效或被撤销"
+                }
+            } else {
+                keyNote = "Key 校验没通（\(code)）"
+            }
+        }
+        // B 计划：站点网页端登录后的 cookie（写接口要 Origin + X-CSRF-Token，读 /me 只要 cookie）
+        let cookieProbe: HTTPClient.Response? = try? client.get(api + "/me", referer: site.url,
+                                                                extraHeaders: ["Accept": "application/json"])
+        let cookieOK = cookieProbe.map { $0.status < 400 } ?? false
+        if cookieOK {
+            let name = colaName(cookieProbe!.data)
+            let tail = name.isEmpty ? "" : "（\(name)）"
+            if keyNote.isEmpty {
+                return Result(siteID: site.id, ok: true, message: "cookie 有效\(tail)")
+            }
+            // Key 不行但 cookie 能用：转种照样能跑，结论给 ok，并把 Key 的状况说清
+            return Result(siteID: site.id, ok: true,
+                          message: "按 cookie 校验通过\(tail)；\(keyNote)——转种走 cookie，"
+                                 + "要用 Key 就到站点「个人中心 → API Keys」申请发种面权限，或清空 Key")
+        }
+        if !keyNote.isEmpty {
             return Result(siteID: site.id, ok: false,
-                          message: "没填 API Key，本地也没有 \(host) 的 cookie：登录站点后同步一次，"
+                          message: "\(keyNote)；本地也没有\(host) 的有效 cookie：登录站点后同步一次，"
                                  + "或在「手动添加cookie或api key」里粘一样")
         }
-        let url = site.url.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/api/v1/me"
-        let resp: HTTPClient.Response
-        do {
-            resp = try client.get(url, referer: site.url, extraHeaders: headers)
-        } catch {
-            return Result(siteID: site.id, ok: false, message: "网络错误（站点不可达？）: \(error.localizedDescription)")
-        }
-        if resp.status == 401 || resp.status == 403 {
+        let status = cookieProbe?.status ?? 0
+        if status == 401 || status == 403 {
             return Result(siteID: site.id, ok: false,
-                          message: key.isEmpty
-                              ? "cookie 已失效，请重新登录站点并触发 PT-depiler 备份"
-                              : "API Key 未通过鉴权（要在站点「自动化」里申请权限并重新生成）")
+                          message: "cookie 已失效，请重新登录站点并触发 PT-depiler / CookieCloud 备份")
         }
-        if resp.status >= 200 && resp.status < 300 {
-            var name = ""
-            if let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any] {
-                name = (obj["username"] as? String) ?? ""
-            }
-            return Result(siteID: site.id, ok: true,
-                          message: name.isEmpty ? (key.isEmpty ? "cookie 有效" : "API Key 有效")
-                               : "\(key.isEmpty ? "cookie 有效" : "API Key 有效")（\(name)）")
+        if status == 0 {
+            return Result(siteID: site.id, ok: false, message: "网络错误（站点不可达？）")
         }
-        return Result(siteID: site.id, ok: false, message: "站点返回 HTTP \(resp.status)")
+        return Result(siteID: site.id, ok: false, message: "站点返回 HTTP \(status)")
+    }
+
+    /// 站点错误体是 {"error":{code,…}}：取 code 用来分「Key 没权限」还是「Key 坏了」
+    private static func colaErrorCode(_ resp: HTTPClient.Response) -> String? {
+        guard let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
+              let err = obj["error"] as? [String: Any],
+              let code = err["code"] as? String else { return nil }
+        return code.lowercased()
+    }
+
+    /// 探针回包里能带出的用户名（列表接口没有就留空，不影响结论）
+    private static func colaName(_ data: Data) -> String {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "" }
+        return (obj["username"] as? String)
+            ?? ((obj["user"] as? [String: Any])?["username"] as? String) ?? ""
     }
 
     // MARK: - YemaPT（fetchUploadOptions 需登录）

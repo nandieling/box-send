@@ -866,6 +866,8 @@ public sealed class SiteRow : INotifyPropertyChanged
     public bool UsesApiKey { get; init; }
     /// <summary>该站也接受 API Key（可乐：cookie 与 Key 都收，手动弹窗要多一个页签）</summary>
     public bool AcceptsApiKey { get; init; }
+    /// <summary>cookie 与 API Key 都收（可乐）：状态行说「可转种」，别说「API 已连接」——可能是拿 cookie 过的检</summary>
+    public bool ApiKeyOptional { get; init; }
     public bool HasApiKey { get; init; }
     private int _cookieCount;
     private bool _hasCookie;
@@ -917,7 +919,13 @@ public sealed class SiteRow : INotifyPropertyChanged
         : CheckOk == null ? "未检测" : CheckOk == true ? "有效" : CheckMessage;
 
     /// 卡片状态行：与 mac 版同一套说法，不写 cookie 条数（条数容易被读成站点数）
-    public string CredentialText => UsesApiKey
+    public string CredentialText => ApiKeyOptional
+        ? (Checking ? "凭据检测中…"
+            : (HasApiKey || HasCookie) && CheckOk == null ? "已配置（未检测）"
+            : CheckOk == true ? "可转种" + CheckBrief
+            : CheckOk == false ? (CheckBrief.Length > 0 ? CheckBrief.Trim('（', '）') : "凭据失效")
+            : (HasApiKey || HasCookie) ? "已配置（未检测）" : "无凭据")
+        : UsesApiKey
         ? HasApiKey
             ? Checking ? "API 检测中…"
                 : CheckOk == null ? "API Key 已配置（未检测）" : CheckOk == true ? "API 已连接" : "API Key 失效"
@@ -925,6 +933,9 @@ public sealed class SiteRow : INotifyPropertyChanged
         : Checking ? "cookie 检测中…"
             : !HasCookie ? "无 cookie"
             : CheckOk == null ? "未检测" : CheckOk == true ? "已登录" : "cookie 失效";
+
+    /// 状态行后面那半句短说明（「（走 cookie）」之类），文案在核心算，这里只渲染
+    public string CheckBrief { get; private set; } = "";
 
     /// 状态行用哪一档颜色：只有这一站检测通过才给强调色
     public string StatusTone => CheckOk == true && !Checking ? "Accent" : "TextMuted";
@@ -936,6 +947,7 @@ public sealed class SiteRow : INotifyPropertyChanged
         if (n["check"]?["ok"] is JsonValue v && v.TryGetValue<bool>(out var b)) ok = b;
         CheckOk = ok;
         CheckMessage = Text(n["check"]?["message"]);
+        CheckBrief = Text(n["check"]?["brief"]);
         Checking = Yes(n["checking"]);
         HasCookie = Yes(n["hasCookie"]);
         CookieCount = n["cookieCount"] is JsonValue nv && nv.TryGetValue<int>(out var cnt) ? cnt : 0;
@@ -955,6 +967,9 @@ public sealed class SiteRow : INotifyPropertyChanged
         n is JsonValue v && v.TryGetValue<bool>(out var b) && b;
 
     /// 弹窗里对当前凭据的一句说明
+    /// 弹窗与状态行下面那句细节：可乐这类站把「Key 只有兼容面」这类原因原样带出来
+    public string CredentialDetail => CheckMessage;
+
     public string CookieText => UsesApiKey ? (HasApiKey ? "已填 API Key" : "未填 API Key")
         : AcceptsApiKey
             ? (HasApiKey ? "已填 API Key（也可用 cookie）"
@@ -986,6 +1001,7 @@ public sealed class SiteRow : INotifyPropertyChanged
             BlockSize = n["blockSize"]?.GetValue<int>() ?? 0,
             UsesApiKey = n["usesAPIKey"]?.GetValue<bool>() ?? false,
             AcceptsApiKey = n["acceptsApiKey"]?.GetValue<bool>() ?? false,
+            ApiKeyOptional = n["apiKeyOptional"]?.GetValue<bool>() ?? false,
             HasApiKey = n["hasAPIKey"]?.GetValue<bool>() ?? false,
             CookieCount = n["cookieCount"]?.GetValue<int>() ?? 0,
             HasCookie = n["hasCookie"]?.GetValue<bool>() ?? false,

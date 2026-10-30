@@ -289,6 +289,51 @@ final class ColaTests: XCTestCase {
         XCTAssertEqual(ok?["synopsis"] as? String, "一段够长的简介文字")
     }
 
+    // MARK: - 凭据分流（Key 只有 MoviePilot 兼容面时，发种要能退回 cookie）
+
+    private func colaAdapter(key: String? = nil, cookie: String? = nil) -> ColaAdapter {
+        var s = site()
+        s.apiKey = key
+        let jar = CookieStore()
+        if let cookie { jar.importRawString(host: "www.colapt.com", cookie) }
+        return ColaAdapter(site: SiteRegistry.effectiveSite(s),
+                           client: HTTPClient(cookies: jar, userAgent: "BoxSendTest"))
+    }
+
+    /// 站点对「只有兼容面的 Key」和「Key 坏了」都回 403，靠 error.code 分辨
+    func testKeyRejectionVsCookieRejection() {
+        func resp(_ code: String) -> HTTPClient.Response {
+            HTTPClient.Response(status: 403,
+                                data: Data("{\"error\":{\"code\":\"\(code)\"}}".utf8),
+                                headers: [:], finalURL: "https://www.colapt.com/api/v1/torrents")
+        }
+        XCTAssertTrue(ColaAdapter.isKeyRejection(resp("api_key_scope_denied")),
+                      "权限不够是 Key 这一侧的问题，要能触发退回 cookie")
+        XCTAssertTrue(ColaAdapter.isKeyRejection(resp("api_key_invalid")))
+        XCTAssertFalse(ColaAdapter.isKeyRejection(resp("authentication_required")),
+                       "那是 cookie 失效，换 Key 没用")
+        XCTAssertFalse(ColaAdapter.isKeyRejection(
+            HTTPClient.Response(status: 403, data: Data("not json".utf8), headers: [:], finalURL: "")))
+    }
+
+    func testCredentialChoice() {
+        // 没填 Key：走 cookie 面（Origin + CSRF）
+        XCTAssertFalse(colaAdapter(cookie: "sid=1").usesAutomation)
+        // 填了 Key、本地没 cookie：仍按 Key 试，报错才能指到「Key 缺 torrent.upload」
+        let onlyKey = colaAdapter(key: "rcapi_abc")
+        onlyKey.cachedKeyCanUpload = false
+        XCTAssertTrue(onlyKey.usesAutomation, "没有 cookie 兜底时别偷偷改道，报错要说清是 Key 的权限问题")
+        // 填了 Key、探针说没发种权限、且有 cookie：改走 cookie（用户那把只有 mtorrent.compat 的情形）
+        let withCookie = colaAdapter(key: "rcapi_abc", cookie: "sid=1")
+        withCookie.cachedKeyCanUpload = false
+        XCTAssertFalse(withCookie.usesAutomation, "兼容面 Key 开不了发种那扇门，有 cookie 就走 cookie")
+        // 探针过了就用 Key
+        withCookie.cachedKeyCanUpload = true
+        XCTAssertTrue(withCookie.usesAutomation)
+        XCTAssertTrue(withCookie.hasCookie)
+        XCTAssertFalse(colaAdapter().hasCookie)
+    }
+
     // MARK: - 注册与凭据
 
     func testSiteRegistrationAndCredentials() {
@@ -301,11 +346,31 @@ final class ColaTests: XCTestCase {
         XCTAssertEqual(es.overrides?.apiKeyOptional, true, "可乐两种凭据都收，界面要给出 API Key 入口")
         XCTAssertNil(es.overrides?.usesAPIKey, "别把可乐标成 key-only 站：cookie 同步照样有用")
         XCTAssertTrue(AppService.supportsAPIKey(cola!), "supportsAPIKey 决定界面给不给 Key 输入")
+        XCTAssertTrue(AppService.optionalAPIKey(cola!), "可乐是「cookie 与 Key 都收」，状态行要说「可转种」")
         XCTAssertFalse(AppService.usesAPIKey(cola!), "可乐不是只认 Key 的站")
         // 适配器按框架路由到 ColaAdapter
         let a = SiteRegistry.adapter(for: cola!, client: HTTPClient(cookies: CookieStore(),
                                                                     userAgent: "BoxSendTest"))
         XCTAssertTrue(a is ColaAdapter)
     }
-}
 
+    // MARK: - 状态行短说明
+
+    func testStatusBrief() {
+        // Key 没权限但 cookie 能用：卡片要说「走 cookie」，而不是含糊的一句「可转种」
+        XCTAssertEqual(CookieCheck.brief(ok: true,
+            message: "按 cookie 校验通过（nan）；Key 只有 MoviePilot 兼容面（mtorrent.compat）——转种走 cookie"),
+            "（走 cookie）")
+        XCTAssertEqual(CookieCheck.brief(ok: true, message: "API Key 有效（可发种）"), "（走 Key）")
+        XCTAssertEqual(CookieCheck.brief(ok: true, message: "已登录"), "", "普通 cookie 站不加尾巴")
+        // 只有兼容面 Key、又没 cookie：短说明要点出缺的是发种权限，不是「凭据失效」那种含混话
+        XCTAssertEqual(CookieCheck.brief(ok: false,
+            message: "Key 只有 MoviePilot 兼容面（mtorrent.compat），发种要 torrent.upload；本地也没有 cookie"),
+            "（Key 缺发种权限）")
+        XCTAssertEqual(CookieCheck.brief(ok: false, message: "API Key 已失效或被撤销；本地也没有 cookie"), "（Key 失效）")
+        XCTAssertEqual(CookieCheck.brief(ok: false, message: "Key 校验没通（network_error）；本地也没有 cookie"), "（Key 没通过）")
+        XCTAssertEqual(CookieCheck.brief(ok: false, message: "cookie 已失效，请重新登录站点并触发备份"), "（cookie 失效）")
+        XCTAssertEqual(CookieCheck.brief(ok: false, message: "本地无 cookie"), "（本地无 cookie）")
+        XCTAssertEqual(CookieCheck.brief(ok: false, message: "站点未响应（12s 超时），未确认登录态"), "（站点没响应）")
+    }
+}

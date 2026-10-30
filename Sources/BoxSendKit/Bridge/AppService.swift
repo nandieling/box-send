@@ -1628,8 +1628,13 @@ public final class AppService {
     /// 该站走 API Key 还是走 cookie（合并内置 override 后判断，与 mac 版同规则）
     /// 界面该不该给这个站开「API Key」输入：key-only 站（馒头、肉丝）+ 可乐这类两种都收的站
     static func supportsAPIKey(_ site: SiteConfig) -> Bool {
-        let es = SiteRegistry.effectiveSite(site)
-        return usesAPIKey(site) || (es.overrides?.apiKeyOptional == true)
+        return usesAPIKey(site) || optionalAPIKey(site)
+    }
+
+    /// 该站「cookie 与 API Key 都收」（可乐）：状态行不能说成「API 已连接」，
+    /// 因为它可能是拿 cookie 过的检——要说「能转种」，细节留在悬停提示里
+    static func optionalAPIKey(_ site: SiteConfig) -> Bool {
+        SiteRegistry.effectiveSite(site).overrides?.apiKeyOptional == true
     }
 
     /// 手动弹窗里默认按哪种凭据填：key-only 站填 Key；可乐这类站填了 Key 就按 Key，否则按 cookie
@@ -1759,11 +1764,14 @@ public final class AppService {
                 "indexInBlock": pos.index, "blockSize": pos.count,
                 "usesAPIKey": Self.prefersAPIKey(s),
                 "acceptsApiKey": Self.supportsAPIKey(s),
+                "apiKeyOptional": Self.optionalAPIKey(s),
                 "hasAPIKey": !(s.apiKey ?? "").isEmpty,
                 "cookieCount": snap[h]?.count ?? 0,
                 "hasCookie": snap[h] != nil && !(snap[h]?.isEmpty ?? true),
-                "check": rec.map { ["ok": $0.ok, "message": $0.message, "time": $0.time] }
-                    ?? ["ok": NSNull(), "message": "", "time": 0] as [String: Any],
+                "check": rec.map {
+                        ["ok": $0.ok, "message": $0.message, "time": $0.time,
+                         "brief": CookieCheck.brief(ok: $0.ok, message: $0.message)]
+                    } ?? ["ok": NSNull(), "message": "", "time": 0, "brief": ""] as [String: Any],
                 "checking": checkingSites.contains(s.id),
                 "upLimitMB": c.reseedDownloader.siteUpLimits[s.id].map { Int($0 / 1_048_576) } ?? 0,
                 "warning": siteWarnings[s.id] ?? "",

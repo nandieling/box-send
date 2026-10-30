@@ -990,6 +990,24 @@ struct SitesView: View {
     private func cookieStatusView(for s: SiteConfig) -> some View {
         if !s.enabled {
             Text("未开启").font(.caption).foregroundStyle(.tertiary)
+        } else if model.siteAcceptsOptionalAPIKey(s) {
+            // 可乐这类 cookie 与 Key 都收的站：只说「能不能转种」，
+            // 到底是拿 Key 过的检还是拿 cookie 过的检，写在悬停提示里（检测结论原文）
+            if model.siteChecking.contains(s.id) {
+                Text("检测中…").font(.caption).foregroundStyle(.secondary)
+            } else if model.siteAPIKey(s).isEmpty && !model.hasCookie(for: s) {
+                Text("无凭据").font(.caption).foregroundStyle(.secondary)
+                    .help("发种要么填带 torrent.upload 权限的 API Key，要么同步该站 cookie；"
+                        + "站方只发 MoviePilot 兼容面（mtorrent.compat）时，用 cookie 转种")
+            } else if let r = model.siteCheckResults[s.id] {
+                Text((r.ok ? "可转种" : "凭据失效") + CookieCheck.brief(ok: r.ok, message: r.message))
+                    .font(.caption)
+                    .foregroundStyle(r.ok ? Color.green : Color.red)
+                    .help(r.message)
+            } else {
+                Text("已配置（未检测）").font(.caption).foregroundStyle(.secondary)
+                    .help("点顶部「检测cookie或api key」验证")
+            }
         } else if model.siteUsesAPIKey(s) {
             if model.siteChecking.contains(s.id) {
                 Text("检测中…").font(.caption).foregroundStyle(.secondary)
@@ -1335,16 +1353,29 @@ struct ManualCookieSheet: View {
         sites.first(where: { $0.id == siteID }) ?? sites.first
     }
 
-    /// 该站允许填 API Key（key-only 站没有页签，直接就是 Key）
+    /// 该站能不能在 cookie / API Key 之间挑。
+    /// 别写成「当前没按 Key 才给挑」：可乐一旦填过 Key，`siteUsesAPIKey` 就变 true，
+    /// 页签消失，用户就被锁死在「只有兼容面的 Key」上，想切回 cookie 都切不了。
     private var canPickKey: Bool {
-        guard let c = current else { return false }
-        return model.siteAcceptsAPIKey(c) && !model.siteUsesAPIKey(c)
+        current.map { model.siteAcceptsAPIKey($0) } ?? false
     }
 
     private var currentUsesAPIKey: Bool {
         guard let c = current else { return false }
-        if canPickKey { return forceAPIKey ?? false }
+        if canPickKey { return forceAPIKey ?? model.siteUsesAPIKey(c) }
         return model.siteUsesAPIKey(c)
+    }
+
+    /// 当前页签里已有的那份凭据：文本删空时靠它判断「这次是去清空」，按钮不能是灰的
+    private var hasCredentialToClear: Bool {
+        guard let c = current else { return false }
+        return currentUsesAPIKey ? !model.siteAPIKey(c).isEmpty
+                                 : !model.existingCookieHeader(for: c).isEmpty
+    }
+
+    private var canSubmit: Bool {
+        guard current != nil else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasCredentialToClear
     }
 
     var body: some View {
@@ -1366,7 +1397,7 @@ struct ManualCookieSheet: View {
             }
             if canPickKey {
                 Picker("凭据类型", selection: Binding(
-                    get: { forceAPIKey ?? false },
+                    get: { forceAPIKey ?? model.siteUsesAPIKey(current!) },
                     set: { forceAPIKey = $0; text = initialText(apiKey: $0) }
                 )) {
                     Text("cookie").tag(false)
@@ -1380,25 +1411,31 @@ struct ManualCookieSheet: View {
                         ? "站点 API Key（可乐在站点「个人中心 → API Keys」申请，要有 torrent.upload 权限；整段粘贴）"
                         : "name1=value1; name2=value2 …（浏览器 Cookie 头原文，整段粘贴）")
             HStack(alignment: .firstTextBaseline) {
-                Text(currentUsesAPIKey
-                     ? "保存即覆盖该站原有 API Key，并自动开启该站"
-                     : "保存即覆盖该站原有 cookie，并自动开启该站")
+                Text((text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "清空该站" : "保存即覆盖该站原有")
+                     + (currentUsesAPIKey ? " API Key" : " cookie")
+                     + (text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "（可乐这类站清掉 Key 就改用 cookie 转种）" : "，并自动开启该站"))
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("取消") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("保存") {
+                // 文本删空 = 清空这一类凭据（可乐要能在 Key / cookie 之间换着使）
+                Button(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "清空" : "保存") {
                     if let c = current {
+                        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         if currentUsesAPIKey {
-                            model.saveSiteAPIKey(siteID: c.id, raw: text)
+                            if t.isEmpty { model.clearSiteCredential(siteID: c.id, apiKey: true) }
+                            else { model.saveSiteAPIKey(siteID: c.id, raw: text) }
                         } else {
-                            model.addSiteCookie(siteID: c.id, raw: text)
+                            if t.isEmpty { model.clearSiteCredential(siteID: c.id, apiKey: false) }
+                            else { model.addSiteCookie(siteID: c.id, raw: text) }
                         }
                     }
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || current == nil)
+                .disabled(!canSubmit)
             }
         }
         .padding()
@@ -1409,6 +1446,7 @@ struct ManualCookieSheet: View {
             text = initialText(apiKey: currentUsesAPIKey)
         }
         .onChange(of: siteID) { _ in
+            // 换站就回到该站的默认页签（填过 Key 的站默认看 Key），别把上一个站的选择带过去
             forceAPIKey = nil
             text = initialText(apiKey: currentUsesAPIKey)
         }

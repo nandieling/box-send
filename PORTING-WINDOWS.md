@@ -1119,6 +1119,35 @@ Windows 侧：
   「可乐 https://www.colapt.com/」，加入分组后卡片与手动凭据弹窗都按 API Key 页签走，
   填一枚假 Key 保存，卡片如实报「API Key 失效」（站点回 403 `api_key_scope_denied`，已 curl 核对）。
 
+## 这一轮（可乐 Key：兼容面 ≠ 发种面）
+
+- 站方一把 Key 只带一种 scope，合法值就 `torrent.upload` 与 `mtorrent.compat` 两个（前端包里的
+  OpenAPI `ApiKeyInput.scopes` 写死了枚举，maxItems 2）。用户申请到的是 MoviePilot 那面
+  （`mtorrent.compat`），能连 MoviePilot，但 api/v1 的发种四步全在这面之外。
+- 旧检测只打 `GET /api/v1/me`，那是 Web 面的端点：兼容面 Key 过不去，一律报「API Key 失效」。
+  实打实 curl 过一遍才敢下结论——`/automation/me/torrents`、`/me`、`/me/automation-access`、
+  `/me/api-keys` 四个端点用那把 Key 全回 **403 `api_key_scope_denied`**（不是 401
+  `authentication_required`），也就是「Key 认出来了，只是没这个权限」。所以 `CookieCheck.checkCola`
+  拆成两扇门分别探：`GET /automation/me/torrents?page_size=1` 验 Key 能不能发种，
+  `GET /api/v1/me` 验 cookie；两个结论合起来才写卡片那句话。
+- `/media`、`/me/*` 这组没有 automation 版（`/automation` 下只有 torrents / metadata / submit /
+  media/ensure / torrents/{id} / download 那几条），查重 `searchExists` 只能 `automation:false` 走 Web 面。
+  MoviePilot 兼容面根本不在 api/v1 的 spec 里（`/api/v1/mtorrent*` 探过，全是 `route_not_found`），
+  所以不能拿它当「Key 有效」的探针，只能用发种面探针反推。
+- `ColaAdapter` 三条鉴权规矩：填了 Key、本地没 cookie → 仍按 Key 走，真被拒了文案才指到「Key 缺
+  torrent.upload」；填了 Key、本地也有 cookie → 先探一次（`cachedKeyCanUpload` 缓存，测一次不重复打网络），
+  探不过就整站改走 cookie；发种途中 Key 忽然被拒（权限收回 / 过期）→ `json()` 里现降级，
+  带 CSRF 重试一次，不让整批转种陪着失败。cookie 那条路 CSRF 是一次性票据，403 会自动换一枚再试。
+- 「删了 api key 又存不下去」是两端各自的坑：mac 的弹窗在文本为空时直接把「保存」按钮 disable 掉，
+  `saveSiteAPIKey` 也拒绝空串；Windows 的 Key/cookie 页签在「已有 Key」时被隐藏，用户被锁死在那把坏 Key 上。
+  现在 mac 空文本走「清空」（`clearSiteCredential`），Windows 页签常显并按站点记住上次选的哪一面。
+- 状态行那半句短说明（「（走 cookie）」「（Key 缺发种权限）」）在核心 `CookieCheck.brief(ok:message:)`
+  算，mac 直接调、Windows 从快照 `site.check.brief` 取。放状态行而不是悬停提示是有原因的：
+  mac 站点卡片的 `.help` 被卡片级的「已开启，点击停用」占了，写在 tooltip 里的结论用户根本看不见。
+- 验过：`swift test` 645 个用例全绿（新增 `testStatusBrief` 8 条断言 + `testSnapshotCarriesCheckBrief`）；
+  WPF 编译 0 错误；`curl` 实网确认四个端点的 error.code；`/Applications/BoxSend.app` 已重装，
+  站点分组里可乐卡片显示「可转种」（Key 没权限但 cookie 可用，结论走 cookie）。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

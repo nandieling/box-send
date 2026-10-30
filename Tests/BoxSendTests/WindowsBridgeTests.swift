@@ -242,6 +242,7 @@ final class WindowsBridgeTests: XCTestCase {
 
         let row = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "cola" }!
         XCTAssertEqual(row["acceptsApiKey"] as? Bool, true, "界面要按 acceptsApiKey 给可乐开 API Key 页签")
+        XCTAssertEqual(row["apiKeyOptional"] as? Bool, true, "两种凭据都收：状态行要说「可转种」，别说「API 已连接」")
         XCTAssertEqual(row["usesAPIKey"] as? Bool, false, "没填 Key 之前可乐还是按 cookie 显示")
 
         _ = try svc.invoke("cookies.setRaw", ["id": "cola", "raw": "sid=abc; csrf=def", "kind": "cookie"])
@@ -258,6 +259,33 @@ final class WindowsBridgeTests: XCTestCase {
         XCTAssertEqual(after["usesAPIKey"] as? Bool, true, "填了 Key 之后该站按 Key 显示")
         // 默认（不带 kind）取当前生效的那种凭据：可乐此时回 Key
         XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola"])["raw"] as? String, "rcapi_9f3")
+
+        // 删掉 Key 要存得下去（用户实测「删除 api key 又无法保存」）：清空后回到 cookie 显示
+        let cleared = try svc.invoke("cookies.setRaw", ["id": "cola", "raw": "   ", "kind": "apikey"])
+        XCTAssertTrue((cleared["message"] as? String)?.contains("清空") == true,
+                      "回话要说清是清空，不是保存了个空串：\(cleared["message"] ?? "")")
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola", "kind": "apikey"])["raw"] as? String, "")
+        let afterClear = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "cola" }!
+        XCTAssertEqual(afterClear["hasAPIKey"] as? Bool, false)
+        XCTAssertEqual(afterClear["usesAPIKey"] as? Bool, false, "Key 清掉后该站回到按 cookie 显示")
+        XCTAssertEqual(try svc.invoke("cookies.getRaw", ["id": "cola", "kind": "cookie"])["raw"] as? String,
+                       "sid=abc; csrf=def", "清 Key 不该顺手把 cookie 也清掉")
+    }
+
+    /// 快照要把「状态行短说明」一起带给 Windows：WPF 只渲染，不自己编文案
+    func testSnapshotCarriesCheckBrief() throws {
+        let (svc, _) = try makeService()
+        _ = try svc.invoke("sites.add", ["ids": ["cola"], "group": -1])
+        _ = try svc.invoke("cookies.check", ["ids": ["cola"]])
+        var brief = ""
+        for _ in 0..<60 {
+            let row = (svc.snapshot()["sites"] as! [[String: Any]]).first { ($0["id"] as? String) == "cola" }!
+            brief = ((row["check"] as? [String: Any])?["brief"] as? String) ?? ""
+            if !brief.isEmpty { break }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        XCTAssertEqual(brief, "（本地无 cookie）",
+                       "可乐没任何凭据时状态行要说清缺什么，别只丢一句「凭据失效」")
     }
 
     func testLegacyConfigWithoutGroupsGetsOne() throws {

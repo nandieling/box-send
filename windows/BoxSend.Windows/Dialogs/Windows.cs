@@ -521,6 +521,8 @@ public sealed class ManualCookieWindow : Window
         Margin = new Thickness(0, 6, 0, 2),
         Visibility = Visibility.Collapsed,
     };
+    /// <summary>每个站各自记住这次挑的页签：可乐填过 Key 之后也得能切回 cookie 去清 cookie</summary>
+    private readonly Dictionary<string, bool> _tabChoice = new();
 
     public ManualCookieWindow(AppModel model, IReadOnlyList<SiteRow> sites)
     {
@@ -539,8 +541,8 @@ public sealed class ManualCookieWindow : Window
         var close = new Button { Content = "关闭", IsCancel = true, Padding = new Thickness(14, 5, 14, 5) };
         _clear.Click += (_, _) => { _raw.Clear(); OnSave(save, new RoutedEventArgs()); };
 
-        _useKey.Checked += (_, _) => { Load(); };
-        _useKey.Unchecked += (_, _) => { Load(); };
+        _useKey.Checked += (_, _) => { RememberTab(); Load(); };
+        _useKey.Unchecked += (_, _) => { RememberTab(); Load(); };
 
         Content = PromptWindow.Backdrop(this, PromptWindow.Stack(new object[]
         {
@@ -556,13 +558,23 @@ public sealed class ManualCookieWindow : Window
     }
 
     /// <summary>当前输入框填的是哪种凭据：key-only 站恒为 Key；两种都收的站看页签</summary>
-    private bool FillingKey(SiteRow s) => s.UsesApiKey || (s.AcceptsApiKey && _useKey.IsChecked == true);
+    private bool FillingKey(SiteRow s) =>
+        s.AcceptsApiKey ? _useKey.IsChecked == true : s.UsesApiKey;
+
+    private void RememberTab()
+    {
+        if (_site.SelectedItem is SiteRow s && s.AcceptsApiKey)
+            _tabChoice[s.Id] = _useKey.IsChecked == true;
+    }
 
     private void Load()
     {
         if (_site.SelectedItem is not SiteRow s) return;
-        // 可乐这类两种凭据都收的站才出页签，馒头那类 key-only 站没得选
-        _useKey.Visibility = s.AcceptsApiKey && !s.UsesApiKey ? Visibility.Visible : Visibility.Collapsed;
+        // 可乐这类两种凭据都收的站都出页签（别只在「还没填 Key」时出：
+        // 填过 Key 之后页签一旦消失，用户就被锁在这把只有兼容面的 Key 上，回不去 cookie）
+        _useKey.Visibility = s.AcceptsApiKey ? Visibility.Visible : Visibility.Collapsed;
+        if (s.AcceptsApiKey)
+            _useKey.IsChecked = _tabChoice.TryGetValue(s.Id, out var chosen) ? chosen : s.UsesApiKey;
         var asKey = FillingKey(s);
         _kind.Text = asKey
             ? "站点 API Key（可乐在站点「个人中心 → API Keys」申请，需 torrent.upload 权限；整段粘贴）"
@@ -579,6 +591,7 @@ public sealed class ManualCookieWindow : Window
     {
         if (_site.SelectedItem is not SiteRow s) return;
         var asKey = FillingKey(s);
+        // 文本删空保存 = 清空这一类凭据（核心认空串：cookie 走 removeHost，Key 置 nil）
         var result = _model.Api.TryInvoke("cookies.setRaw", out var error,
                                           new { id = s.Id, raw = _raw.Text, kind = asKey ? "apikey" : "cookie" });
         _status.Text = error ?? (result?["message"] is JsonValue mv && mv.TryGetValue<string>(out var msg)

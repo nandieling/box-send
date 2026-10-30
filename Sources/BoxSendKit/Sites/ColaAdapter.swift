@@ -47,8 +47,60 @@ final class ColaAdapter: SiteAdapter {
         return k
     }
 
-    /// 填了 API Key 就走 /automation 面（站方给外部工具的写入口，不吃 Origin / CSRF）
-    private var usesAutomation: Bool { key != nil }
+    /// 本地有没有该站的 cookie（可乐的 B 计划：Key 只能走兼容面时，发种退回 cookie）
+    var hasCookie: Bool {
+        guard let host = URL(string: site.url)?.host else { return false }
+        return client.cookies.cookieHeader(forHost: host) != nil
+    }
+
+    // MARK: 用哪把钥匙
+    //
+    // 可乐的 API Key 分两种权限（站方 spec：scopes ∈ torrent.upload | mtorrent.compat）：
+    //   torrent.upload   —— 发种面，即 /api/v1/automation/* 那组写端点
+    //   mtorrent.compat  —— MoviePilot 兼容面，站外工具能用，但它开不了发种那扇门
+    // 老写法「填了 Key 就只认 Key」会把只有兼容面的用户直接判死：
+    // 挂种子 403 api_key_scope_denied，界面显示「API Key 失效」，可他删掉 Key 用 cookie 本来转得好好的。
+    // 现在按权限分流：先拿只读的 /automation/me/torrents 探一次，探得过才走 Key；
+    // 探不过且有 cookie 就走 cookie（Origin + CSRF）；没 cookie 就仍用 Key，
+    // 至少报错能说清「是这把 Key 缺 torrent.upload」。判定每个适配器缓存一次，别每步都探。
+    /// 探针结果缓存（internal：测试直接给结论，不打网络）
+    var cachedKeyCanUpload: Bool?
+
+    private var keyCanUpload: Bool {
+        if let cached = cachedKeyCanUpload { return cached }
+        let ok = probeKeyForUpload()
+        cachedKeyCanUpload = ok
+        return ok
+    }
+
+    /// 站点按「Key 这一把钥匙」拒绝的信号（区别于 cookie 的 authentication_required）
+    static func isKeyRejection(_ resp: HTTPClient.Response) -> Bool {
+        guard let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
+              let err = obj["error"] as? [String: Any],
+              let code = (err["code"] as? String)?.lowercased() else { return false }
+        return code.contains("api_key") || code.contains("scope_denied")
+    }
+
+    /// 只读探针：能列出「我的种子」= 这把 Key 有发种面权限
+    private func probeKeyForUpload() -> Bool {
+        guard let k = key else { return false }
+        guard let resp = try? send("GET", api + "/automation/me/torrents?page_size=1",
+                                   body: nil, contentType: nil,
+                                   headers: ["Accept": "application/json", "Referer": site.url,
+                                            "x-api-key": k])
+        else { return false }
+        return resp.status < 400
+    }
+
+    var usesAutomation: Bool {
+        if usesCookieOverride { return false }
+        guard key != nil else { return false }
+        // 没 cookie 兜底时仍按 Key 试：报错信息能指到「Key 缺哪门权限」
+        return hasCookie ? keyCanUpload : true
+    }
+
+    /// 写操作现场被 Key 拒了（权限没开、Key 过期）且本地有 cookie：这次改走 cookie
+    private var usesCookieOverride = false
 
     private var root: String { usesAutomation ? api + "/automation" : api }
 
@@ -92,24 +144,41 @@ final class ColaAdapter: SiteAdapter {
         }
     }
 
-    /// 站点错误体固定是 {"error":{code,message,fields}}；把它压成一句能看的原因
+    /// 站点错误体固定是 {"error":{code,message,fields}}；按 code 压成一句能看懂的原因。
+    /// 关键是把「Key 没这门权限」和「Key 失效」分开：站点对只有 mtorrent.compat 的 Key
+    /// 也回 403，一刀切报「失效」会让人以为钥匙坏了，其实是我们敲错了门。
     private func failure(_ resp: HTTPClient.Response, _ what: String) -> BoxSendError {
+        var code = ""
         var detail = ""
         if let obj = try? JSONSerialization.jsonObject(with: resp.data) as? [String: Any],
            let err = obj["error"] as? [String: Any] {
-            let code = (err["code"] as? String) ?? ""
+            code = (err["code"] as? String) ?? ""
             let msg = (err["message"] as? String) ?? ""
             detail = [code, msg].filter { !$0.isEmpty }.joined(separator: "：")
             if let fields = err["fields"] as? [String: Any], !fields.isEmpty {
                 detail += "（字段：\(fields.keys.sorted().joined(separator: "、"))）"
             }
         }
-        let authHint = usesAutomation
-            ? "API Key 要有 torrent.upload 权限（站点「个人中心 → API Keys」里重新申请）"
-            : "cookie 已失效，重新登录站点并触发 PT-depiler / CookieCloud 同步"
+        let head = "\(site.name) \(what)"
+        let tail = detail.isEmpty ? "" : "（\(detail)）"
         if resp.status == 401 || resp.status == 403 {
-            return BoxSendError.cookieExpired("\(site.name) \(what) 鉴权未通过"
-                + "\(detail.isEmpty ? "" : "（\(detail)）")——\(authHint)")
+            let lower = code.lowercased()
+            if lower.contains("scope_denied") {
+                // 有 cookie 的话上面已经自动改道了；走到这里说明只能靠 Key
+                return BoxSendError.apiKeyInvalid(
+                    "\(head) 被站点按权限拦下\(tail)：这把 Key 只有 MoviePilot 兼容面"
+                    + "（mtorrent.compat），发种要的是 torrent.upload。"
+                    + "去站点「个人中心 → API Keys」申请发种面权限；"
+                    + "或清空 Key、登录网页端后用同步下来的 cookie 转种。")
+            }
+            if lower.contains("api_key") {
+                return BoxSendError.apiKeyInvalid(
+                    "\(head) 未通过\(tail)：API Key 已失效或被撤销，重新生成一把，"
+                    + "或清空 Key 改用同步下来的 cookie。")
+            }
+            return BoxSendError.cookieExpired(
+                "\(head) 鉴权未通过\(tail)：cookie 已失效，重新登录站点并触发"
+                + " PT-depiler / CookieCloud 同步；用 API Key 的话要带 torrent.upload 权限。")
         }
         return BoxSendError.http(status: resp.status, url: site.url,
                                  body: detail.isEmpty ? "\(what)（HTTP \(resp.status)）"
@@ -135,12 +204,19 @@ final class ColaAdapter: SiteAdapter {
             body = nil
             type = nil
         }
-        let base = automation ? root : api
         func attempt(_ csrf: String?) throws -> HTTPClient.Response {
-            try send(method, base + path, body: body, contentType: type, headers: headers(csrf: csrf))
+            try send(method, (automation ? root : api) + path,
+                     body: body, contentType: type, headers: headers(csrf: csrf))
         }
         let csrf = method == "GET" ? nil : csrfToken()
         var resp = try attempt(csrf)
+        // Key 现场被拒（权限没开放 / Key 过期）而本地有 cookie：整站改走 cookie 再试一次
+        if resp.status == 401 || resp.status == 403, usesAutomation, hasCookie,
+           ColaAdapter.isKeyRejection(resp) {
+            usesCookieOverride = true
+            cachedKeyCanUpload = false
+            resp = try attempt(method == "GET" ? nil : csrfToken())
+        }
         // cookie 模式下 CSRF 是一次性票据（用过一次/过期就 403）：换一枚新的再试一次
         if resp.status == 403, csrfRetry, !usesAutomation, method != "GET" {
             resp = try attempt(csrfToken())

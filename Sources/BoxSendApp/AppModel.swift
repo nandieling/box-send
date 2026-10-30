@@ -795,11 +795,48 @@ final class AppModel: ObservableObject {
 
     /// 该站能不能填 API Key（可乐：cookie 与 Key 都收，界面要多给一个 Key 页签）
     func siteAcceptsAPIKey(_ site: SiteConfig) -> Bool {
-        modelOnlyAPIKey(site) || (SiteRegistry.effectiveSite(site).overrides?.apiKeyOptional == true)
+        modelOnlyAPIKey(site) || siteAcceptsOptionalAPIKey(site)
+    }
+
+    /// 该站是否「cookie 与 API Key 都收」（可乐）：状态行要说「能转种」，别说「API 已连接」
+    func siteAcceptsOptionalAPIKey(_ site: SiteConfig) -> Bool {
+        SiteRegistry.effectiveSite(site).overrides?.apiKeyOptional == true
     }
 
     func siteAPIKey(_ site: SiteConfig) -> String {
         site.apiKey ?? ""
+    }
+
+    /// 清空该站的某种凭据（手动弹窗里把文本删空再保存就会走到这儿）
+    func clearSiteCredential(siteID: String, apiKey: Bool) {
+        guard let site = config.site(siteID) else {
+            cookieMessage = "未配置的站点 id: \(siteID)"
+            return
+        }
+        if apiKey {
+            guard !(site.apiKey ?? "").isEmpty else {
+                cookieMessage = "\(site.name) 本来就没填 API Key"
+                return
+            }
+            var cfg = config
+            if let i = cfg.sourceSites.firstIndex(where: { $0.id == siteID }) {
+                cfg.sourceSites[i].apiKey = nil
+            }
+            config = cfg
+            cookieMessage = "已清空 \(site.name) 的 API Key"
+        } else {
+            let host = siteHost(site)
+            guard cookies.cookieHeader(forHost: host) != nil else {
+                cookieMessage = "\(site.name) 本地没有 cookie 可清"
+                return
+            }
+            _ = cookies.removeHost(host)
+            cookieMessage = "已清空 \(site.name) 的 cookie"
+        }
+        // 凭据变了，旧的检测结论不能再留着显示
+        siteCheckResults[siteID] = nil
+        state.clearCookieCheck(siteID)
+        state.note("api: 单站 \(siteID) \(apiKey ? "key" : "cookie") 已清空")
     }
 
     func setSiteAPIKey(_ value: String, siteID: String) {
@@ -809,15 +846,17 @@ final class AppModel: ObservableObject {
         saveConfig()
     }
 
-    /// 弹窗保存 API Key：覆盖旧值、启用该站、作废旧检测结果（与 addSiteCookie 行为对齐）
+    /// 弹窗保存 API Key：覆盖旧值、启用该站、作废旧检测结果（与 addSiteCookie 行为对齐）。
+    /// 文本删空再保存 = 清空这把 Key（可乐那类站要能在 Key / cookie 之间来回切，
+    /// 清不掉就只能一直撞「Key 没发种权限」那面墙）。
     func saveSiteAPIKey(siteID: String, raw: String) {
         guard let site = config.site(siteID) else {
             cookieMessage = "未配置的站点 id: \(siteID)"
             return
         }
         let v = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !v.isEmpty else {
-            cookieMessage = "先粘贴该站的 API Key"
+        if v.isEmpty {
+            clearSiteCredential(siteID: siteID, apiKey: true)
             return
         }
         var cfg = config
