@@ -26,13 +26,20 @@
             <TabItem x:Name="TabSettings" />
         </TabControl>
 
-        <Border Grid.Row="1" Background="{DynamicResource TextSurface}" Padding="12,6"
+        <!-- 底部提示条：cookie 同步信息之类，显示几分钟自己收（时长在核心 StickyMessage），
+             末尾的「关闭」可以立刻收掉；没有内容就整条不占位，和 mac 版一条样 -->
+        <Border x:Name="StatusBar" Grid.Row="1" Visibility="Collapsed"
+                Background="{DynamicResource TextSurface}" Padding="12,6"
                 BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
             <DockPanel LastChildFill="True">
-                <TextBlock x:Name="RunState" DockPanel.Dock="Right" Margin="12,0,0,0"
-                           Foreground="{DynamicResource TextMuted}" FontSize="12" />
+                <Button x:Name="BtnDismissStatus" DockPanel.Dock="Right" Content="关闭"
+                        Style="{StaticResource Ghost}" FontSize="12" Padding="8,2" Margin="12,0,0,0"
+                        ToolTip="收起这条提示（cookie 提示几分钟后也会自己收）" Click="OnDismissStatus" />
+                <TextBlock x:Name="StatusGlyph" DockPanel.Dock="Left" Margin="0,0,6,0" VerticalAlignment="Center"
+                           FontFamily="Segoe MDL2 Assets" FontSize="12"
+                           Foreground="{DynamicResource TextMuted}" />
                 <TextBlock x:Name="StatusText" FontSize="12" Foreground="{DynamicResource TextMuted}"
-                           TextTrimming="CharacterEllipsis" />
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             </DockPanel>
         </Border>
     </Grid>

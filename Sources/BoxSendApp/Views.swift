@@ -147,6 +147,11 @@ struct ContentView: View {
                 Image(systemName: model.configError != nil ? "exclamationmark.triangle.fill" : "info.circle")
                 Text(msg).textSelection(.enabled).lineLimit(2)
                 Spacer()
+                // 提示不长期占着底部：几分钟自己收（核心 StickyMessage），这里也能立刻手动收
+                Button("关闭") { model.dismissBottomMessage() }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("收起这条提示")
             }
             .font(.callout)
             .padding(.horizontal, 12)

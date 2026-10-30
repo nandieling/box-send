@@ -21,6 +21,13 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private readonly AutoTask _zipTask;
     private (bool On, int Minutes)? _zipArmed;
 
+    // 底部提示条：核心那份 StickyMessage 管 cookie 同步信息与配置报错（显示几分钟自己收），
+    // 界面自己顶的几条（读快照失败、本地调用抛异常）走不到核心，就在这儿按同一个时长兜底。
+    // 时长从核心的 version 里拿，两端不会各写一个数。
+    private int _cookieMessageTTLSeconds = 300;
+    private string _localMessage = "";
+    private DateTime _localMessageUntil = DateTime.MinValue;
+
     /// <summary>一节使用说明：标题 + 步骤 + 可选代码块（Worker 脚本那种）</summary>
     public sealed record TutorialSection(string Title, IReadOnlyList<string> Steps, string? Code);
 
@@ -65,6 +72,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
                 d["probeURL"]?.GetValue<string>() ?? "https://speed.cloudflare.com/__up",
                 d["throttlingMBps"] is JsonValue tv && tv.TryGetValue<double>(out var mb) ? mb : 20);
         if (version["tutorial"] is { } tut) ParseTutorial(tut);
+        if (version["cookieMessageTTL"] is JsonValue ttl && ttl.TryGetValue<int>(out var ttlSeconds))
+            _cookieMessageTTLSeconds = Math.Max(30, ttlSeconds);
         foreach (var g in Groups) Groups.Remove(g);
 
         _timer = new System.Windows.Threading.DispatcherTimer
@@ -205,8 +214,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex)
         {
-            CookieMessage = "读取状态失败：" + ex.Message;
-            Raise(nameof(CookieMessage), nameof(StatusText));
+            ShowCookieMessage("读取状态失败：" + ex.Message);
         }
         finally
         {
@@ -227,8 +235,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex)
         {
-            CookieMessage = "读取状态失败：" + ex.Message;
-            Raise(nameof(CookieMessage), nameof(StatusText));
+            ShowCookieMessage("读取状态失败：" + ex.Message);
         }
     }
 
@@ -246,6 +253,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         BusyAssist = Bool(busy?["assist"]);
         var msg = snap["messages"]?.AsObject();
         CookieMessage = Str(msg?["cookie"]);
+        if (string.IsNullOrEmpty(CookieMessage)) CookieMessage = LocalMessageNow();
         DownloaderMessage = Str(msg?["downloader"]);
         ZipMessage = Str(msg?["zip"]);
         UpdateMessage = Str(msg?["update"]);
@@ -430,10 +438,57 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public int SectionInt(string section, string field, int fallback = 0) =>
         Config?[section]?[field] is JsonValue v && v.TryGetValue<int>(out var i) ? i : fallback;
 
+    // MARK: 底部提示条（cookie 同步信息之类）
+
+    /// <summary>顶一条底部提示：优先交给核心记（它带显示时长，快照会一直把这句话带回来，
+    /// 到点自己收）；核心那条路走不通时，本地按同一个时长挂一条，一样不会长期赖着。</summary>
+    public void ShowCookieMessage(string text)
+    {
+        var t = (text ?? "").Trim();
+        string? error = null;
+        try { _api.TryInvoke("cookie.message", out error, new { text = t }); }
+        catch (Exception ex) { error = ex.Message; }
+        if (error == null)
+        {
+            // 核心接下了，本地那条就别再冒出来盖住它
+            _localMessage = "";
+            _localMessageUntil = DateTime.MinValue;
+            return;
+        }
+        ShowLocalMessage(t);
+        Raise(nameof(CookieMessage), nameof(StatusText));
+    }
+
+    /// <summary>底部提示条末尾那个「关闭」：cookie 提示和配置报错一起收，
+    /// 下次真出事会重新冒出来，不会一按就永久哑掉。</summary>
+    public void DismissBottomMessage()
+    {
+        try { _api.TryInvoke("cookie.dismiss", out _); } catch { /* 本地这条照样要收 */ }
+        ShowLocalMessage("");
+        CookieMessage = "";
+        ConfigError = "";
+        Raise(nameof(CookieMessage), nameof(ConfigError), nameof(StatusText));
+    }
+
+    private string LocalMessageNow() => DateTime.Now < _localMessageUntil ? _localMessage : "";
+
+    private void ShowLocalMessage(string text)
+    {
+        var t = (text ?? "").Trim();
+        if (t.Length == 0)
+        {
+            _localMessage = "";
+            _localMessageUntil = DateTime.MinValue;
+            return;
+        }
+        _localMessage = t;
+        _localMessageUntil = DateTime.Now.AddSeconds(_cookieMessageTTLSeconds);
+    }
+
     private void Guard(Func<JsonNode> call)
     {
         try { call(); }
-        catch (Exception ex) { CookieMessage = ex.Message; Raise(nameof(CookieMessage), nameof(StatusText)); }
+        catch (Exception ex) { ShowCookieMessage(ex.Message); }
     }
 
     public void StartRun(string detailUrl, IEnumerable<string> targets, bool skipReseed, bool skipPush,

@@ -45,6 +45,9 @@ public final class AppService {
     private var checkResults: [String: StateStore.CookieCheckRec] = [:]
     /// 此刻正在检测的站（界面据此在单张卡片上写「检测中」，不必等整批跑完）
     private var checkingSites: Set<String> = []
+    /// 底部那条 cookie 提示：显示几分钟就自己收（时长在 StickyMessage），
+    /// 界面末尾还有个「关闭」可以立刻收掉
+    private var cookieSticky = StickyMessage()
     private var busyCookieSync = false
     private var busyCookieCheck = false
     private var busyDownloader = false
@@ -75,7 +78,6 @@ public final class AppService {
     private var assistReport = ""
     /// 定时自动跑的钟（从进程起来算第一轮的起点）
     private var assistAutoRun = AssistAutoRun()
-    private var cookieMessage: String?
     private var downloaderMessage: String?
     private var zipMessage: String?
     private var updateMessage: String?
@@ -148,6 +150,8 @@ public final class AppService {
                     "features": ["assist": AssistFeature.enabled],
                     "configPath": configPath, "dataDir": dataDir,
                     "themes": ThemeCatalog.allJSON,
+                    // 底部提示条显示多久：界面自己顶的那几条也照这个时长收，别两端各写一个数
+                    "cookieMessageTTL": Int(StickyMessage.ttl),
                     // 使用说明正文也走这里：两端渲染同一份，不再各抄一份抄歪
                     "tutorial": TutorialText.payload(),
                     // 界面拿这些当占位值，免得两端各写一份默认值写歪
@@ -343,6 +347,18 @@ public final class AppService {
             }
             persistCookies()
             return ["removed": removed]
+        case "cookie.message":
+            // 界面自己顶一条底部提示（核心没覆盖到的本地动作），同样按几分钟自动收
+            mutate { self.cookieSticky.show(params["text"] as? String ?? "") }
+            return [:]
+        case "cookie.dismiss":
+            // 底部提示条末尾那个「关闭」：cookie 提示与配置报错一起收，
+            // 下次真出事会重新冒出来，不会一按就永久哑掉
+            mutate {
+                self.cookieSticky.dismiss()
+                self.configError = nil
+            }
+            return [:]
         case "cookies.sync":
             return try syncCookies(source: params["source"] as? String ?? "both")
         case "cookies.check":
@@ -457,7 +473,7 @@ public final class AppService {
         ]
         let run = runStateLocked()
         let messages: [String: Any] = [
-            "cookie": cookieMessage ?? "",
+            "cookie": cookieSticky.current() ?? "",
             "downloader": downloaderMessage ?? "",
             "zip": zipMessage ?? "",
             "update": updateMessage ?? "",
@@ -1222,10 +1238,11 @@ public final class AppService {
         }
 
         let (imported, kept, skipped) = importBackupRaws(rawsBySource)
-        cookieMessage = "同步完成：导入 \(imported) 个站，保留 \(kept) 个"
+        let message = "同步完成：导入 \(imported) 个站，保留 \(kept) 个"
             + (errors.isEmpty ? "" : "；\(errors.joined(separator: "；"))")
+        mutate { self.cookieSticky.show(message) }
         persistCookies()
-        emit("note", nil, cookieMessage ?? "", "", phase: nil, ok: errors.isEmpty)
+        emit("note", nil, message, "", phase: nil, ok: errors.isEmpty)
         // 同步完立刻逐站复检（mac 版同一步）：界面上要看到新导入的 cookie 到底能不能用
         var recheck: [String] = []
         lock.lock()
@@ -1299,7 +1316,7 @@ public final class AppService {
             if !v.isEmpty { cfg.sourceSites[i].enabled = true }
             message = v.isEmpty ? "已清空 \(site.name) 的 API Key"
                                 : "已保存 \(site.name) 的 API Key，并启用该站"
-            self.cookieMessage = message
+            self.cookieSticky.show(message)
             self.note("api: 单站 \(siteID) key 已更新")
         }
         save()
@@ -1319,7 +1336,7 @@ public final class AppService {
                 cookies.importRawString(host: h, raw)
                 message = "已保存 \(site.name) 的 cookie"
             }
-            self.cookieMessage = message
+            self.cookieSticky.show(message)
             self.note("cookie: 手动写入 \(site.id)")
         }
         persistCookies()
@@ -1338,7 +1355,7 @@ public final class AppService {
             message = error.localizedDescription
         }
         mutate {
-            self.cookieMessage = message
+            self.cookieSticky.show(message)
             self.note("zip: \(url.lastPathComponent) -> \(message)")
         }
         persistCookies()

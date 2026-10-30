@@ -1052,6 +1052,38 @@ Windows 侧：
   WPF 编译 0 错误（XAML 里的 `local:SecretField` 与删掉的 peeker 引用都由编译把关）。
   Windows 端没机器可眼验，改动全在 XAML/控件层，回归点在下载器卡片与 SSH 卡片的取值。
 
+## 这一轮（底部 cookie 提示：显示几分钟自己收，末尾加「关闭」）
+
+- 规则只写一份，放在核心：新增 `Sources/BoxSendKit/Util/StickyMessage.swift`，一个 `show / current /
+  dismiss` 的小结构，`ttl` 定在 5 分钟。核心里的 cookie 提示与 mac 界面侧那份都用它，
+  免得出现「mac 五分钟就收、Windows 挂一整天」。
+  顺手修掉它自己的一个 bug：`show` 里裁了首尾空白却把没裁的那份存进去，底部因此带着一串空白，
+  现在存的是裁好的（`testStoredTextIsTrimmed` 钉住）。
+- 核心（`AppService`）：原来那个 `cookieMessage` 变量换成 `cookieSticky = StickyMessage()`，
+  五处写入统一走 `cookieSticky.show(...)`，快照 `"cookie": cookieSticky.current() ?? ""`。
+  新增两条命令给界面用：`cookie.message`（界面自己顶一条，同样按几分钟收）、
+  `cookie.dismiss`（末尾那个「关闭」，cookie 提示与配置报错一起收，下次真出事会重新冒出来）。
+  `version` 载荷多带一个 `cookieMessageTTL`，Windows 本地兜底那份照它取值，两端不各写一个数。
+- mac（`AppModel`）：`cookieMessage` 加 `didSet` 记录时间，另挂一个 10 秒的 `Timer` 问
+  `StickyMessage.current()`，过期就把显示值清空；`suppressStickyRecord` 防计时器回写时被
+  `didSet` 当成新提示重新计时。`dismissBottomMessage()` 给「关闭」用，`cookieMessage` 与
+  `configError` 一起清。`Views.swift` 的 `statusBar` 末尾加 `Button("关闭")`。
+- Windows：`MainWindow.xaml` 底部那条 `Border` 起名 `StatusBar`、默认 `Collapsed`，
+  右侧加 Ghost 样式的「关闭」按钮（`Click="OnDismissStatus"`），左侧留一个图标位
+  （`StatusGlyph`：配置报错用告警图标、cookie 提示用信息图标）。
+  原来这条栏里那两个 `TextBlock` 其实没人写过值，是条死栏，这轮才真正接上模型。
+  `MainWindow.xaml.cs` 订 `Refreshed` / `FullRefreshed` → `Dispatcher.Invoke(UpdateStatusBar)`，
+  文字取 `model.StatusText`（配置报错优先，其次 cookie 提示），两边都空就整条收起来不留空带。
+- Windows（`AppModel.cs`）：新增 `ShowCookieMessage(text)` 与 `DismissBottomMessage()`。
+  顶提示优先走核心 `cookie.message`（核心记着，600ms 一轮的快照会把这句话带回来，到点自己收）；
+  核心那条路走不通时本地挂一条，`_localMessageUntil` 用核心的 TTL，在 `Apply` 里就地判过期，
+  所以不用另开计时器。原先三处直接 `CookieMessage = ...`（两处「读取状态失败」、`Guard` 的
+  catch）改走 `ShowCookieMessage`，否则会一直挂着。
+- 验过：`swift test` 619 个用例全绿（新增 `StickyMessageTests` 10 个：TTL 到点、过期不复活、
+  重显重新计时、空白等于收回、裁空白、`cookie.message`/`cookie.dismiss` 往返、载荷里的 TTL）；
+  WPF 编译 0 错误；mac 重新出包装到 /Applications，实跑点「同步 Cookie」后底部出现
+  「Cookie 同步成功：导入/更新 2 个站点…」并在末尾带「关闭」，点一下整条消失。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

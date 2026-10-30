@@ -15,7 +15,18 @@ final class AppModel: ObservableObject {
     // MARK: cookie
     @Published var cookieHosts: [String] = []
     @Published var cookieCounts: [String: Int] = [:]
-    @Published var cookieMessage: String? = nil
+    /// 底部提示条与 cookie 卡片共用这一条：写入即重新计时，几分钟后自己收
+    /// （时长由核心的 StickyMessage 定），界面末尾还有个「关闭」可以立刻收掉
+    @Published var cookieMessage: String? = nil {
+        didSet {
+            if suppressStickyRecord { return }
+            if let v = cookieMessage, !v.isEmpty { cookieSticky.show(v) } else { cookieSticky.dismiss() }
+        }
+    }
+    private var cookieSticky = StickyMessage()
+    /// 计时器回写显示值时别再被 didSet 当成「新提示」重新计时
+    private var suppressStickyRecord = false
+    private var cookieExpireTimer: Timer?
     @Published var lastGistSyncText: String = ""
     @Published var gistAuto: Bool = false
 
@@ -87,6 +98,32 @@ final class AppModel: ObservableObject {
     /// 当前背景图片（nil = 纯渐变主题）
     private(set) var backgroundNSImage: NSImage?
 
+    /// 十秒一次问核心那份规则「这条提示还在时限内吗」，过期就把界面清空
+    private func startCookieExpireTimer() {
+        cookieExpireTimer?.invalidate()
+        cookieExpireTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tickCookieMessage() }
+        }
+    }
+
+    private func tickCookieMessage() {
+        let next = cookieSticky.current()
+        guard next != cookieMessage else { return }
+        suppressStickyRecord = true
+        cookieMessage = next
+        suppressStickyRecord = false
+    }
+
+    /// 底部提示条末尾那个「关闭」：cookie 提示与配置报错一起收，
+    /// 下次真出事会重新冒出来，不会一按就永久哑掉
+    func dismissBottomMessage() {
+        suppressStickyRecord = true
+        cookieSticky.dismiss()
+        cookieMessage = nil
+        configError = nil
+        suppressStickyRecord = false
+    }
+
     init() {
         dataDir = AppPaths.dir
         configPath = AppPaths.configFile
@@ -108,6 +145,9 @@ final class AppModel: ObservableObject {
         }
 
         state = StateStore(dataDir: dataDir)
+
+        // 底部那条 cookie 提示到点自己收（显示时长在核心的 StickyMessage 里）
+        startCookieExpireTimer()
 
         // 数据目录以 GUI 自己的 AppPaths.dir 为准：配置里可能留着历史相对值（".boxsend"），
         // 相对路径会让转种失败现场（debug/ 下的响应页与字段清单）落到 GUI 进程的工作目录（"/"）而静默丢失
