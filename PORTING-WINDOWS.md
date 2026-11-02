@@ -1188,6 +1188,33 @@ Windows 侧：
 - 验过：WPF 编译 0 错误；`swift test` 646 个用例仍全绿（这轮只动界面）。
   Windows 界面得实机看一眼：列宽放宽后 主题 那一排会更松散，若觉得挤再说。
 
+## 这一轮（优堡：媒介跟着源站走、限定词标签别乱勾、整季勾「合集」）
+
+- 现场：LuckPT 48806「Minami-ke: Tadaima S04 2013 1080p Blu-Ray x265 FLAC 2.0-LuckAni」转优堡
+  （ubits.club，站点没有「完结」标签），站内审核写着「去除高分国剧标签，缺合集标签，媒介错误」。
+  三处都在核心，两端只渲染，Windows 侧不用动。
+- ① 媒介选成 Track：`QualityTokens.medium` 被标题里的 `FLAC` 当音轨带走了。现在两条判据都听：
+  源站详情页「媒介」行明写 Encode（`ReleaseInfo.sourceMedium`，新增字段，随 CodingKeys 存盘）
+  就直接定压制；标题或 MediaInfo 里出现 `x264`/`x265` 也算压制（`AVC`/`H.264`/`H.265` 只是格式名，
+  原生碟片也这么写，不算）。`FLAC`/`APE`/`M4A` 判 Track 前先看 `hasVideoMediumHint`——
+  标题写过分辨率、碟片、流媒体或编码器就不再是音乐；`kind == .music` 仍在最前，音乐站不受影响。
+  源站媒介行的取词补了 `NexusPHPAdapter.inlineRowValue`：LuckPT 把「媒介: Encode　编码: H.265」
+  连排在类型单元格里，`<tr><td>媒介</td><td>` 那种结构抓不到，取到的值要在下一个字段名处裁断。
+- ② 勾了「高分国剧」：动态标签那趟放宽匹配只要标签文案含规范关键词就勾，「高分」把「高分国剧」
+  带了出来。现在放宽档要再过一道 `QualityTokens.qualifiedLabelAllowed`：标签里多出来的限定词
+  （国剧/国产/华语/美剧…剧、剧集/电视剧/网剧、综艺、纪录片、动画/动漫、电影、音乐、体育）
+  得拿事实核。三态判定——拿得准的反证才拦（产地写明日本 → 「国剧」不成立），证据不足放行
+  （产地空、动画电影对「动画电影」），别替站点下结论。
+- ③ 整季没勾「合集」：站点没有「完结」标签，口径是整季勾「合集」、单集勾「连载」。
+  `SiteOverride.serialPackTags`（opt-in，只给优堡开）在体裁是动漫/剧集且不是单片时派生：
+  `isCompletedRelease` → `pack`、`isEpisodicRelease` → `serial`，并进 `dynamicTagValues` 的标签集。
+  `tagTextMap` 补 `serial`（连载/連載/连载中/更新中/正在更新）与 `pack`（合集/整季/全季/pack），
+  所以源站自己打了「合集/连载」的站点照样跟；没开 `serialPackTags` 的站不会凭空多勾。
+- 测试 656 个全绿（新增 10 个，`UbitsMediumTagTests`）：源站媒介行取词、媒介=压制不是 Track、
+  x264/x265/MediaInfo 判压制、WEB-DL+x265 仍按来源、音乐仍 Track、限定词三例、
+  整季→合集、单集→连载、未开启派生的站不受影响。两端共用核心判定，优堡的 `serialPackTags`
+  走 `SiteRegistry.effectiveSite()` 合并，不进快照，WPF 无需改。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

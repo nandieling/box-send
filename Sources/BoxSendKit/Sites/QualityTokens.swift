@@ -5,16 +5,29 @@ import Foundation
 enum QualityTokens {
     /// 媒介/源介质 token。mediainfo 传入源页 MediaInfo/BDInfo 原文：
     /// 里面出现 x264/x265（软件编码器）说明这份「蓝光盘」是压制出来的，应选压制媒介。
-    static func medium(from name: String, kind: ReleaseKind?, mediainfo: String = "") -> String? {
+    static func medium(from name: String, kind: ReleaseKind?, mediainfo: String = "",
+                       sourceMedium: String? = nil) -> String? {
         let n = name.lowercased()
         if n.contains("remux") { return "remux" }
-        if kind == .music || n.contains("flac") || n.contains("ape") || n.contains("m4a") { return "track" }
+        let src = mediumToken(fromSourceLabel: sourceMedium)
+        // FLAC / APE / M4A 是音轨格式：只有音乐发布（或标题压根没有视频痕迹）才拿它定媒介。
+        // 动画、剧集的蓝光压制盘常带 FLAC 音轨，以前那样判会被带去 Track
+        //（优堡那条「Minami-ke Tadaima S04 1080p Blu-Ray x265 FLAC 2.0」审核就是「媒介错误」）。
+        if kind == .music { return "track" }
+        // 源站媒介行已经写明「Encode（压制）」时跟着源站走，
+        // 别让标题里的 FLAC 音轨把整条种子当成无损音乐
+        if src == "encode" { return "encode" }
+        let audioFormat = n.contains("flac") || n.contains("ape") || n.contains("m4a")
+        if (audioFormat || src == "track"), !hasVideoMediumHint(n) { return "track" }
         if n.contains("hdtv") { return "hdtv" }
         let isDisc = n.contains("bluray") || n.contains("blu-ray") || n.contains("bdrip") || n.contains("brrip") || n.contains("bdiso")
         let isWeb = n.contains("web-dl") || n.contains("webdl") || n.contains("web rip") || n.contains("webrip")
         // BDMV / ISO 是原盘目录与镜像：即便轨里写着编码器也不算压制盘
         let isRawDisc = n.contains("bdmv") || n.contains("iso")
-        let pressed = !isRawDisc && (hasSoftwareEncoder(name) || hasSoftwareEncoder(mediainfo))
+        // 压制判据：标题或 MediaInfo 里出现软件编码器 x264/x265，或源站「媒介」行明写 Encode。
+        // AVC / H.264 / H.265 这些格式名不算——原盘视频轨本来就常是这些（见 hasSoftwareEncoder）
+        let pressed = !isRawDisc && (hasSoftwareEncoder(name) || hasSoftwareEncoder(mediainfo)
+                                     || src == "encode")
         let is8K = n.contains("8k") || n.contains("4320")
         let is4K = n.contains("2160p") || n.contains("4k") || n.contains("uhd")
         if is8K { return isDisc ? "uhdbd8k" : "uhd8k" }
@@ -29,7 +42,36 @@ enum QualityTokens {
             return "encode"
         }
         if n.contains("dvd") { return "dvd" }
+        // 标题什么视频痕迹都没写出来时，才让源站那句「媒介」说了算（原来这里直接留空）
+        return src
+    }
+
+    /// 源站详情页「媒介」行的文案（Encode / REMUX / WEB-DL / Blu-ray / HDTV / DVD / Track…）
+    /// 归一成媒介 token。认不出给 nil：站点写自己那套词时不硬套。
+    static func mediumToken(fromSourceLabel label: String?) -> String? {
+        guard let label else { return nil }
+        let t = label.lowercased()
+            .replacingOccurrences(of: #"[\s\-_./()（）\[\]｜|,，:：]"#, with: "", options: .regularExpression)
+        if t.isEmpty { return nil }
+        if t.contains("remux") { return "remux" }
+        if t.contains("encode") || t.contains("压制") || t.contains("重编码") { return "encode" }
+        if t.contains("webrip") { return "webrip" }
+        if t.contains("webdl") || t.contains("流媒体") || t.contains("web") { return "webdl" }
+        if t.contains("hdtv") || t.contains("iptv") { return "hdtv" }
+        if t.contains("dvd") { return "dvd" }
+        if t.contains("uhd") || t.contains("4k") { return "uhdbd" }
+        if t.contains("bluray") || t.contains("蓝光") || t.contains("原盘") { return "bluray" }
+        if t.contains("track") || t.contains("cd") || t.contains("无损") { return "track" }
         return nil
+    }
+
+    /// 标题里有没有视频发布的痕迹（分辨率、碟片、流媒体、视频编码器）。
+    /// 用来分「音乐发布带 FLAC」与「动画带 FLAC 音轨」，只在传入已小写的标题时使用。
+    static func hasVideoMediumHint(_ loweredName: String) -> Bool {
+        ["1080p", "1080i", "720p", "480p", "576p", "2160p", "4320", "1440p", "4k", "8k", "uhd", "2k",
+         "bluray", "blu-ray", "bdrip", "brrip", "bdmv", "bdiso", "dvd", "hddvd",
+         "web-dl", "webdl", "webrip", "web rip", "hdtv", "iptv",
+         "x264", "x265", "h264", "h265", "hevc", "avc", "av1", "vc1", "xvid", "remux"].contains { loweredName.contains($0) }
     }
 
     /// 文本里是否出现软件编码器 x264 / x265（x.264、libx264、x265 core 这类写法归一后同样命中）。
@@ -254,6 +296,10 @@ enum QualityTokens {
         // 转出去的种子既不是本站官种、也不是本站首发，一律不跟随源站。
         ("disc", ["原盘"]),
         ("completed", ["完结", "完結", "全集", "complete", "finished"]),
+        // 连载体裁的两态：单集在更新（连载），整季包（合集）。
+        // 有的站没有「完结」标签，整季包就是靠「合集」表达（春天、优堡）
+        ("serial", ["连载", "連載", "连载中", "連載中", "更新中", "正在更新"]),
+        ("pack", ["合集", "整季", "全季", "pack"]),
         ("anime", ["动画", "动漫", "anime"]),
         ("remux", ["remux"]),
         // 题材标签：取源站「类别」行（财神等站按题材标签审核，缺题材标签会被打回）
@@ -339,6 +385,75 @@ enum QualityTokens {
                       options: .regularExpression) != nil { return true }
         if flat.contains("engsub") { return true }
         return lower.range(of: #"(?:eng|english)[ ._\-]subs?(?:\b|$)"#, options: .regularExpression) != nil
+    }
+
+    /// 标签选项的「限定词」守卫：站点选项常在规范词上再加限定
+    /// （「高分国剧」比「高分」多了产地与体裁，「高分美剧」多了产地）。
+    /// 这些限定词自带门槛，这份发布自己得满足才允许走「包含」那条匹配，否则宁可不勾。
+    /// 优堡那条日本动画被豆瓣 8 分推成「高分国剧」，审核直接打回「去除高分国剧标签」。
+    static func qualifiedLabelAllowed(_ info: ReleaseInfo, keyword: String, label: String) -> Bool {
+        let l = normLabel(label), k = normLabel(keyword)
+        guard !l.isEmpty, !k.isEmpty else { return false }
+        guard l.contains(k) else { return l == k }
+        let rest = l.replacingOccurrences(of: k, with: "")
+        if rest.isEmpty { return true }
+        for (word, ok) in qualifierFacts(info) where rest.contains(word) {
+            if ok == false { return false }        // nil = 证据不足，按满足放行
+        }
+        return true
+    }
+
+    /// 限定词 → 这份发布是否满足（三态）。true 满足、false 有明确反证、nil 证据不足。
+    /// 只有拿得准的反证才拦标签：证据不足时放行，免得把站点本来该勾的标签抹掉
+    ///（动画电影对上「动画电影」这种标签，判不准就别替站点做决定）。
+    private static func qualifierFacts(_ info: ReleaseInfo) -> [(String, Bool?)] {
+        let text = (info.region + " " + info.genre + " " + info.siteCategory + " "
+                    + info.subtitle + " " + info.name).lowercased()
+        func mentions(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
+        /// 产地型限定词（国剧 / 美剧 / 港剧…）：产地写了就算数，写了别的就不算；没写算证据不足。
+        /// 「X 剧」结尾的词还要求体裁不是单片电影。
+        func regionFact(_ regionWords: [String], _ mentionWords: [String],
+                        seriesOnly: Bool = false) -> Bool? {
+            if regionWords.contains(where: { info.region.contains($0) }) { return true }
+            if mentions(mentionWords) { return true }
+            if seriesOnly, info.kind == .movie { return false }
+            guard !info.region.isEmpty else { return nil }
+            return false
+        }
+        /// 体型限定词（电影 / 剧集 / 动画…）：kind 或文案正面命中算满足，
+        /// 命中互斥体裁算不满足，其余留给 nil。
+        func kindFact(_ yes: [ReleaseKind], _ negative: [ReleaseKind],
+                      _ mentionWords: [String]) -> Bool? {
+            if let kind = info.kind, yes.contains(kind) { return true }
+            if mentions(mentionWords) { return true }
+            if let kind = info.kind, negative.contains(kind) { return false }
+            return nil
+        }
+        let mainland = ["大陆", "内地", "中国"]
+        return [
+            ("国剧", regionFact(mainland, ["国产", "内地剧", "大陆剧", "国剧"], seriesOnly: true)),
+            ("国产", regionFact(mainland, ["国产"])),
+            ("华语", regionFact(["大陆", "内地", "中国", "港", "澳", "台"], ["国语", "华语", "粤语"])),
+            ("美剧", regionFact(["美", "欧美"], ["美剧", "美国"], seriesOnly: true)),
+            ("英剧", regionFact(["英"], ["英剧", "英国"], seriesOnly: true)),
+            ("日剧", regionFact(["日"], ["日剧", "日本"], seriesOnly: true)),
+            ("韩剧", regionFact(["韩"], ["韩剧", "韩国"], seriesOnly: true)),
+            ("港剧", regionFact(["港"], ["港剧"], seriesOnly: true)),
+            ("台剧", regionFact(["台"], ["台剧"], seriesOnly: true)),
+            ("泰剧", regionFact(["泰"], ["泰剧"], seriesOnly: true)),
+            ("剧集", kindFact([.series, .tvshow, .anime], [.music, .sports], ["剧集", "电视剧", "连续剧"])),
+            ("电视剧", kindFact([.series, .tvshow], [.movie, .anime, .music], ["电视剧", "连续剧"])),
+            ("网剧", kindFact([.series, .tvshow], [.movie, .anime, .music], ["网剧"])),
+            ("综艺", kindFact([.tvshow], [.anime, .movie, .music], ["综艺", "綜藝", "真人秀", "variety"])),
+            ("纪录片", kindFact([.documentary], [.anime, .music], ["纪录", "紀錄", "纪实", "documentary"])),
+            ("动画", kindFact([.anime], [.music, .sports], ["动画", "動漫", "动漫", "anime", "番剧"])),
+            ("动漫", kindFact([.anime], [.music, .sports], ["动画", "動漫", "动漫", "anime", "番剧"])),
+            ("电影", kindFact([.movie], [.series, .tvshow, .music],
+                             ["电影", "電影", "剧场版", "劇場版", "映画", "movie", "film"])),
+            ("音乐", kindFact([.music], [.anime, .movie, .series, .tvshow],
+                             ["音乐", "音樂", "唱片", "album", "flac"])),
+            ("体育", kindFact([.sports], [.anime, .music, .movie], ["体育", "赛事", "賽事", "sport"])),
+        ]
     }
 
     /// 源站「类别」行（如 "喜剧 / 动画"）解析成题材标签。

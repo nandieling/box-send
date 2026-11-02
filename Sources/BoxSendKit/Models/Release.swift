@@ -24,6 +24,9 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
     public var sourceName: String      // 源站显示名（如 LuckPT；目标站"附加信息=转种来源"用）
     public var bangumi: String         // Bangumi 番组计划条目链接（馒头动画分类发种必填）
     public var sourceTags: [String]    // 源站详情页"标签"行原文（如 ["官方","中字","完结"]）
+    /// 源站详情页「媒介」行原文（如 "Encode" / "REMUX" / "WEB-DL"）。
+    /// 源站已经把媒介讲明时，目标站的媒介下拉该跟随它，而不是只靠发布名猜。
+    public var sourceMedium: String?
     /// 「批量转种」页勾选「源站引用」时用户填写的文本：加在发种简介最上面，按目标站格式用引用包裹。
     /// 源站简介自带引用的可以不填，所以做成可选项（空串 = 不加）。
     public var extraQuote: String
@@ -81,7 +84,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
          isForbidReseed: Bool = false, subtitle: String = "", genre: String = "",
          mediainfo: String = "", region: String = "", sourceName: String = "",
          bangumi: String = "", sourceTags: [String] = [], extraQuote: String = "",
-         siteCategory: String = "") {
+         siteCategory: String = "", sourceMedium: String? = nil) {
         self.siteID = siteID
         self.detailURL = detailURL
         self.name = name
@@ -103,12 +106,13 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         self.bangumi = bangumi
         self.sourceTags = sourceTags
         self.extraQuote = extraQuote
+        self.sourceMedium = sourceMedium
     }
 
     private enum CodingKeys: String, CodingKey {
         case siteID, detailURL, name, descr, imdb, douban, size, kind, extraQuote
         case torrentName, torrentURL, isForbidReseed, subtitle, genre, mediainfo, region
-        case sourceName, bangumi, sourceTags, siteCategory
+        case sourceName, bangumi, sourceTags, siteCategory, sourceMedium
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -131,6 +135,7 @@ public struct ReleaseInfo: Codable, CustomStringConvertible {
         sourceName = try c.decodeIfPresent(String.self, forKey: .sourceName) ?? ""
         bangumi = try c.decodeIfPresent(String.self, forKey: .bangumi) ?? ""
         sourceTags = try c.decodeIfPresent([String].self, forKey: .sourceTags) ?? []
+        sourceMedium = try c.decodeIfPresent(String.self, forKey: .sourceMedium)
         extraQuote = try c.decodeIfPresent(String.self, forKey: .extraQuote) ?? ""
     }
 

@@ -201,6 +201,9 @@ class NexusPHPAdapter: SiteAdapter {
         let siteCategory = Self.siteCategoryRow(html) ?? ""
         let region = Self.regionValue(fromPlain: plain) ?? ""
         let sourceTags = Self.sourceTags(fromHTML: html)
+        // 源站「媒介」行（Encode / REMUX / WEB-DL…）：站方已经把媒介讲明时，目标站的媒介下拉跟随它
+        let sourceMedium = Self.detailRowValue(html, label: "媒介") ?? Self.detailRowValue(html, label: "介质")
+            ?? Self.inlineRowValue(html, label: "媒介") ?? Self.inlineRowValue(html, label: "介质")
 
         // 外链信息
         let imdb = HTMLUtil.firstMatch(descrRaw, "tt\\d{5,13}")
@@ -344,7 +347,8 @@ class NexusPHPAdapter: SiteAdapter {
             region: region,
             sourceName: override?.sourceLabel ?? site.name,
             sourceTags: sourceTags,
-            siteCategory: siteCategory
+            siteCategory: siteCategory,
+            sourceMedium: sourceMedium
         )
     }
 
@@ -415,6 +419,27 @@ class NexusPHPAdapter: SiteAdapter {
             .replacingOccurrences(of: "[ \\t　 ]+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
+    }
+
+    /// 内联写法兜底：有的站把「媒介: Encode　编码: H.265」连排进同一个单元格，
+    /// <tr><td>媒介</td><td>…</td> 那种结构抓不到，只能在去掉标签的正文里按「媒介:」取词。
+    static func inlineRowValue(_ html: String, label: String) -> String? {
+        let text = HTMLUtil.stripTags(HTMLUtil.decodeEntities(html))
+            .replacingOccurrences(of: "\u{a0}", with: " ")
+        let pattern = "\(NSRegularExpression.escapedPattern(for: label))\\s*[:：]\\s*([^\\n]{1,60})"
+        guard let raw = HTMLUtil.group(text, pattern) else { return nil }
+        var value = raw
+        // 值只到同排下一个字段名为止，别把「编码: H.265」这类一起吞进来
+        for stop in ["编码", "分辨率", "音频", "制作组", "格式", "标签", "类型", "字幕", "片源",
+                     "上映", "地区", "国家", "时长", "名称", "又名", "IMDb", "imdb", "豆瓣"] {
+            if let r = value.range(of: stop), r.lowerBound != value.startIndex {
+                value = String(value[..<r.lowerBound])
+            }
+        }
+        let t = value.replacingOccurrences(of: "[\\s　]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, t.count <= 30, !t.contains("<"), !t.contains("http") else { return nil }
+        return t
     }
 
     /// 详情页"标签"行的标签列表（NexusPHP 用彩色 <span> 逐个展示，去标签后会连成一片，必须逐节点取）
@@ -979,7 +1004,8 @@ class NexusPHPAdapter: SiteAdapter {
         }
         if !["2160p", "8k"].contains(std) { shapeAvoid += ["4k", "uhd", "2160", "8k"] }
         if !QualityTokens.normLabel(info.name).contains("3d") { shapeAvoid += ["3d"] }
-        switch QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo) ?? "" {
+        switch QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo,
+                                              sourceMedium: info.sourceMedium) ?? "" {
         case "webdl", "webrip": shapePrefer += ["web", "流媒体"]
         case "hdtv": shapePrefer += ["hdtv", "电视"]
         case "remux": shapePrefer += ["remux"]
@@ -1123,7 +1149,8 @@ class NexusPHPAdapter: SiteAdapter {
 
     private func applyQualitySelects(_ info: ReleaseInfo, page: String, mode: String?, _ set: (String, String) -> Void) {
         let tokens: [String: String?] = [
-            "medium": QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo),
+            "medium": QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo,
+                                           sourceMedium: info.sourceMedium),
             "codec": QualityTokens.codec(from: info.name, mediainfo: info.mediainfo),
             "audiocodec": QualityTokens.audio(from: info.name),
             "standard": QualityTokens.standard(from: info.name),
@@ -1800,7 +1827,8 @@ class NexusPHPAdapter: SiteAdapter {
     /// 字段名含 tag/chinese/exclusive 的按"文案包含关键词"匹配；其余字段名（如 pterclub 的
     /// zhongzi/jinzhuan 拼音命名）只接受文案与关键词完全一致，避免误勾表单里其它复选框。
     private func dynamicTagValues(_ info: ReleaseInfo, page: String,
-                                  excluding: Set<String> = []) -> [(name: String, value: String)] {
+                                  excluding: Set<String> = [],
+                                  extraTags: [String] = []) -> [(name: String, value: String)] {
         func nameGated(_ n: String) -> Bool {
             let base = n.replacingOccurrences(of: #"[\d]+"#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
@@ -1810,7 +1838,8 @@ class NexusPHPAdapter: SiteAdapter {
             s.lowercased().replacingOccurrences(of: "[\\s　]+", with: "", options: .regularExpression)
         }
         let boxes = HTMLUtil.checkboxes(page).filter { !$0.label.isEmpty }
-        let tags = canonicalTags(info)
+        var tags = canonicalTags(info)
+        for t in extraTags where !tags.contains(t) { tags.append(t) }
         var out: [(name: String, value: String)] = []
         var claimed: Set<String> = []
         for (tag, keywords) in QualityTokens.tagTextMap {
@@ -1824,7 +1853,11 @@ class NexusPHPAdapter: SiteAdapter {
                     if claimedBox(box) || !nameGated(box.name) { return false }
                     // 并列文案（"原盘或ISO"）语义不唯一，只有完全一致才算命中
                     if box.label.contains("或") { return false }
-                    return keys.contains(where: { norm(box.label).contains($0) })
+                    // 「高分国剧」这种带限定词的选项：这份发布自己得满足限定词才敢勾
+                    return keys.contains(where: { key in
+                        norm(box.label).contains(key)
+                            && QualityTokens.qualifiedLabelAllowed(info, keyword: key, label: box.label)
+                    })
                 }
             guard let h = hit else { continue }
             claimed.insert("\(h.name)\u{1}\(h.value)")
@@ -2065,7 +2098,19 @@ class NexusPHPAdapter: SiteAdapter {
         // 动态标签：按页面复选框文案匹配（新站免逐站配置）。
         // 配了 tagMap/tagCheckboxes 的站也走一遍，只补配置没覆盖的规范标签——
         // 例如源站「标签」行写了 DIY，而本站 tagMap 里没配 diy，也应该勾上本站的 DIY 复选框。
-        for (name, value) in dynamicTagValues(info, page: page, excluding: mappedTags)
+        // 站点用「连载 / 合集」而不是「完结」表达连载体裁的两态时，按发布形态派生
+        var derivedTags: [String] = []
+        if override?.serialPackTags == true,
+           [.anime, .series, .tvshow].contains(info.kind ?? .other),
+           !QualityTokens.isFilmRelease(info) {
+            if QualityTokens.isCompletedRelease(info) {
+                derivedTags.append("pack")
+            } else if QualityTokens.isEpisodicRelease(info) {
+                derivedTags.append("serial")
+            }
+        }
+        for (name, value) in dynamicTagValues(info, page: page, excluding: mappedTags,
+                                             extraTags: derivedTags)
         where !fields.contains(where: { $0.name == name && $0.value == value }) {
             fields.append(.init(name, value))
         }

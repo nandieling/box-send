@@ -342,7 +342,8 @@ class Unit3DAdapter: SiteAdapter {
     /// （419 电影/HD、421 电影/BluRay、439 电影/Remux、420 电影/DVDiSo、401 电影/SD；
     ///  影剧对应 402/438/435/403；动画分 405 与 453 动画/BluRay）
     static func uploadCategory(for info: ReleaseInfo) -> Int {
-        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo) ?? ""
+        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo,
+                                              sourceMedium: info.sourceMedium) ?? ""
         let std = QualityTokens.standard(from: info.name) ?? ""
         let n = info.name.uppercased()
         // 碟片形态看发布名而不是 medium token：x264/x265 压制的蓝盘 token 是「压制」，
@@ -430,7 +431,8 @@ class Unit3DAdapter: SiteAdapter {
 
     /// 视频编码 / 音频编码 / 分辨率 / 媒介 / 来源：站方字典动态匹配，字典缺失时用兜底 id
     private func qualityFields(_ info: ReleaseInfo) -> [HTTPClient.MultipartField] {
-        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo)
+        let medium = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo,
+                                              sourceMedium: info.sourceMedium)
         let std = QualityTokens.standard(from: info.name)
         let ctx = QualityMatcher.Context(
             isUHD: ["2160p", "8k"].contains(std ?? ""),

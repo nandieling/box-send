@@ -174,7 +174,7 @@ public enum SiteRegistry {
         SiteConfig(id: "shuioudao", name: "下水道", url: "https://sewerpt.com/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "tangpt", name: "躺平", url: "https://www.tangpt.top/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "tjupt", name: "北洋园", url: "https://www.tjupt.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
-        SiteConfig(id: "ubits", name: "优堡", url: "https://ubits.club/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
+        SiteConfig(id: "ubits", name: "优堡", url: "https://ubits.club/", framework: .nexusPHP, enabled: false, overrides: .ubits),
         SiteConfig(id: "ultrahd", name: "UltraHD", url: "https://ultrahd.net/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "wtsakura", name: "冬樱", url: "https://wintersakura.net/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "xingtan", name: "杏坛", url: "https://xingtan.one/", framework: .nexusPHP, enabled: false, overrides: .xingtan),

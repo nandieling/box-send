@@ -235,6 +235,21 @@ extension SiteOverride {
         return o
     }
 
+    /// ubits（优堡）：在 .nexusCN 基础上开「连载 / 合集」派生。
+    /// 站点没有「完结」标签，审核按这两条口径：单集剧集勾「连载」，整季剧集勾「合集」
+    /// （2026-11 那条南家三姐妹 S04 因「缺合集标签」被审核打回）
+    static let ubits = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr",
+        serialPackTags: true
+    )
+
     static let nexusCN = SiteOverride(
         uploadPath: "upload.php",
         uploadActionPath: "takeupload.php",

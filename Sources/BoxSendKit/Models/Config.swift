@@ -175,6 +175,9 @@ public struct SiteOverride: Codable {
     /// 站方两种凭据都收（可乐 PT：填了 API Key 走 Key 面，没填仍走同步下来的 cookie）：
     /// 界面因此同时给出 cookie 状态与「API Key（可选）」入口
     public var apiKeyOptional: Bool?
+    /// 站点用「连载 / 合集」表达连载体裁的两态（没有「完结」标签）：
+    /// 整季包勾「合集」、单集勾「连载」（春天、优堡这类）
+    public var serialPackTags: Bool?
 }
 
 extension SiteOverride {
@@ -248,6 +251,7 @@ extension SiteOverride {
         if let v = apiBase { out.apiBase = v }
         if usesAPIKey ?? false { out.usesAPIKey = true }
         if apiKeyOptional ?? false { out.apiKeyOptional = true }
+        if let v = serialPackTags { out.serialPackTags = v }
         return out
     }
 }

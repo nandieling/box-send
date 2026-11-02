@@ -73,7 +73,8 @@ enum ColaFields {
     /// 4. 一点依据都没有就返回 nil（留「未知」让用户自己点，别猜成原盘）。
     static func source(_ info: ReleaseInfo) -> String? {
         let n = info.name.lowercased()
-        let m = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo)
+        let m = QualityTokens.medium(from: info.name, kind: info.kind, mediainfo: info.mediainfo,
+                                              sourceMedium: info.sourceMedium)
         if m == "remux" || n.contains("remux") { return "Remux" }
         if n.contains("webrip") || n.contains("web-rip") || n.contains("web rip") { return "WEBRip" }
         if m == "webdl" || n.contains("web-dl") || n.contains("webdl") { return "WEB-DL" }
