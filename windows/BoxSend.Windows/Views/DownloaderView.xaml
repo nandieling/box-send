@@ -33,50 +33,54 @@
         <StackPanel x:Name="DlCards" Margin="0,12,0,0" />
 
         <GroupBox Header="转种服务器（SSH 上传测速）">
+            <!-- 顺序与宽度按用户要求排：登录方式 → 服务器地址（端口跟在它右边）→ 用户名 → 密码。
+                 宽度取 220 的整倍数，服务器地址 / 用户名 / 密码 = 4 : 3 : 2，长地址一眼看得完 -->
             <StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="260" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="登录方式" Padding="0,0,0,2" />
-                    <ComboBox x:Name="SshAuth">
+                    <ComboBox x:Name="SshAuth" Width="260">
                         <ComboBoxItem Content="密钥（用系统 ssh）" Tag="key" />
                         <ComboBoxItem Content="密码（用内置 SSH 客户端）" Tag="password" />
                     </ComboBox>
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="320" HorizontalAlignment="Left">
-                    <Label Content="密码（只在登录方式选「密码」时用）" Padding="0,0,0,2" />
-                    <local:SecretField x:Name="SshPass" />
-                </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="460" HorizontalAlignment="Left">
-                    <Label Content="服务器地址" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshHost" />
-                </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="90" HorizontalAlignment="Left">
-                    <Label Content="SSH 端口" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshPort" />
-                </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="200" HorizontalAlignment="Left">
+                <WrapPanel ItemHeight="62">
+                    <StackPanel Margin="0,0,16,8" HorizontalAlignment="Left">
+                        <Label Content="服务器地址" Padding="0,0,0,2" />
+                        <TextBox x:Name="SshHost" Width="880" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
+                        <Label Content="SSH 端口" Padding="0,0,0,2" />
+                        <TextBox x:Name="SshPort" Width="90" />
+                    </StackPanel>
+                </WrapPanel>
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="用户名" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshUser" />
+                    <TextBox x:Name="SshUser" Width="660" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="460" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
+                    <Label Content="密码（只在登录方式选「密码」时用）" Padding="0,0,0,2" />
+                    <local:SecretField x:Name="SshPass" Width="440" />
+                </StackPanel>
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="私钥路径（~ = 当前用户目录）" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshKeyPath" />
+                    <TextBox x:Name="SshKeyPath" Width="880" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="90" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="每轮 MB" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshTestMB" />
+                    <TextBox x:Name="SshTestMB" Width="90" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="520" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="测速地址（换成自己的接收端）" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshProbe" />
+                    <TextBox x:Name="SshProbe" Width="880" />
                 </StackPanel>
                 <WrapPanel Margin="0,4,0,0">
                     <Button x:Name="BtnSshTest" Content="测试连接并测速"
                             Style="{StaticResource Primary}" Click="OnTestSSH" />
                     <TextBlock x:Name="SshState" Margin="12,0,0,0" VerticalAlignment="Center"
-                               FontSize="12" TextWrapping="Wrap" MaxWidth="520"
+                               FontSize="12" TextWrapping="Wrap" MaxWidth="880"
                                Foreground="{DynamicResource TextMuted}" />
                 </WrapPanel>
-                <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="940"
                            Foreground="{DynamicResource TextMuted}"
                            Text="「测试上传速度」按钮在「批量转种」页「开始运行」左边，实测速度显示在按钮下面那一行。密钥登录用系统自带的 ssh：先在 C:\Windows\System32\OpenSSH 下执行 ssh-keygen 生成密钥，再把公钥追加到服务器的 ~/.ssh/authorized_keys。密码登录走软件内置的 SSH 客户端，不需要系统 ssh。测速是在服务器上往公网推数据（默认每轮 64 MB、共两轮），只多花这一份上行。" />
             </StackPanel>
