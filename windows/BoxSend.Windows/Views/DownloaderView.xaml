@@ -34,7 +34,7 @@
 
         <GroupBox Header="转种服务器（SSH 上传测速）">
             <StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="300" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="260" HorizontalAlignment="Left">
                     <Label Content="登录方式" Padding="0,0,0,2" />
                     <ComboBox x:Name="SshAuth">
                         <ComboBoxItem Content="密钥（用系统 ssh）" Tag="key" />
@@ -45,27 +45,27 @@
                     <Label Content="密码（只在登录方式选「密码」时用）" Padding="0,0,0,2" />
                     <local:SecretField x:Name="SshPass" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="460" HorizontalAlignment="Left">
                     <Label Content="服务器地址" Padding="0,0,0,2" />
                     <TextBox x:Name="SshHost" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="120" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="90" HorizontalAlignment="Left">
                     <Label Content="SSH 端口" Padding="0,0,0,2" />
                     <TextBox x:Name="SshPort" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="240" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="200" HorizontalAlignment="Left">
                     <Label Content="用户名" Padding="0,0,0,2" />
                     <TextBox x:Name="SshUser" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="460" HorizontalAlignment="Left">
                     <Label Content="私钥路径（~ = 当前用户目录）" Padding="0,0,0,2" />
                     <TextBox x:Name="SshKeyPath" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="120" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="90" HorizontalAlignment="Left">
                     <Label Content="每轮 MB" Padding="0,0,0,2" />
                     <TextBox x:Name="SshTestMB" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="420" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="520" HorizontalAlignment="Left">
                     <Label Content="测速地址（换成自己的接收端）" Padding="0,0,0,2" />
                     <TextBox x:Name="SshProbe" />
                 </StackPanel>
@@ -73,7 +73,7 @@
                     <Button x:Name="BtnSshTest" Content="测试连接并测速"
                             Style="{StaticResource Primary}" Click="OnTestSSH" />
                     <TextBlock x:Name="SshState" Margin="12,0,0,0" VerticalAlignment="Center"
-                               FontSize="12" TextWrapping="Wrap" MaxWidth="420"
+                               FontSize="12" TextWrapping="Wrap" MaxWidth="520"
                                Foreground="{DynamicResource TextMuted}" />
                 </WrapPanel>
                 <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"

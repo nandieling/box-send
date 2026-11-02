@@ -541,8 +541,18 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     public void SaveDownloader(JsonObject downloader) =>
         Call("downloaders.save", new JsonObject { ["downloader"] = downloader });
 
-    public Task<string?> TestDownloaderAsync(string id) =>
-        TryAsync("downloader.test", new { id });
+    /// <summary>测一台下载器：核心库同步跑（要走网络）。结果直接取这一次调用的回话，
+    /// 不等快照轮询——快照 600ms 才回一次，等它就只剩「测试中…」永远挂在屏幕上。</summary>
+    public async Task<DownloaderTestOutcome> TestDownloaderAsync(string id)
+    {
+        var node = await Task.Run(() => _api.TryInvoke("downloader.test", out var error, new { id })
+            ?? new JsonObject { ["ok"] = false, ["message"] = error ?? "测试没能启动" });
+        await RefreshAsync(full: false);
+        return new DownloaderTestOutcome(Bool(node["ok"]), Str(node["message"]));
+    }
+
+    /// 下载器测试结果（是否连上、给用户看的那一句）
+    public sealed record DownloaderTestOutcome(bool Ok, string Text);
 
     // MARK: 辅种
     //

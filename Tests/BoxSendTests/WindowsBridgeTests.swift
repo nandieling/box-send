@@ -272,6 +272,22 @@ final class WindowsBridgeTests: XCTestCase {
                        "sid=abc; csrf=def", "清 Key 不该顺手把 cookie 也清掉")
     }
 
+    /// 「测试连接」哪怕连不上也得回一句话：界面上那句「测试中…」要有下文，
+    /// 不能因为连不上就一直挂着（Windows 卡片实测就是这么停在「测试中」）。
+    func testDownloaderTestAlwaysGivesALine() throws {
+        let (svc, _) = try makeService()
+        _ = try svc.invoke("downloaders.save", ["downloader": [
+            "id": "dead", "name": "连不上的下载器", "type": "qbittorrent",
+            "url": "http://127.0.0.1:1/", "username": "u", "password": "p",
+        ] as [String: Any]])
+        let r = try svc.invoke("downloader.test", ["id": "dead"])
+        XCTAssertEqual(r["ok"] as? Bool, false, "端口没人监听就该回 ok=false：\(r)")
+        XCTAssertFalse(((r["message"] as? String) ?? "").isEmpty, "失败也要带回给用户看的那一句")
+        let snap = svc.snapshot()["messages"] as? [String: Any]
+        XCTAssertFalse(((snap?["downloader"] as? String) ?? "").isEmpty,
+                       "顶部那行也要有同样的结论，别只写给调用方")
+    }
+
     /// 快照要把「状态行短说明」一起带给 Windows：WPF 只渲染，不自己编文案
     func testSnapshotCarriesCheckBrief() throws {
         let (svc, _) = try makeService()

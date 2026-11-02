@@ -1148,6 +1148,29 @@ Windows 侧：
   WPF 编译 0 错误；`curl` 实网确认四个端点的 error.code；`/Applications/BoxSend.app` 已重装，
   站点分组里可乐卡片显示「可转种」（Key 没权限但 cookie 可用，结论走 cookie）。
 
+## 这一轮（Windows 下载器「测试连接」不回话 + SSH 输入框宽度）
+
+- 现象：设置 → 下载器 点「测试连接」，卡片上停在「测试中…」就没下文了。两个原因叠在一起：
+  1. `Test()` 开头先 `Save()`，`Call("downloaders.save")` 会带一次全量刷新 → `BuildCards` 把每台卡片
+     整个重建，闭包里抓着的那个 `status` TextBlock 当场成孤儿；await 回来写的是已经不挂在树上的控件，
+     屏幕上自然什么都不变。
+  2. 写回去时读的是 `_model.DownloaderMessage`——那是 600ms 一轮的快照字段，而 `TryAsync` 里补的那次
+     `RefreshAsync(full:false)` 撞上 `_refreshing` 会直接 return（只置 `_pendingFull`），于是拿到空串，
+     兜底分支又写回一句「测试中…」，看着就是卡死。
+- 修法：`downloader.test` 在核心本来就回 `ok` / `message`，`AppModel.TestDownloaderAsync` 改成直接取这次
+  调用的回话（`TryInvoke` 的返回值），不再等快照；返回 `DownloaderTestOutcome(Ok, Text)`，界面按成败上
+  红绿色。卡片那句回话按下载器 id 存进 `_cardStatus`，`CardFor` 建卡片时照存的那份贴回去，
+  `BuildCards` 重建前把 `_statusLabels` 清掉；「已保存」「已删除」也走同一条，不会再被重建冲掉。
+- 顺带补一刀：核心给「测试连接」那条 client 上了 20s 上限（`DownloaderFactory.testTimeout`，
+  mac 的 `testDownloader` 与桥接的 `testDownloader` 共用这一个常量）。地址填错、VPS 隧道没起来时
+  到点就回「连接失败」，不让按钮永远转圈。
+- SSH 那截（转种服务器）按字段实际长度重排：服务器地址 / 私钥路径 460（跟上面下载器卡片的地址同档）、
+  测速地址 520、登录方式 260、密码 320、用户名 200、SSH 端口与每轮 MB 90；`SshState` 那句测速回话
+  跟着放宽到 520，免得「成功：xx MB/s…」折成三四行。
+- 验过：`swift test` 646 个用例全绿（新增 `testDownloaderTestAlwaysGivesALine`：把下载器指到
+  `127.0.0.1:1`，要求 `ok=false`、`message` 非空、快照 `messages.downloader` 也非空）；WPF 编译 0 错误；
+  mac 重新出包装到 /Applications。Windows 侧是界面线程与控件树那两条改动，需要实机点一次确认。
+
 ## 踩过记在这儿
 
 - 跨边界的字符串由分配它的模块释放：核心里 `strdup`，只能由同模块的 `boxsend_free` 回收。

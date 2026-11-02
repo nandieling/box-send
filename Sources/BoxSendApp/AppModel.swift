@@ -1408,6 +1408,8 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let client = HTTPClient(cookies: cookies, userAgent: config.userAgent)
+                // 与「测试连接」同一档上限：连不上要回话，不能把「测试中…」挂在屏幕上不动
+                client.setRequestTimeout(DownloaderFactory.testTimeout)
                 let target = config.downloaderEntry(id: id)
                 let d = DownloaderFactory.make(target, client: client)
                 downloaderTestResults[id] = "成功（\(target.label)）: " + (try d.testConnection())

@@ -30,6 +30,22 @@ public partial class DownloaderView : UserControl
 
     private bool _loading;
 
+    /// 卡片右下角那句回话（已保存 / 测试结论 / 删除结果）。整页会在配置变化时重建卡片，
+    /// 只写进当下那个 TextBlock 的话，「测试中…」会被重建冲掉，用户就再也看不到结果，
+    /// 所以按下载器 id 存一份，重建时重新贴回去。
+    private readonly Dictionary<string, (string Text, bool Ok)> _cardStatus = new();
+    private readonly Dictionary<string, TextBlock> _statusLabels = new();
+
+    private void SetCardStatus(string id, string text, bool ok)
+    {
+        _cardStatus[id] = (text, ok);
+        if (_statusLabels.TryGetValue(id, out var lbl))
+        {
+            lbl.Text = text;
+            lbl.Foreground = (Brush)FindResource(ok ? "TextMuted" : "DangerText");
+        }
+    }
+
     /// 快照回来就整页重填：用途指派与每台一张卡片都以核心库那份为准
     private void Load()
     {
@@ -51,6 +67,7 @@ public partial class DownloaderView : UserControl
     private void BuildCards(IReadOnlyList<DownloaderRow> list)
     {
         DlCards.Children.Clear();
+        _statusLabels.Clear();   // 旧卡片的标签马上就没用了，别往上面写
         foreach (var d in list) DlCards.Children.Add(CardFor(d));
     }
 
@@ -84,8 +101,11 @@ public partial class DownloaderView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)FindResource("TextMuted"),
+            Text = _cardStatus.TryGetValue(d.Id, out var carried) ? carried.Text : "",
+            Foreground = (Brush)FindResource(
+                _cardStatus.TryGetValue(d.Id, out var c) && !c.Ok ? "DangerText" : "TextMuted"),
         };
+        _statusLabels[d.Id] = status;
 
         JsonObject Collect()
         {
@@ -113,16 +133,22 @@ public partial class DownloaderView : UserControl
         {
             if (_loading) return;
             _model.SaveDownloader(Collect());
-            status.Text = "已保存";
+            SetCardStatus(d.Id, "已保存", true);
         }
 
         async void Test()
         {
             Save();
-            status.Text = "测试中…";
-            // 连下载器要走网络：放在界面线程上，窗口会先「未响应」一下
-            var error = await _model.TestDownloaderAsync(d.Id);
-            status.Text = error ?? (_model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : "测试中…");
+            SetCardStatus(d.Id, "测试中…", true);
+            // 连下载器要走网络：丢到线程池跑，界面线程不卡
+            var r = await _model.TestDownloaderAsync(d.Id);
+            // 回话取调用本身的结果，不等快照：原来那里读 DownloaderMessage，
+            // 快照 600ms 才回一次，没回来时就又写回一句「测试中…」，看着像卡死
+            var line = r.Ok
+                ? (r.Text.Length > 0 ? r.Text : "连接成功")
+                : "连接失败：" + (r.Text.Length > 0 ? r.Text : "下载器没给出原因");
+            SetCardStatus(d.Id, line, r.Ok);
+            Result.Text = _model.DownloaderMessage.Length > 0 ? _model.DownloaderMessage : line;
         }
 
         // 一行一个字段：两列并排时标签与输入框都容易被挤矮，长短不一的字段还互相抢宽度
@@ -166,7 +192,7 @@ public partial class DownloaderView : UserControl
             del.Click += (_, _) =>
             {
                 var err = _model.RemoveDownloader(d.Id);
-                status.Text = err ?? "已删除，用途自动指回主下载器";
+                SetCardStatus(d.Id, err ?? "已删除，用途自动指回主下载器", err == null);
             };
             buttons.Children.Add(del);
         }

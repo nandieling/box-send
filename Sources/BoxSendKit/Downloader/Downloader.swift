@@ -71,6 +71,9 @@ extension Downloader {
 
 /// 下载器工厂（CLI 与 Web 共用）
 public enum DownloaderFactory {
+    /// 「测试连接」的请求上限：地址填错、隧道没起来时不让按钮永远转圈
+    public static let testTimeout: TimeInterval = 20
+
     /// 按配置建：给哪台配置就建哪台
     public static func make(_ d: DownloaderConfig, client: HTTPClient) -> Downloader {
         switch d.type {

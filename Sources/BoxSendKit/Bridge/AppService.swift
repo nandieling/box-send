@@ -1552,6 +1552,8 @@ public final class AppService {
         defer { mutate { self.busyDownloader = false } }
 
         let client = HTTPClient(cookies: cookies, userAgent: c.userAgent)
+        // 地址填错 / 隧道没起来时别让按钮一直「测试中」：到点报错，至少给句话
+        client.setRequestTimeout(DownloaderFactory.testTimeout)
         do {
             let info = try DownloaderFactory.make(target, client: client).testConnection()
             mutate { self.downloaderMessage = "连接成功（\(target.label)）：\(info)" }
