@@ -304,6 +304,35 @@ final class WindowsBridgeTests: XCTestCase {
                        "可乐没任何凭据时状态行要说清缺什么，别只丢一句「凭据失效」")
     }
 
+    /// 上次那条源站种子链接要跟着配置走：两端打开软件都能把它填回输入框
+    func testSeedLinkSurvivesConfigRoundTrip() throws {
+        let (svc, _) = try makeService()
+        let url = "https://pt.luckpt.de/details.php?id=48806&hit=1"
+        let patched = try svc.invoke("config.patch", ["patch": ["lastDetailURL": url]])
+        XCTAssertEqual((patched["config"] as? [String: Any])?["lastDetailURL"] as? String, url)
+        let cfg = svc.snapshot()["config"] as! [String: Any]
+        XCTAssertEqual(cfg["lastDetailURL"] as? String, url,
+                       "快照的 config 要带上这条，界面照着恢复输入框（两端同一份）")
+        // 补丁只动给出的字段：别把相邻的源站引用一起抹了
+        _ = try svc.invoke("sourceQuote.set", ["enabled": true, "text": "转载自LuckPT，感谢发布者"])
+        let again = svc.snapshot()["config"] as! [String: Any]
+        XCTAssertEqual(again["lastDetailURL"] as? String, url, "别的区块保存不该把链接挤掉")
+        XCTAssertEqual(again["sourceQuoteText"] as? String, "转载自LuckPT，感谢发布者")
+    }
+
+    /// Windows 靠 configGen 决定「这轮快照要不要重建整扇窗口」：内容没变就别惊动重画
+    func testConfigGenOnlyMovesOnRealChanges() throws {
+        let (svc, _) = try makeService()
+        let gen0 = (svc.snapshot()["configGen"] as? Int) ?? -1
+        XCTAssertGreaterThanOrEqual(gen0, 0, "快照要带 configGen")
+        _ = try svc.invoke("config.patch", ["patch": ["lastDetailURL": "https://a.example/details.php?id=1"]])
+        let gen1 = (svc.snapshot()["configGen"] as? Int) ?? -1
+        XCTAssertGreaterThan(gen1, gen0, "配置真改了，代次要往前走")
+        _ = try svc.invoke("config.patch", ["patch": ["lastDetailURL": "https://a.example/details.php?id=1"]])
+        let gen2 = (svc.snapshot()["configGen"] as? Int) ?? -1
+        XCTAssertEqual(gen2, gen1, "写回同样的内容不算改动：转种时不该为它重建整页")
+    }
+
     func testLegacyConfigWithoutGroupsGetsOne() throws {
         // 旧配置：站点都纳管了却一个分组都没有 → 读进来要补一个默认分组，别悬着「未分组」
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())

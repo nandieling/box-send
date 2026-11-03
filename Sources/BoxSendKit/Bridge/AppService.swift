@@ -83,6 +83,10 @@ public final class AppService {
     private var updateMessage: String?
     private var updateRelease: SoftwareUpdate.Release?
     private var logs: [String]
+    /// 配置内容写盘的代次：界面据此分清「这轮快照里配置真动过」还是「只是日志在长」。
+    /// 转种跑着的时候整页重建（连背景图都要重解码一遍）代价大，没改动就别重建。
+    private var configGen = 0
+    private var lastSavedBytes: Data?
 
     public let state: StateStore
     public let cookies = CookieStore()
@@ -486,6 +490,7 @@ public final class AppService {
         let warnings = siteWarnings
         let logLines = logs
         let update = updateRelease
+        let gen = configGen
         lock.unlock()
 
         var updateDict: [String: Any] = [:]
@@ -516,6 +521,7 @@ public final class AppService {
             "warnings": warnings,
             "update": updateDict,
             "logs": logLines,
+            "configGen": gen,
         ]
     }
 
@@ -1694,6 +1700,16 @@ public final class AppService {
             let data = try JSONEncoder().encode(cfg)
             try FileManager.default.createDirectory(atPath: dataDir, withIntermediateDirectories: true)
             try data.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+            // 内容一样的重写不算新一代：勾选一下又取消、限速填回原值，都不该惊动整页重建。
+            // 按排序后的键比：配置里的字典字段每次重新解码后键序可能变，按原始字节比会把
+            // 「内容其实没变」误判成「改了」
+            let probe = (try? JSONSerialization.jsonObject(with: data)).flatMap {
+                try? JSONSerialization.data(withJSONObject: $0, options: [.sortedKeys])
+            } ?? data
+            if probe != lastSavedBytes {
+                lastSavedBytes = probe
+                mutate { self.configGen += 1 }
+            }
             mutate { self.configError = nil }
         } catch {
             mutate { self.configError = "配置保存失败: \(error.localizedDescription)" }

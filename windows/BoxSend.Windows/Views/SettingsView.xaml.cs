@@ -91,8 +91,6 @@ public partial class SettingsView : UserControl
             TmdbBase.Text = _model.SectionText("tmdb", "apiBase");
         if (!TmdbKey.IsKeyboardFocusWithin) TmdbKey.Text = _model.SectionText("tmdb", "apiKey");
         TmdbOn.IsChecked = _model.SectionFlag("tmdb", "enabled");
-        About.Text = $"BoxSend {_model.CoreVersion} · 核心库 {_model.CoreVersion} · 平台 {_model.Platform}";
-        ConfigPath.Text = $"配置：{_model.ConfigPath}\n数据：{_model.DataDir}";
         LoadPace();
         BuildSiteFilters();
         _loading = false;

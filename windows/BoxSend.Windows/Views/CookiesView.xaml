@@ -15,7 +15,7 @@
                     <Label Content="GitHub Token" Padding="0,0,0,2" />
                     <local:SecretField x:Name="GistToken" />
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="360" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="720" HorizontalAlignment="Left">
                     <Label Content="加密 KEY" Padding="0,0,0,2" />
                     <local:SecretField x:Name="GistKey" />
                 </StackPanel>
@@ -71,7 +71,7 @@
                         <TextBox x:Name="ZipDir" />
                     </DockPanel>
                 </StackPanel>
-                <StackPanel Margin="0,0,0,8" MaxWidth="300" HorizontalAlignment="Left">
+                <StackPanel Margin="0,0,0,8" MaxWidth="600" HorizontalAlignment="Left">
                     <Label Content="备份密码" Padding="0,0,0,2" />
                     <local:SecretField x:Name="ZipPassword" />
                 </StackPanel>

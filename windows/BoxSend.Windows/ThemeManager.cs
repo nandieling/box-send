@@ -9,8 +9,16 @@ namespace BoxSend.Windows;
 /// 与 macOS 版同一组色值，两端只是渲染方式不同。</summary>
 public static class ThemeManager
 {
+    /// <summary>上一次真正画上去的那一份（主题 + 背景图 + 透明度 + 是否最大化）。
+    /// 快照轮询里配置没动也会照样敲一遍 Apply 的话，会把背景图重新解码一次、
+    /// 把十八支画刷全换一遍——整扇窗口跟着重画，转种时看着就像「卡死」。</summary>
+    private static string _appliedKey = "";
+
     public static void Apply(Application app, ThemeRow theme, string? backgroundImageFile, double bgOpacity)
     {
+        var key = ThemeKey(theme, backgroundImageFile, bgOpacity);
+        if (key == _appliedKey) return;
+        _appliedKey = key;
         var res = app.Resources;
         res["Accent"] = Brush(theme.Accent);
         res["GradientBackground"] = Gradient(theme.Colors);
@@ -52,12 +60,29 @@ public static class ThemeManager
         }
     }
 
+    /// 主题 + 背景图（连文件的修改时间）+ 透明度 + 最大化：只有这些真变了才重画
+    private static string ThemeKey(ThemeRow theme, string? file, double opacity)
+    {
+        var stamp = "";
+        if (!string.IsNullOrEmpty(file))
+        {
+            try { var f = new FileInfo(file!); stamp = $"{f.Length}:{f.LastWriteTimeUtc.Ticks}"; }
+            catch { stamp = "unreadable"; }
+        }
+        return $"{theme.Id}|{theme.Dark}|{theme.Accent}|{string.Join(",", theme.Colors)}"
+               + $"|{file}|{stamp}|{opacity:F2}|{_maximized}";
+    }
+
+    /// <summary>外观之外的改动（比如换主题按钮、拖透明度）想让下一次 Apply 一定生效时，用它作废缓存。</summary>
+    public static void Invalidate() => _appliedKey = "";
+
     private static bool _maximized;
 
     /// <summary>页签尺寸：全屏（最大化）时窗口大、离得远，页签整体放大一档。
     /// 界面上的字号/图标尺寸都走 DynamicResource，改这里就能立刻生效。</summary>
     public static void ApplyMetrics(Application app, bool maximized)
     {
+        if (_maximized != maximized) Invalidate();     // 最大化档位变了：页签尺寸与主题画刷一起重画
         _maximized = maximized;
         var res = app.Resources;
         res["TabFontSize"] = maximized ? 16.0 : 14.0;

@@ -14,6 +14,49 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     private readonly System.Windows.Threading.DispatcherTimer _timer;
     private bool _refreshing;
     private bool _pendingFull;
+    private string _downloadersJson = "";
+    private int _configGen = -1;
+
+    /// 核心库只在配置内容真变了才递增这一代（configGen）
+    private bool ConfigChanged(JsonNode snap)
+    {
+        var gen = snap["configGen"] is JsonValue v && v.TryGetValue<int>(out var g) ? g : -1;
+        if (gen == _configGen) return false;
+        _configGen = gen;
+        return true;
+    }
+    private int _logCount = -1;
+    private string _logTail = "";
+
+    /// <summary>核心库那份日志只往后追加（最多留 400 行）。界面这边每 600ms 拿一次快照，
+    /// 以前每轮都 Clear + 重加 300 条 —— 转种时日志刷得最勤，等于每轮在界面线程上白干一次。
+    /// 现在一行没多就直接跳过，有新行只补尾巴，核心那侧截断或清空才整体重建。</summary>
+    private void SyncLogs(JsonNode? node, bool full)
+    {
+        if (node is not JsonArray arr) return;
+        var tail = arr.Count > 0 ? arr[arr.Count - 1]?.GetValue<string>() ?? "" : "";
+        if (!full && arr.Count == _logCount && tail == _logTail) return;
+        var lines = new List<string>(arr.Count);
+        foreach (var n in arr) lines.Add(n?.GetValue<string>() ?? "");
+        _logCount = lines.Count;
+        _logTail = tail;
+        if (!full && lines.Count > 0 && Logs.Count > 0)
+        {
+            // 我们手上这份是新列表的一段连续后缀：从后往前找到我们的最后一行，只补它后面的
+            var ours = Logs[Logs.Count - 1];
+            for (var j = Math.Min(lines.Count - 1, 420); j >= 0; j--)
+            {
+                if (lines[j] != ours) continue;
+                for (var k = j + 1; k < lines.Count; k++) Logs.Add(lines[k]);
+                while (Logs.Count > LogKeep) Logs.RemoveAt(0);
+                return;
+            }
+        }
+        Logs.Clear();
+        foreach (var l in lines.TakeLast(LogKeep)) Logs.Add(l);
+    }
+
+    private const int LogKeep = 300;
 
     private readonly System.Windows.Threading.DispatcherTimer _assistTickTimer;
     private readonly AutoTask _gistTask;
@@ -196,6 +239,8 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     /// 定时器只做局部刷新，避免用户正在输入的限速/口令框被重建打断。</param>
     public async Task RefreshAsync(bool full = true)
     {
+        if (full && Running) _pendingFull = true;
+        if (_pendingFull && !Running) full = true;
         if (_refreshing)
         {
             if (full) _pendingFull = true;
@@ -206,11 +251,15 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         // 记进 _pendingFull，等这轮结束补一轮。只看这一轮的快照会拿到改动前的数据，
         // 表现就是「加了站点但卡片没出现」——定时刷新只做局部刷，永远等不到跟进。
         var wantFull = full || _pendingFull;
-        _pendingFull = false;
+        var started = DateTime.UtcNow;
         try
         {
             var snap = await Task.Run(() => _api.Invoke("snapshot"));
-            Apply(snap, wantFull);
+            // 转种跑着的时候，只有配置真动过才值得重建整扇窗口（连背景图都要重解码一遍）；
+            // 只是日志在长、卡片在动，就留着这次重建，等这轮跑完补
+            if (wantFull && Running && !ConfigChanged(snap)) _pendingFull = true;
+            else if (wantFull) _pendingFull = false;      // 没做全量就别把别人刚欠下的那条抹掉
+            Apply(snap, wantFull && !(_pendingFull && Running));
         }
         catch (Exception ex)
         {
@@ -220,7 +269,11 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         {
             _refreshing = false;
         }
-        if (_pendingFull) await RefreshAsync(full: true);
+        // 界面线程要是被这一趟拖住，「卡死」就是这么来的：留下耗时好下次对答案
+        var took = (DateTime.UtcNow - started).TotalMilliseconds;
+        if (took > 500)
+            StartupLog.Write($"快照刷新耗时 {took:F0}ms（full={wantFull}，站点 {Sites.Count}，运行中 {Running}）");
+        if (_pendingFull && !Running) await RefreshAsync(full: true);
     }
 
     /// <summary>首帧之前同步取一次快照。核心库就在本进程里，这一问一答只有几毫秒，
@@ -270,8 +323,10 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         SourcePush = snap["run"]?["sourcePush"] is { } sp ? RunRow.From(sp!, "push") : null;
 
         var dl = snap["downloaders"]?.AsArray();
-        if (dl != null)
+        var dlText = dl?.ToJsonString() ?? "";
+        if (dl != null && dlText != _downloadersJson)
         {
+            _downloadersJson = dlText;
             Downloaders.Clear();
             foreach (var n in dl) Downloaders.Add(DownloaderRow.From(n!));
             ReseedDownloaderID = Text(snap["downloaderRoles"]?["reseed"]);
@@ -292,12 +347,7 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         ApplyAssistSiteProgress(assist?["siteProgress"]);
         ApplyAssistBudget(assist?["budget"]);
 
-        var logs = snap["logs"]?.AsArray();
-        if (logs != null && (Logs.Count != logs.Count || full))
-        {
-            Logs.Clear();
-            foreach (var l in logs.TakeLast(300)) Logs.Add(l?.GetValue<string>() ?? "");
-        }
+        SyncLogs(snap["logs"], full);
 
         if (full)
         {
@@ -367,16 +417,60 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
     // MARK: 动作转发
 
     /// 用户改完一组字段后整体提交；patch 只带改动的那一段（如 {"downloader":{...}}）
-    public void Patch(object patch)
+    public void Patch(object patch) => Fire("config.patch", new { patch });
+
+    public void Call(string method, object? parameters = null) => Fire(method, parameters);
+
+    /// <summary>写操作一律丢到线程池，等它写完再补一次快照。
+    /// 以前是在界面线程上同步等核心库回话：转种跑着的时候核心库正忙着发种与推送，
+    /// 这时候点一下卡片、勾一下框就可能把整个窗口钉成「未响应」（mac 版这些都在后台队列跑）。
+    /// 报错照样进底部提示条；不等写完就刷新一轮是白刷，还会把没落盘的旧值画回输入框。</summary>
+    private void Fire(string method, object? parameters)
     {
-        Guard(() => _api.Invoke("config.patch", new { patch }));
-        _ = RefreshAsync();
+        Enqueue(() =>
+        {
+            _api.Invoke(method, parameters);
+            OnUIThread(() => _ = RefreshAsync());
+        });
     }
 
-    public void Call(string method, object? parameters = null)
+    /// <summary>写操作按点下的先后排队执行（一条后台线程）。改成线程池并发以后，
+    /// 「先移组再排到某人前面」这种连着两下的调用会打乱顺序，站点位置就乱了；
+    /// 上一条没回来时新写的先排在队里，回来接着做。</summary>
+    private readonly Queue<Action> _writes = new();
+    private readonly object _writeGate = new();
+    private bool _writerRunning;
+
+    private void Enqueue(Action work)
     {
-        Guard(() => _api.Invoke(method, parameters));
-        _ = RefreshAsync();
+        lock (_writeGate)
+        {
+            _writes.Enqueue(work);
+            if (_writerRunning) return;
+            _writerRunning = true;
+        }
+        Task.Run(() =>
+        {
+            while (true)
+            {
+                Action next;
+                lock (_writeGate)
+                {
+                    if (_writes.Count == 0) { _writerRunning = false; return; }
+                    next = _writes.Dequeue();
+                }
+                try { next(); }
+                catch (Exception ex) { OnUIThread(() => ShowCookieMessage(ex.Message)); }
+            }
+        });
+    }
+
+    /// 回到界面线程执行（没有窗口可回的时候直接跑，别让一条提示把后台线程也钉住）
+    private static void OnUIThread(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess()) action();
+        else dispatcher.BeginInvoke(action);
     }
 
     /// 需要同步拿返回值的调用；返回 null 表示成功，否则是给用户看的一句原因
@@ -491,10 +585,18 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
         catch (Exception ex) { ShowCookieMessage(ex.Message); }
     }
 
+    private bool _runRequested;
+
     public void StartRun(string detailUrl, IEnumerable<string> targets, bool skipReseed, bool skipPush,
                          string sourceQuote, string? sourceSiteId)
     {
-        Guard(() => _api.Invoke("run.start", new
+        if (_runRequested) return;      // 连点两次别把「正在运行」那句错误甩给用户
+        _runRequested = true;
+        // 先按下「运行中」：按钮立刻变灰，不用等核心库回话（它要建 HTTP 会话、拷 cookie）
+        Running = true;
+        RunningStep = "准备中";
+        Raise(nameof(Running), nameof(RunningStep));
+        var payload = new
         {
             detailURL = detailUrl,
             targets = targets.ToArray(),
@@ -502,8 +604,27 @@ public sealed class AppModel : INotifyPropertyChanged, IDisposable
             skipPush,
             sourceQuote,
             sourceSiteID = sourceSiteId,
-        }));
-        _ = RefreshAsync(full: false);
+        };
+        Task.Run(() =>
+        {
+            try { _api.Invoke("run.start", payload); }
+            catch (Exception ex)
+            {
+                OnUIThread(() =>
+                {
+                    _runRequested = false;
+                    Running = false;
+                    RunningStep = "";
+                    Raise(nameof(Running), nameof(RunningStep));
+                    ShowCookieMessage(ex.Message);
+                });
+            }
+            OnUIThread(() =>
+            {
+                _runRequested = false;
+                _ = RefreshAsync(full: false);
+            });
+        });
     }
 
     /// <summary>SSH 上传测速：核心库跑几十秒，丢给线程池；结果原样交给界面弹窗，不做判定。

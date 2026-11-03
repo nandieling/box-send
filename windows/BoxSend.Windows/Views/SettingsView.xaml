@@ -18,11 +18,6 @@
                         </WrapPanel>
                         <TextBlock x:Name="UpdateState" Margin="0,8,0,0" FontSize="12"
                                    Foreground="{DynamicResource TextMuted}" />
-                        <!-- 「关于」区块取消了：版本号与配置路径挪到这下面，别把这两条信息丢了 -->
-                        <TextBlock x:Name="About" Margin="0,8,0,0" FontSize="12"
-                                   Foreground="{DynamicResource TextMuted}" />
-                        <TextBlock x:Name="ConfigPath" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
                 </GroupBox>
 

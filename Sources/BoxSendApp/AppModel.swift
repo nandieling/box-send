@@ -166,6 +166,8 @@ final class AppModel: ObservableObject {
         selectedTargets = Set(config.targetSites)
         sourceQuoteEnabled = config.sourceQuoteEnabled
         sourceQuoteText = config.sourceQuoteText
+        // 上次那条源站种子链接填回输入框：批量转种常常是关一下软件再接着转同一批
+        detailURL = config.lastDetailURL ?? ""
         reloadBackgroundImage()
         refreshCookieStats()
         if config.gistSync != nil {
@@ -386,6 +388,9 @@ final class AppModel: ObservableObject {
             c.targetSites = targets
             c.sourceQuoteEnabled = sourceQuoteEnabled
             c.sourceQuoteText = sourceQuoteText
+            // 只在看起来是个链接时记：清空输入框不该把上次存的那条一起抹掉
+            let link = detailURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if link.hasPrefix("http") { c.lastDetailURL = link }
             // 勾选为目标即自动启用（内置表新站默认 enabled=false，避免还要手动开开关）
             c.sourceSites = c.sourceSites.map { site in
                 var site = site

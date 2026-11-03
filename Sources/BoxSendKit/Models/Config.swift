@@ -506,9 +506,12 @@ public struct AppConfig: Codable {
     public var reseedDownloaderID: String
     /// 辅种扫描与校验用哪台（nil = 与发种同一台）
     public var assistDownloaderID: String?
+    /// 「批量转种」页最后一次用的源站种子链接：关掉软件再打开直接填回输入框，
+    /// 省得回站内重新翻一遍那条种子
+    public var lastDetailURL: String?
 
     private enum CodingKeys: String, CodingKey {
-        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh, assist, downloaders, reseedDownloaderID, assistDownloaderID
+        case dataDir, sourceSites, targetSites, downloader, gistSync, cookieCloud, userAgent, webToken, groups, zipWatch, appearance, unmanagedSiteOrder, sourceQuoteEnabled, sourceQuoteText, tmdb, autoUpdateCheck, ssh, assist, downloaders, reseedDownloaderID, assistDownloaderID, lastDetailURL
     }
 
     /// 向后兼容：旧配置无 groups 字段时解码为空
@@ -535,6 +538,7 @@ public struct AppConfig: Codable {
         downloaders = try c.decodeIfPresent([DownloaderConfig].self, forKey: .downloaders)
         reseedDownloaderID = try c.decodeIfPresent(String.self, forKey: .reseedDownloaderID) ?? "main"
         assistDownloaderID = try c.decodeIfPresent(String.self, forKey: .assistDownloaderID)
+        lastDetailURL = try c.decodeIfPresent(String.self, forKey: .lastDetailURL)
     }
 
     public init(dataDir: String, sourceSites: [SiteConfig], targetSites: [String],
@@ -546,7 +550,8 @@ public struct AppConfig: Codable {
                 sourceQuoteEnabled: Bool = false, sourceQuoteText: String = "",
                 tmdb: TMDBConfig? = nil, ssh: SSHConfig? = nil, autoUpdateCheck: Bool = true,
                 assist: AssistConfig? = nil, downloaders: [DownloaderConfig]? = nil,
-                reseedDownloaderID: String = "main", assistDownloaderID: String? = nil) {
+                reseedDownloaderID: String = "main", assistDownloaderID: String? = nil,
+                lastDetailURL: String? = nil) {
         self.dataDir = dataDir
         self.sourceSites = sourceSites
         self.targetSites = targetSites
@@ -568,6 +573,7 @@ public struct AppConfig: Codable {
         self.downloaders = downloaders
         self.reseedDownloaderID = reseedDownloaderID
         self.assistDownloaderID = assistDownloaderID
+        self.lastDetailURL = lastDetailURL
     }
 
     public static let `default` = AppConfig.load(path: "Config/boxsend.json") ?? AppConfig.template()

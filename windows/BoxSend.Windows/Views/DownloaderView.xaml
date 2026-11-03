@@ -34,7 +34,8 @@
 
         <GroupBox Header="转种服务器（SSH 上传测速）">
             <!-- 顺序与宽度按用户要求排：登录方式 → 服务器地址（端口跟在它右边）→ 用户名 → 密码。
-                 宽度取 220 的整倍数，服务器地址 / 用户名 / 密码 = 4 : 3 : 2，长地址一眼看得完 -->
+                 宽度取 220 的整倍数，服务器地址 / 用户名 / 密码 = 2 : 1 : 2，
+                 地址栏不再占满整行，用户名比地址窄一半 -->
             <StackPanel>
                 <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="登录方式" Padding="0,0,0,2" />
@@ -46,7 +47,7 @@
                 <WrapPanel ItemHeight="62">
                     <StackPanel Margin="0,0,16,8" HorizontalAlignment="Left">
                         <Label Content="服务器地址" Padding="0,0,0,2" />
-                        <TextBox x:Name="SshHost" Width="880" />
+                        <TextBox x:Name="SshHost" Width="440" />
                     </StackPanel>
                     <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                         <Label Content="SSH 端口" Padding="0,0,0,2" />
@@ -55,7 +56,7 @@
                 </WrapPanel>
                 <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="用户名" Padding="0,0,0,2" />
-                    <TextBox x:Name="SshUser" Width="660" />
+                    <TextBox x:Name="SshUser" Width="220" />
                 </StackPanel>
                 <StackPanel Margin="0,0,0,8" HorizontalAlignment="Left">
                     <Label Content="密码（只在登录方式选「密码」时用）" Padding="0,0,0,2" />

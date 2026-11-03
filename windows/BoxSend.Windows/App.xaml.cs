@@ -36,6 +36,7 @@ public partial class App : Application
         };
 
         WatchStartup(20);
+        WatchUi();
 
         var single = new Mutex(true, "BoxSend.SingleInstance", out var isNew);
         if (!isNew)
@@ -95,6 +96,38 @@ public partial class App : Application
         _showRequested = new EventWaitHandle(false, EventResetMode.AutoReset, "BoxSend.ShowRequested");
         _showWait = ThreadPool.RegisterWaitForSingleObject(_showRequested, (_, _) =>
             Dispatcher.BeginInvoke(() => _window?.ShowFromTray()), null, Timeout.InfiniteTimeSpan, false);
+    }
+
+    /// <summary>界面线程心跳看门狗：每秒往界面线程投一颗心跳，心跳接不走就说明界面被什么东西钉住了。
+    /// 转种过程中报「卡死」时，光靠界面侧看不出没回来的是哪一趟，至少让这条线在
+    /// {StartupLog.FilePath} 里留下一行「界面线程已 N 秒没响应」，下次好对答案。</summary>
+    private void WatchUi()
+    {
+        var dispatcher = Dispatcher;
+        long beat = DateTime.UtcNow.Ticks;
+        var t = new Thread(() =>
+        {
+            var warned = false;
+            while (!dispatcher.HasShutdownStarted)
+            {
+                Thread.Sleep(1000);
+                var stalled = (DateTime.UtcNow.Ticks - Interlocked.Read(ref beat)) / (double)TimeSpan.TicksPerSecond;
+                if (stalled > 3)
+                {
+                    if (!warned)
+                    {
+                        warned = true;
+                        StartupLog.Write($"界面线程已 {stalled:F0} 秒没响应"
+                            + $"（{(_model?.Running == true ? "转种运行中" : "空闲")}，"
+                            + $"上轮快照耗时看相邻那几行）");
+                    }
+                    continue;
+                }
+                warned = false;
+                dispatcher.BeginInvoke(new Action(() => Interlocked.Exchange(ref beat, DateTime.UtcNow.Ticks)));
+            }
+        }) { IsBackground = true };
+        t.Start();
     }
 
     /// <summary>核心库要是不返回，界面线程就钉在那儿，WPF 自己的定时器也点不亮——

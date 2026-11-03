@@ -18,6 +18,8 @@ public partial class RunView : UserControl
     /// <summary>卡片上会随运行状态变的几处（结构只在整份刷新时重建，平时只改文字与底色）</summary>
     private sealed class CardRefs
     {
+        public required Border Card { get; init; }
+        public required string Url { get; init; }
         public required TextBlock Name { get; init; }
         public required Border Reseed { get; init; }
         public required TextBlock ReseedText { get; init; }
@@ -28,6 +30,19 @@ public partial class RunView : UserControl
     }
 
     private readonly Dictionary<string, CardRefs> _cards = new();
+    /// <summary>每张卡片最后一次画出来的内容指纹（转种 / 推送 / 提醒 / 种子链接）。
+    /// 快照每 600ms 就来一轮，没变的卡片就别再改一遍文字与画刷。</summary>
+    private readonly Dictionary<string, string> _cardSig = new();
+    private string _sourceChipSig = "";
+    private string _historySig = "";
+    private string _runBtnSig = "";
+
+    /// 链接与勾选都写核心配置：改完缓一小会儿再写一次，别每敲一个字问核心库一趟
+    private readonly System.Windows.Threading.DispatcherTimer _saveTimer;
+    private bool _linkRestored;
+    private bool _flushOnClose;
+    private string _savedLink = "";
+    private string _savedTargets = "";
 
     /// 源站下拉里的第一项：不点名，按链接域名自动识别。文字会跟着链接变
     /// （识别出是哪一站就写成「源站：自动（某站）」），所以每次都要现造一个
@@ -46,10 +61,36 @@ public partial class RunView : UserControl
         InitializeComponent();
         _model.FullRefreshed += (_, _) => Dispatcher.Invoke(Rebuild);
         _model.Refreshed += (_, _) => Dispatcher.Invoke(UpdateRunStatus);
-        DetailUrl.TextChanged += (_, _) => RefreshSourceLabel();
+        DetailUrl.TextChanged += (_, _) =>
+        {
+            RefreshSourceLabel();
+            ArmSave();
+        };
+        DetailUrl.LostFocus += (_, _) => RememberLink();
+        _saveTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(1200)
+        };
+        _saveTimer.Tick += (_, _) =>
+        {
+            _saveTimer.Stop();
+            RememberLink();
+            RememberTargets();
+        };
         SourceSitePick.SelectionChanged += (_, _) =>
         {
             if (SourceSitePick.SelectedItem is SiteRow r) _pickedSourceId = r.Id;
+        };
+        Loaded += (_, _) =>
+        {
+            // 粘完链接马上关软件：别等那 1.2 秒的节流，关窗前先把链接落一次盘
+            var w = Window.GetWindow(this);
+            if (w != null && !_flushOnClose)
+            {
+                _flushOnClose = true;
+                // 关窗这趟直接同步写：进程要走了，排队那条线程未必还有机会跑
+                w.Closing += (_, _) => RememberLink(force: true);
+            }
         };
         LoadQuote();
         Rebuild();
@@ -66,16 +107,65 @@ public partial class RunView : UserControl
         LoadSpeedButton();
         RebuildSourcePick();
 
+        RestoreLink();
         if (!_seeded)
         {
             // 默认只勾配置里存着的转种目标（与 mac 版同一份 targetSites）：第一次用就是全不选。
             // 以前是「把所有已开启的站点都勾上」，连没纳管的源站也算进去，数字比卡片多一个
             _targets = SavedTargets();
+            // 与配置里存的那批对齐：不这样「全不选」会被当成「没改过」而漏写
+            _savedTargets = string.Join(",", SavedTargets());
             _seeded = true;
         }
 
         RebuildTargetBlocks();
         UpdateRunStatus();
+    }
+
+    // MARK: 上次那条种子链接（存核心配置，下次打开直接填回）
+
+    /// <summary>核心配置里存着最后一次用的源站链接（lastDetailURL）：软件重新打开直接填回输入框，
+    /// 省得回站内把那条种子再翻一遍。只在我们还没往框里打字时填，别盖掉用户正在粘的东西。</summary>
+    private void RestoreLink()
+    {
+        if (_linkRestored) return;
+        _linkRestored = true;
+        _savedLink = _model.Config?["lastDetailURL"] is JsonValue v ? v.GetValue<string>() : "";
+        if (_savedLink.Length == 0) return;
+        if (DetailUrl.Text.Trim().Length == 0 && !DetailUrl.IsKeyboardFocusWithin)
+        {
+            DetailUrl.Text = _savedLink;
+            RefreshSourceLabel();
+        }
+    }
+
+    private void ArmSave()
+    {
+        _saveTimer.Stop();
+        _saveTimer.Start();
+    }
+
+    /// <summary>把当前链接记进配置（同一个链接不重复写；运行中不写，别惊动整页刷新）。
+    /// <c>force</c> 只有关窗那一下用：那时顾不上刷新，先把它存下来更要紧。</summary>
+    private void RememberLink(bool force = false)
+    {
+        var url = DetailUrl.Text.Trim();
+        if (url.Length == 0 || url == _savedLink) return;
+        if (_model.Running && !force) return;
+        _savedLink = url;
+        if (force) _model.Try("config.patch", new { patch = new { lastDetailURL = url } });
+        else _model.Call("config.patch", new { patch = new { lastDetailURL = url } });
+    }
+
+    /// <summary>勾选的转种目标写回核心（targetSites）。卡片点得勤，合并成一次写</summary>
+    private void RememberTargets()
+    {
+        if (_model.Running) return;
+        var ids = RunTargets().Select(x => x.Id).ToArray();
+        var key = string.Join(",", ids);
+        if (key == _savedTargets) return;
+        _savedTargets = key;
+        _model.Call("targets.set", new { ids });
     }
 
     // MARK: 源站（下拉点名 + 按域名自动识别）
@@ -86,7 +176,6 @@ public partial class RunView : UserControl
     private void RefreshSourceLabel()
     {
         ProbeSourceLabel();
-        RebuildSourcePick();
     }
 
     /// 重建源站下拉：第一项永远是「源站：自动（某站）」，其余是已添加的站点
@@ -101,18 +190,40 @@ public partial class RunView : UserControl
             SourceSitePick.Items.Cast<SiteRow>().First(s => s.Id == _pickedSourceId);
     }
 
+    private int _probeSeq;
+
     private void ProbeSourceLabel()
     {
         var url = DetailUrl.Text.Trim();
         if (url == _lastProbeUrl) return;
         _lastProbeUrl = url;
-        var name = "";
-        if (url.StartsWith("http"))
+        if (!url.StartsWith("http"))
+        {
+            SetAutoLabel("源站：自动识别");
+            return;
+        }
+        var mine = ++_probeSeq;
+        // 「这条链接像哪个站」也要到线程池问：转种跑着的时候核心库正忙，
+        // 界面线程同步等一次回话，窗口就成「未响应」了
+        Task.Run(() =>
         {
             var hit = _model.Api.TryInvoke("sites.matchURL", out _, new { url })?["name"];
-            name = hit is JsonValue v && v.TryGetValue<string>(out var n) ? n : "";
-        }
-        _autoLabel = name.Length > 0 ? $"源站：自动（{name}）" : "源站：自动识别";
+            var name = hit is JsonValue v && v.TryGetValue<string>(out var n) ? n : "";
+            var label = name.Length > 0 ? $"源站：自动（{name}）" : "源站：自动识别";
+            Dispatcher.BeginInvoke(() =>
+            {
+                // 老问题晚到的回话别盖掉新链接的结果
+                if (mine != _probeSeq || DetailUrl.Text.Trim() != url) return;
+                SetAutoLabel(label);
+            });
+        });
+    }
+
+    private void SetAutoLabel(string label)
+    {
+        if (label == _autoLabel) return;
+        _autoLabel = label;
+        RebuildSourcePick();
     }
 
     /// 源站种子的获取状态（「源站种子获取中… / 已获取 / 获取失败」），与 mac 版那颗胶囊对应
@@ -121,12 +232,17 @@ public partial class RunView : UserControl
         var e = _model.SourcePush;
         if (e == null || e.Text.Length == 0)
         {
+            if (_sourceChipSig == "hidden") return;
+            _sourceChipSig = "hidden";
             SourceChip.Visibility = Visibility.Collapsed;
             return;
         }
         // 源站种子取到之后，下拉里要看得见这次用的到底是哪一站（与 mac 版同一显示）
         if (_autoLabel == "源站：自动识别" && DetailUrl.Text.Trim().StartsWith("http"))
-            RefreshSourceLabel();
+            ProbeSourceLabel();
+        var sig = e.Phase + "|" + e.Text + "|" + e.Detail;
+        if (sig == _sourceChipSig) return;
+        _sourceChipSig = sig;
         SourceChipText.Text = e.Text;
         SourceChipText.Foreground = (Brush)FindResource(e.Phase switch
         {
@@ -187,13 +303,17 @@ public partial class RunView : UserControl
         };
         groupAll.Click += (_, _) =>
         {
+            var on = !allOn;
             foreach (var s in sites)
             {
-                if (allOn) _targets.Remove(s.Id);
-                else _targets.Add(s.Id);
+                if (on) _targets.Add(s.Id);
+                else _targets.Remove(s.Id);
             }
-            SaveTargets();
-            RebuildTargetBlocks();
+            allOn = on;
+            groupAll.Content = on ? "全不选" : "全选";
+            groupAll.ToolTip = on ? "取消该分组全部站点" : "选中该分组全部站点作为转种目标";
+            PaintSelection();           // 只改选中态，别把整组卡片重建一遍
+            ArmSave();
             UpdateRunStatus();
         };
         header.Children.Add(groupAll);
@@ -307,18 +427,32 @@ public partial class RunView : UserControl
         card.MouseLeftButtonUp += (_, _) => Toggle(s.Id);
         _cards[s.Id] = new CardRefs
         {
-            Name = name, Reseed = reseed, ReseedText = reseedText,
+            Card = card, Url = s.Url, Name = name, Reseed = reseed, ReseedText = reseedText,
             Push = push, PushText = pushText, Seed = seed, Detail = detail,
         };
+        _cardSig.Remove(s.Id);
         return card;
     }
 
     private void Toggle(string id)
     {
         if (!_targets.Remove(id)) _targets.Add(id);
-        SaveTargets();
-        RebuildTargetBlocks();
+        PaintSelection();
+        ArmSave();
         UpdateRunStatus();
+    }
+
+    /// <summary>选中态只改底色、字重与鼠标提示。以前是整块重建（RebuildTargetBlocks）：
+    /// 转种跑着的时候点一张卡片，几十张卡片连同状态胶囊全部重做一遍，界面像被钉住。</summary>
+    private void PaintSelection()
+    {
+        foreach (var (id, r) in _cards)
+        {
+            var on = _targets.Contains(id);
+            r.Card.Background = (Brush)FindResource(on ? "AccentFaint" : "TextSurface");
+            r.Name.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
+            r.Card.ToolTip = (on ? "已选为转种目标，点击取消" : "点击选为转种目标") + "\n" + r.Url;
+        }
     }
 
     /// 配置里的转种目标（界面勾选的初始值）
@@ -329,10 +463,6 @@ public partial class RunView : UserControl
             .Where(id => _model.Sites.Any(s => s.Id == id && s.Enabled && s.Managed))
             .ToHashSet();
     }
-
-    /// 勾选写回 core（targetSites）：下次打开还是这批，与 mac 版一致
-    private void SaveTargets() =>
-        _model.Call("targets.set", new { ids = RunTargets().Select(x => x.Id).ToArray() });
 
     /// 状态胶囊：先建好放着，运行时才填字（重建整张卡片代价大，改文字便宜）。
     /// 没有事件时整条收起来：卡片只在真有转种信息时才长高，当排行高交给 WrapPanel 重算
@@ -363,15 +493,33 @@ public partial class RunView : UserControl
         ShowSourceChip();
         UpdateSummary();
         BtnRun.IsEnabled = !_model.Running;
-        BtnRun.Content = _model.Running ? "运行中…" : "开始运行";
-        RunStep.Text = _model.Running ? _model.RunningStep : "";
-        HistoryText.Text = _model.LastReport.Length == 0 ? "（还没有运行记录）" : _model.LastReport;
+        // 运行中每轮都改一遍按钮文字会触发整块重排：内容没变就跳过
+        var btn = _model.Running ? "运行中…" : "开始运行";
+        if (btn != _runBtnSig)
+        {
+            _runBtnSig = btn;
+            BtnRun.Content = btn;
+        }
+        var step = _model.Running ? _model.RunningStep : "";
+        if (RunStep.Text != step) RunStep.Text = step;
+        var report = _model.LastReport.Length == 0 ? "（还没有运行记录）" : _model.LastReport;
+        if (report != _historySig)
+        {
+            _historySig = report;
+            HistoryText.Text = report;
+        }
     }
 
     private void PaintCard(string id, CardRefs r)
     {
         var reseed = _model.ReseedEvent(id);
         var push = _model.PushEvent(id);
+        // 一轮快照里绝大多数站点这轮没动静：拿指纹比一下，没变就别碰它的文字与画刷
+        var sig = $"{reseed?.Phase}|{reseed?.Text}|{reseed?.Detail}|{reseed?.Url}"
+                + $"#{push?.Phase}|{push?.Text}|{push?.Detail}|{push?.Url}"
+                + $"%{_model.Sites.FirstOrDefault(x => x.Id == id)?.Warning ?? ""}";
+        if (_cardSig.TryGetValue(id, out var old) && old == sig) return;
+        _cardSig[id] = sig;
         SetChip(r.Reseed, r.ReseedText, reseed);
         SetChip(r.Push, r.PushText, push);
         var warning = _model.Sites.FirstOrDefault(s => s.Id == id)?.Warning ?? "";
@@ -594,6 +742,8 @@ public partial class RunView : UserControl
             return;
         }
         SaveQuote();
+        RememberLink();
+        RememberTargets();        // 开转前把这批勾选落盘（与 mac 版 run() 里 saveConfig 同一时机）
         Start(url, targets);
     }
 

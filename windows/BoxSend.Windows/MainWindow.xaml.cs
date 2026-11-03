@@ -57,6 +57,9 @@ public partial class MainWindow : Window
     private void UpdateStatusBar()
     {
         var text = _model.StatusText;
+        // 这条每轮快照都要过一遍：文字没变就别改，改一次整块布局要重排一次
+        if (StatusText.Text == text && StatusBar.Visibility ==
+            (string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible)) return;
         StatusText.Text = text;
         // 配置报错是「有事要看」，cookie 同步只是「告知一声」，图标上区分开
         StatusGlyph.Text = string.IsNullOrEmpty(_model.ConfigError) ? "\uE946" : "\uE7BA";
