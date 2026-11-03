@@ -19,7 +19,7 @@
                             <TextBlock x:Name="SourceChipText" FontSize="12" TextWrapping="NoWrap" />
                         </Border>
                     </WrapPanel>
-                    <!-- 输入框只占这一栏一半宽：链接再长也用不到整行，右边留给状态提示 -->
+                    <!-- 输入框只占这一栏一半宽：链接再长也用不到整行，右侧留白 -->
                     <Grid Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
