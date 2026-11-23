@@ -42,7 +42,9 @@ enum BBCode {
         var out = ""
 
         func absURL(_ ref: String) -> String {
-            let t = ref.trimmingCharacters(in: .whitespacesAndNewlines)
+            // 属性值里的实体要先解：源站 href/src 常写成 …id=38744&amp;hit=1，
+            // 原样带进 [url]/[img] 会被目标站再转义一次，正文里就成了 &amp;hit=1
+            let t = HTMLUtil.decodeEntities(ref.trimmingCharacters(in: .whitespacesAndNewlines))
             if t.lowercased().hasPrefix("http://") || t.lowercased().hasPrefix("https://") { return t }
             if t.hasPrefix("//") { return "https:" + t }
             if let base { return HTMLUtil.resolveURL(t, against: base) }

@@ -566,11 +566,53 @@ class Unit3DAdapter: SiteAdapter {
         return "\(s.prefix(keep / 2))…\(s.suffix(keep / 2 - 1))"
     }
 
-    /// 简介：站方为 Markdown/HTML 混排编辑器，沿用源站 HTML（图片绝对化、去源站链接）
+    /// 简介：站方存的是 BBCode（站台上每条种子的 descr 都是 `[img]`/`[url=]`/`[quote]`/`[color]`，
+    /// 没有一条带 HTML 标签），发 HTML 过去由站方转 BBCode，而那一转是有损的：
+    /// 带 `onload`/`onerror`/`data-zoomable` 的 `<img>` 会整枚被丢掉（海报和三张截图一起没）、
+    /// `<a>` 被压成纯文本（链接没了，查询串里的 `&` 还变成 `&amp;` 或 `@`）、
+    /// `&nbsp;` 原样留在正文里。所以这里自己转，站方照单存。
+    /// 站点 override 写明 `descrFormat: "html"` 时才发 HTML（Unit3D 分支站里有真吃 HTML 的）。
     func uploadDescr(_ info: ReleaseInfo) -> String {
-        let html = Self.buildDescr(info.descr, sourceHost: info.detailURL)
-        if !html.isEmpty { return info.extraQuoteHTML + html }
-        return info.extraQuoteHTML + "转载自\(info.sourceName.isEmpty ? info.siteID : info.sourceName)，感谢发布者。"
+        let who = info.sourceName.isEmpty ? info.siteID : info.sourceName
+        if override?.descrFormat == "html" {
+            let html = Self.buildDescr(info.descr, sourceHost: info.detailURL)
+            if !html.isEmpty { return info.extraQuoteHTML + html }
+            return info.extraQuoteHTML + "转载自\(who)，感谢发布者。"
+        }
+        guard let base = URL(string: info.detailURL) ?? URL(string: site.url) else {
+            let html = Self.buildDescr(info.descr, sourceHost: info.detailURL)
+            return html.isEmpty ? info.extraQuoteHTML + NexusPHPAdapter.fallbackDescr(info)
+                                : info.extraQuoteHTML + html
+        }
+        // 与中文站家族同一套预处理：海报 div 与正文里那张独立海报图去重、清掉 <legend> 标签名
+        let pre = NexusPHPAdapter.preprocessDescription(info.descr, base: info.detailURL,
+                                                        dropScreenshots: false)
+        var body = BBCode.fromHTML(pre, base: base)
+        // 同一张图在源页出现两次（海报 div + 正文）时 BBCode 里也只剩一条
+        body = Self.dedupImgLines(body)
+        if body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return info.extraQuoteBBCode + NexusPHPAdapter.fallbackDescr(info)
+        }
+        if !info.extraQuoteText.isEmpty,
+           let merged = NexusPHPAdapter.mergeIntoLeadingQuote(source: info.extraQuoteText, text: body) {
+            return merged
+        }
+        return info.extraQuoteBBCode + body
+    }
+
+    /// 去掉重复的 `[img]URL[/img]` 行：源页常把海报同时放在主题海报块和正文里，
+    /// 转成 BBCode 就是两条一模一样的图片行，站台上会连着显示两张。保留第一处。
+    static func dedupImgLines(_ bbcode: String) -> String {
+        var seen = Set<String>()
+        var out: [String] = []
+        for line in bbcode.components(separatedBy: "\n") {
+            let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.hasPrefix("[img]"), t.lowercased().hasSuffix("[/img]"), t.count > "[img][/img]".count {
+                if !seen.insert(t.lowercased()).inserted { continue }
+            }
+            out.append(line)
+        }
+        return out.joined(separator: "\n")
     }
 
     static func apiMessage(_ resp: HTTPClient.Response) -> String? {
