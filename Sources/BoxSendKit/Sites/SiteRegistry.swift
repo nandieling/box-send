@@ -132,6 +132,7 @@ public enum SiteRegistry {
         SiteConfig(id: "qilin", name: "麒麟", url: "https://www.hdkyl.in/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdtime", name: "时光", url: "https://hdtime.org/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "hdvideo", name: "HDVideo", url: "https://hdvideo.top/", framework: .nexusPHP, enabled: false, overrides: .hdvideo),
+        SiteConfig(id: "hdwing", name: "瓷器", url: "https://hdwing.org/", framework: .nexusPHP, enabled: false, overrides: .hdwing),
         SiteConfig(id: "hitpt", name: "百川", url: "https://www.hitpt.com/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),
         SiteConfig(id: "haitang", name: "海棠", url: "https://www.htpt.cc/", framework: .nexusPHP, enabled: false, overrides: .haitang),
         SiteConfig(id: "hudbt", name: "蝴蝶", url: "https://hudbt.hust.edu.cn/", framework: .nexusPHP, enabled: false, overrides: .nexusCN),

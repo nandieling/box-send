@@ -315,6 +315,24 @@ extension SiteOverride {
 
     // MARK: - 通用站逐站实测修正（2026-09 上传页批量探测：分类表/豆瓣字段/标签/动态分类）
 
+    /// 瓷器（HDWinG）：NexusPHP 的 X2015 主题（登录页 title「HDWinG :: 登录」、游客访问带
+    /// login.php?returnto= 回跳）。2026-11-27 未登录探测：upload.php / details.php / torrents.php
+    /// 都在（游客跳登录页），search.php 直接 404 —— 站内检索只有 torrents.php，查重端点因此写明，
+    /// 免得日后通用检索端点一改就把这站的查重带沟里（查无结果时还会存档 search-hdwing-*.html）。
+    /// 分类表、质量下拉、标签字段要真实 cookie 打开上传页才能定，先照 .nexusCN 那套通用值走：
+    /// 分类由上传页 <select> 动态解析，站点表单里没有的字段一律不选。
+    static let hdwing = SiteOverride(
+        uploadPath: "upload.php",
+        uploadActionPath: "takeupload.php",
+        titleField: "name",
+        imdbField: "url",
+        imdbValueTemplate: "http://www.imdb.com/title/{imdb}/",
+        categoryField: "type",
+        searchURL: "torrents.php?search={name}&notnewword=1",
+        extraUploadFields: ["uplver": "yes"],
+        subtitleField: "small_descr"
+    )
+
     /// 北理工PT：imdb/豆瓣为裸 ID 字段，标签为 span[] 数字值
     static let btschool = SiteOverride(
         uploadPath: "upload.php",

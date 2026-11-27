@@ -297,7 +297,7 @@ final class SiteCoverageTests: XCTestCase {
         // savept.icu 扩充的长尾站（部分抽查）
         for id in ["azusa", "kamept", "musopia", "xdy", "ourbits", "gpw", "mteam",
                    "milkie", "ptneko", "alpharatio", "animez", "sportscult",
-                   "hdtorrents", "beyondhd", "torrentleech", "sjtu"] {
+                   "hdtorrents", "beyondhd", "torrentleech", "sjtu", "hdwing"] {
             XCTAssertTrue(ids.contains(id), "missing \(id)")
         }
         // 无重复 id
@@ -341,11 +341,35 @@ final class SiteCoverageTests: XCTestCase {
             "ptskit": "拾刻", "ptt": "时间", "ptzone": "葡萄汁", "qingwa": "青蛙",
             "tjupt": "北洋园", "ubits": "优堡", "wtsakura": "冬樱", "zmpt": "织梦",
             "u2": "幼儿圈", "zhuque": "朱雀", "haidan": "海胆", "yemapt": "野马",
-            "hdcity": "城市"
+            "hdcity": "城市", "hdwing": "瓷器"
         ]
         for (id, name) in expected {
             XCTAssertEqual(sites.first { $0.id == id }?.name, name, "id: \(id)")
         }
+    }
+
+    /// 瓷器（HDWinG）：NexusPHP 站点，未登录只能确认到路由与主题，字段照通用值走
+    func testHDWingRosterEntry() throws {
+        let sites = SiteRegistry.prioritySites
+        let s = try XCTUnwrap(sites.first { $0.id == "hdwing" })
+        XCTAssertEqual(s.name, "瓷器")
+        XCTAssertEqual(s.url, "https://hdwing.org/")
+        XCTAssertEqual(s.framework, .nexusPHP)
+        XCTAssertEqual(s.enabled, false, "长尾站默认停用，由用户在「添加站点」里启用")
+        let ov = try XCTUnwrap(s.overrides)
+        XCTAssertEqual(ov.uploadPath, "upload.php")
+        XCTAssertEqual(ov.uploadActionPath, "takeupload.php")
+        XCTAssertEqual(ov.categoryField, "type")
+        XCTAssertEqual(ov.subtitleField, "small_descr")
+        // 站内没有 search.php（实测 404）：查重只能走 torrents.php，写死在内置表里
+        XCTAssertEqual(ov.searchURL, "torrents.php?search={name}&notnewword=1")
+
+        // 用户自己添加、没带 overrides 时也要拿到这份内置差异
+        let merged = SiteRegistry.effectiveSite(SiteConfig(id: "hdwing", name: "瓷器",
+                                                          url: "https://hdwing.org/",
+                                                          framework: .nexusPHP, enabled: true))
+        XCTAssertEqual(merged.overrides?.searchURL, "torrents.php?search={name}&notnewword=1")
+        XCTAssertTrue(SiteRegistry.adapter(for: merged, client: client) is NexusPHPAdapter)
     }
 
     /// 旧配置兼容：无 managed 字段时按 enabled 推断（启用的站视为已添加）
